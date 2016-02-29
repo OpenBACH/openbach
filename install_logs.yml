@@ -1,0 +1,86 @@
+---
+
+- hosts: Agents 
+  roles:
+    - agents
+  remote_user: root
+
+  tasks:
+  - name: Install Rsyslog
+    apt: pkg=rsyslog state=installed update_cache=true
+
+  - name: Start Rsyslog
+    service: name=rsyslog state=started
+   
+- hosts: Collector
+  roles:
+    - collector
+  remote_user : root
+  vars:
+   - version_elasticsearch: 2.1.1
+   - version_logstash: 2.1.1
+  
+  tasks:
+  - name: Download ElasticSearch
+    get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
+      dest=/tmp/ force=no
+
+  - name: Install ElasticSearch
+    shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
+  
+  - name: Install openjdk-7-jdk
+    apt: pkg=openjdk-7-jdk state=installed update_cache=true
+    
+  - name: Configure ElasticSearch 
+    template: src=roles/collector/templates/elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
+      owner=root group=elasticsearch
+    
+  - name: Start ElasticSearch
+    service: name=elasticsearch state=started
+  
+  - name: Download LogStash
+    get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
+      dest=/tmp/ force=no
+
+  - name: Install LogStash
+    shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb
+  
+  - name: Configure LogStash
+    template: src=roles/collector/templates/collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
+      owner=root group=root
+    
+  - name: Start LogStash
+    service: name=logstash state=started
+  
+  - name: Wait 2min
+    shell: sleep 120
+
+- hosts: Controller
+  roles:
+    - controller
+  remote_user: root
+  vars:
+   - version_kibana: 4.3.1
+   - controller_archi: x64
+  
+  tasks:
+  - name: Download and Uncompress Kibana
+    unarchive: src=https://download.elastic.co/kibana/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
+      dest=/tmp/ copy=no
+      
+  - name: Create Kibana repository
+    file: path=/opt/kibana state=directory mode=0755
+    
+  - name: Install Kibana
+    shell: cp -R /tmp/kibana-{{ version_kibana }}-linux-{{ controller_archi }}/* /opt/kibana
+    
+  - name: Configure Kibana
+    template: src=roles/controller/templates/kibana.yml.j2 dest=/opt/kibana/config/kibana.yml \
+      owner=root group=root
+
+  - name: Create Kibana Service
+    copy: src=roles/controller/templates/kibana dest=/etc/init.d/ mode=0755
+    
+  - name: Start Kibana
+    service: name=kibana state=started
+

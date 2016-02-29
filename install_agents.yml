@@ -1,0 +1,32 @@
+---
+
+- hosts: Agents 
+  roles:
+    - agents
+  remote_user: root
+
+  tasks:
+  # Synchro part
+  - name: Install ntpdate
+    apt: pkg=ntpdate state=installed update_cache=true
+
+  # Log part
+  - name: Install Rsyslog
+    apt: pkg=rsyslog state=installed update_cache=true
+
+  - name: Start Rsyslog
+    service: name=rsyslog state=started
+    
+  # Stats part
+  - name: Install Rstats
+    copy: src=roles/agents/templates/rstats/ dest=/opt/rstats/ mode=0644
+
+  - name: Configure Rstats
+    template: src=roles/agents/templates/rstats.cfg.j2 dest=/opt/rstats/rstats.cfg
+
+  - name: Create Rstats Service
+    copy: src=roles/agents/templates/rstats_service dest=/etc/init.d/rstats mode=0755
+
+  - name: Start Rstats
+    service: name=rstats state=started
+

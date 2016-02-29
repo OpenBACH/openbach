@@ -1,0 +1,69 @@
+---
+
+- hosts: Collector
+  roles:
+    - collector
+  remote_user: root
+  vars:
+    - version_elasticsearch: 2.1.1
+    - version_logstash: 2.1.1
+    - cluster_name: openbach
+    - influxdb_version: 0.10.0-1
+  
+  tasks:
+  # Synchro part
+  - name: Install
+    apt: pkg=ntpdate state=installed update_cache=true
+ 
+  # Log part
+  - name: Download ElasticSearch
+    get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
+      dest=/tmp/ force=no
+
+  - name: Install ElasticSearch
+    shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
+  
+  - name: Install openjdk-7-jdk
+    apt: pkg=openjdk-7-jdk state=installed update_cache=true
+    
+  - name: Configure ElasticSearch 
+    template: src=roles/collector/templates/elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
+      owner=root group=elasticsearch
+    
+  - name: Start ElasticSearch
+    service: name=elasticsearch state=started
+  
+  - name: Download LogStash
+    get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
+      dest=/tmp/ force=no
+
+  - name: Install LogStash
+    shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb
+  
+  - name: Configure LogStash
+    template: src=roles/collector/templates/collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
+      owner=root group=root
+    
+  - name: Start LogStash
+    service: name=logstash state=started
+  
+  # Stats part
+  - name: Download InfluxDB (64bits)
+    get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
+      dest=/tmp/ force=no
+      
+  - name: Install InfluxDB (64bits)
+    shell: dpkg -i /tmp/influxdb_{{ influxdb_version }}_amd64.deb
+    
+  - name: Start InfluxDB
+    service: name=influxdb state=started
+    
+  - name: Wait a little
+    shell: sleep 2
+    
+  - name: Database Creation
+    shell: curl -G http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
+    with_items:
+      - CREATE DATABASE "{{ database_name }}"
+      - CREATE USER "{{username}}" WITH PASSWORD '{{ password }}' WITH ALL PRIVILEGES
+ 

@@ -1,0 +1,24 @@
+---
+
+- hosts: Controller
+  remote_user: root
+
+  tasks:
+  - name: Install ntp and ntpdate
+    apt: pkg={{ item }} state=installed update_cache=true
+    with_items:
+      - ntp
+      - ntpdate
+
+  - name: Start Ntp server
+    service: name=ntp state=started
+      
+- hosts:
+    - Collector
+    - Agents
+  remote_user: root
+  
+  tasks:
+  - name: Install ntpdate
+    apt: pkg=ntpdate state=installed update_cache=true
+    

@@ -32,3 +32,8 @@ $ ansible-playbook install_collector.yml
 $ ansible-playbook install_controller.yml
 
 (install_stats.yml only install the stats part of OpenBACH, same for install_logs.yml and install_synchro.yml)
+
+Now everything is install.
+To see the logs in the kibana interface, go to http://*controller_ip*:5601 (5601 is the defaut port for kibana, if you choosed an other one, use it).
+To see the stats in the grafana interface, go to http://*controller_ip*:3000 (3000 is the defaut port for graphana, if you choosed an other one, use it). The login/password are admin/admin. First you have to add a data source.
+Choose "InfluxDB 0.9.x" as Type, Url is http://*collector_ip*:8086 (8086 is the defaut port for influxDB, if you choosed an other one, use it), InfluxDB Details are the ones you choose in /etc/ansible/group_vars/all file.

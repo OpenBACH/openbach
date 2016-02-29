@@ -17,8 +17,7 @@ First, you have to define and install the global variable of OpenBACH.
 File the file group_vars/all. The defaut port for logstash elasticsearch and influxdb are filled but you can change them.
 It is here you choose the database name and the username and password associate to it.
 Then move the repository to /etc/ansible :
-$ sudo cp -r group_vars/all /etc/ansible/
-$ sudo chmod 755 /etc/ansible/group_vars/
+$ sudo cp -r group_vars/ /etc/ansible/
 
 Now, you have to specify the machines you want to install OpenBACH to Ansible.
 Open the hosts file :

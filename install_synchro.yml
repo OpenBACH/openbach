@@ -1,6 +1,9 @@
 ---
 
-- hosts: Controller
+- hosts:
+    - Controller
+    - Collector
+    - Agents
   remote_user: root
 
   tasks:
@@ -19,6 +22,15 @@
   remote_user: root
   
   tasks:
-  - name: Install ntpdate
-    apt: pkg=ntpdate state=installed update_cache=true
+  - name: Delete all ntp source servers
+    shell: sed -i 's/^server/#server/' /etc/ntp.conf
+
+  - name: Add Controller as the ntp source server
+    shell: echo "{{ item }}" >> /etc/ntp.conf
+    with_items:
+      - "\n# Controller ntp server"
+      - "server {{ controller_ip }}"
+    
+  - name: Restart Ntp server
+    service: name=ntp state=restarted
     

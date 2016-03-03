@@ -1,0 +1,9 @@
+---
+
+- hosts:
+    - Agents
+    - Collector
+  remote_user: root
+
+  tasks:
+  - include: tasks/synchro.yml

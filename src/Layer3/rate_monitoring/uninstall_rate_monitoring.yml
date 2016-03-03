@@ -1,0 +1,20 @@
+---
+
+- hosts: Agents
+  remote_user: root
+
+  tasks:
+  - include: tasks/stop_rate_monitoring.yml
+
+  - name: Delete Rate Monitoring Service
+    file: path=/etc/init.d/rate_monitoring state=absent
+
+  - name: Uninstall Rate Monitoring
+    file: path=/opt/openbach-plugins/rate_monitoring/rate{{ item }} state=absent
+    with_items:
+      - .py
+      - _rstats_filter.conf
+
+  - name: Remove Rate Monitoring repository
+    file: path=/opt/openbach-plugins/rate_monitoring state=absent
+

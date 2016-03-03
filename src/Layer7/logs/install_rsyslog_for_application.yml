@@ -1,0 +1,16 @@
+---
+
+## Configuration of Rsyslog for the application
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+   - name: Rsyslog Configuration 
+     template: src=templates/application{{ item.src }} dest=/etc/rsyslog.d/{{ application }}{{ item.dst }} owner=root group=root
+     with_items:
+       - { src: '_local.j2', dst: '_local.conf' }
+       - { src: '.j2', dst: '.conf' }
+     notify: Restart Rsyslog
+

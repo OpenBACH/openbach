@@ -1,0 +1,8 @@
+---
+
+- hosts: Agents
+  remote_user: root
+
+  tasks:
+  - include: tasks/stop_rate_monitoring.yml
+

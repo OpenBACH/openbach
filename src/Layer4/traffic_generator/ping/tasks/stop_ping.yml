@@ -1,0 +1,7 @@
+---
+
+- name: Stop Ping
+  service: name=ping state=stopped
+
+- name: Remove Ping daemon
+  file: path=/etc/init.d/ping state=absent

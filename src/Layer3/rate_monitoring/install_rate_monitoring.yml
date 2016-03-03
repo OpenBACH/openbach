@@ -1,0 +1,24 @@
+---
+
+- hosts: Agents
+  remote_user: root
+
+  tasks:
+  - name: Install python-iptables
+    pip: name=python-iptables state=present
+    
+  - name: Install python-apscheduler
+    pip: name=apscheduler state=present
+
+  - name: Create Rate Monitoring repository
+    file: path=/opt/openbach-plugins/rate_monitoring state=directory mode=0755
+
+  - name: Install Rate Monitoring
+    copy: src=templates/rate{{ item }} dest=/opt/openbach-plugins/rate_monitoring/ mode=0644
+    with_items:
+      - .py
+      - _rstats_filter.conf
+
+  - name: Create Rate Monitoring Service
+    copy: src=templates/rate_monitoring dest=/etc/init.d/ mode=0755
+

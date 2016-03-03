@@ -1,0 +1,5 @@
+---
+
+# Rate monitoring
+rate_monitoring_options: 2 OUTPUT -p tcp --dport 5001 -d 172.20.0.83
+

@@ -1,0 +1,6 @@
+---
+
+# Rstats
+filter_path: ../../Layer3/rate_monitoring/templates/rate_rstats_filter.conf
+application_path: /opt/openbach-plugins/rate_monitoring/
+

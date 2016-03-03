@@ -1,0 +1,19 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  
+  tasks:
+  - name: Download Modified Iperf
+    unarchive: src=http://caia.swin.edu.au/tools/teacup/downloads/iperf-2.0.5-mod.tar.gz \
+      dest=/tmp/ copy=no
+      
+  - name: Running ./configure for Modified Iperf
+    shell: ./configure chdir=/tmp/iperf-2.0.5-mod/
+    
+  - name: Running "make" for Modified Iperf
+    shell: make chdir=/tmp/iperf-2.0.5-mod/
+    
+  - name: Running "make install" for Modified Iperf
+    shell: make install chdir=/tmp/iperf-2.0.5-mod/
+    

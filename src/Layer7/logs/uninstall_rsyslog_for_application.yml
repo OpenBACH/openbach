@@ -1,0 +1,17 @@
+---
+
+## Configuration of Rsyslog for the application
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+   - name: Rsyslog Configuration 
+     file: path=/etc/rsyslog.d/{{ application }}{{ item }} state=absent
+     with_items:
+       - '_local.conf'
+       - '.conf'
+       - '.conf.locked'
+     notify: Restart Rsyslog
+

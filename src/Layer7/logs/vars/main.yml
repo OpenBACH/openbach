@@ -1,0 +1,7 @@
+---
+
+# Rsyslog
+application: client
+syslogseverity: 6
+syslogseverity_local: 6
+

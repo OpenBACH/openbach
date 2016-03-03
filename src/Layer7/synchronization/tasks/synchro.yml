@@ -1,0 +1,4 @@
+---
+
+- name: Time Synchronization
+  shell: ntpdate -u {{ controller_ip }}

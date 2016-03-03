@@ -1,0 +1,12 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - include: tasks/stop_cwnd_monitoring.yml
+  
+  - include: tasks/start_cwnd_monitoring.yml
+

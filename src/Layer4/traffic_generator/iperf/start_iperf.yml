@@ -1,0 +1,19 @@
+---
+
+- hosts: server
+  remote_user: root
+  vars: 
+    - iperf_options: -s
+     
+  tasks:
+  - include: tasks/start_iperf.yml
+
+
+- hosts: client
+  remote_user: root
+  vars: 
+    - iperf_options: -c 192.179.19.2 -t 600
+     
+  tasks:
+  - include: tasks/start_iperf.yml
+

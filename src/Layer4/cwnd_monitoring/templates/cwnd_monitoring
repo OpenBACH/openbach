@@ -1,0 +1,116 @@
+#!/bin/bash
+# cwnd monitoring daemon
+# description: cwnd monitoring daemon
+# processname: cwnd monitoring
+
+DAEMON_PATH="/opt/openbach-plugins/cwnd_monitoring/"
+
+DAEMON=./cwnd.py
+DAEMONOPTS=""
+
+NAME=cwnd
+NAME2=cwnd2
+DESC="My daemon description"
+PIDFILE=/var/run/$NAME.pid
+PIDFILE2=/var/run/$NAME2.pid
+PORTFILE=/var/run/$NAME.port
+SCRIPTNAME=/etc/init.d/$NAME_monitoring
+RESULT=/tmp/tcpprobe.out
+
+if [ $1 == start ]
+then
+    if [ -z "$2" ] || [ -z "$3" ]
+    then
+        echo "Usage: $0 {status|start port interval|stop|restart}"
+        exit 1
+    fi
+    PORT=$2
+    INTERVAL=$3
+fi
+
+case "$1" in
+start)
+    printf "%-50s" "Starting $NAME..."
+    cd $DAEMON_PATH
+    insmod tcp_probe_new_fix.ko port=$PORT full=1 > /dev/null 2>&1
+    if [ $? != 0 ]
+    then
+        printf "%s\n" "Fail"
+        printf "%s\n" "Already running, try status"
+        exit 1
+    fi
+    chmod 444 /proc/net/tcpprobe
+    PID=`cat /proc/net/tcpprobe > $RESULT & echo $!`
+    #echo "Saving PID" $PID " to " $PIDFILE
+    if [ -z $PID ]; then
+        printf "%s\n" "Fail"
+        exit 1
+    else
+        echo $PID > $PIDFILE
+        echo $PORT > $PORTFILE
+    fi
+    hostname=`cat /etc/hostname`
+    PID=`python $DAEMON $hostname.$NAME.$PORT -i $INTERVAL -p $RESULT > /dev/null 2>&1 & echo $!`
+    #echo "Saving PID" $PID " to " $PIDFILE
+    if [ -z $PID ]; then
+        printf "%s\n" "Fail"
+        exit 1
+    else
+        echo $PID > $PIDFILE2
+        printf "%s\n" "Ok"
+    fi
+;;
+status)
+    printf "%-50s" "Checking $NAME..."
+    if [ -f $PIDFILE ]; then
+        PID=`cat $PIDFILE`
+        PID2=`cat $PIDFILE2`
+        PORT=`cat $PORTFILE`
+        if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
+            printf "%s\n" "Process dead but pidfile exists"
+        elif [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
+            printf "%s\n" "Process dead but pidfile exists"
+        else
+            echo "Running on port" $PORT
+        fi
+    else
+        printf "%s\n" "Service not running"
+    fi
+;;
+stop)
+    printf "%-50s" "Stopping $NAME"
+    PID2=`cat $PIDFILE2`
+    if [ -f $PIDFILE2 ]; then
+        kill -HUP $PID2
+        rm -f $PIDFILE2
+    else
+        printf "%s\n" "pidfile not found"
+    fi
+    PID=`cat $PIDFILE`
+    PORT=`cat $PORTFILE`
+    if [ -f $PIDFILE ]; then
+        kill -HUP $PID
+        rmmod tcp_probe_new_fix > /dev/null 2>&1
+        printf "%s\n" "Ok"
+        rm -f $PIDFILE
+        rm -f $PORTFILE
+    else
+        printf "%s\n" "pidfile not found"
+        exit 1
+    fi
+;;
+restart)
+    if [ -f $PORTFILE ]; then
+        PORT=`cat $PORTFILE`
+    else
+        printf "%s\n" "Service not running"
+        exit 1
+    fi
+    $0 stop
+    $0 start $PORT
+;;
+
+*)
+    echo "Usage: $0 {status|start port interval|stop|restart}"
+    exit 1
+esac

@@ -1,0 +1,15 @@
+---
+
+- hosts: client
+  remote_user: root
+     
+  tasks:
+  - include: tasks/stop_iperf.yml
+
+
+- hosts: server
+  remote_user: root
+     
+  tasks:
+  - include: tasks/stop_iperf.yml
+

@@ -1,0 +1,23 @@
+#!/bin/bash
+# Ce script est utilisé par le controlleur d'OpenBACH pour communiquer et donner ses ordres à l'agent
+
+
+if [ -z "$2" ]
+then
+    echo "Usage: $0 {install|start|status|stop|uninstall} job_name [options]"
+    exit 1
+fi
+
+result=`echo "$@" | nc localhost 1112`
+
+IFS=' ' read -ra arr <<< "$result"
+if [ $arr = "OK" ]; then
+    exit 0
+elif [ $arr = "KO" ]; then
+    echo $result
+    exit 2
+else
+    echo $result
+    exit 3
+fi
+

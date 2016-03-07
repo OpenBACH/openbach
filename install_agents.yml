@@ -48,3 +48,26 @@
   - name: Start Rstats
     service: name=rstats state=started
 
+  # Daemon part
+  - name: Install python-apscheduler
+    pip: name=apscheduler state=present
+    
+  - name: Create openbach-agent repository
+    file: path=/opt/openbach-agent state=directory mode=0755
+    
+  - name: Install the daemon
+    copy: src=roles/agents/templates/openbach-agent/{{ item }} dest=/opt/openbach-agent/ mode=0644
+    with_items:
+      - openbach-agent.py
+      - openbach-agent_filter.conf
+      - openbach-controller
+    
+  - name: Make the openbach-controller script executable
+    file: dest=/opt/openbach-agent/openbach-controller mode=0755
+    
+  - name: Create the service
+    copy: src=roles/agents/templates/openbach-agent/openbach-agent dest=/etc/init.d/ mode=0755
+
+  - name: Start the service
+    service: name=openbach-agent state=started
+

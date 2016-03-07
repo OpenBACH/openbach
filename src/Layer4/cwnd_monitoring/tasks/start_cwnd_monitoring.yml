@@ -1,4 +1,0 @@
----
-
-- name: Start Cwnd Monitoring
-  service: name=cwnd_monitoring state=started args='{{ port_to_monitor }} {{ interval }}'

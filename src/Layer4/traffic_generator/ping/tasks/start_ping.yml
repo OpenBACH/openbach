@@ -1,7 +1,0 @@
----
-
-- name: Install Ping daemon
-  copy: src=templates/ping dest=/etc/init.d/ mode=0755
-  
-- name: Start Ping
-  service: name=ping state=started args={{ ping_options }}

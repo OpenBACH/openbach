@@ -1,7 +1,0 @@
----
-
-- name: Install Iperf daemon
-  copy: src=templates/iperf dest=/etc/init.d/ mode=0755
-  
-- name: Start Iperf
-  service: name=iperf state=started args={{ iperf_options }}

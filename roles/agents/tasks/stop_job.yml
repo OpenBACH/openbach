@@ -1,0 +1,4 @@
+---
+
+- name: Stop Job
+  shell: /opt/openbach-agent/openbach-controller stop {{ job_name }} {{ date }}

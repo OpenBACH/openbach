@@ -2,6 +2,10 @@
 
 - hosts: Agents
   remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: /opt/openbach-plugins/cwnd_monitoring/cwnd_monitoring.cfg
 
   tasks:
   - name: Create Cwnd Monitoring repository
@@ -13,7 +17,7 @@
       - cwnd.py
       - cwnd_rstats_filter.conf
       - tcp_probe_new_fix.ko
+      - cwnd_monitoring.cfg
 
-  - name: Create Cwnd Monitoring Service
-    copy: src=templates/cwnd_monitoring dest=/etc/init.d/ mode=0755
+  - include: ../../../roles/agents/tasks/add_job.yml
 

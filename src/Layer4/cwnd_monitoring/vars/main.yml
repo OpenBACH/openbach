@@ -1,6 +1,5 @@
 ---
 
 # Cwnd monitoring
-port_to_monitor: 5001
-interval: 10
+job_name: cwnd_monitoring
 

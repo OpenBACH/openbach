@@ -1,5 +1,0 @@
----
-
-- name: Start Rate Monitoring
-  service: name=rate_monitoring state=started args={{ rate_monitoring_options }}
-

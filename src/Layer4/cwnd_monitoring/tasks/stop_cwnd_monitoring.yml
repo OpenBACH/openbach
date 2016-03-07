@@ -1,4 +1,0 @@
----
-
-- name: Stop Cwnd Monitoring
-  service: name=cwnd_monitoring state=stopped

@@ -11,6 +11,20 @@ import socket
 import syslog
 import errno
 import time
+import os
+import sys
+import signal
+
+
+def signal_term_handler(signal, frame):
+    cmd = "PID=`cat /var/run/cwnd.pid`; kill -HUP $PID; rm "
+    cmd += "/var/run/cwnd.pid"
+    os.system(cmd)
+    cmd = "rmmod tcp_probe_new_fix > /dev/null 2>&1"
+    os.system(cmd)
+    sys.exit(0)
+                 
+signal.signal(signal.SIGHUP, signal_term_handler)
 
 
 def watch(fn):
@@ -29,7 +43,23 @@ def watch(fn):
             time.sleep(0.5)
             # TODO: (Piste1) Ne plus l'indiquer
  
-def main(path, stat_name, interval):
+def main(path, port, interval):
+    # Mise en place du monitoring
+    cmd = "insmod /opt/openbach-plugins/cwnd_monitoring/tcp_probe_new_fix.ko"
+    cmd += " port=" + str(port) + " full=1 > /dev/null 2>&1"
+    os.system(cmd)
+    cmd = "chmod 444 /proc/net/tcpprobe"
+    os.system(cmd)
+    cmd = "PID=`cat /proc/net/tcpprobe > " + path + " & echo $!`; echo $PID >"
+    cmd += " /var/run/cwnd.pid"
+    os.system(cmd)
+
+    # Contruction du nom de la stat
+    f = open("/etc/hostname", "r")
+    stat_name = f.readline().split('\n')[0]
+    f.close()
+    stat_name += ".cwnd." + str(port)
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect(("", 1111))
@@ -92,8 +122,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='Active/Deactive cwnd monitoring.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('stat_name', metavar='stat_name', type=str, nargs=1,
-                        help='Name of the statistic')
+    parser.add_argument('port', metavar='port', type=int, nargs=1,
+                        help='Port to monitor')
     parser.add_argument('-p', '--path', type=str,
                         default='/tmp/tcpprobe.out',
                         help='path to result file')
@@ -102,9 +132,9 @@ if __name__ == "__main__":
     
     # get args
     args = parser.parse_args()
-    stat_name = args.stat_name[0]
+    port = args.port[0]
     path = args.path
     interval = args.interval
     
-    main(path, stat_name, interval)
+    main(path, port, interval)
 

@@ -5,8 +5,8 @@
   vars_files:
     - vars/main.yml
   vars:
-    - date: date now
+    - date_interval_stop: date now
 
   tasks:
-    - include: ../../../roles/agents/tasks/stop_job.yml
+    - include: ../../../roles/agents/tasks/status_job.yml
 

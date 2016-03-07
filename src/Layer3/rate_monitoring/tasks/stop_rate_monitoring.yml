@@ -1,5 +1,0 @@
----
-
-- name: Stop Rate Monitoring
-  service: name=rate_monitoring state=stopped
-

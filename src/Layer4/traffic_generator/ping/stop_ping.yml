@@ -2,7 +2,11 @@
 
 - hosts: Agents
   remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars: 
+    - date: date now
   
   tasks:
-  - include: tasks/stop_ping.yml
+    - include: ../../../../roles/agents/tasks/stop_job.yml
 

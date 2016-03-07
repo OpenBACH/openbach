@@ -1,7 +1,0 @@
----
-
-- name: Stop Iperf
-  service: name=iperf state=stopped
-
-- name: Remove Iperf daemon
-  file: path=/etc/init.d/iperf state=absent

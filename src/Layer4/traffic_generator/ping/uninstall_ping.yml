@@ -1,0 +1,16 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Uninstall Ping
+    file: path=/opt/openbach-plugins/ping/ping.cfg state=absent
+
+  - name: Remove Ping repository
+    file: path=/opt/openbach-plugins/cwnd_monitoring state=absent
+
+  - include: ../../../../roles/agents/tasks/remove_job.yml
+

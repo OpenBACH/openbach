@@ -1,5 +1,5 @@
 ---
 
 # Ping
-ping_options: 172.20.0.83
+job_name: ping
 

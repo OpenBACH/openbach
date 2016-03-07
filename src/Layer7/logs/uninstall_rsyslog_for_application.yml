@@ -14,4 +14,12 @@
        - '.conf'
        - '.conf.locked'
      notify: Restart Rsyslog
+     
+  handlers:
+   - include: handlers/handlers.yml
+
+  # include not working with thie version yet
+  # See this bug : https://github.com/ansible/ansible/issues/13485
+   - name: Restart Rsyslog
+     service: name=rsyslog state=restarted
 

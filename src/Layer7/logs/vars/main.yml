@@ -1,7 +1,7 @@
 ---
 
 # Rsyslog
-application: client
+application: rstats
 syslogseverity: 6
 syslogseverity_local: 6
 

@@ -5,21 +5,18 @@
   remote_user: root
   vars_files:
     - vars/main.yml
+  vars:
+    - job_options: restart
+    - date_interval: date now
 
   tasks:
-   - name: Rsyslog Configuration 
-     file: path=/etc/rsyslog.d/{{ application }}{{ item }} state=absent
-     with_items:
-       - '_local.conf'
-       - '.conf'
-       - '.conf.locked'
-     notify: Restart Rsyslog
-     
-  handlers:
-   - include: handlers/handlers.yml
-
-  # include not working with thie version yet
-  # See this bug : https://github.com/ansible/ansible/issues/13485
-   - name: Restart Rsyslog
-     service: name=rsyslog state=restarted
+    - name: Rsyslog Configuration 
+      file: path=/etc/rsyslog.d/{{ application }}{{ item }} state=absent
+      with_items:
+        - '_local.conf'
+        - '.conf'
+        - '.conf.locked'
+      notify: Restart Rsyslog
+      
+    - include: ../../../roles/agents/tasks/start_job.yml
 

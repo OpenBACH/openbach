@@ -1,5 +1,0 @@
----
-    
-- name: Restart Rsyslog
-  service: name=rsyslog state=restarted
-  

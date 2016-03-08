@@ -1,0 +1,18 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: /opt/openbach-plugins/logs/logs.cfg
+
+  tasks:
+  - name: Create Logs repository
+    file: path=/opt/openbach-plugins/logs state=directory mode=0755
+
+  - name: Install Logs
+    template: src=templates/logs.cfg dest=/opt/openbach-plugins/logs/logs.cfg mode=0644
+
+  - include: ../../../roles/agents/tasks/add_job.yml
+

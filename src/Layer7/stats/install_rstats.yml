@@ -1,0 +1,15 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: /opt/rstats/openbach-agent_rstats.cfg
+
+  tasks:
+  - name: Install Synchronization
+    copy: src=templates/rstats.cfg dest={{ job_conf }} mode=0644
+
+  - include: ../../../roles/agents/tasks/add_job.yml
+

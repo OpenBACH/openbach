@@ -1,13 +1,16 @@
 ---
 
-## Enable transmission of rsyslog to logstash for the application
 - hosts: Agents
   remote_user: root
   vars_files:
     - vars/main.yml
+  vars:
+    - job_options: reload
+    - date_interval: date now
 
   tasks:
-   - name: Enable Transmission
-     copy: src={{ filter_path }} dest={{ application_path }}
-     notify: Reload Rstats
+    - name: Enable Transmission
+      copy: src={{ filter_path }} dest={{ application_path }}
+     
+    - include: ../../../roles/agents/tasks/start_job.yml
 

@@ -1,0 +1,13 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Uninstall Rstats conf
+    file: path=/opt/rstats/openbach-agent_rstats.cfg state=absent
+
+  - include: ../../../roles/agents/tasks/remove_job.yml
+

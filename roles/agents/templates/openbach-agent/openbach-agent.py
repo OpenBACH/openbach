@@ -214,7 +214,10 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             data_recv[2] = conf.command
-            data_recv.append(conf.required)
+            if conf.required == '':
+                data_recv.append(False)
+            else:
+                data_recv.append(conf.required)
             data_recv.append(conf.optional)
         elif request_type == 'uninstall':
             # On vérifie que le job soit bien installé
@@ -364,7 +367,11 @@ class ClientThread(threading.Thread):
                 return []
             # On vérifie si il au moins autant d'arguments qu'exigé (+ la date
             # à laquelle il faut executer le job)
-            if len(data_recv) < len(job['required']) + 4:
+            if not job['required']:
+                nb_args = 0
+            else:
+                nb_args = len(job['required'])
+            if len(data_recv) < nb_args + 4:
                 error_msg = "KO job " + job_name + " required at least "
                 error_msg += str(len(job['required'])) + " arguments"
                 self.clientsocket.send(error_msg)
@@ -447,10 +454,16 @@ class ClientThread(threading.Thread):
         if request_type == 'install':
             # TODO Vérifié que l'appli a bien été installé ?
             mutex_jobs.acquire()
-            dict_jobs[job_name] = dict(command=data_recv[2],
-                                       required=data_recv[3].split(' '),
-                                       optional=bool(data_recv[4]),
-                                       status=False)
+            if not data_recv[3]:
+                dict_jobs[job_name] = dict(command=data_recv[2],
+                                           required=data_recv[3],
+                                           optional=bool(data_recv[4]),
+                                           status=False)
+            else:
+                dict_jobs[job_name] = dict(command=data_recv[2],
+                                           required=str(data_recv[3]).split(' '),
+                                           optional=bool(data_recv[4]),
+                                           status=False)
             mutex_jobs.release()
             self.clientsocket.send("OK")
             self.clientsocket.close()

@@ -10,7 +10,7 @@
     file: path=/opt/openbach-plugins/ping/ping.cfg state=absent
 
   - name: Remove Ping repository
-    file: path=/opt/openbach-plugins/cwnd_monitoring state=absent
+    file: path=/opt/openbach-plugins/ping state=absent
 
   - include: ../../../../roles/agents/tasks/remove_job.yml
 

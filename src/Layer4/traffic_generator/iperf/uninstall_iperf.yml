@@ -10,7 +10,7 @@
     file: path=/opt/openbach-plugins/iperf/iperf.cfg state=absent
 
   - name: Remove Iperf repository
-    file: path=/opt/openbach-plugins/cwnd_monitoring state=absent
+    file: path=/opt/openbach-plugins/iperf state=absent
 
   - include: ../../../../roles/agents/tasks/remove_job.yml
 

@@ -86,7 +86,7 @@ def status_job(job_name):
         if serr.errno == errno.ECONNREFUSED:
             syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
         raise serr
-    s.send("1 /opt/openbach-plugins/rate_monitoring/rate_rstats_filter.conf")
+    s.send("1 /opt/openbach-agent/openbach-agent_filter.conf")
     r = s.recv(9999)
     s.close()
     data = r.split(" ")
@@ -133,6 +133,36 @@ class ClientThread(threading.Thread):
         threading.Thread.__init__(self)
         self.clientsocket = clientsocket
         self.scheduler = scheduler
+        
+    def start_job(self, mutex_job, dict_jobs, data_recv):
+        job_name = data_recv[1]
+        mutex_jobs.acquire()
+        command = dict_jobs[job_name]['command']
+        mutex_jobs.release()
+        args = ' '.join(data_recv[4:])
+        actual_timestamp = int(round(time.time() * 1000))
+        if data_recv[2] == 'date':
+            if data_recv[3] < actual_timestamp:
+                date = None
+            else:
+                date = datetime.fromtimestamp(data_recv[3])
+            self.scheduler.add_job(launch_job, 'date', run_date=date,
+                                   args=[job_name, command, args],
+                                   id=job_name)
+            mutex_jobs.acquire()
+            dict_jobs[job_name]['status'] = True
+            mutex_jobs.release()
+        elif data_recv[2] == 'interval':
+            interval = data_recv[3]
+            self.scheduler.add_job(launch_job, 'interval', seconds=interval,
+                                   args=[job_name, command, args],
+                                   id=job_name)
+            mutex_jobs.acquire()
+            dict_jobs[job_name]['status'] = True
+            mutex_jobs.release()
+        self.clientsocket.send("OK")
+        self.clientsocket.close()
+
         
     def parse_and_check(self, r):
         global dict_jobs
@@ -280,7 +310,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-        elif request_type == 'start':
+        elif request_type == 'start' or request_type == 'restart':
             # On vérifie que le job soit bien installé
             mutex_jobs.acquire()
             if not job_name in dict_jobs:
@@ -437,32 +467,7 @@ class ClientThread(threading.Thread):
             self.clientsocket.send("OK")
             self.clientsocket.close()
         elif request_type == 'start':
-            mutex_jobs.acquire()
-            command = dict_jobs[job_name]['command']
-            mutex_jobs.release()
-            args = ' '.join(data_recv[4:])
-            actual_timestamp = int(round(time.time() * 1000))
-            if data_recv[2] == 'date':
-                if data_recv[3] < actual_timestamp:
-                    date = None
-                else:
-                    date = datetime.fromtimestamp(data_recv[3])
-                self.scheduler.add_job(launch_job, 'date', run_date=date,
-                                       args=[job_name, command, args],
-                                       id=job_name)
-                mutex_jobs.acquire()
-                dict_jobs[job_name]['status'] = True
-                mutex_jobs.release()
-            elif data_recv[2] == 'interval':
-                interval = data_recv[3]
-                self.scheduler.add_job(launch_job, 'interval', seconds=interval,
-                                       args=[job_name, command, args],
-                                       id=job_name)
-                mutex_jobs.acquire()
-                dict_jobs[job_name]['status'] = True
-                mutex_jobs.release()
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
+            self.start_job(mutex_jobs, dict_jobs, data_recv)
         elif request_type == 'stop':
             actual_timestamp = int(round(time.time() * 1000))
             if data_recv[3] < actual_timestamp:
@@ -506,6 +511,14 @@ class ClientThread(threading.Thread):
                     return
             self.clientsocket.send("OK")
             self.clientsocket.close()
+        elif request_type == 'restart':
+            # Stop le job si il est lancer
+            mutex_jobs.acquire()
+            if dict_jobs[job_name]['status']:
+                self.scheduler.add_job(stop_job, 'date', args=[job_name])
+            mutex_jobs.release()
+            # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
+            self.start_job(mutex_jobs, dict_jobs, data_recv)
 
 
 

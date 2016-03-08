@@ -1,0 +1,13 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_options:
+    - date_interval: date now
+
+  tasks:
+    - include: ../../../roles/agents/tasks/start_job.yml
+

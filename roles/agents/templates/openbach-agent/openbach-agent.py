@@ -19,6 +19,7 @@ from datetime import datetime
 from ConfigParser import NoSectionError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
+from apscheduler.jobstores.base import ConflictingIdError
 
 
 
@@ -126,6 +127,7 @@ class Conf:
         self.command = Config.get(job_name, 'command')
         self.required = Config.get(job_name, 'required')
         self.optional = Config.get(job_name, 'optional')
+        self.persistent = Config.get(job_name, 'persistent')
  
 
 class ClientThread(threading.Thread):
@@ -146,19 +148,35 @@ class ClientThread(threading.Thread):
                 date = None
             else:
                 date = datetime.fromtimestamp(data_recv[3])
-            self.scheduler.add_job(launch_job, 'date', run_date=date,
-                                   args=[job_name, command, args],
-                                   id=job_name)
+            try:
+                self.scheduler.add_job(launch_job, 'date', run_date=date,
+                                       args=[job_name, command, args],
+                                       id=job_name)
+            except ConflictingIdError:
+                error_msg = "KO A job " + job_name + " is already programmed"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return
             mutex_jobs.acquire()
-            dict_jobs[job_name]['status'] = True
+            if dict_jobs[job_name]['persistent']:
+                dict_jobs[job_name]['status'] = True
             mutex_jobs.release()
         elif data_recv[2] == 'interval':
             interval = data_recv[3]
-            self.scheduler.add_job(launch_job, 'interval', seconds=interval,
-                                   args=[job_name, command, args],
-                                   id=job_name)
+            try:
+                self.scheduler.add_job(launch_job, 'interval', seconds=interval,
+                                       args=[job_name, command, args],
+                                       id=job_name)
+            except ConflictingIdError:
+                error_msg = "KO A job " + job_name + " is already programmed"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return
             mutex_jobs.acquire()
-            dict_jobs[job_name]['status'] = True
+            if dict_jobs[job_name]['persistent']:
+                dict_jobs[job_name]['status'] = True
             mutex_jobs.release()
         self.clientsocket.send("OK")
         self.clientsocket.close()
@@ -218,7 +236,28 @@ class ClientThread(threading.Thread):
                 data_recv.append(False)
             else:
                 data_recv.append(conf.required)
-            data_recv.append(conf.optional)
+            if conf.optional == 'True' or conf.optional == 'true':
+                data_recv.append(True)
+            elif conf.optional == 'False' or conf.optional == 'false':
+                data_recv.append(False)
+            else:
+                error_msg = "KO Conf 'optional' for job " + job_name + " should"
+                error_msg += "be a boolean"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
+            if conf.persistent == 'True' or conf.persistent == 'true':
+                data_recv.append(True)
+            elif conf.persistent == 'False' or conf.persistent == 'false':
+                data_recv.append(False)
+            else:
+                error_msg = "KO Conf 'persistent' for job " + job_name + " should"
+                error_msg += "be a boolean"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
         elif request_type == 'uninstall':
             # On vérifie que le job soit bien installé
             mutex_jobs.acquire()
@@ -327,7 +366,7 @@ class ClientThread(threading.Thread):
             job = dict_jobs[job_name]
             mutex_jobs.release()
             if job['status']:
-                error_msg = "KO job " + job_name + " is already started"
+                eror_msg = "KO job " + job_name + " is already started"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -388,15 +427,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            # On vérifie si il n'est pas déjà stoppé
-            job = dict_jobs[job_name]
             mutex_jobs.release()
-            if not job['status']:
-                error_msg = "KO job " + job_name + " is already stopped"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
             # On vérifie si il y a autant d'arguments qu'exigé
             # (la date à laquelle il faut stopper le job)
             if len(data_recv) < 4:
@@ -457,13 +488,15 @@ class ClientThread(threading.Thread):
             if not data_recv[3]:
                 dict_jobs[job_name] = dict(command=data_recv[2],
                                            required=data_recv[3],
-                                           optional=bool(data_recv[4]),
-                                           status=False)
+                                           optional=data_recv[4],
+                                           status=False,
+                                           persistent=data_recv[5])
             else:
                 dict_jobs[job_name] = dict(command=data_recv[2],
                                            required=str(data_recv[3]).split(' '),
-                                           optional=bool(data_recv[4]),
-                                           status=False)
+                                           optional=data_recv[4],
+                                           status=False,
+                                           persistent=data_recv[5])
             mutex_jobs.release()
             self.clientsocket.send("OK")
             self.clientsocket.close()
@@ -489,13 +522,22 @@ class ClientThread(threading.Thread):
                 date = datetime.fromtimestamp(data_recv[3])
             self.scheduler.add_job(stop_job, 'date', run_date=date,
                                    args=[job_name])
-            mutex_jobs.acquire()
-            dict_jobs[job_name]['status'] = False
-            mutex_jobs.release()
             try:
                 self.scheduler.remove_job(job_name)
             except JobLookupError:
-                pass
+                # On vérifie si il n'est pas déjà stoppé
+                mutex_jobs.acquire()
+                job = dict_jobs[job_name]
+                mutex_jobs.release()
+                if not job['status']:
+                    error_msg = "KO job " + job_name + " is already stopped"
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return
+            mutex_jobs.acquire()
+            dict_jobs[job_name]['status'] = False
+            mutex_jobs.release()
             self.clientsocket.send("OK")
             self.clientsocket.close()
         elif request_type == 'status':
@@ -506,13 +548,27 @@ class ClientThread(threading.Thread):
                     date = None
                 else:
                     date = datetime.fromtimestamp(data_recv[3])
-                self.scheduler.add_job(status_job, 'date', run_date=date,
-                                       args=[job_name], id=job_name + "_status")
+                try:
+                    self.scheduler.add_job(status_job, 'date', run_date=date,
+                                           args=[job_name], id=job_name + "_status")
+                except ConflictingIdError:
+                    error_msg = "KO A watch on job " + job_name + " is already programmed"
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return
             # Programmer de regarder le status régulièrement
             elif data_recv[2] == 'interval':
                 interval = data_recv[3]
-                self.scheduler.add_job(status_job, 'interval', seconds=interval,
-                                       args=[job_name], id=job_name + "_status")
+                try:
+                    self.scheduler.add_job(status_job, 'interval', seconds=interval,
+                                           args=[job_name], id=job_name + "_status")
+                except ConflictingIdError:
+                    error_msg = "KO A watch on job " + job_name + " is already programmed"
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return
             # Déprogrammer
             elif data_recv[2] == 'stop':
                 try:

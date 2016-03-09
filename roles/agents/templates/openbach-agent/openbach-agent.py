@@ -16,10 +16,11 @@ import time
 import signal
 import ConfigParser
 from datetime import datetime
-from ConfigParser import NoSectionError
+from ConfigParser import NoSectionError, MissingSectionHeaderError, NoOptionError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.base import ConflictingIdError
+import subprocess
 
 
 
@@ -121,9 +122,10 @@ def status_job(job_name):
     
     
 class Conf:
-    def __init__(self, job_name, confpath="config.ini"):
+    def __init__(self, job_name, confpath):
+        conffile = confpath + job_name + '.cfg'
         Config = ConfigParser.ConfigParser()
-        Config.read(confpath)
+        Config.read(conffile)
         self.command = Config.get(job_name, 'command')
         self.required = Config.get(job_name, 'required')
         self.optional = Config.get(job_name, 'optional')
@@ -131,10 +133,11 @@ class Conf:
  
 
 class ClientThread(threading.Thread):
-    def __init__(self, clientsocket, scheduler):
+    def __init__(self, clientsocket, scheduler, path):
         threading.Thread.__init__(self)
         self.clientsocket = clientsocket
         self.scheduler = scheduler
+        self.path = path
         
     def start_job(self, mutex_job, dict_jobs, data_recv):
         job_name = data_recv[1]
@@ -207,31 +210,24 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             mutex_jobs.release()
-            # On vérifie qu'il y a un 3eme argument (le fichier de conf)
-            if len(data_recv) < 3:
+            # On vérifie qu'il n'y ai pas d'autre argument
+            if len(data_recv) > 2:
                 error_msg = "KO Message not formed well. To perform an install,"
-                error_msg += " you should provide a configuration file"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            elif len(data_recv) > 3:
-                error_msg = "KO Message not formed well. To perform an install,"
-                error_msg += " you should only provide a configuration file"
+                error_msg += " you should only provide the job name"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
             try:
-                conf = Conf(job_name, data_recv[2])
-            except NoSectionError:
+                conf = Conf(job_name, self.path)
+            except (NoSectionError, MissingSectionHeaderError, NoOptionError):
                 error_msg = "KO Conf files for job " + job_name + " isn't formed well"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            data_recv[2] = conf.command
+            data_recv.append(conf.command)
             if conf.required == '':
                 data_recv.append(False)
             else:
@@ -607,11 +603,59 @@ if __name__ == "__main__":
     global mutex_jobs
     dict_jobs = {}
     mutex_jobs = threading.Lock()
+    # On ajoute tous les jobs déjà présent
+    path = '/opt/openbach-agent/jobs/'
+    result_ls = subprocess.check_output(["ls", path]).split('\n')
+    jobs = []
+    for job in result_ls:
+        if job[-4:] == '.cfg':
+            jobs.append(job[:-4])
+    for job_name in jobs:
+        # On vérifie que ce fichier de conf contient tout ce qu'il faut
+        try:
+            conf = Conf(job_name, path)
+        except (NoSectionError, MissingSectionHeaderError, NoOptionError):
+            error_msg = "KO Conf files for job " + job_name + " isn't formed well"
+            syslog.syslog(syslog.LOG_ERR, error_msg)
+            continue
+        if conf.required == '':
+            conf.required = False
+        if conf.optional == 'True' or conf.optional == 'true':
+            conf.optional = True
+        elif conf.optional == 'False' or conf.optional == 'false':
+            conf.optional = False
+        else:
+            error_msg = "KO Conf 'optional' for job " + job_name + " should"
+            error_msg += "be a boolean"
+            syslog.syslog(syslog.LOG_ERR, error_msg)
+            continue
+        if conf.persistent == 'True' or conf.persistent == 'true':
+            conf.persistent = True
+        elif conf.persistent == 'False' or conf.persistent == 'false':
+            conf.persistent = False
+        else:
+            error_msg = "KO Conf 'persistent' for job " + job_name + " should"
+            error_msg += "be a boolean"
+            syslog.syslog(syslog.LOG_ERR, error_msg)
+            continue
+        # On ajoute le job a la liste des jobs disponibles
+        if not conf.required:
+            dict_jobs[job_name] = dict(command=conf.command,
+                                       required=conf.required,
+                                       optional=conf.optional,
+                                       status=False,
+                                       persistent=conf.persistent)
+        else:
+            dict_jobs[job_name] = dict(command=conf.command,
+                                       required=str(conf.required).split(' '),
+                                       optional=conf.optional,
+                                       status=False,
+                                       persistent=conf.persistent)
 
     while True:
         num_connexion_max = 10
         tcpsock.listen(num_connexion_max)
         (clientsocket, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(clientsocket, scheduler)
+        newthread = ClientThread(clientsocket, scheduler, path)
         newthread.start()
 

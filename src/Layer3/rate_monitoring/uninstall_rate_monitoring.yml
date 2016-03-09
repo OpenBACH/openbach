@@ -4,6 +4,8 @@
   remote_user: root
   vars_files:
     - vars/main.yml
+  vars:
+    - job_conf: rate_monitoring.cfg
 
   tasks:
   - name: Uninstall Rate Monitoring
@@ -11,10 +13,12 @@
     with_items:
       - .py
       - _rstats_filter.conf
-      - _monitoring.cfg
 
   - name: Remove Rate Monitoring repository
     file: path=/opt/openbach-plugins/rate_monitoring state=absent
+    
+  - name: Inform Agent that Rate Monitoring is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
 
   - include: ../../../roles/agents/tasks/remove_job.yml
 

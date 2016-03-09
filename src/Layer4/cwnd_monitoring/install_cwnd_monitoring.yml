@@ -5,7 +5,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: /opt/openbach-plugins/cwnd_monitoring/cwnd_monitoring.cfg
+    - job_conf: cwnd_monitoring.cfg
 
   tasks:
   - name: Create Cwnd Monitoring repository
@@ -17,7 +17,9 @@
       - cwnd.py
       - cwnd_rstats_filter.conf
       - tcp_probe_new_fix.ko
-      - cwnd_monitoring.cfg
+      
+  - name: Inform Agent that Cwnd Monitoring is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
 
   - include: ../../../roles/agents/tasks/add_job.yml
 

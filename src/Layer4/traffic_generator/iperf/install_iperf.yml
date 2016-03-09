@@ -5,14 +5,11 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: /opt/openbach-plugins/iperf/iperf.cfg
+    - job_conf: iperf.cfg
 
   tasks:
-  - name: Create Iperf repository
-    file: path=/opt/openbach-plugins/iperf state=directory mode=0755
-    
-  - name: Install Iperf
-    copy: src=templates/iperf.cfg dest=/opt/openbach-plugins/iperf/ mode=0644
-    
+  - name: Inform Agent that Iperf is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+
   - include: ../../../../roles/agents/tasks/add_job.yml
   

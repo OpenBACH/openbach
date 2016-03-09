@@ -4,13 +4,12 @@
   remote_user: root
   vars_files:
     - vars/main.yml
+  vars:
+    - job_conf: synchronization.cfg
 
   tasks:
-  - name: Uninstall Synchronization
-    file: path=/opt/openbach-plugins/synchronization/synchronization.cfg state=absent
-
-  - name: Remove Synchronization repository
-    file: path=/opt/openbach-plugins/synchronization state=absent
+  - name: Inform Agent that Synchronization is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
 
   - include: ../../../roles/agents/tasks/remove_job.yml
 

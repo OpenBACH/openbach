@@ -5,11 +5,11 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: /opt/rstats/openbach-agent_rstats.cfg
+    - job_conf: rstats.cfg
 
   tasks:
-  - name: Install Synchronization
-    copy: src=templates/rstats.cfg dest={{ job_conf }} mode=0644
+  - name: Inform Agent that Rstats is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
 
   - include: ../../../roles/agents/tasks/add_job.yml
 

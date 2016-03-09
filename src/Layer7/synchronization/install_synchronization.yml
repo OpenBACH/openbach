@@ -5,14 +5,11 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: /opt/openbach-plugins/synchronization/synchronization.cfg
+    - job_conf: synchronization.cfg
 
   tasks:
-  - name: Create Synchronization repository
-    file: path=/opt/openbach-plugins/synchronization state=directory mode=0755
-
-  - name: Install Synchronization
-    template: src=templates/synchronization.cfg.j2 dest=/opt/openbach-plugins/synchronization/synchronization.cfg mode=0644
+  - name: Inform Agent that Synchronization is installed
+    template: src=templates/{{ job_conf }}.j2 dest=/opt/openbach-agent/jobs/{{ job_conf }} mode=0644
 
   - include: ../../../roles/agents/tasks/add_job.yml
 

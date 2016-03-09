@@ -5,7 +5,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: /opt/openbach-plugins/rate_monitoring/rate_monitoring.cfg
+    - job_conf: rate_monitoring.cfg
 
   tasks:
   - name: Install python-iptables
@@ -22,7 +22,9 @@
     with_items:
       - .py
       - _rstats_filter.conf
-      - _monitoring.cfg
+      
+  - name: Inform Agent that Rate Monitoring is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
 
   - include: ../../../roles/agents/tasks/add_job.yml
 

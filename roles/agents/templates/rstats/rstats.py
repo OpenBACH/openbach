@@ -4,7 +4,7 @@ import threading
 import logging
 import socket
 import ConfigParser
-import os
+import shlex
 import subprocess
 
 
@@ -87,7 +87,6 @@ class Rstats:
             cmd += stats_values + "]]}]'"
             
         # Envoyer la commande
-        #os.system(cmd)
         result = subprocess.check_output(cmd, shell=True)
         if len(result) != 0:
             self._logger.error(result)
@@ -302,7 +301,7 @@ class ClientThread(threading.Thread):
         self.conf = conf
         
     def parse_and_check(self, r):
-        data_recv = r.split()
+        data_recv = shlex.split(r)
         try:
             request_type = int(data_recv[0])
             data_recv[0] = request_type

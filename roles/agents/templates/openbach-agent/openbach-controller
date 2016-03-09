@@ -1,11 +1,14 @@
 #!/bin/bash
 # Ce script est utilisé par le controlleur d'OpenBACH pour communiquer et donner ses ordres à l'agent
 
-
-if [ -z "$2" ]
+if [ $1 != "ls"]
 then
-    echo "Usage: $0 {install|start|status|stop|uninstall} job_name [options]"
-    exit 1
+    if [ -z "$2" ]
+    then
+        echo "Usage: $0 {install|start|status|stop|uninstall|restart} job_name [options]"
+        echo "Or   : $0 ls"
+        exit 1
+    fi
 fi
 
 result=`echo "$@" | nc localhost 1112`

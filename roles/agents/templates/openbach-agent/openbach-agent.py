@@ -58,7 +58,7 @@ def stop_job(job_name):
     cmd = "PID=`cat /var/run/" + job_name + ".pid`; kill -HUP $PID; rm "
     cmd += "/var/run/" + job_name + ".pid"
     os.system(cmd)
-
+    
 def status_job(job_name):
     # Récupération du status
     timestamp = int(round(time.time() * 1000))
@@ -117,6 +117,66 @@ def status_job(job_name):
     s.connect(("", 1111))
     cmd = "2 " + connection_id + " " + stat_name + " " + str(timestamp) + " status "
     cmd += status
+    s.send(cmd)
+    s.close()
+ 
+def ls_jobs():
+    global dict_jobs
+    global mutex_jobs
+    
+    # Récupération des jobs disponibles
+    timestamp = int(round(time.time() * 1000))
+    mutex_jobs.acquire()
+    jobs = ''
+    for job_name in dict_jobs.keys():
+        if jobs != '':
+            jobs += ' '
+        jobs += job_name
+    mutex_jobs.release()
+    
+    # Construction du nom de la stat
+    f = open("/etc/hostname", "r")
+    stat_name = f.readline().split('\n')[0]
+    f.close()
+    
+    # Envoie de la stat à Rstats
+    # Connexion au service de collecte de l'agent
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.connect(("", 1111))
+    except socket.error as serr:
+        if serr.errno == errno.ECONNREFUSED:
+            syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
+        raise serr
+    s.send("1 /opt/openbach-agent/openbach-agent_filter.conf")
+    r = s.recv(9999)
+    s.close()
+    data = r.split(" ")
+    if data[0] == 'OK':
+        if len(data) != 2:
+            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
+            syslog.syslog(syslog.LOG_ERR, "\t" + r)
+            quit()
+        try:
+            int(data[1])
+        except:
+            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
+            syslog.syslog(syslog.LOG_ERR, "\t" + r)
+            quit()
+        connection_id = data[1]
+        syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Identifiant de connexion = " + connection_id)
+    elif data[0] == 'KO':
+        syslog.syslog(syslog.LOG_ERR, "ERROR: Something went wrong :")
+        syslog.syslog(syslog.LOG_ERR, "\t" + r)
+        quit()
+    else:
+        syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
+        syslog.syslog(syslog.LOG_ERR, "\t" + r)
+        quit()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("", 1111))
+    cmd = "2 " + connection_id + " " + stat_name + " " + str(timestamp)
+    cmd += " jobs_list \"" + jobs + "\""
     s.send(cmd)
     s.close()
     
@@ -190,15 +250,24 @@ class ClientThread(threading.Thread):
         global mutex_jobs
         data_recv = r.split()
         # Récupération du type de la requete et du nom du job
-        if len(data_recv) < 2:
-            error_msg = "KO Message not formed well. It should have an action"
-            error_msg += "and a job name (with eventually options)"
+        if len(data_recv) < 1:
+            error_msg = "KO Message not formed well. It should have at least an"
+            error_msg += " action"
+            #error_msg += "and a job name (with eventually options)"
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             syslog.syslog(syslog.LOG_ERR, error_msg)
             return []
         request_type = data_recv[0]
-        job_name = data_recv[1]
+        if len(data_recv) < 2 and request_type != 'ls':
+            error_msg = "KO Message not formed well. It should have an action "
+            error_msg += "and a job name (with eventually options)"
+            self.clientsocket.send(error_msg)
+            self.clientsocket.close()
+            syslog.syslog(syslog.LOG_ERR, error_msg)
+            return []
+        elif request_type != 'ls':
+            job_name = data_recv[1]
         if request_type == 'install':
             # On vérifie si le job est déjà installé
             mutex_jobs.acquire()
@@ -367,6 +436,14 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
+            # On vérifie que la date ou l'intervalle est donné
+            if len(data_recv) < 4:
+                error_msg = "KO To start or restart a job, you should provide a"
+                error_msg += " date or an interval"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
             # On récupère la date ou l'interval
             if data_recv[2] == 'date':
                 if data_recv[3] == 'now':
@@ -458,6 +535,15 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
+        elif request_type == 'ls':
+            # On vérifie qu'il n'y ait pas d'arguments indésirables
+            if len(data_recv) != 1:
+                error_msg = "KO Message not formed well. For ls"
+                error_msg += ", no more arguments are needed"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
         else:
             error_msg = "KO Action not recognize. Actions possibles are : "
             error_msg += "install uninstall status start stop"
@@ -477,7 +563,8 @@ class ClientThread(threading.Thread):
         if len(data_recv) == 0:
             return
         request_type = data_recv[0]
-        job_name = data_recv[1]
+        if request_type != 'ls':
+            job_name = data_recv[1]
         if request_type == 'install':
             # TODO Vérifié que l'appli a bien été installé ?
             mutex_jobs.acquire()
@@ -584,6 +671,10 @@ class ClientThread(threading.Thread):
             mutex_jobs.release()
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
             self.start_job(mutex_jobs, dict_jobs, data_recv)
+        elif request_type == 'ls':
+            self.scheduler.add_job(ls_jobs, 'date')
+            self.clientsocket.send("OK")
+            self.clientsocket.close()
 
 
 

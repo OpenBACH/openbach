@@ -227,6 +227,8 @@ class ClientThread(threading.Thread):
                 dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
         elif data_recv[3] == 'interval':
+            if dict_jobs[job_name]['persistent']:
+                return
             interval = data_recv[4]
             try:
                 self.scheduler.add_job(launch_job, 'interval', seconds=interval,
@@ -239,8 +241,7 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return
             mutex_jobs.acquire()
-            if dict_jobs[job_name]['persistent']:
-                dict_jobs[job_name]['set_id'].add(job_id)
+            dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
         self.clientsocket.send("OK")
         self.clientsocket.close()
@@ -478,6 +479,13 @@ class ClientThread(threading.Thread):
                     return []
                 data_recv[4] = int(data_recv[4])
             elif data_recv[3] == 'interval':
+                if dict_jobs[job_name]['persistent']:
+                    error_msg = "KO You can only start a watch on jobs that are"
+                    error_msg += " not persistent"
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return []
                 try:
                     int(data_recv[4])
                 except:

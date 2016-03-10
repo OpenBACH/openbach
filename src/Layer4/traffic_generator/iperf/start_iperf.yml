@@ -5,6 +5,7 @@
   vars_files:
     - vars/main.yml
   vars: 
+    - id: 1
     - job_options: -s
     - date_interval: date now
      
@@ -17,6 +18,7 @@
   vars_files:
     - vars/main.yml
   vars: 
+    - id: 1
     - job_options: -c 172.20.0.81 -t 600
     - date_interval: date now
      

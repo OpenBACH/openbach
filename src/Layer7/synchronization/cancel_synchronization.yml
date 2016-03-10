@@ -5,6 +5,7 @@
   vars_files:
     - vars/main.yml
   vars:
+    - id: 1
     - date: date now
 
   tasks:

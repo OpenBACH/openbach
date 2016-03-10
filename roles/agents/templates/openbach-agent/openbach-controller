@@ -5,8 +5,9 @@ if [ $1 != "ls" ]
 then
     if [ -z "$2" ]
     then
-        echo "Usage: $0 {install|start|status|stop|uninstall|restart} job_name [options]"
-        echo "Or   : $0 ls"
+        echo "Usage 1: $0 {install|uninstall} job_name"
+        echo "Usage 2: $0 {start|status|stop|restart} job_name id [options]"
+        echo "Usage 3: $0 ls"
         exit 1
     fi
 fi

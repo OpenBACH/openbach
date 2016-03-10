@@ -5,6 +5,7 @@
   vars_files:
     - vars/main.yml
   vars:
+    - id: 1
     - job_options: 2 OUTPUT -p tcp --dport 5001 -d 172.20.0.83
     - date_interval: date now
 

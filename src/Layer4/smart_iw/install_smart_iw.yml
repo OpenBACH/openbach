@@ -1,0 +1,21 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: smart_iw.cfg
+
+  tasks:
+  - name: Create Smart IW repository
+    file: path=/opt/openbach-plugins/smart_iw state=directory mode=0755
+
+  - name: Install Smart IW
+    copy: src=templates/smart_iw.sh dest=/opt/openbach-plugins/smart_iw/ mode=0755
+      
+  - name: Inform Agent that Smart IW is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+
+  - include: ../../../roles/agents/tasks/add_job.yml
+

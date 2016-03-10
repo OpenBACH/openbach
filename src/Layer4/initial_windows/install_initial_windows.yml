@@ -1,0 +1,21 @@
+---
+
+- hosts: Agents
+  remote_user: root
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: initial_windows.cfg
+
+  tasks:
+  - name: Create Initial Windows repository
+    file: path=/opt/openbach-plugins/initial_windows state=directory mode=0755
+
+  - name: Install Initial Windows
+    copy: src=templates/initial_windows.sh dest=/opt/openbach-plugins/initial_windows/ mode=0755
+      
+  - name: Inform Agent that Initial Windows is installed
+    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+
+  - include: ../../../roles/agents/tasks/add_job.yml
+

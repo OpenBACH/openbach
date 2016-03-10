@@ -63,11 +63,13 @@ def status_job(job_name, job_id):
     try:
         pid_file = open("/var/run/" + job_name + job_id + ".pid", 'r')
         pid = int(pid_file.readline())
+        pid_file.close()
         if os.path.exists("/proc/" + str(pid)):
             status = "Running"
         else:
             status = "\"Not Running\""
-        pid_file.close()
+            cmd = "rm /var/run/" + job_name + job_id + ".pid"
+            os.system(cmd)
     except (IOError, ValueError):
         status = "\"Not Running\""
     

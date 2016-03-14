@@ -19,6 +19,9 @@ from datetime import datetime
 from ConfigParser import NoSectionError, MissingSectionHeaderError, NoOptionError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.util import datetime_repr
 import subprocess
 
 
@@ -59,21 +62,33 @@ def stop_job(job_name, job_id):
     cmd += " /var/run/" + job_name + job_id + ".pid"
     os.system(cmd)
     
-def status_job(job_name, job_id):
+def status_job(job_name, job_id, scheduler):
     # Récupération du status
     timestamp = int(round(time.time() * 1000))
-    try:
-        pid_file = open("/var/run/" + job_name + job_id + ".pid", 'r')
-        pid = int(pid_file.readline())
-        pid_file.close()
-        if os.path.exists("/proc/" + str(pid)):
-            status = "Running"
-        else:
+    job = scheduler.get_job(job_name + job_id)
+    if job == None:
+        try:
+            pid_file = open("/var/run/" + job_name + job_id + ".pid", 'r')
+            pid = int(pid_file.readline())
+            pid_file.close()
+            if os.path.exists("/proc/" + str(pid)):
+                status = "Running"
+            else:
+                status = "\"Not Running\""
+                cmd = "rm /var/run/" + job_name + job_id + ".pid"
+                os.system(cmd)
+        except (IOError, ValueError):
             status = "\"Not Running\""
-            cmd = "rm /var/run/" + job_name + job_id + ".pid"
-            os.system(cmd)
-    except (IOError, ValueError):
-        status = "\"Not Running\""
+    else:
+        status = "\"Programmed "
+        if type(job.trigger) == DateTrigger:
+            status += "on " + datetime_repr(job.trigger.run_date) + "\""
+        elif type(job.trigger) == IntervalTrigger:
+            status += "every " + str(job.trigger.interval_length) + " seconds\""
+        else:
+            # Attention : Potentiellement ça peut être du CronTrigger
+            # mais on ne l'utilise pas pour le moment
+            pass
     
     # Construction du nom de la stat
     f = open("/etc/hostname", "r")
@@ -208,7 +223,7 @@ class ClientThread(threading.Thread):
         command = dict_jobs[job_name]['command']
         mutex_jobs.release()
         args = ' '.join(data_recv[5:])
-        actual_timestamp = int(round(time.time() * 1000))
+        actual_timestamp = time.time()
         if data_recv[3] == 'date':
             if data_recv[4] < actual_timestamp:
                 date = None
@@ -641,7 +656,7 @@ class ClientThread(threading.Thread):
             self.start_job(mutex_jobs, dict_jobs, data_recv)
         elif request_type == 'stop':
             job_id = data_recv[2]
-            actual_timestamp = int(round(time.time() * 1000))
+            actual_timestamp = time.time()
             if data_recv[4] < actual_timestamp:
                 date = None
             else:
@@ -668,14 +683,15 @@ class ClientThread(threading.Thread):
             job_id = data_recv[2]
             # Récupérer le status actuel
             if data_recv[3] == 'date':
-                actual_timestamp = int(round(time.time() * 1000))
+                actual_timestamp = time.time()
                 if data_recv[4] < actual_timestamp:
                     date = None
                 else:
                     date = datetime.fromtimestamp(data_recv[4])
                 try:
                     self.scheduler.add_job(status_job, 'date', run_date=date,
-                                           args=[job_name, job_id], id=job_name
+                                           args=[job_name, job_id,
+                                                 self.scheduler], id=job_name
                                            + job_id + "_status")
                 except ConflictingIdError:
                     error_msg = "KO A watch on job " + job_name + " with id "
@@ -689,7 +705,8 @@ class ClientThread(threading.Thread):
                 interval = data_recv[4]
                 try:
                     self.scheduler.add_job(status_job, 'interval', seconds=interval,
-                                           args=[job_name, job_id], id=job_name
+                                           args=[job_name, job_id,
+                                                 self.scheduler], id=job_name
                                            + job_id + "_status")
                 except ConflictingIdError:
                     error_msg = "KO A watch on job " + job_name + " with id "

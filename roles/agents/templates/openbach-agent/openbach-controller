@@ -1,7 +1,7 @@
 #!/bin/bash
 # Ce script est utilisé par le controlleur d'OpenBACH pour communiquer et donner ses ordres à l'agent
 
-if [ -z "$2" ]
+if [ -z "$1" ]
 then
     echo "Usage 1: $0 {install|uninstall} *job_name*"
     echo "Usage 2: $0 {start|restart} *job_name* *id* {date *date*|interval *interval} [options]"

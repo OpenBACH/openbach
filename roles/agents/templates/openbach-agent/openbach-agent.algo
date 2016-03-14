@@ -61,8 +61,8 @@ R2 : Parsage (et vérification du format) de la commande
  Sinon si requête est 'start' ou 'restart' :
      | Vérifier que le job est bien disponible dans la liste des jobs installés
      | Vérifier qu'un id est bien donné
-#TODO faut-il aussi le faire pour 'restart' ?
-     | Vérifier qu'une instance du job avec cet id ne soit pas déjà lancé
+	 Si requête est 'start' :
+		 | Vérifier qu'une instance du job avec cet id ne soit pas déjà lancé
      | Vérifier qu'il y ai bien une action ('date ou 'interval') et que la date ou l'intervalle soit donné
      | Récupérer la date ou l'intervalle
      | Vérifier que les arguments donnés correspondent à la commande à lancer

@@ -35,7 +35,9 @@ def signal_term_handler(signal, frame):
                 scheduler.add_job(stop_job, 'date', args=[job_name,
                                                           job_id])
     mutex_jobs.release()
-    time.sleep(10)
+    while len(scheduler.get_jobs()) != 0:
+        time.sleep(0.5)
+    scheduler.shutdown()
     sys.exit(0)
                  
 signal.signal(signal.SIGHUP, signal_term_handler)
@@ -243,8 +245,6 @@ class ClientThread(threading.Thread):
             mutex_jobs.acquire()
             dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
-        self.clientsocket.send("OK")
-        self.clientsocket.close()
 
         
     def parse_and_check(self, r):
@@ -447,15 +447,17 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             job_id = data_recv[2]
-            # On vérifie si il n'est pas déjà demarré
+            # On vérifie si il n'est pas déjà demarré (seulement dans le cas
+            # 'start')
             job = dict_jobs[job_name]
             mutex_jobs.release()
-            if job_id in job['set_id']:
-                error_msg = "KO job " + job_name + " is already started"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+            if request_type == 'start':
+                if job_id in job['set_id']:
+                    error_msg = "KO job " + job_name + " is already started"
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return []
             # On vérifie que la date ou l'intervalle est donné
             if len(data_recv) < 5:
                 error_msg = "KO To start or restart a job, you should provide a"
@@ -504,8 +506,8 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            # On vérifie si il au moins autant d'arguments qu'exigé (+ la date
-            # à laquelle il faut executer le job)
+            # On vérifie si il au moins autant d'arguments qu'exigé pour lancer
+            # la commande
             if not job['required']:
                 nb_args = 0
             else:
@@ -513,6 +515,14 @@ class ClientThread(threading.Thread):
             if len(data_recv) < nb_args + 5:
                 error_msg = "KO job " + job_name + " required at least "
                 error_msg += str(len(job['required'])) + " arguments"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
+            # On vérifié qu'il n'y ait pas trop d'arguments
+            if (not job['optional']) and len(data_recv) > nb_args + 5:
+                error_msg = "KO job " + job_name + " doesn't require more "
+                error_msg += "than " + str(len(job['required'])) + " arguments"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -615,8 +625,6 @@ class ClientThread(threading.Thread):
                                            set_id = set(),
                                            persistent=data_recv[5])
             mutex_jobs.release()
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
         elif request_type == 'uninstall':
             # On vérifie si le job n'est pas en train de tourner
             mutex_jobs.acquire()
@@ -629,8 +637,6 @@ class ClientThread(threading.Thread):
             mutex_jobs.acquire()
             del dict_jobs[job_name]
             mutex_jobs.release()
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
         elif request_type == 'start':
             self.start_job(mutex_jobs, dict_jobs, data_recv)
         elif request_type == 'stop':
@@ -658,8 +664,6 @@ class ClientThread(threading.Thread):
             mutex_jobs.acquire()
             dict_jobs[job_name]['set_id'].remove(job_id)
             mutex_jobs.release()
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
         elif request_type == 'status':
             job_id = data_recv[2]
             # Récupérer le status actuel
@@ -703,8 +707,6 @@ class ClientThread(threading.Thread):
                                            job_name + " was programmed")
                     self.clientsocket.close()
                     return
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
         elif request_type == 'restart':
             # Stop le job si il est lancer
             job_id = data_recv[2]
@@ -723,8 +725,8 @@ class ClientThread(threading.Thread):
             self.start_job(mutex_jobs, dict_jobs, data_recv)
         elif request_type == 'ls':
             self.scheduler.add_job(ls_jobs, 'date')
-            self.clientsocket.send("OK")
-            self.clientsocket.close()
+        self.clientsocket.send("OK")
+        self.clientsocket.close()
 
 
 

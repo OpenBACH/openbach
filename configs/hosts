@@ -18,3 +18,7 @@
 [Controller]
 #IP4
 
+#vars_file=configs/all.yml TO be checked
+ansible_ssh_user=openbach
+ansible_ssh_pass=openbach
+ansible_become_pass=

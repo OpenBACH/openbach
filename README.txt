@@ -22,7 +22,7 @@ $ ssh-copy-id -i ~/.ssh/id_dsa.pub root@*IP_ADDR*
 	Can be done in local ansible/ directory in your home
 	TO be discussed
 First, you have to define and install the global variable of OpenBACH.
-File the file group_vars/all. The defaut port for logstash elasticsearch and influxdb are filled but you can change them.
+Fill the file group_vars/all with controller and collector ip address. The defaut port for logstash elasticsearch and influxdb are filled but you can change them.
 It is here you choose the database name and the username and password associate to it.
 Then move the repository to /etc/ansible :
 $ sudo cp -r group_vars/ /etc/ansible/

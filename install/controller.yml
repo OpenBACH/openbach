@@ -1,0 +1,8 @@
+---
+
+- hosts: Controller
+  roles:
+    - controller
+  remote_user: opensand
+  become: yes
+

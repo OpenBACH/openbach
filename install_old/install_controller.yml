@@ -9,9 +9,20 @@
    - controller_archi: x64
   
   tasks:
+  # Ansible Part
+  - name: Add Ansible repository
+    apt_repository: repo=ppa:ansible/ansible update_cache=yes
+    
+  - name: Install software-properties-common
+    apt: pkg=software-properties-common update_cache=false
+    
+  - name:  Install Ansible
+    apt: pkg=ansible update_cache=false
+  
+
   # Synchro part
   - name: Install ntp and ntpdate
-    apt: pkg={{ item }} state=installed update_cache=true
+    apt: pkg={{ item }} state=installed update_cache=false
     with_items:
       - ntp
       - ntpdate

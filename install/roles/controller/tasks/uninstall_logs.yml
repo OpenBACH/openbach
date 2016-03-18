@@ -1,0 +1,17 @@
+---
+
+- name: Stop Kibana
+  service: name=kibana state=stopped
+  tags:
+    - uninstall
+
+- name: Remove Kibana Service
+  file: path=etc/init.d/kibana state=absent
+  tags:
+    - uninstall
+  
+- name: Uninstall Kibana
+  file: path=/opt/kibana state=absent
+  tags:
+    - uninstall
+  

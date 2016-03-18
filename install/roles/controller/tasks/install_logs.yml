@@ -1,0 +1,34 @@
+---
+
+- name: Download and Uncompress Kibana
+  unarchive: src=https://download.elastic.co/kibana/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
+    dest=/tmp/ copy=no
+  tags:
+    - install
+    
+- name: Create Kibana repository
+  file: path=/opt/kibana state=directory mode=0755
+  tags:
+    - install
+  
+- name: Install Kibana
+  shell: cp -R /tmp/kibana-{{ version_kibana }}-linux-{{ controller_archi }}/* /opt/kibana
+  tags:
+    - install
+  
+- name: Configure Kibana
+  template: src=roles/controller/templates/kibana.yml.j2 dest=/opt/kibana/config/kibana.yml \
+    owner=root group=root
+  tags:
+    - install
+
+- name: Create Kibana Service
+  copy: src=roles/controller/templates/kibana dest=/etc/init.d/ mode=0755
+  tags:
+    - install
+  
+- name: Start Kibana
+  service: name=kibana state=started
+  tags:
+    - install
+

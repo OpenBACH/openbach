@@ -1,0 +1,51 @@
+---
+
+- name: Download ElasticSearch
+  get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
+    dest=/tmp/ force=no
+  tags:
+    - install
+
+- name: Install ElasticSearch
+  shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
+  tags:
+    - install
+
+- name: Install openjdk-7-jdk
+  apt: pkg=openjdk-7-jdk state=installed update_cache=false
+  tags:
+    - install
+  
+- name: Configure ElasticSearch 
+  template: src=roles/collector/templates/elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
+    owner=root group=elasticsearch
+  tags:
+    - install
+  
+- name: Start ElasticSearch
+  service: name=elasticsearch state=started
+  tags:
+    - install
+
+- name: Download LogStash
+  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
+    dest=/tmp/ force=no
+  tags:
+    - install
+
+- name: Install LogStash
+  shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb
+  tags:
+    - install
+
+- name: Configure LogStash
+  template: src=roles/collector/templates/collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
+    owner=root group=root
+  tags:
+    - install
+  
+- name: Start LogStash
+  service: name=logstash state=started
+  tags:
+    - install
+

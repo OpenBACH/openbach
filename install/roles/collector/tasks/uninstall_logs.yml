@@ -1,0 +1,17 @@
+---
+
+- name: Uninstall LogStash
+  shell: dpkg -P logstash
+  tags:
+    - uninstall
+
+- name: Uninstall ElasticSearch
+  shell: dpkg -P elasticsearch
+  tags:
+    - uninstall
+    
+- name: Uninstall openjdk-7-jdk
+  apt: pkg=openjdk-7-jdk state=absent update_cache=false
+  tags:
+    - uninstall
+ 

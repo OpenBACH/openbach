@@ -1,0 +1,15 @@
+---
+
+- name: Install ntp and ntpdate
+  apt: pkg={{ item }} state=installed update_cache=false
+  with_items:
+    - ntp
+    - ntpdate
+  tags:
+    - install
+    
+- name: Start Ntp server
+  service: name=ntp state=started
+  tags:
+    - install
+

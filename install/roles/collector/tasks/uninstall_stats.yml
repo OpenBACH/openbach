@@ -1,0 +1,7 @@
+---
+
+- name: Uninstall InfluxDB (64bits)
+  shell: dpkg -P influxdb
+  tags:
+    - uninstall
+ 

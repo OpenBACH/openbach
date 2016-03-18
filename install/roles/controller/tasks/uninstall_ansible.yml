@@ -1,0 +1,17 @@
+---
+
+- name: Uninstall Ansible
+  apt: pkg=ansible update_cache=false state=absent
+  tags:
+    - uninstall
+
+- name: Uninstall software-properties-common
+  apt: pkg=software-properties-common update_cache=false state=absent
+  tags:
+    - uninstall
+  
+- name: Del Ansible repository
+  apt_repository: repo=ppa:ansible/ansible update_cache=false state=absent
+  tags:
+    - uninstall
+  

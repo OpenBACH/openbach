@@ -1,0 +1,7 @@
+---
+
+- hosts: Agents 
+  roles:
+    - agents
+  become: yes
+

@@ -1,0 +1,12 @@
+---
+
+- name: Install Rsyslog
+  apt: pkg=rsyslog state=installed update_cache=false
+  tags:
+    - install
+
+- name: Start Rsyslog
+  service: name=rsyslog state=started
+  tags:
+    - install
+ 

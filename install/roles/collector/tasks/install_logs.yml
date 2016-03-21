@@ -1,10 +1,10 @@
 ---
 
-- name: Download ElasticSearch
-  get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
-    dest=/tmp/ force=no
-  tags:
-    - install
+#- name: Download ElasticSearch
+#  get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
+#    dest=/tmp/ force=no
+#  tags:
+#    - install
 
 - name: Install ElasticSearch
   shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
@@ -27,11 +27,11 @@
   tags:
     - install
 
-- name: Download LogStash
-  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
-    dest=/tmp/ force=no
-  tags:
-    - install
+#- name: Download LogStash
+#  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
+#    dest=/tmp/ force=no
+#  tags:
+#    - install
 
 - name: Install LogStash
   shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb

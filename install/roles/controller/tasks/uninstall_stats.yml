@@ -5,13 +5,13 @@
   tags:
     - uninstall
   
-- name: Del the Package Cloud key
-  apt_key: url=https://packagecloud.io/gpg.key state=absent
-  tags:
-    - uninstall
-  
 - name: Del the apt repository
   file: path=/etc/apt/sources.list.d/grafana-trusty.list state=absent
   tags:
     - uninstall
+  
+#- name: Del the Package Cloud key
+#  apt_key: url=https://packagecloud.io/gpg.key state=absent
+#  tags:
+#    - uninstall
   

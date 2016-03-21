@@ -1,0 +1,22 @@
+---
+
+- name: Install Rstats
+  copy: src=roles/agents/templates/rstats/ dest=/opt/rstats/ mode=0644
+  tags:
+    - install
+
+- name: Configure Rstats
+  template: src=roles/agents/templates/rstats.cfg.j2 dest=/opt/rstats/rstats.cfg
+  tags:
+    - install
+
+- name: Create Rstats Service
+  copy: src=roles/agents/templates/rstats_service dest=/etc/init.d/rstats mode=0755
+  tags:
+    - install
+
+- name: Start Rstats
+  service: name=rstats state=started
+  tags:
+    - install
+

@@ -1,10 +1,10 @@
 ---
 
-- name: Download InfluxDB (64bits)
-  get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
-    dest=/tmp/ force=no
-  tags:
-    - install
+#- name: Download InfluxDB (64bits)
+#  get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
+#    dest=/tmp/ force=no
+#  tags:
+#    - install
     
 - name: Install InfluxDB (64bits)
   shell: dpkg -i /tmp/influxdb_{{ influxdb_version }}_amd64.deb
@@ -25,7 +25,7 @@
   shell: curl -G http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
   with_items:
     - CREATE DATABASE "{{ database_name }}"
-    - CREATE USER "{{username}}" WITH PASSWORD '{{ password }}' WITH ALL PRIVILEGES
+    - CREATE USER "{{ database_username }}" WITH PASSWORD '{{ database_password }}' WITH ALL PRIVILEGES
   tags:
     - install
 

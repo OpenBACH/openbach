@@ -1,0 +1,12 @@
+---
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach state=directory mode=0755
+  tags:
+    - install
+
+- name: Copy the sources
+  copy: src=../src/ dest=/opt/openbach/ mode=0755
+  tags:
+    - install
+

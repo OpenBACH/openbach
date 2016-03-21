@@ -1,16 +1,16 @@
 ---
 
-- name: Add Ansible repository
-  apt_repository: repo=ppa:ansible/ansible update_cache=yes
-  tags:
-    - install
+#- name: Add Ansible repository
+#  apt_repository: repo=ppa:ansible/ansible update_cache=yes
+#  tags:
+#    - install
   
 - name: Install software-properties-common
   apt: pkg=software-properties-common update_cache=false
   tags:
     - install
   
-- name:  Install Ansible
+- name: Install Ansible
   apt: pkg=ansible update_cache=false
   tags:
     - install

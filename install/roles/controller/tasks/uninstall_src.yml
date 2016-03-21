@@ -1,0 +1,7 @@
+---
+
+- name: Delete the sources
+  file: path=/opt/openbach state=absent
+  tags:
+    - uninstall
+

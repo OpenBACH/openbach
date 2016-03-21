@@ -8,17 +8,9 @@
 #   - You can enter hostnames or ip addresses
 #   - A hostname/ip can be a member of multiple groups
 
-[Agents]
-#IP1
-#IP2
-
 [Collector]
-#IP3
+#IP Collector
 
 [Controller]
-#IP4
+#IP Controller
 
-#vars_file=configs/all.yml TO be checked
-ansible_ssh_user=openbach
-ansible_ssh_pass=openbach
-ansible_become_pass=

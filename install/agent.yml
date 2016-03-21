@@ -1,0 +1,14 @@
+---
+
+- hosts: Controller
+  
+  tasks:
+    - name: Add an Agent
+      shell: ansible-playbook -e agent_address={{ agent_address }} -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags install
+      tags:
+        - add_agent
+
+    - name: Del an Agent
+      shell: ansible-playbook -e agent_address={{ agent_address }} -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags uninstall
+      tags:
+        - del_agent

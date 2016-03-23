@@ -3,12 +3,26 @@
 - hosts: Controller
   
   tasks:
+    - name: Add the list of Agents
+      copy: src=../configs/hosts_controller dest=/tmp/openbach_hosts
+      tags:
+        - add_agent
+        - del_agent
+
+    - name: Add the list of global variables
+      copy: src=../configs/{{ item }} dest=/tmp/openbach_{{ item }}
+      with_items:
+        - all
+        - ips
+      tags:
+        - add_agent
+
     - name: Add an Agent
-      shell: ansible-playbook -e agent_address={{ agent_address }} -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags install
+      shell: ansible-playbook -i /tmp/openbach_hosts -e @/tmp/openbach_ips -e @/tmp/openbach_all -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags install > /tmp/agent_log_install.tmp
       tags:
         - add_agent
 
     - name: Del an Agent
-      shell: ansible-playbook -e agent_address={{ agent_address }} -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags uninstall
+      shell: ansible-playbook -i /tmp/openbach_hosts -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags uninstall > /tmp/agent_log_uninstall.tmp
       tags:
         - del_agent

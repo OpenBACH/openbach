@@ -11,7 +11,7 @@
     - uninstall
   
 - name: Uninstall the daemon
-  path: path=/opt/openbach-agent/openbach-agent state=absent
+  file: path=/opt/openbach-agent/ state=absent
   tags:
     - uninstall
 

@@ -1,11 +1,9 @@
 ---
 
-controller_ip: 
-collector_ip: 
 logstash_port: 10514
 elasticsearch_port: 9200
 influxdb_port: 8086
-database_name: 
-database_username: 
-database_password: 
+database_name: openbach
+database_username: openbach
+database_password: openbach
 

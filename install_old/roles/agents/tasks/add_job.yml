@@ -1,5 +1,0 @@
----
-
-- name: Add the job to the openbach-agent daemon
-  shell: /opt/openbach-agent/openbach-controller install {{ job_name }}
-

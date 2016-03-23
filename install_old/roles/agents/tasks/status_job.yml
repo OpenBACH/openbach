@@ -1,4 +1,0 @@
----
-
-- name: Get the status of the job
-  shell: /opt/openbach-agent/openbach-controller status {{ job_name }} {{ id }} {{ date_interval_stop }}

@@ -10,10 +10,10 @@
   tags:
     - install
   
-#- name: Install Grafana
-#  apt: pkg=grafana state=installed update_cache=true
-#  tags:
-#    - install
+- name: Install Grafana
+  apt: pkg=grafana state=installed update_cache=true
+  tags:
+    - install
   
 - name: Configure Grafana
   copy: src=roles/controller/templates/grafana.ini dest=/etc/grafana/ mode=0640

@@ -10,6 +10,7 @@
   tags:
     - uninstall
   
+# TODO This action fails
 #- name: Del the Package Cloud key
 #  apt_key: url=https://packagecloud.io/gpg.key state=absent
 #  tags:

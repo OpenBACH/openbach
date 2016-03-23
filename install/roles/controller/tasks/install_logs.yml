@@ -1,10 +1,10 @@
 ---
 
-#- name: Download and Uncompress Kibana
-#  unarchive: src=https://download.elastic.co/kibana/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
-#    dest=/tmp/ copy=no
-#  tags:
-#    - install
+- name: Download and Uncompress Kibana
+  unarchive: src=https://download.elastic.co/kibana/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
+    dest=/tmp/ copy=no
+  tags:
+    - install
     
 - name: Create Kibana repository
   file: path=/opt/kibana state=directory mode=0755

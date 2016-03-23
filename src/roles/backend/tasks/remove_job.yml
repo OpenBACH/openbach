@@ -1,4 +1,4 @@
 ---
 
 - name: Remove Job
-  shell: /opt/openbach-agent/openbach-controller uninstall {{ job_name }}
+  shell: /opt/openbach-agent/openbach-controller del {{ job_name }}

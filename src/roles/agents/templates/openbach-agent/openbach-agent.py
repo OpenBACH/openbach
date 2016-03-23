@@ -276,16 +276,16 @@ class ClientThread(threading.Thread):
             syslog.syslog(syslog.LOG_ERR, error_msg)
             return []
         request_type = data_recv[0]
-        if len(data_recv) < 2 and request_type != 'ls':
+        if len(data_recv) < 2 and request_type != 'ls_jobs':
             error_msg = "KO Message not formed well. It should have an action "
             error_msg += "and a job name (with eventually options)"
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             syslog.syslog(syslog.LOG_ERR, error_msg)
             return []
-        elif request_type != 'ls':
+        elif request_type != 'ls_jobs':
             job_name = data_recv[1]
-        if request_type == 'install':
+        if request_type == 'add':
             # On vérifie si le job est déjà installé
             mutex_jobs.acquire()
             if job_name in dict_jobs:
@@ -298,7 +298,7 @@ class ClientThread(threading.Thread):
             mutex_jobs.release()
             # On vérifie qu'il n'y ai pas d'autre argument
             if len(data_recv) > 2:
-                error_msg = "KO Message not formed well. To perform an install,"
+                error_msg = "KO Message not formed well. To add a job,"
                 error_msg += " you should only provide the job name"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
@@ -340,7 +340,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-        elif request_type == 'uninstall':
+        elif request_type == 'del':
             # On vérifie que le job soit bien installé
             mutex_jobs.acquire()
             if not job_name in dict_jobs:
@@ -353,7 +353,7 @@ class ClientThread(threading.Thread):
             mutex_jobs.release()
             # On vérifie qu'il n'y ait pas d'arguments indésirables
             if len(data_recv) != 2:
-                error_msg = "KO Message not formed well. For uninstall"
+                error_msg = "KO Message not formed well. To delete"
                 error_msg += ", no more arguments are needed"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
@@ -370,10 +370,10 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             mutex_jobs.release()
-            # On vérifie que l'id est donné
+            # On vérifie que l'instance_id est donné
             if len(data_recv) < 3:
-                error_msg = "KO To start or restart a job, you should provide an"
-                error_msg += " id (to be able to get the status or stop the job)"
+                error_msg = "KO To start or restart a job, you should provide an "
+                error_msg += "instance_id (to be able to get the status or stop the job)"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -453,10 +453,10 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            # On vérifie que l'id est donné
+            # On vérifie que l'instance_id est donné
             if len(data_recv) < 3:
-                error_msg = "KO To start or restart a job, you should provide an"
-                error_msg += " id (to be able to get the status or stop the job)"
+                error_msg = "KO To start or restart a job, you should provide an "
+                error_msg += "instance_id (to be able to get the status or stop the job)"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -553,9 +553,9 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             mutex_jobs.release()
-            # On vérifie que l'id est donné
+            # On vérifie que l'instance_id est donné
             if len(data_recv) < 3:
-                error_msg = "KO To stop a job, you should provide it id"
+                error_msg = "KO To stop a job, you should provide it instance_id"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -594,10 +594,10 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-        elif request_type == 'ls':
+        elif request_type == 'ls_jobs':
             # On vérifie qu'il n'y ait pas d'arguments indésirables
             if len(data_recv) != 1:
-                error_msg = "KO Message not formed well. For ls"
+                error_msg = "KO Message not formed well. For ls_jobs"
                 error_msg += ", no more arguments are needed"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
@@ -605,7 +605,7 @@ class ClientThread(threading.Thread):
                 return []
         else:
             error_msg = "KO Action not recognize. Actions possibles are : "
-            error_msg += "install uninstall status start stop restart ls"
+            error_msg += "add del status start stop restart ls_jobs"
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -622,9 +622,9 @@ class ClientThread(threading.Thread):
         if len(data_recv) == 0:
             return
         request_type = data_recv[0]
-        if request_type != 'ls':
+        if request_type != 'ls_jobs':
             job_name = data_recv[1]
-        if request_type == 'install':
+        if request_type == 'add':
             # TODO Vérifié que l'appli a bien été installé ?
             mutex_jobs.acquire()
             if not data_recv[3]:
@@ -640,7 +640,7 @@ class ClientThread(threading.Thread):
                                            set_id = set(),
                                            persistent=data_recv[5])
             mutex_jobs.release()
-        elif request_type == 'uninstall':
+        elif request_type == 'del':
             # On vérifie si le job n'est pas en train de tourner
             mutex_jobs.acquire()
             if len(dict_jobs[job_name]['set_id']) != 0:
@@ -694,8 +694,8 @@ class ClientThread(threading.Thread):
                                                  self.scheduler], id=job_name
                                            + job_id + "_status")
                 except ConflictingIdError:
-                    error_msg = "KO A watch on job " + job_name + " with id "
-                    error_msg += job_id + " is already programmed"
+                    error_msg = "KO A watch on job " + job_name + " with "
+                    error_msg += job_id + "instance_id  is already programmed"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -709,8 +709,8 @@ class ClientThread(threading.Thread):
                                                  self.scheduler], id=job_name
                                            + job_id + "_status")
                 except ConflictingIdError:
-                    error_msg = "KO A watch on job " + job_name + " with id "
-                    error_msg += job_id + " is already programmed"
+                    error_msg = "KO A watch on job " + job_name + " with "
+                    error_msg += job_id + "instance_id  is already programmed"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -740,7 +740,7 @@ class ClientThread(threading.Thread):
             mutex_jobs.release()
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
             self.start_job(mutex_jobs, dict_jobs, data_recv)
-        elif request_type == 'ls':
+        elif request_type == 'ls_jobs':
             self.scheduler.add_job(ls_jobs, 'date')
         self.clientsocket.send("OK")
         self.clientsocket.close()

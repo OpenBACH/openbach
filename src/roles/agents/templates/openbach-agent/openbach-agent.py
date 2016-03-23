@@ -29,36 +29,22 @@ import subprocess
 def signal_term_handler(signal, frame):
     global dict_jobs
     global mutex_jobs
-    global dict_args
-    global mutex_args
     global scheduler
     scheduler.remove_all_jobs()
     mutex_jobs.acquire()
     for (job_name, job) in dict_jobs.iteritems():
-        mutex_jobs.acquire()
-        command = dict_jobs[job_name]['command_stop']
-        mutex_jobs.release()
         if len(job['set_id']) != 0:
             for job_id in job['set_id']:
-                if command:
-                    mutex_args.acquire()
-                    args = dict_args[job_name][job_id]
-                    del dict_args[job_name][job_id]
-                    print dict_args
-                    mutex_args.release()
-                else:
-                    args = ''
                 scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                          job_id, command,
-                                                          args])
+                                                          job_id])
     mutex_jobs.release()
     while len(scheduler.get_jobs()) != 0:
         time.sleep(0.5)
     scheduler.shutdown()
     sys.exit(0)
-
+                 
 signal.signal(signal.SIGHUP, signal_term_handler)
-
+                 
 
 
 # TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
@@ -67,31 +53,15 @@ syslog.openlog("openbach-agent", syslog.LOG_PID, syslog.LOG_USER)
 
 
 def launch_job(job_name, job_id, command, args):
-    global dict_jobs
-    global mutex_jobs
-
-    # Si le job n'est pas persistent
-    mutex_jobs.acquire()
-    if job_id in dict_jobs[job_name]['set_id']:
-        # On retire son id de la liste des id lancés ou programmés
-        dict_jobs[job_name]['set_id'].remove(job_id)
-    mutex_jobs.release()
-
     cmd = "PID=`" + command + " " + args + "> /dev/null 2>&1 & echo $!`; echo"
     cmd += " $PID > /var/run/" + job_name + job_id + ".pid"
     os.system(cmd)
-
-
-def stop_job(job_name, job_id, command, args):
+    
+def stop_job(job_name, job_id):
     cmd = "PID=`cat /var/run/" + job_name + job_id + ".pid`; kill -HUP $PID; rm"
     cmd += " /var/run/" + job_name + job_id + ".pid"
     os.system(cmd)
-
-    if command:
-        cmd = command + " " + args
-        os.system(cmd)
-
-
+    
 def status_job(job_name, job_id, scheduler):
     # Récupération du status
     timestamp = int(round(time.time() * 1000))
@@ -119,13 +89,13 @@ def status_job(job_name, job_id, scheduler):
             # Attention : Potentiellement ça peut être du CronTrigger
             # mais on ne l'utilise pas pour le moment
             pass
-
+    
     # Construction du nom de la stat
     f = open("/etc/hostname", "r")
     stat_name = f.readline().split('\n')[0]
     f.close()
     stat_name += "." + job_name + job_id
-
+    
     # Envoie de la stat à Rstats
     # Connexion au service de collecte de l'agent
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -166,12 +136,11 @@ def status_job(job_name, job_id, scheduler):
     cmd += status
     s.send(cmd)
     s.close()
-
-
+ 
 def ls_jobs():
     global dict_jobs
     global mutex_jobs
-
+    
     # Récupération des jobs disponibles
     timestamp = int(round(time.time() * 1000))
     mutex_jobs.acquire()
@@ -181,12 +150,12 @@ def ls_jobs():
             jobs += ' '
         jobs += job_name
     mutex_jobs.release()
-
+    
     # Construction du nom de la stat
     f = open("/etc/hostname", "r")
     stat_name = f.readline().split('\n')[0]
     f.close()
-
+    
     # Envoie de la stat à Rstats
     # Connexion au service de collecte de l'agent
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -227,19 +196,18 @@ def ls_jobs():
     cmd += " jobs_list \"" + jobs + "\""
     s.send(cmd)
     s.close()
-
-
+    
+    
 class Conf:
     def __init__(self, job_name, confpath):
         conffile = confpath + job_name + '.cfg'
         Config = ConfigParser.ConfigParser()
         Config.read(conffile)
         self.command = Config.get(job_name, 'command')
-        self.command_stop = Config.get(job_name, 'command_stop')
         self.required = Config.get(job_name, 'required')
         self.optional = Config.get(job_name, 'optional')
         self.persistent = Config.get(job_name, 'persistent')
-
+ 
 
 class ClientThread(threading.Thread):
     def __init__(self, clientsocket, scheduler, path):
@@ -247,8 +215,8 @@ class ClientThread(threading.Thread):
         self.clientsocket = clientsocket
         self.scheduler = scheduler
         self.path = path
-
-    def start_job(self, mutex_jobs, dict_jobs, data_recv):
+        
+    def start_job(self, mutex_job, dict_jobs, data_recv):
         job_name = data_recv[1]
         job_id = data_recv[2]
         mutex_jobs.acquire()
@@ -257,7 +225,6 @@ class ClientThread(threading.Thread):
         args = ' '.join(data_recv[5:])
         actual_timestamp = time.time()
         if data_recv[3] == 'date':
-            # TODO Trouver un moyen d'uniquiser le job_id
             if data_recv[4] < actual_timestamp:
                 date = None
             else:
@@ -267,8 +234,7 @@ class ClientThread(threading.Thread):
                                        args=[job_name, job_id, command, args],
                                        id=job_name + job_id)
             except ConflictingIdError:
-                error_msg = "KO A job " + job_name + " with id " + job_id
-                error_msg += " is already programmed"
+                error_msg = "KO A job " + job_name + " is already programmed"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -278,40 +244,15 @@ class ClientThread(threading.Thread):
                 dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
         elif data_recv[3] == 'interval':
-            date = ''
-            mutex_jobs.acquire()
             if dict_jobs[job_name]['persistent']:
-                mutex_jobs.release()
                 return
-            mutex_jobs.release()
-            if command:
-                mutex_args.acquire()
-                if not job_name in dict_args:
-                    dict_args[job_name] = {}
-                for (job_id, job_args) in dict_args[job_name].items():
-                    if job_args['type'] == 'interval':
-                        # Pour ce genre de job (non persistent avec une
-                        # command_stop), un seul interval est autorisé
-                        # Pour l'instant on renvoie un message d'erreur quand on
-                        # en demande un 2eme mais on pourrait très bien
-                        # remplacer l'un par l'autre à la place
-                        error_msg = "KO A job " + job_name + " is already programmed"
-                        error_msg += ". It id is " + job_id + ". Please stop it "
-                        error_msg += "before trying to programme regulary this job"
-                        self.clientsocket.send(error_msg)
-                        self.clientsocket.close()
-                        syslog.syslog(syslog.LOG_ERR, error_msg)
-                        mutex_args.release()
-                        return
-                mutex_args.release()
             interval = data_recv[4]
             try:
                 self.scheduler.add_job(launch_job, 'interval', seconds=interval,
                                        args=[job_name, job_id, command, args],
                                        id=job_name + job_id)
             except ConflictingIdError:
-                error_msg = "KO A job " + job_name + " with id " + job_id
-                error_msg += " is already programmed"
+                error_msg = "KO A job " + job_name + " is already programmed"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -319,40 +260,8 @@ class ClientThread(threading.Thread):
             mutex_jobs.acquire()
             dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
-        mutex_jobs.acquire()
-        if dict_jobs[job_name]['command_stop']:
-            mutex_args.acquire()
-            if not job_name in dict_args:
-                dict_args[job_name] = {}
-            dict_args[job_name][job_id] = dict(args=args, type=data_recv[3], date=date)
-            print dict_args
-            mutex_args.release()
-        mutex_jobs.release()
 
-    def parse_args(self, data_recv, job, job_name):
-        # On vérifie si il au moins autant d'arguments qu'exigé pour lancer
-        # la commande
-        if not job['required']:
-            nb_args = 0
-        else:
-            nb_args = len(job['required'])
-        if len(data_recv) < nb_args + 5:
-            error_msg = "KO job " + job_name + " required at least "
-            error_msg += str(len(job['required'])) + " arguments"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            return False
-        # On vérifié qu'il n'y ait pas trop d'arguments
-        if (not job['optional']) and len(data_recv) > nb_args + 5:
-            error_msg = "KO job " + job_name + " doesn't require more "
-            error_msg += "than " + str(len(job['required'])) + " arguments"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            return False
-        return True
-
+        
     def parse_and_check(self, r):
         global dict_jobs
         global mutex_jobs
@@ -405,10 +314,6 @@ class ClientThread(threading.Thread):
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
             data_recv.append(conf.command)
-            if conf.command_stop == '':
-                data_recv.append(False)
-            else:
-                data_recv.append(conf.command_stop)
             if conf.required == '':
                 data_recv.append(False)
             else:
@@ -548,8 +453,6 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            job = dict_jobs[job_name]
-            mutex_jobs.release()
             # On vérifie que l'id est donné
             if len(data_recv) < 3:
                 error_msg = "KO To start or restart a job, you should provide an"
@@ -561,10 +464,11 @@ class ClientThread(threading.Thread):
             job_id = data_recv[2]
             # On vérifie si il n'est pas déjà demarré (seulement dans le cas
             # 'start')
+            job = dict_jobs[job_name]
+            mutex_jobs.release()
             if request_type == 'start':
                 if job_id in job['set_id']:
-                    error_msg = "KO job " + job_name + "with id " + job_id
-                    error_msg += " is already started"
+                    error_msg = "KO job " + job_name + " is already started"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -617,8 +521,26 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            # On vérifie qu'il y ait le bon nombre d'arguments
-            if not self.parse_args(data_recv, job, job_name):
+            # On vérifie si il au moins autant d'arguments qu'exigé pour lancer
+            # la commande
+            if not job['required']:
+                nb_args = 0
+            else:
+                nb_args = len(job['required'])
+            if len(data_recv) < nb_args + 5:
+                error_msg = "KO job " + job_name + " required at least "
+                error_msg += str(len(job['required'])) + " arguments"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
+            # On vérifié qu'il n'y ait pas trop d'arguments
+            if (not job['optional']) and len(data_recv) > nb_args + 5:
+                error_msg = "KO job " + job_name + " doesn't require more "
+                error_msg += "than " + str(len(job['required'])) + " arguments"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
         elif request_type == 'stop':
             # On vérifie que le job soit bien installé
@@ -630,11 +552,24 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            job = dict_jobs[job_name]
             mutex_jobs.release()
             # On vérifie que l'id est donné
             if len(data_recv) < 3:
                 error_msg = "KO To stop a job, you should provide it id"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
+            # On vérifie si il y a autant d'arguments qu'exigé
+            # (la date à laquelle il faut stopper le job)
+            if len(data_recv) < 5:
+                error_msg = "KO To stop a job you have to specify the date"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return []
+            elif len(data_recv) > 5:
+                error_msg = "KO To stop a job you just have to specify the date"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -659,25 +594,6 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 return []
-            ## On vérifie qu'il y ait le bon nombre d'arguments
-            #if job['command_stop']:
-            #    if not self.parse_args(data_recv, job, job_name):
-            #        return []
-            #else:
-            # On vérifie si il y a autant d'arguments qu'exigé
-            # (la date à laquelle il faut stopper le job)
-            if len(data_recv) < 5:
-                error_msg = "KO To stop a job you have to specify the date"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            elif len(data_recv) > 5:
-                error_msg = "KO To stop a job you just have to specify the date"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
         elif request_type == 'ls':
             # On vérifie qu'il n'y ait pas d'arguments indésirables
             if len(data_recv) != 1:
@@ -695,7 +611,7 @@ class ClientThread(threading.Thread):
             syslog.syslog(syslog.LOG_ERR, error_msg)
             return []
         return data_recv
-
+            
 
     def run(self): 
         global dict_jobs
@@ -708,42 +624,29 @@ class ClientThread(threading.Thread):
         request_type = data_recv[0]
         if request_type != 'ls':
             job_name = data_recv[1]
-
         if request_type == 'install':
             # TODO Vérifié que l'appli a bien été installé ?
             mutex_jobs.acquire()
-            if not data_recv[4]:
-                required = data_recv[4]
+            if not data_recv[3]:
+                dict_jobs[job_name] = dict(command=data_recv[2],
+                                           required=data_recv[3],
+                                           optional=data_recv[4],
+                                           set_id = set(),
+                                           persistent=data_recv[5])
             else:
-                required = str(data_recv[4]).split(' ')
-            dict_jobs[job_name] = dict(command=data_recv[2],
-                                       command_stop=data_recv[3],
-                                       required=required,
-                                       optional=data_recv[5],
-                                       set_id = set(),
-                                       persistent=data_recv[6])
-            print dict_jobs
+                dict_jobs[job_name] = dict(command=data_recv[2],
+                                           required=str(data_recv[3]).split(' '),
+                                           optional=data_recv[4],
+                                           set_id = set(),
+                                           persistent=data_recv[5])
             mutex_jobs.release()
         elif request_type == 'uninstall':
-            mutex_jobs.acquire()
-            command = dict_jobs[job_name]['command_stop']
-            mutex_jobs.release()
             # On vérifie si le job n'est pas en train de tourner
             mutex_jobs.acquire()
             if len(dict_jobs[job_name]['set_id']) != 0:
                 for job_id in dict_jobs[job_name]['set_id']:
-                    if command:
-                        mutex_args.acquire()
-                        args = dict_args[job_name][job_id]
-                        del dict_args[job_name][job_id]
-                        print dict_args
-                        mutex_args.release()
-                    else:
-                        args = ''
                     self.scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                                   job_id,
-                                                                   command,
-                                                                   args])
+                                                                   job_id])
             mutex_jobs.release()
             # TODO Vérifié que l'appli a bien été déinstallé ?
             mutex_jobs.acquire()
@@ -753,30 +656,21 @@ class ClientThread(threading.Thread):
             self.start_job(mutex_jobs, dict_jobs, data_recv)
         elif request_type == 'stop':
             job_id = data_recv[2]
-            mutex_jobs.acquire()
-            job = dict_jobs[job_name]
-            mutex_jobs.release()
             actual_timestamp = time.time()
             if data_recv[4] < actual_timestamp:
                 date = None
             else:
                 date = datetime.fromtimestamp(data_recv[4])
-            command = job['command_stop']
-            if command:
-                mutex_args.acquire()
-                args = dict_args[job_name][job_id]
-                del dict_args[job_name][job_id]
-                print dict_args
-                mutex_args.release()
-            else:
-                args = ''
             self.scheduler.add_job(stop_job, 'date', run_date=date,
-                                   args=[job_name, job_id, command, args])
+                                   args=[job_name, job_id])
             try:
                 self.scheduler.remove_job(job_name + job_id)
             except JobLookupError:
                 # On vérifie si il n'est pas déjà stoppé
-                if job['persitent'] and (not job_id in job['set_id']):
+                mutex_jobs.acquire()
+                job = dict_jobs[job_name]
+                mutex_jobs.release()
+                if not job_id in job['set_id']:
                     error_msg = "KO job " + job_name + " is already stopped"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
@@ -797,8 +691,8 @@ class ClientThread(threading.Thread):
                 try:
                     self.scheduler.add_job(status_job, 'date', run_date=date,
                                            args=[job_name, job_id,
-                                                 self.scheduler], id=job_name +
-                                           job_id + "_status")
+                                                 self.scheduler], id=job_name
+                                           + job_id + "_status")
                 except ConflictingIdError:
                     error_msg = "KO A watch on job " + job_name + " with id "
                     error_msg += job_id + " is already programmed"
@@ -812,8 +706,8 @@ class ClientThread(threading.Thread):
                 try:
                     self.scheduler.add_job(status_job, 'interval', seconds=interval,
                                            args=[job_name, job_id,
-                                                 self.scheduler], id=job_name +
-                                           job_id + "_status")
+                                                 self.scheduler], id=job_name
+                                           + job_id + "_status")
                 except ConflictingIdError:
                     error_msg = "KO A watch on job " + job_name + " with id "
                     error_msg += job_id + " is already programmed"
@@ -835,20 +729,7 @@ class ClientThread(threading.Thread):
             job_id = data_recv[2]
             mutex_jobs.acquire()
             if job_id in dict_jobs[job_name]['set_id']:
-                mutex_jobs.acquire()
-                command = dict_jobs[job_name]['command_stop']
-                mutex_jobs.release()
-                if command:
-                    mutex_args.acquire()
-                    args = dict_args[job_name][job_id]
-                    del dict_args[job_name][job_id]
-                    print dict_args
-                    mutex_args.release()
-                else:
-                    args = ''
-                self.scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                               job_id, command,
-                                                               args])
+                self.scheduler.add_job(stop_job, 'date', args=[job_name, job_id])
             mutex_jobs.release()
             try:
                 self.scheduler.remove_job(job_name + job_id)
@@ -876,20 +757,12 @@ if __name__ == "__main__":
     global scheduler
     scheduler = BackgroundScheduler()
     scheduler.start()
-
+    
     # Liste de job disponible (+ son mutex)
     global dict_jobs
     global mutex_jobs
     dict_jobs = {}
     mutex_jobs = threading.Lock()
-
-    # Liste des arguments utiliser pour lancer les instances de jobs (+ son
-    # mutex)
-    global dict_args
-    global mutex_args
-    dict_args = {}
-    mutex_args = threading.Lock()
-
     # On ajoute tous les jobs déjà présent
     path = '/opt/openbach-agent/jobs/'
     result_ls = subprocess.check_output(["ls", path]).split('\n')
@@ -927,16 +800,17 @@ if __name__ == "__main__":
             continue
         # On ajoute le job a la liste des jobs disponibles
         if not conf.required:
-            required = conf.required
+            dict_jobs[job_name] = dict(command=conf.command,
+                                       required=conf.required,
+                                       optional=conf.optional,
+                                       set_id = set(),
+                                       persistent=conf.persistent)
         else:
-            required = str(conf.required).split(' ')
-        dict_jobs[job_name] = dict(command=conf.command,
-                                   command_stop=conf.command_stop,
-                                   required=required,
-                                   optional=conf.optional,
-                                   set_id = set(),
-                                   persistent=conf.persistent)
-    print dict_jobs
+            dict_jobs[job_name] = dict(command=conf.command,
+                                       required=str(conf.required).split(' '),
+                                       optional=conf.optional,
+                                       set_id = set(),
+                                       persistent=conf.persistent)
 
     while True:
         num_connexion_max = 10

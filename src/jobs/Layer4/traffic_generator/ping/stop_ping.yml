@@ -9,5 +9,5 @@
     - date: date now
   
   tasks:
-    - include: ../../../../roles/agents/tasks/stop_job.yml
+    - include: ../../../../roles/backend/tasks/stop_job.yml
 

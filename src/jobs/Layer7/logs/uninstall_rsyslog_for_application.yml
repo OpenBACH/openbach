@@ -19,5 +19,5 @@
         - '.conf.locked'
       notify: Restart Rsyslog
       
-    - include: ../../../roles/agents/tasks/start_job.yml
+    - include: ../../../roles/backend/tasks/start_job.yml
 

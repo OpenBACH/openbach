@@ -11,5 +11,5 @@
   - name: Inform Agent that Logs is installed
     copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
 
-  - include: ../../../roles/agents/tasks/add_job.yml
+  - include: ../../../roles/backend/tasks/add_job.yml
 

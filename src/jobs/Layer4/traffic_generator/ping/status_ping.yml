@@ -9,5 +9,5 @@
     - date_interval_stop: date now
 
   tasks:
-    - include: ../../../../roles/agents/tasks/status_job.yml
+    - include: ../../../../roles/backend/tasks/status_job.yml
 

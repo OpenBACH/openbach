@@ -11,5 +11,5 @@
   - name: Inform Agent that Iperf is uninstalled
     file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
 
-  - include: ../../../../roles/agents/tasks/remove_job.yml
+  - include: ../../../../roles/backend/tasks/remove_job.yml
 

@@ -11,7 +11,7 @@
     - date: date now
   
   tasks:
-    - include: ../../../../roles/agents/tasks/stop_job.yml
+    - include: ../../../../roles/backend/tasks/stop_job.yml
     
-    - include: ../../../../roles/agents/tasks/start_job.yml
+    - include: ../../../../roles/backend/tasks/start_job.yml
     

@@ -17,5 +17,5 @@
         - { src: '_local.j2', dst: '_local.conf' }
         - { src: '.j2', dst: '.conf' }
       
-    - include: ../../../roles/agents/tasks/start_job.yml
+    - include: ../../../roles/backend/tasks/start_job.yml
 

@@ -15,3 +15,13 @@
   tags:
     - install
 
+- name: Create SSH Key 
+  user: generate_ssh_key=yes name={{ ansible_ssh_user }}
+  tags:
+    - install
+    
+- name: Copy the SSH Key to OpenBACH repository
+  copy: src=/home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub dest=/opt/openbach/ remote_src=True
+  tags:
+    - install
+

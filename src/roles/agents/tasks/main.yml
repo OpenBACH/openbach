@@ -5,10 +5,12 @@
 - include: install_logs.yml
 - include: install_stats.yml
 - include: install_daemon.yml
+- include: install_ssh_key.yml
 
 # Install
 - include: uninstall_synchro.yml
 - include: uninstall_logs.yml
 - include: uninstall_stats.yml
 - include: uninstall_daemon.yml
+- include: uninstall_ssh_key.yml
 

@@ -1,0 +1,9 @@
+---
+
+- name: Remove authorized_keys for the agent user
+  authorized_key: user={{ ansible_ssh_user }} key={{ item }} state=absent
+  with_file:
+    - /opt/openbach/id_rsa.pub
+  tags:
+    - uninstall
+

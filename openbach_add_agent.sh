@@ -7,9 +7,11 @@ then
     exit
 fi
 echo "[Agents]" > configs/hosts_controller
+echo "agents:" > configs/agents
 while [ ! -z $agent_address ]
 do
     echo "$agent_address" >> configs/hosts_controller
+    echo "  - $agent_address" >> configs/agents
     read -p "Agent Ip Address : " agent_address
 done
 read -p "SSH Agents Username : " agent_username
@@ -52,10 +54,10 @@ then
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
 echo "controller_ip: $controller_address" > configs/ips
-echo "collector_ip: $collector_address" > configs/ips
+echo "collector_ip: $collector_address" >> configs/ips
 
 
-ansible-playbook -i configs/hosts -e ansible_ssh_user=$username -e ansible_sudo_pass=$password -e ansible_ssh_pass=$password -e agent_username=$agent_username -e agent_password=$agent_password install/agent.yml --tags add_agent
+ansible-playbook -i configs/hosts -e @configs/agents -e ansible_ssh_user=$username -e ansible_sudo_pass=$password -e ansible_ssh_pass=$password -e agent_username=$agent_username -e agent_password=$agent_password install/agent.yml --tags add_agent
 
-rm configs/hosts_controller configs/hosts configs/ips
+rm configs/hosts_controller configs/hosts configs/ips configs/agents
 

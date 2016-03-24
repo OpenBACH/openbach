@@ -22,4 +22,9 @@
     - openbach_del_agent.sh
   tags:
     - install
+    
+- name: Create an empty file with the good right needed for agent's installation
+  file: path=/opt/openbach/agent.retry mode=0666 state=touch
+  tags:
+    - install
 

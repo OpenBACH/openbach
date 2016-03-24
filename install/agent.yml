@@ -3,6 +3,12 @@
 - hosts: Controller
   
   tasks:
+    - name: Scan Agents public key
+      shell: ssh-keyscan -H -T 10 {{ item }} >> /home/{{ ansible_ssh_user }}/.ssh/known_hosts
+      with_items: agents
+      tags:
+        - add_agent
+
     - name: Add the list of Agents
       copy: src=../configs/hosts_controller dest=/tmp/openbach_hosts
       tags:

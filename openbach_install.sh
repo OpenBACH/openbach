@@ -1,12 +1,12 @@
 #!/bin/bash
 
-read -p "Controller Ip Address : ? " controller_address
+read -p "Controller Ip Address : " controller_address
 if [ -z $controller_address ]
 then
     echo "You should provide the IP address of the Controller"
     exit
 fi
-read -p "SSH Controller Username : ? " controller_username
+read -p "SSH Controller Username : " controller_username
 if [ -z $controller_username ]
 then
     echo "You should provide the username of the Controller"
@@ -19,13 +19,13 @@ then
     echo "You should provide the password of the Controller"
     exit
 fi
-read -p "Collector Ip Address : ? " collector_address
+read -p "Collector Ip Address : " collector_address
 if [ -z $collector_address ]
 then
     echo "You should provide the IP address of the Collector"
     exit
 fi
-read -p "SSH Collector Username : ? " collector_username
+read -p "SSH Collector Username : " collector_username
 if [ -z $collector_username ]
 then
     echo "You should provide the username of the Collector"

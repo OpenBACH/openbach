@@ -45,9 +45,15 @@ then
     exit
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
+echo "ansible_ssh_user: $username" > configs/extra_vars
+echo "ansible_ssh_pass: $password" >> configs/extra_vars
+echo "ansible_sudo_pass: $password" >> configs/extra_vars
+echo "agent_username: $agent_username" >> configs/extra_vars
+echo "agent_password: $agent_password" >> configs/extra_vars
 
 
-ansible-playbook -i configs/hosts -e ansible_ssh_user=$username -e ansible_sudo_pass=$password -e ansible_ssh_pass=$password -e agent_username=$agent_username -e agent_password=$agent_password install/agent.yml --tags del_agent
+ansible-playbook -i configs/hosts -e @configs/extra_vars install/agent.yml --tags del_agent
 
-rm configs/hosts_controller configs/hosts
+
+rm configs/hosts_controller configs/hosts configs/extra_vars
 

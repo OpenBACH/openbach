@@ -1,5 +1,13 @@
 ---
 
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: Scan Controller public key
+      shell: ssh-keyscan -H -T 10 {{ controller_ip }} >> /home/{{ local_username }}/.ssh/known_hosts
+      tags:
+        - install
+
 - hosts: Collector
   roles:
     - collector

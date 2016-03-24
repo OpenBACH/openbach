@@ -34,10 +34,13 @@ then
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
 
+echo "ansible_ssh_user: $username" > configs/extra_vars
+echo "ansible_ssh_pass: $password" >> configs/extra_vars
+echo "ansible_sudo_pass: $password" >> configs/extra_vars
 
 for job in $jobs
 do
-    ansible-playbook -i configs/hosts -e ansible_ssh_user=$username -e ansible_sudo_pass=$password -e ansible_ssh_pass=$password -e job=$job install/job.yml --tags add_job
+    ansible-playbook -i configs/hosts -e @configs/extra_vars -e job=$job install/job.yml --tags add_job
 done
 
-rm configs/hosts
+rm configs/hosts configs/extra_vars

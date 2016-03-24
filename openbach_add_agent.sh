@@ -51,6 +51,7 @@ then
     exit
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
+echo "controller_ip: $controller_address" > configs/ips
 echo "collector_ip: $collector_address" > configs/ips
 
 

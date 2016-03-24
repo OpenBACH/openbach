@@ -1,33 +1,15 @@
 ---
 
-- name: Install ntp and ntpdate
-  apt: pkg={{ item }} state=installed update_cache=true
+- name: Stop Ntp server
+  service: name=ntp state=stopped
+  tags:
+    - uninstall
+
+- name: Uninstall ntp and ntpdate
+  apt: pkg={{ item }} state=absent update_cache=false
   with_items:
     - ntp
     - ntpdate
   tags:
-    - install
-
-- name: Start Ntp server
-  service: name=ntp state=started
-  tags:
-    - install
-
-- name: Delete all ntp source servers
-  shell: sed -i 's/^server/#server/' /etc/ntp.conf
-  tags:
-    - install
-
-- name: Add Controller as the ntp source server
-  shell: echo "{{ item }}" >> /etc/ntp.conf
-  with_items:
-    - "\n# Controller ntp server"
-    - "server {{ controller_ip }}"
-  tags:
-    - install
-  
-- name: Restart Ntp server
-  service: name=ntp state=restarted
-  tags:
-    - install
+    - uninstall
 

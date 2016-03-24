@@ -6,12 +6,20 @@
     - install
     
 - name: Copy the global variables file
-  copy: src=../configs dest=/opt/openbach/ mode=0755
+  copy: src=../configs dest=/opt/openbach/
   tags:
     - install
 
 - name: Copy the sources
-  copy: src=../src/ dest=/opt/openbach/ mode=0755
+  copy: src=../src/ dest=/opt/openbach/
+  tags:
+    - install
+
+- name: Change scripts mode bits
+  file: path=/opt/openbach/{{ item }} mode=755
+  with_items:
+    - openbach_add_agent.sh
+    - openbach_del_agent.sh
   tags:
     - install
 

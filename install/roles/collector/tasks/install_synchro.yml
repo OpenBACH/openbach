@@ -14,12 +14,12 @@
     - install
 
 - name: Delete all ntp source servers
-  shell: sed -i 's/^server/#server/' /etc/ntp.conf
+  lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
   tags:
     - install
 
 - name: Add Controller as the ntp source server
-  shell: echo "{{ item }}" >> /etc/ntp.conf
+  lineinfile: dest=/etc/ntp.conf state=present line={{ item }}
   with_items:
     - "\n# Controller ntp server"
     - "server {{ controller_ip }}"

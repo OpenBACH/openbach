@@ -1,7 +1,6 @@
 ---
 
 - hosts: client
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars: 
@@ -13,7 +12,6 @@
 
 
 - hosts: server
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars: 

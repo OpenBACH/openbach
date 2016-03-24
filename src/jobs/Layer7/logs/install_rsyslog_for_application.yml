@@ -2,7 +2,6 @@
 
 ## Configuration of Rsyslog for the application
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -16,6 +15,7 @@
       with_items:
         - { src: '_local.j2', dst: '_local.conf' }
         - { src: '.j2', dst: '.conf' }
+      become: yes
       
     - include: ../../../roles/backend/tasks/start_job.yml
 

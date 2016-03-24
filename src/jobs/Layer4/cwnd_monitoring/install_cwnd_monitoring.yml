@@ -1,7 +1,6 @@
 ---
 
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -10,9 +9,11 @@
   tasks:
   - name: Create Cwnd Monitoring repository
     file: path=/opt/openbach-plugins/cwnd_monitoring state=directory mode=0755
+    become: yes
 
   - name: Install Cwnd Monitoring
     copy: src=templates/{{ item }} dest=/opt/openbach-plugins/cwnd_monitoring/ mode=0644
+    become: yes
     with_items:
       - cwnd.py
       - cwnd_rstats_filter.conf
@@ -20,6 +21,7 @@
       
   - name: Inform Agent that Cwnd Monitoring is installed
     copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml
 

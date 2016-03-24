@@ -1,7 +1,6 @@
 ---
 
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -10,21 +9,26 @@
   tasks:
   - name: Install python-iptables
     pip: name=python-iptables state=present
+    become: yes
     
   - name: Install python-apscheduler
     pip: name=apscheduler state=present
+    become: yes
 
   - name: Create Rate Monitoring repository
     file: path=/opt/openbach-plugins/rate_monitoring state=directory mode=0755
+    become: yes
 
   - name: Install Rate Monitoring
     copy: src=templates/rate{{ item }} dest=/opt/openbach-plugins/rate_monitoring/ mode=0644
+    become: yes
     with_items:
       - .py
       - _rstats_filter.conf
       
   - name: Inform Agent that Rate Monitoring is installed
     copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml
 

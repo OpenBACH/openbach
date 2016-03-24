@@ -1,7 +1,6 @@
 ---
 
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -10,12 +9,15 @@
   tasks:
   - name: Create Tcp Buffer repository
     file: path=/opt/openbach-plugins/tcp_buffer state=directory mode=0755
+    become: yes
 
   - name: Install Tcp Buffer
     copy: src=templates/tcp_buffer.sh dest=/opt/openbach-plugins/tcp_buffer/ mode=0755
+    become: yes
       
   - name: Inform Agent that Tcp Buffer is installed
     copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-read -p "Agent Ip Address : ? " agent_address
+read -p "Agent Ip Address : " agent_address
 if [ -z $agent_address ]
 then
     echo "You should provide at least one IP address"
@@ -10,9 +10,9 @@ echo "[Agents]" > /tmp/openbach_hosts
 while [ ! -z $agent_address ]
 do
     echo "$agent_address" >> /tmp/openbach_hosts
-    read -p "Agent Ip Address : ? " agent_address
+    read -p "Agent Ip Address : " agent_address
 done
-read -p "SSH Agents Username : ? " agent_username
+read -p "SSH Agents Username : " agent_username
 if [ -z $agent_username ]
 then
     echo "You should provide the username of the Agents"

@@ -1,7 +1,6 @@
 ---
 
 - hosts: client
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars: 
@@ -12,7 +11,6 @@
     - include: ../../../../roles/backend/tasks/stop_job.yml
 
 - hosts: server
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars: 
@@ -28,7 +26,6 @@
 
 
 - hosts: client
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars: 

@@ -1,7 +1,6 @@
 ---
 
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -12,6 +11,7 @@
   tasks:
     - name: Enable Transmission
       copy: src={{ filter_path }} dest={{ application_path }}
+      become: yes
      
     - include: ../../../roles/backend/tasks/start_job.yml
 

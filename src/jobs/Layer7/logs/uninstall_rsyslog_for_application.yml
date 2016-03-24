@@ -2,7 +2,6 @@
 
 ## Configuration of Rsyslog for the application
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -17,6 +16,7 @@
         - '_local.conf'
         - '.conf'
         - '.conf.locked'
+      become: yes
       notify: Restart Rsyslog
       
     - include: ../../../roles/backend/tasks/start_job.yml

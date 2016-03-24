@@ -1,7 +1,6 @@
 ---
 
 - hosts: Agents
-  remote_user: root
   vars_files:
     - vars/main.yml
   vars:
@@ -10,12 +9,15 @@
   tasks:
   - name: Uninstall Initial Spreading Fq
     file: path=/opt/openbach-plugins/initial_spreading_fq/initial_spreading_fq.sh state=absent
+    become: yes
 
   - name: Remove Initial Spreading Fq repository
     file: path=/opt/openbach-plugins/initial_spreading_fq state=absent
+    become: yes
 
   - name: Inform Agent that Initial Spreading Fq is uninstalled
     file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
 
   - include: ../../../roles/backend/tasks/remove_job.yml
 

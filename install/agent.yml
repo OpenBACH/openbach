@@ -3,11 +3,28 @@
 - hosts: Controller
   
   tasks:
-    - name: Scan Agents public key
-      shell: ssh-keyscan -H -T 10 {{ item }} >> /home/{{ ansible_ssh_user }}/.ssh/known_hosts
-      with_items: agents
+    - name: Make sure the known hosts file exists
+      file: path=/home/{{ ansible_ssh_user }}/.ssh/known_hosts state=touch
       tags:
         - add_agent
+        - del_agent
+
+    - name: Check host name availability
+      shell: ssh-keygen -f /home/{{ ansible_ssh_user }}/.ssh/known_hosts -F {{ item }}
+      with_items: agents
+      register: ssh_known_host_results
+      ignore_errors: yes
+      tags:
+        - add_agent
+        - del_agent
+      
+    - name: Scan Controller public key
+      shell: ssh-keyscan -H -T 10 {{ item.item }} >> /home/{{ ansible_ssh_user }}/.ssh/known_hosts
+      with_items: ssh_known_host_results.results
+      when: item.stdout == ""
+      tags:
+        - add_agent
+        - del_agent
 
     - name: Add the list of Agents
       copy: src=../configs/hosts_controller dest=/tmp/openbach_hosts

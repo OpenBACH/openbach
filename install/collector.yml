@@ -3,10 +3,29 @@
 - hosts: localhost
   connection: local
   tasks:
-    - name: Scan Controller public key
-      shell: ssh-keyscan -H -T 10 {{ controller_ip }} >> /home/{{ local_username }}/.ssh/known_hosts
+    - name: Make sure the known hosts file exists
+      file: path=/home/{{ local_username }}/.ssh/known_hosts state=touch
       tags:
         - install
+        - uninstall
+
+    - name: Check host name availability
+      shell: ssh-keygen -f /home/{{ local_username }}/.ssh/known_hosts -F {{ item }}
+      with_items:
+        - '{{ collector_ip }}'
+      register: ssh_known_host_results
+      ignore_errors: yes
+      tags:
+        - install
+        - uninstall
+      
+    - name: Scan Collector public key
+      shell: ssh-keyscan -H -T 10 {{ item.item }} >> /home/{{ local_username }}/.ssh/known_hosts
+      with_items: ssh_known_host_results.results
+      when: item.stdout == ""
+      tags:
+        - install
+        - uninstall
 
 - hosts: Collector
   roles:

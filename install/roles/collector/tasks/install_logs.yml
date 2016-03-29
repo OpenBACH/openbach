@@ -1,15 +1,25 @@
 ---
 
+- name: Check if ElasticSearch is installed
+  shell: dpkg-query -W elasticsearch
+  register: elasticsearch_check_deb
+  failed_when: elasticsearch_check_deb.rc > 1
+  changed_when: elasticsearch_check_deb.rc == 1
+  tags:
+    - install
+
 - name: Download ElasticSearch
   get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
     dest=/tmp/ force=no
   tags:
     - install
+  when: elasticsearch_check_deb.rc == 1
 
 - name: Install ElasticSearch
   shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
   tags:
     - install
+  when: elasticsearch_check_deb.rc == 1
 
 - name: Install openjdk-7-jdk
   apt: pkg=openjdk-7-jdk state=installed update_cache=false
@@ -27,16 +37,26 @@
   tags:
     - install
 
+- name: Check if LogStash is installed
+  shell: dpkg-query -W logstash
+  register: logstash_check_deb
+  failed_when: logstash_check_deb.rc > 1
+  changed_when: logstash_check_deb.rc == 1
+  tags:
+    - install
+
 - name: Download LogStash
   get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
     dest=/tmp/ force=no
   tags:
     - install
+  when: logstash_check_deb.rc == 1
 
 - name: Install LogStash
   shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb
   tags:
     - install
+  when: logstash_check_deb.rc == 1
 
 - name: Configure LogStash
   template: src=roles/collector/templates/collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \

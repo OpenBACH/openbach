@@ -7,16 +7,19 @@
     - ntpdate
   tags:
     - install
+    - only-collector
 
 - name: Start Ntp server
   service: name=ntp state=started
   tags:
     - install
+    - only-collector
 
 - name: Delete all ntp source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
   tags:
     - install
+    - only-collector
 
 - name: Add Controller as the ntp source server
   lineinfile: dest=/etc/ntp.conf state=present line={{ item }}
@@ -25,9 +28,11 @@
     - "server {{ controller_ip }}"
   tags:
     - install
+    - only-collector
   
 - name: Restart Ntp server
   service: name=ntp state=restarted
   tags:
     - install
+    - only-collector
 

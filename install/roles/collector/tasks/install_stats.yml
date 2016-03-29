@@ -1,15 +1,25 @@
 ---
 
+- name: Check if InfluxDB is installed
+  shell: dpkg-query -W influxdb
+  register: influxdb_check_deb
+  failed_when: influxdb_check_deb.rc > 1
+  changed_when: influxdb_check_deb.rc == 1
+  tags:
+    - install
+
 - name: Download InfluxDB (64bits)
   get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
     dest=/tmp/ force=no
   tags:
     - install
+  when: influxdb_check_deb.rc == 1
     
 - name: Install InfluxDB (64bits)
   shell: dpkg -i /tmp/influxdb_{{ influxdb_version }}_amd64.deb
   tags:
     - install
+  when: influxdb_check_deb.rc == 1
   
 - name: Start InfluxDB
   service: name=influxdb state=started

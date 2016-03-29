@@ -7,4 +7,5 @@
     - ntpdate
   tags:
     - uninstall
+    - only-collector
 

@@ -39,6 +39,14 @@ then
     exit
 fi
 
+if [ $controller_address != $collector_address ]
+then
+    skip_tag=""
+else
+    skip_tag="--skip-tag only-collector"
+fi
+
+
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
 echo "controller_ip: $controller_address" > configs/ips
 echo -e "[Collector]\n$collector_address" >> configs/hosts
@@ -56,7 +64,7 @@ echo "local_username:" `whoami` > configs/extra_vars
 echo "ansible_ssh_user: $collector_username" >> configs/extra_vars
 echo "ansible_ssh_pass: $collector_password" >> configs/extra_vars
 echo "ansible_sudo_pass: $collector_password" >> configs/extra_vars
-ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/collector.yml --tags uninstall
+ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/collector.yml --tags uninstall $skip_tag
 
 rm configs/hosts configs/ips configs/extra_vars
 

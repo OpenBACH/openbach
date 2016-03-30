@@ -4,16 +4,19 @@
   apt_repository: repo=ppa:ansible/ansible update_cache=yes
   tags:
     - install
+    - only-controller
   
 - name: Install software-properties-common
   apt: pkg=software-properties-common update_cache=false
   tags:
     - install
+    - only-controller
   
 - name: Install Ansible
   apt: pkg=ansible update_cache=false
   tags:
     - install
+    - only-controller
 
 - name: Create SSH Key 
   user: generate_ssh_key=yes name={{ ansible_ssh_user }}

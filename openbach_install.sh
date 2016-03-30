@@ -41,10 +41,20 @@ fi
 
 if [ $controller_address != $collector_address ]
 then
-    skip_tag=""
+    skip_tag_collector=""
 else
-    skip_tag="--skip-tag only-collector"
+    skip_tag_collector="--skip-tag only-collector"
 fi
+
+list_local_ip=`hostname -I`
+skip_tag_controller=""
+for ip in $list_local_ip
+do
+    if [ $controller_address = $ip ]
+    then
+        skip_tag_controller="--skip-tag only-controller"
+    fi
+done
 
 
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
@@ -57,14 +67,14 @@ echo "local_username:" `whoami` > configs/extra_vars
 echo "ansible_ssh_user: $controller_username" >> configs/extra_vars
 echo "ansible_ssh_pass: $controller_password" >> configs/extra_vars
 echo "ansible_sudo_pass: $controller_password" >> configs/extra_vars
-ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/controller.yml --tags install
+ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/controller.yml --tags install $skip_tag_controller
 
 
 echo "local_username:" `whoami` > configs/extra_vars
 echo "ansible_ssh_user: $collector_username" >> configs/extra_vars
 echo "ansible_ssh_pass: $collector_password" >> configs/extra_vars
 echo "ansible_sudo_pass: $collector_password" >> configs/extra_vars
-ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/collector.yml --tags install $skip_tag
+ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/collector.yml --tags install $skip_tag_collector
 
 rm configs/hosts configs/ips configs/extra_vars
 

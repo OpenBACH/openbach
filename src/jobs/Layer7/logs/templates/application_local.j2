@@ -1,2 +1,2 @@
-if $programname == '{{ application }}' and $syslogseverity <= '{{ syslogseverity_local }}' then \
-  /var/log/{{ application }}.log
+if $programname == '{{ job }}' and $syslogseverity <= '{{ syslogseverity_local }}' then \
+  /var/log/{{ job }}.log

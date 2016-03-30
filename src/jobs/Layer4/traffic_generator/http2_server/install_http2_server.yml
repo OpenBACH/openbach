@@ -39,9 +39,9 @@
     become: yes
     when: nghttp_check_deb.rc == 1
     
-#  - name: Download nghttp2 sources
-#    git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
-#    when: nghttp_check_deb.rc == 1
+  - name: Download nghttp2 sources
+    git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
+    when: nghttp_check_deb.rc == 1
     
   - name: Install nghttp2 (autoreconf -i)
     shell: autoreconf -i chdir=/tmp/nghttp2/

@@ -1,0 +1,12 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - id: 1
+    - date_interval_stop: date now
+
+  tasks:
+    - include: ../../../../roles/backend/tasks/status_job.yml
+

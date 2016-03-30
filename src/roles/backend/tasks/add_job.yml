@@ -1,5 +1,5 @@
 ---
 
 - name: Add the job to the openbach-agent daemon
-  shell: /opt/openbach-agent/openbach-controller add {{ job_name }}
+  shell: /opt/openbach-agent/openbach-baton add {{ job_name }}
 

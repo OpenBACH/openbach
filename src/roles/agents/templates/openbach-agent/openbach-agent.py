@@ -53,7 +53,7 @@ syslog.openlog("openbach-agent", syslog.LOG_PID, syslog.LOG_USER)
 
 
 def launch_job(job_name, job_id, command, args):
-    cmd = "PID=`" + command + " " + args + "> /dev/null 2>&1 & echo $!`; echo"
+    cmd = "PID=`" + command + " " + args + " > /dev/null 2>&1 & echo $!`; echo"
     cmd += " $PID > /var/run/" + job_name + job_id + ".pid"
     os.system(cmd)
     

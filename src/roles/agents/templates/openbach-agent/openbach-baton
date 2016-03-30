@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ce script est utilisé par le controlleur d'OpenBACH pour communiquer et donner ses ordres à l'agent
+# This script is used by the OpenBACH conductor (Controller) to give his order to the Agent
 
 if [ -z "$1" ]
 then

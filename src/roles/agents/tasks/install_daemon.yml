@@ -28,8 +28,8 @@
   tags:
     - install
   
-- name: Install the openbach-controller script as an executable
-  copy: src=roles/agents/templates/openbach-agent/openbach-controller dest=/opt/openbach-agent/ mode=0755
+- name: Install the openbach-baton script as an executable
+  copy: src=roles/agents/templates/openbach-agent/openbach-baton dest=/opt/openbach-agent/ mode=0755
   tags:
     - install
   

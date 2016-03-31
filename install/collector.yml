@@ -21,7 +21,7 @@
       
     - name: Scan Collector public key
       shell: ssh-keyscan -H -T 10 {{ item.item }} >> /home/{{ local_username }}/.ssh/known_hosts
-      with_items: ssh_known_host_results.results
+      with_items: '{{ssh_known_host_results.results}}'
       when: item.stdout == ""
       tags:
         - install

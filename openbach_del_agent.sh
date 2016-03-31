@@ -54,7 +54,7 @@ echo "agent_username: $agent_username" >> configs/extra_vars
 echo "agent_password: $agent_password" >> configs/extra_vars
 
 
-ansible-playbook -i configs/hosts -e @configs/agents -e @configs/extra_vars install/agent.yml --tags del_agent
+ansible-playbook -i configs/hosts -e @configs/extra_vars install/agent.yml --tags del_agent
 
 
 rm configs/hosts_controller configs/hosts configs/agents configs/extra_vars

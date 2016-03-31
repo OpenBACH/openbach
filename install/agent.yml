@@ -1,33 +1,13 @@
 ---
 
 - hosts: Controller
-  
+
   tasks:
-    - name: Make sure the known hosts file exists
-      file: path=/home/{{ ansible_ssh_user }}/.ssh/known_hosts state=touch
-      tags:
-        - add_agent
-        - del_agent
-
-    - name: Check host name availability
-      shell: ssh-keygen -f /home/{{ ansible_ssh_user }}/.ssh/known_hosts -F {{ item }}
-      with_items: agents
-      register: ssh_known_host_results
-      ignore_errors: yes
-      tags:
-        - add_agent
-        - del_agent
-      
-    - name: Scan Controller public key
-      shell: ssh-keyscan -H -T 10 {{ item.item }} >> /home/{{ ansible_ssh_user }}/.ssh/known_hosts
-      with_items: ssh_known_host_results.results
-      when: item.stdout == ""
-      tags:
-        - add_agent
-        - del_agent
-
     - name: Add the list of Agents
-      copy: src=../configs/hosts_controller dest=/tmp/openbach_hosts
+      copy: src=../configs/{{ item.a }} dest=/tmp/openbach_{{ item.b }}
+      with_items:
+        - { a: 'hosts_controller', b: 'host' }
+        - { a: 'agents', b: 'agents' }
       tags:
         - add_agent
         - del_agent
@@ -41,11 +21,11 @@
         - add_agent
 
     - name: Add an Agent
-      shell: ansible-playbook -i /tmp/openbach_hosts -e @/tmp/openbach_ips -e @/tmp/openbach_all -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags install > /tmp/agent_log_install.tmp
+      shell: ansible-playbook -i /tmp/openbach_hosts -e @/tmp/openbach_ips -e @/tmp/openbach_all -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }}  -e local_username={{ ansible_ssh_user }} /opt/openbach/agent.yml --tags install > /tmp/agent_log_install.tmp
       tags:
         - add_agent
 
     - name: Del an Agent
-      shell: ansible-playbook -i /tmp/openbach_hosts -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} /opt/openbach/agent.yml --tags uninstall > /tmp/agent_log_uninstall.tmp
+      shell: ansible-playbook -i /tmp/openbach_hosts -e ansible_ssh_user={{ agent_username }} -e ansible_sudo_pass={{ agent_password }} -e ansible_ssh_pass={{ agent_password }} -e local_username={{ ansible_ssh_user }} /opt/openbach/agent.yml --tags uninstall > /tmp/agent_log_uninstall.tmp
       tags:
         - del_agent

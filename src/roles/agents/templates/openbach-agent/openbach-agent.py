@@ -228,7 +228,10 @@ class ClientThread(threading.Thread):
             if data_recv[4] < actual_timestamp:
                 date = None
             else:
-                date = datetime.fromtimestamp(data_recv[4])
+                try:
+                    date = datetime.fromtimestamp(data_recv[4])
+                except:
+                    date = None
             try:
                 self.scheduler.add_job(launch_job, 'date', run_date=date,
                                        args=[job_name, job_id, command, args],

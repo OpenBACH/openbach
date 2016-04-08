@@ -8,6 +8,7 @@ list_installed_jobs.py - <+description+>
 
 import requests
 import argparse
+import pprint
 
 
 def main(agent_ip):
@@ -15,7 +16,7 @@ def main(agent_ip):
 
     r = requests.get(url)
     print r
-    print(r._content)
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

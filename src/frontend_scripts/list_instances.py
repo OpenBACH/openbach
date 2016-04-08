@@ -8,6 +8,7 @@ list_instances.py - <+description+>
 
 import requests
 import argparse
+import pprint
 
 
 def main(agent_ip):
@@ -22,7 +23,7 @@ def main(agent_ip):
     for i in range(len(url)):
         r = requests.get(url[i])
         print r
-        print(r._content)
+        pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

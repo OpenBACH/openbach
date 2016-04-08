@@ -8,6 +8,7 @@ stop_job.py - <+description+>
 
 import requests, json
 import argparse
+import pprint
 
 
 def main(instance_id, date):
@@ -19,7 +20,7 @@ def main(instance_id, date):
     
     r = requests.post(url, data={'data': json.dumps(payload)})
     print r
-    print(r._content)
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

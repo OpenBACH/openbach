@@ -8,6 +8,7 @@ add_agent.py - <+description+>
 
 import requests, json
 import argparse
+import pprint
 
 
 def main(agent_ip, collector_ip, username, password, name, date):
@@ -22,7 +23,7 @@ def main(agent_ip, collector_ip, username, password, name, date):
     
     r = requests.post(url, data={'data': json.dumps(payload)})
     print r
-    print(r._content)
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

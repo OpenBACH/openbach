@@ -8,6 +8,7 @@ start_job.py - <+description+>
 
 import requests, json
 import argparse
+import pprint
 
 
 def main(agent_ip, job_name, arguments, date, interval):
@@ -25,7 +26,7 @@ def main(agent_ip, job_name, arguments, date, interval):
     
     r = requests.post(url, data={'data': json.dumps(payload)})
     print r
-    print(r._content)
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

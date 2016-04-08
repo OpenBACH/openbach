@@ -8,6 +8,7 @@ list_agents.py - <+description+>
 
 import requests
 import argparse
+import pprint
 
 
 def main():
@@ -15,7 +16,7 @@ def main():
 
     r = requests.get(url)
     print r
-    print(r._content)
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":

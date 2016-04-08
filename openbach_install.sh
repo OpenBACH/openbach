@@ -57,24 +57,22 @@ do
 done
 
 
-echo -e "[Controller]\n$controller_address\n" > configs/hosts
+echo -e "[Controller]\n$controller_address\n" > /tmp/openbach_hosts
 echo "controller_ip: $controller_address" > configs/ips
-echo -e "[Collector]\n$collector_address" >> configs/hosts
+echo -e "[Collector]\n$collector_address" >> /tmp/openbach_hosts
 echo "collector_ip: $collector_address" >> configs/ips
 
 
-echo "local_username:" `whoami` > configs/extra_vars
-echo "ansible_ssh_user: $controller_username" >> configs/extra_vars
-echo "ansible_ssh_pass: $controller_password" >> configs/extra_vars
-echo "ansible_sudo_pass: $controller_password" >> configs/extra_vars
-sudo ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/controller.yml --tags install $skip_tag_controller
+echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
+echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
+echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags install $skip_tag_controller
 
 
-echo "local_username:" `whoami` > configs/extra_vars
-echo "ansible_ssh_user: $collector_username" >> configs/extra_vars
-echo "ansible_ssh_pass: $collector_password" >> configs/extra_vars
-echo "ansible_sudo_pass: $collector_password" >> configs/extra_vars
-sudo ansible-playbook -i configs/hosts -e @configs/ips -e @configs/all -e @configs/extra_vars install/collector.yml --tags install $skip_tag_collector
+echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
+echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars
+echo "ansible_sudo_pass: $collector_password" >> /tmp/openbach_extra_vars
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/collector.yml --tags install $skip_tag_collector
 
-rm configs/hosts configs/ips configs/extra_vars
+rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars
 

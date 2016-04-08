@@ -23,6 +23,11 @@
   tags:
     - install
     
+- name: Create OpenBACH repository
+  file: path=/opt/openbach state=directory mode=0755
+  tags:
+    - install
+    
 - name: Copy the SSH Key to OpenBACH repository
   copy: src=/home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub dest=/opt/openbach/ remote_src=True
   tags:

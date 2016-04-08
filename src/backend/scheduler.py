@@ -94,7 +94,6 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide a "
                 error_msg += "date when to execute the order"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return False
@@ -102,13 +101,11 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide a "
                 error_msg += "date or an interval in order to execute the order"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return False
         else:
             error_msg = "KO Message not formed well. Request not knwown"
-            print(error_msg)
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             return False
@@ -119,27 +116,22 @@ class ClientThread(threading.Thread):
         if len(data_recv) < 1:
             error_msg = "KO Message not formed well. You should provide a "
             error_msg += "request"
-            print(error_msg)
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             return []
         if not self.check_date_interval(data_recv):
             return []
-        #for i in range(len(data_recv)):
-        #    data_recv[i] = data_recv[i]
         request_type = data_recv[0]
         if request_type == 'add_agent' or request_type == 'del_agent':
             if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide the"
                 error_msg += " ip address of the agent"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
             if len(data_recv) > 3:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
@@ -147,14 +139,12 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 4:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the ip address of the agent and the name of the job"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
             if len(data_recv) > 4:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
@@ -162,14 +152,12 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 4:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
             if len(data_recv) > 4:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
@@ -177,20 +165,17 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
             if len(data_recv) > 3:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
-                print(error_msg)
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
         else:
             error_msg = "KO Request type not defined"
-            print(error_msg)
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             return []
@@ -199,7 +184,6 @@ class ClientThread(threading.Thread):
     
     def run(self): 
         r = self.clientsocket.recv(2048)
-        print r
 
         data_recv = self.parse_and_check(r)
         if len(data_recv) == 0:
@@ -226,7 +210,6 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password
             cmd_ansible += " /opt/openbach/agent.yml --tags install"
-            print(cmd_ansible)
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -254,7 +237,6 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password
             cmd_ansible += " /opt/openbach/agent.yml --tags uninstall"
-            print(cmd_ansible)
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -275,7 +257,6 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += job.path + "/install_" + job.name + ".yml"
-            print cmd_ansible
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -296,7 +277,6 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += job.path + "/uninstall_" + job.name + ".yml"
-            print cmd_ansible
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -325,8 +305,10 @@ class ClientThread(threading.Thread):
                                               instance.args, date, interval)
             playbook.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " " + playbook_filename
-            print cmd_ansible
+            cmd_ansible += "sh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+            cmd_ansible += playbook_filename
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -350,8 +332,10 @@ class ClientThread(threading.Thread):
                                              date)
             playbook.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " " + playbook_filename
-            print cmd_ansible
+            cmd_ansible += "sh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+            cmd_ansible += playbook_filename
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:
@@ -380,8 +364,10 @@ class ClientThread(threading.Thread):
                                                 instance.args, date, interval)
             playbook.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " " + playbook_filename
-            print cmd_ansible
+            cmd_ansible += "sh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+            cmd_ansible += playbook_filename
             p = subprocess.Popen(cmd_ansible, shell=True)
             p.wait()
             if p.returncode != 0:

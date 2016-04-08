@@ -74,15 +74,15 @@
     when: nghttp_check_deb.rc == 1
     
   - name: Create HTTP2 Server repository
-    file: path=/opt/openbach-plugins/http2_server state=directory mode=0755
+    file: path=/opt/openbach-jobs/http2_server state=directory mode=0755
     become: yes
 
   - name: Download HTTP2 Server sources
-    copy: src=templates/server.tar.gz dest=/opt/openbach-plugins/http2_server/ mode=0644
+    copy: src=templates/server.tar.gz dest=/opt/openbach-jobs/http2_server/ mode=0644
     become: yes
     
   - name: Install HTTP2 Server
-    shell: tar xvzf server.tar.gz chdir=/opt/openbach-plugins/http2_server/
+    shell: tar xvzf server.tar.gz chdir=/opt/openbach-jobs/http2_server/
     become: yes
     
   - name: Install HTTP2 Server configuration file

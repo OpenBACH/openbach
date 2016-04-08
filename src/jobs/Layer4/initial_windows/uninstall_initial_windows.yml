@@ -8,11 +8,11 @@
 
   tasks:
   - name: Uninstall Initial Windows
-    file: path=/opt/openbach-plugins/initial_windows/initial_windows.sh state=absent
+    file: path=/opt/openbach-jobs/initial_windows/initial_windows.sh state=absent
     become: yes
 
   - name: Remove Initial Windows repository
-    file: path=/opt/openbach-plugins/initial_windows state=absent
+    file: path=/opt/openbach-jobs/initial_windows state=absent
     become: yes
 
   - name: Inform Agent that Initial Windows is uninstalled

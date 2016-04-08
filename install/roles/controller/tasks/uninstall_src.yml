@@ -1,5 +1,28 @@
 ---
 
+- name: Stop openbach-backend
+  service: name=openbach-backend state=stopped
+  tags:
+    - uninstall
+
+- name: Remove openbach-backend service
+  file: path=/etc/init.d/openbach-backend state=absent
+  tags:
+    - uninstall
+
+- name: Uninstall Apscheduler and Django
+  pip: name={{ item }} state=absent
+  with_items:
+    - django
+    - apscheduler
+  tags:
+    - uninstall
+
+- name: Uninstall python-pip
+  apt: pkg=python-pip state=absent
+  tags:
+    - uninstall
+
 - name: Delete the sources
   file: path=/opt/openbach state=absent
   tags:

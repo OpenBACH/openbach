@@ -1,0 +1,4 @@
+---
+
+- name: Retart Job
+  shell: /opt/openbach-agent/openbach-baton restart {{ job_name }} {{ id }} {{ date_interval }} {{ job_options }}

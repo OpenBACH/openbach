@@ -8,11 +8,11 @@
   
   tasks:
   - name: Create HTTP2 Client repository
-    file: path=/opt/openbach-plugins/http2_client state=directory mode=0755
+    file: path=/opt/openbach-jobs/http2_client state=directory mode=0755
     become: yes
 
   - name: Install HTTP2 Client
-    copy: src=templates/http2_client.py dest=/opt/openbach-plugins/http2_client/ mode=0644
+    copy: src=templates/http2_client.py dest=/opt/openbach-jobs/http2_client/ mode=0644
     become: yes
     
   - name: Install HTTP2 Client configuration file

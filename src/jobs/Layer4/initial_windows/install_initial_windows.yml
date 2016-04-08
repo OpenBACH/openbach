@@ -8,11 +8,11 @@
 
   tasks:
   - name: Create Initial Windows repository
-    file: path=/opt/openbach-plugins/initial_windows state=directory mode=0755
+    file: path=/opt/openbach-jobs/initial_windows state=directory mode=0755
     become: yes
 
   - name: Install Initial Windows
-    copy: src=templates/initial_windows.sh dest=/opt/openbach-plugins/initial_windows/ mode=0755
+    copy: src=templates/initial_windows.sh dest=/opt/openbach-jobs/initial_windows/ mode=0755
     become: yes
       
   - name: Inform Agent that Initial Windows is installed

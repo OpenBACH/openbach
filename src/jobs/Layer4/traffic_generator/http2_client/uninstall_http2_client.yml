@@ -8,7 +8,7 @@
   
   tasks:
   - name: Delete HTTP2 Client repository
-    file: path=/opt/openbach-plugins/http2_client state=absent
+    file: path=/opt/openbach-jobs/http2_client state=absent
     become: yes
 
   - name: Delete HTTP2 Client configuration file

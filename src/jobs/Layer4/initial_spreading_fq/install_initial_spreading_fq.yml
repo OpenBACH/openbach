@@ -8,11 +8,11 @@
 
   tasks:
   - name: Create Initial Spreading Fq repository
-    file: path=/opt/openbach-plugins/initial_spreading_fq state=directory mode=0755
+    file: path=/opt/openbach-jobs/initial_spreading_fq state=directory mode=0755
     become: yes
 
   - name: Install Initial Spreading Fq
-    copy: src=templates/initial_spreading_fq.sh dest=/opt/openbach-plugins/initial_spreading_fq/ mode=0755
+    copy: src=templates/initial_spreading_fq.sh dest=/opt/openbach-jobs/initial_spreading_fq/ mode=0755
     become: yes
       
   - name: Inform Agent that Initial Spreading Fq is installed

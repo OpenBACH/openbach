@@ -8,11 +8,11 @@
 
   tasks:
   - name: Uninstall Smart IW
-    file: path=/opt/openbach-plugins/smart_iw/smart_iw.sh state=absent
+    file: path=/opt/openbach-jobs/smart_iw/smart_iw.sh state=absent
     become: yes
 
   - name: Remove Smart IW repository
-    file: path=/opt/openbach-plugins/smart_iw state=absent
+    file: path=/opt/openbach-jobs/smart_iw state=absent
     become: yes
 
   - name: Inform Agent that Smart IW is uninstalled

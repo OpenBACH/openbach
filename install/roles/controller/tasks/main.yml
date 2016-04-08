@@ -4,8 +4,8 @@
 - include: install_synchro.yml
 - include: install_stats.yml
 - include: install_logs.yml
-- include: install_src.yml
 - include: install_ansible.yml
+- include: install_src.yml
 
 # Uninstall
 - include: uninstall_synchro.yml

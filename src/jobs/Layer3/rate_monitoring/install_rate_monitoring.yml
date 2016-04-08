@@ -16,11 +16,11 @@
     become: yes
 
   - name: Create Rate Monitoring repository
-    file: path=/opt/openbach-plugins/rate_monitoring state=directory mode=0755
+    file: path=/opt/openbach-jobs/rate_monitoring state=directory mode=0755
     become: yes
 
   - name: Install Rate Monitoring
-    copy: src=templates/rate{{ item }} dest=/opt/openbach-plugins/rate_monitoring/ mode=0644
+    copy: src=templates/rate{{ item }} dest=/opt/openbach-jobs/rate_monitoring/ mode=0644
     become: yes
     with_items:
       - .py

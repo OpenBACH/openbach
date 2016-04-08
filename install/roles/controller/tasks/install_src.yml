@@ -1,5 +1,18 @@
 ---
 
+- name: Install python-pip
+  apt: pkg=python-pip state=installed update_cache=false
+  tags:
+    - install
+
+- name: Install Apscheduler and Django
+  pip: name={{ item }}
+  with_items:
+    - apscheduler
+    - django
+  tags:
+    - install
+
 - name: Create OpenBACH repository
   file: path=/opt/openbach state=directory mode=0755
   tags:
@@ -14,17 +27,27 @@
   copy: src=../src/ dest=/opt/openbach/
   tags:
     - install
-
-- name: Change scripts mode bits
-  file: path=/opt/openbach/{{ item }} mode=755
+    
+- name: Initialize the database
+  shell: python /opt/openbach/backend/manage.py {{ item }}
   with_items:
-    - openbach_add_agent.sh
-    - openbach_del_agent.sh
+    - makemigrations
+    - migrate
   tags:
     - install
     
-- name: Create an empty file with the good right needed for agent's installation
-  file: path=/opt/openbach/agent.retry mode=0666 state=touch
+- name: Create a default superuser on the database
+  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | python /opt/openbach/backend/manage.py shell
+  tags:
+    - install
+
+- name: Create openbach-backend service
+  copy: src=roles/controller/templates/openbach-backend dest=/etc/init.d/ mode=0755
+  tags:
+    - install
+    
+- name: Start openbach-backend
+  service: name=openbach-backend state=started
   tags:
     - install
 

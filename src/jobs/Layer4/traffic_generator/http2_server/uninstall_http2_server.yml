@@ -24,7 +24,7 @@
     when: nghttp_check_deb.rc != 1
     
   - name: Remove HTTP2 Server repository
-    file: path=/opt/openbach-plugins/http2_server state=absent
+    file: path=/opt/openbach-jobs/http2_server state=absent
     become: yes
 
   - name: Remove HTTP2 Server configuration file

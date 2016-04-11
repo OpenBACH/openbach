@@ -6,7 +6,7 @@
 restart_instance.py - <+description+>
 """
 
-from frontend import restart_instance
+from frontend import restart_instance, date_to_timestamp
 import argparse
 import pprint
 
@@ -24,9 +24,9 @@ if __name__ == "__main__":
     parser.add_argument('instance_id', metavar='instance_id', type=str, nargs=1,
                         help='Id of the instance')
     parser.add_argument('-a', '--arguments', type=str, default=None,
-                        nargs ='+', help='Arguments of the Instance')
+                        nargs='+', help='Arguments of the Instance')
     parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the execution')
+                        nargs=2, help='Date of the execution')
     parser.add_argument('-i', '--interval', type=str, default=None,
                         help='Interval of the execution')
     
@@ -34,7 +34,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     instance_id = args.instance_id[0]
     arguments = args.arguments
-    date = args.date
+    if args.date == None:
+        date = None
+    else:
+        date = date_to_timestamp(args.date[0] + " " + args.date[1])
     interval = args.interval
     if (date != None) and (interval != None):
         print("You can only provide a date OR an interval, but not both")

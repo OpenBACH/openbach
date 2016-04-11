@@ -410,7 +410,7 @@ class ClientThread(threading.Thread):
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
                     return []
-                data_recv[4] = int(data_recv[4])
+                data_recv[4] = int(data_recv[4])/1000.
             elif data_recv[3] == 'interval':
                 if len(data_recv) != 5:
                     error_msg = "KO To start a watch, you have"
@@ -497,7 +497,7 @@ class ClientThread(threading.Thread):
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
                     return []
-                data_recv[4] = int(data_recv[4])
+                data_recv[4] = int(data_recv[4])/1000.
             elif data_recv[3] == 'interval':
                 if dict_jobs[job_name]['persistent']:
                     error_msg = "KO You can only start a watch on jobs that are"
@@ -590,7 +590,7 @@ class ClientThread(threading.Thread):
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
                     return []
-                data_recv[4] = int(data_recv[4])
+                data_recv[4] = int(data_recv[4])/1000.
             else:
                 error_msg = "KO To stop a job you have to specify the date"
                 self.clientsocket.send(error_msg)

@@ -6,7 +6,7 @@
 start_instance.py - <+description+>
 """
 
-from frontend import start_instance
+from frontend import start_instance, date_to_timestamp
 import argparse
 import pprint
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--arguments', type=str, default=None,
                         nargs ='+', help='Arguments of the Instance')
     parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the execution')
+                        nargs=2, help='Date of the execution')
     parser.add_argument('-i', '--interval', type=str, default=None,
                         help='Interval of the execution')
     
@@ -37,7 +37,10 @@ if __name__ == "__main__":
     agent_ip = args.agent_ip[0]
     job_name = args.job_name[0]
     arguments = args.arguments
-    date = args.date
+    if args.date == None:
+        date = None
+    else:
+        date = date_to_timestamp(args.date[0] + " " + args.date[1])
     interval = args.interval
     if (date != None) and (interval != None):
         print("You can only provide a date OR an interval, but not both")

@@ -5,11 +5,8 @@
   tags:
     - install
 
-- name: Install Apscheduler and Django
-  pip: name={{ item }}
-  with_items:
-    - apscheduler
-    - django
+- name: Install Django
+  pip: name=django
   tags:
     - install
 

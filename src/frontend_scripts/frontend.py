@@ -7,6 +7,13 @@ frontend.py - <+description+>
 """
 
 import requests, json
+from datetime import datetime
+
+
+def date_to_timestamp(date):
+    date_object = datetime.strptime(date, '%Y-%m-%d %H:%M:%S.%f')
+    timestamp = (date_object - datetime(1970,1,1)).total_seconds()
+    return timestamp
 
 
 def add_agent(agent_ip, collector_ip, username, password, name):

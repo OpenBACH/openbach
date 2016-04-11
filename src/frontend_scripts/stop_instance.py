@@ -6,7 +6,7 @@
 stop_instance.py - <+description+>
 """
 
-from frontend import stop_instance
+from frontend import stop_instance, date_to_timestamp
 import argparse
 import pprint
 
@@ -24,12 +24,15 @@ if __name__ == "__main__":
     parser.add_argument('instance_id', metavar='instance_id', type=str, nargs=1,
                         help='Id of the instance')
     parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the execution')
+                        nargs=2, help='Date of the execution')
     
     # get args
     args = parser.parse_args()
     instance_id = args.instance_id[0]
-    date = args.date
+    if args.date == None:
+        date = None
+    else:
+        date = date_to_timestamp(args.date[0] + " " + args.date[1])
 
     main(instance_id, date)
 

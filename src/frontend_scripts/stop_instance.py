@@ -3,33 +3,33 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-del_agent.py - <+description+>
+stop_instance.py - <+description+>
 """
 
-from frontend import del_agent
+from frontend import stop_instance
 import argparse
 import pprint
 
 
-def main(agent_ip, date):
-    r = del_agent(agent_ip, date)
+def main(instance_id, date):
+    r = stop_instance(instance_id, date)
     print r
     pprint.pprint(r.json())
 
-
+    
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
-                        help='IP Address of the Agent')
+    parser.add_argument('instance_id', metavar='instance_id', type=str, nargs=1,
+                        help='Id of the instance')
     parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the installation')
+                        help='Date of the execution')
     
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip[0]
+    instance_id = args.instance_id[0]
     date = args.date
 
-    main(agent_ip, date)
+    main(instance_id, date)
 

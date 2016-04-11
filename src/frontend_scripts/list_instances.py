@@ -6,22 +6,15 @@
 list_instances.py - <+description+>
 """
 
-import requests
+from frontend import list_instances
 import argparse
 import pprint
 
 
 def main(agent_ip):
-    if agent_ip == None:
-        url = ["http://localhost:8000/conductor/instances/list"]
-    else:
-        url = list()
-        for i in agent_ip:
-            url.append("http://localhost:8000/conductor/" + i +
-                       "/instances/list")
-
-    for i in range(len(url)):
-        r = requests.get(url[i])
+    responses = list_instances(agent_ip)
+    for i in range(len(responses)):
+        r = responses[i]
         print r
         pprint.pprint(r.json())
 

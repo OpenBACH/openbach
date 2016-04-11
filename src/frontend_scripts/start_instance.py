@@ -3,28 +3,16 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-start_job.py - <+description+>
+start_instance.py - <+description+>
 """
 
-import requests, json
+from frontend import start_instance
 import argparse
 import pprint
 
 
 def main(agent_ip, job_name, arguments, date, interval):
-    url = "http://localhost:8000/conductor/instances/start"
-
-    payload = {'agent_ip': agent_ip, 'job_name': job_name}
-    if arguments == None:
-        payload['args'] = list()
-    else:
-        payload['args'] = arguments
-    if interval != None:
-        payload['interval'] = interval
-    if date != None:
-        payload['date'] = date
-    
-    r = requests.post(url, data={'data': json.dumps(payload)})
+    r = start_instance(agent_ip, job_name, arguments, date, interval)
     print r
     pprint.pprint(r.json())
 
@@ -38,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('job_name', metavar='job_name', type=str, nargs=1,
                         help='Name of the Job')
     parser.add_argument('-a', '--arguments', type=str, default=None,
-                        nargs ='+', help='Arguments of the Job')
+                        nargs ='+', help='Arguments of the Instance')
     parser.add_argument('-d', '--date', type=str, default=None,
                         help='Date of the execution')
     parser.add_argument('-i', '--interval', type=str, default=None,

@@ -6,22 +6,13 @@
 add_agent.py - <+description+>
 """
 
-import requests, json
+from frontend import add_agent
 import argparse
 import pprint
 
 
 def main(agent_ip, collector_ip, username, password, name, date):
-    url = "http://localhost:8000/conductor/agents/add"
-
-    payload = {'address': agent_ip, 'username': username, 'password':
-               password, 'collector': collector_ip}
-    if name != None:
-        payload['name'] = name
-    if date != None:
-        payload['date'] = date
-    
-    r = requests.post(url, data={'data': json.dumps(payload)})
+    r = add_agent(agent_ip, collector_ip, username, password, name, date)
     print r
     pprint.pprint(r.json())
 

@@ -6,17 +6,13 @@
 add_job.py - <+description+>
 """
 
-import requests, json
+from frontend import add_job
 import argparse
 import pprint
 
 
 def main(job_name, path):
-    url = "http://localhost:8000/conductor/jobs/add"
-
-    payload = {'name': job_name, 'path': path}
-    
-    r = requests.post(url, data={'data': json.dumps(payload)})
+    r = add_job(job_name, path)
     print r
     pprint.pprint(r.json())
 

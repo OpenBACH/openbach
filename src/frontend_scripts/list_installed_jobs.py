@@ -6,15 +6,13 @@
 list_installed_jobs.py - <+description+>
 """
 
-import requests
+from frontend import list_installed_jobs
 import argparse
 import pprint
 
 
 def main(agent_ip):
-    url = "http://localhost:8000/conductor/" + agent_ip + "/jobs/list"
-
-    r = requests.get(url)
+    r = list_installed_jobs(agent_ip)
     print r
     pprint.pprint(r.json())
 

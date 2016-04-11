@@ -6,17 +6,13 @@
 del_job.py - <+description+>
 """
 
-import requests, json
+from frontend import del_job
 import argparse
 import pprint
 
 
 def main(job_name):
-    url = "http://localhost:8000/conductor/jobs/del"
-
-    payload = {'name': job_name}
-    
-    r = requests.post(url, data={'data': json.dumps(payload)})
+    r = del_job(job_name)
     print r
     pprint.pprint(r.json())
 

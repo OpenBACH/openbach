@@ -6,15 +6,13 @@
 list_agents.py - <+description+>
 """
 
-import requests
+from frontend import list_agents
 import argparse
 import pprint
 
 
 def main():
-    url = "http://localhost:8000/conductor/agents/list"
-
-    r = requests.get(url)
+    r = list_agents()
     print r
     pprint.pprint(r.json())
 

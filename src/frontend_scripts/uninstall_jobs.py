@@ -6,19 +6,13 @@
 uninstall_jobs.py - <+description+>
 """
 
-import requests, json
+from fronted import uninstall_jobs
 import argparse
 import pprint
 
 
 def main(jobs_name, agents_ip, date):
-    url = "http://localhost:8000/conductor/jobs/uninstall"
-
-    payload = {'addresses': agents_ip, 'names': jobs_name}
-    if date != None:
-        payload['date'] = date
-    
-    r = requests.post(url, data={'data': json.dumps(payload)})
+    r = uninstall_jobs(jobs_name, agents_ip, date)
     print r
     pprint.pprint(r.json())
 

@@ -295,7 +295,7 @@ def list_installed_jobs(request, ip_address):
         return JsonResponse(response_data, status=200)
 
 
-def start_job(request):
+def start_instance(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -334,11 +334,11 @@ def start_job(request):
     instance.update_status = timezone.now()
     instance.save()
     instance_id = str(instance.id)
-    cmd = "start_job "
+    cmd = "start_instance "
     if date_interval == 'date':
-        cmd += "date " + date
+        cmd += "date " + str(date)
     else:
-        cmd += "interval " + interval
+        cmd += "interval " + str(interval)
     cmd += " " + instance_id
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('localhost', 1113))
@@ -357,7 +357,7 @@ def start_job(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def stop_job(request):
+def stop_instance(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -377,7 +377,7 @@ def stop_job(request):
         date = data['date']
     else:
         date = "now"
-    cmd = "stop_job " + date + " " + instance_id
+    cmd = "stop_instance " + date + " " + instance_id
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('localhost', 1113))
     s.send(cmd)
@@ -391,7 +391,7 @@ def stop_job(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def restart_job(request):
+def restart_instance(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -429,7 +429,7 @@ def restart_job(request):
             return JsonResponse(data=response_data, status=404)
         instance.save()
     instance_id = str(instance.id)
-    cmd = "restart_job "
+    cmd = "restart_instance "
     if date_interval == 'date':
         cmd += "date " + date
     else:
@@ -448,7 +448,7 @@ def restart_job(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def status_job(request):
+def status_instance(request):
     pass
 
 

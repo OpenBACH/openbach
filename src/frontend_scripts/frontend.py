@@ -8,11 +8,15 @@ frontend.py - <+description+>
 
 import requests, json
 from datetime import datetime
+import time
+from calendar import timegm
 
 
 def date_to_timestamp(date):
+    t = time.localtime()
+    utc_offset = timegm(t) - timegm(time.gmtime(time.mktime(t)))
     date_object = datetime.strptime(date, '%Y-%m-%d %H:%M:%S.%f')
-    timestamp = (date_object - datetime(1970,1,1)).total_seconds()
+    timestamp = (date_object - datetime(1970,1,1)).total_seconds() - utc_offset
     return timestamp
 
 

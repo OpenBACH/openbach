@@ -1,4 +1,4 @@
 ---
 
-- name: Start Job
+- name: Start Instance
   shell: /opt/openbach-agent/openbach-baton start {{ job_name }} {{ id }} {{ date_interval }} {{ job_options }}

@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if args.date == None:
         date = None
     else:
-        date = date_to_timestamp(args.date[0] + " " + args.date[1])
+        date = int(date_to_timestamp(args.date[0] + " " + args.date[1])*1000)
     interval = args.interval
     if (date != None) and (interval != None):
         print("You can only provide a date OR an interval, but not both")

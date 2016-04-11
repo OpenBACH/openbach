@@ -34,7 +34,7 @@ class PlaybookBuilder():
             playbook.write(" include: ")
         else:
             return False
-        playbook.write(self.path_src + "start_job.yml\n")
+        playbook.write(self.path_src + "start_instance.yml\n")
         return True
 
     def build_status(self, playbook, job_name, instance_id, date, interval,
@@ -66,14 +66,14 @@ class PlaybookBuilder():
             playbook.write(" include: ")
         else:
             return False
-        playbook.write(self.path_src + "restart_job.yml\n")
+        playbook.write(self.path_src + "restart_instance.yml\n")
         return True
 
     def build_stop(self, playbook, job_name, instance_id, date):
         playbook.write("- hosts: Agents\n  vars:\n    - job_name: ")
         playbook.write(job_name + "\n    - id: " + instance_id + "\n    - date")
         playbook.write(": date " + date + "\n\n  tasks:\n    - include: ")
-        playbook.write(self.path_src + "stop_job.yml\n")
+        playbook.write(self.path_src + "stop_instance.yml\n")
         return True
 
 class ClientThread(threading.Thread):
@@ -86,8 +86,8 @@ class ClientThread(threading.Thread):
     def check_date_interval(self, data_recv):
         request_type = data_recv[0]
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job']
-        only_date = ['stop_job']
-        date_interval = ['start_job', 'restart_job', 'status_job']
+        only_date = ['stop_instance']
+        date_interval = ['start_instance', 'restart_instance', 'status_instance']
         if request_type in only_date:
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide a "
@@ -146,7 +146,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'start_job' or request_type == 'restart_job':
+        elif request_type == 'start_instance' or request_type == 'restart_instance':
             if len(data_recv) < 4:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
@@ -159,7 +159,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'stop_job':
+        elif request_type == 'stop_instance':
             if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
@@ -277,7 +277,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send('KO')
                 self.clientsocket.close()
                 return
-        elif request_type == 'start_job':
+        elif request_type == 'start_instance':
             if data_recv[1] == 'date':
                 date = data_recv[2]
                 interval = None
@@ -309,7 +309,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send('KO')
                 self.clientsocket.close()
                 return
-        elif request_type == 'stop_job':
+        elif request_type == 'stop_instance':
             date = data_recv[1]
             instance_id = data_recv[2]
             instance = Instance.objects.get(pk=instance_id)
@@ -336,7 +336,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send('KO')
                 self.clientsocket.close()
                 return
-        elif request_type == 'restart_job':
+        elif request_type == 'restart_instance':
             if data_recv[1] == 'date':
                 date = data_recv[2]
                 interval = None

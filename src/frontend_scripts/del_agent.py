@@ -11,8 +11,8 @@ import argparse
 import pprint
 
 
-def main(agent_ip, date):
-    r = del_agent(agent_ip, date)
+def main(agent_ip):
+    r = del_agent(agent_ip)
     print r
     pprint.pprint(r.json())
 
@@ -23,13 +23,10 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
                         help='IP Address of the Agent')
-    parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the installation')
     
     # get args
     args = parser.parse_args()
     agent_ip = args.agent_ip[0]
-    date = args.date
 
-    main(agent_ip, date)
+    main(agent_ip)
 

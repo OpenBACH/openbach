@@ -6,13 +6,13 @@
 uninstall_jobs.py - <+description+>
 """
 
-from fronted import uninstall_jobs
+from frontend import uninstall_jobs
 import argparse
 import pprint
 
 
-def main(jobs_name, agents_ip, date):
-    r = uninstall_jobs(jobs_name, agents_ip, date)
+def main(jobs_name, agents_ip):
+    r = uninstall_jobs(jobs_name, agents_ip)
     print r
     pprint.pprint(r.json())
 
@@ -25,18 +25,15 @@ if __name__ == "__main__":
                         help='Name of the Jobs to uninstall')
     parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
                         help='IP address of the agent')
-    parser.add_argument('-d', '--date', type=str, default=None,
-                        help='Date of the uninstallation')
     
     # get args
     args = parser.parse_args()
     jobs_name = args.job_name
     agent_ip = args.agent_ip[0]
-    date = args.date
     # TODO On devra plus tard pouvoir demander la desinstall de plusieurs jobs sur
     # plusieurs agents
     agents_ip = list()
     agents_ip.append(agent_ip)
 
-    main(jobs_name, agents_ip, date)
+    main(jobs_name, agents_ip)
 

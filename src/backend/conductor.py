@@ -9,7 +9,6 @@ scheduler.py - <+description+>
 import socket
 import shlex
 import threading
-from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import subprocess
 import getpass
@@ -78,17 +77,16 @@ class PlaybookBuilder():
         return True
 
 class ClientThread(threading.Thread):
-    def __init__(self, clientsocket, scheduler):
+    def __init__(self, clientsocket):
         threading.Thread.__init__(self)
         self.clientsocket = clientsocket
-        self.scheduler = scheduler
         self.playbook_builder = PlaybookBuilder("/tmp/",
                                                 "/opt/openbach/roles/backend/tasks/")
 
     def check_date_interval(self, data_recv):
         request_type = data_recv[0]
-        only_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
-                     'stop_job']
+        no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job']
+        only_date = ['stop_job']
         date_interval = ['start_job', 'restart_job', 'status_job']
         if request_type in only_date:
             if len(data_recv) < 2:
@@ -123,26 +121,26 @@ class ClientThread(threading.Thread):
             return []
         request_type = data_recv[0]
         if request_type == 'add_agent' or request_type == 'del_agent':
-            if len(data_recv) < 3:
+            if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide the"
                 error_msg += " ip address of the agent"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-            if len(data_recv) > 3:
+            if len(data_recv) > 2:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
         elif request_type == 'install_job' or request_type == 'uninstall_job':
-            if len(data_recv) < 4:
+            if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the ip address of the agent and the name of the job"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-            if len(data_recv) > 4:
+            if len(data_recv) > 3:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
                 self.clientsocket.send(error_msg)
@@ -190,8 +188,7 @@ class ClientThread(threading.Thread):
             return
         request_type = data_recv[0]
         if request_type == 'add_agent':
-            date = data_recv[1]
-            agent_ip = data_recv[2]
+            agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
             hosts = open('/tmp/openbach_hosts', 'w')
             hosts.write("[Agents]\n" + agent.address + "\n")
@@ -217,8 +214,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 return
         elif request_type == 'del_agent':
-            date = data_recv[1]
-            agent_ip = data_recv[2]
+            agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
             hosts = open('/tmp/openbach_hosts', 'w')
             hosts.write("[Agents]\n" + agent.address + "\n")
@@ -244,9 +240,8 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 return
         elif request_type == 'install_job':
-            date = data_recv[1]
-            agent_ip = data_recv[2]
-            job_name = data_recv[3]
+            agent_ip = data_recv[1]
+            job_name = data_recv[2]
             agent = Agent.objects.get(pk=agent_ip)
             job = Job.objects.get(pk=job_name)
             hosts = open('/tmp/openbach_hosts', 'w')
@@ -264,9 +259,8 @@ class ClientThread(threading.Thread):
                 self.clientsocket.close()
                 return
         elif request_type == 'uninstall_job':
-            date = data_recv[1]
-            agent_ip = data_recv[2]
-            job_name = data_recv[3]
+            agent_ip = data_recv[1]
+            job_name = data_recv[2]
             agent = Agent.objects.get(pk=agent_ip)
             job = Job.objects.get(pk=job_name)
             hosts = open('/tmp/openbach_hosts', 'w')
@@ -385,14 +379,10 @@ if __name__ == "__main__":
     tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcpsock.bind(("",1113))
     
-    # Creation du scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.start()
-    
     while True:
         num_connexion_max = 10
         tcpsock.listen(num_connexion_max)
         (clientsocket, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(clientsocket, scheduler)
+        newthread = ClientThread(clientsocket)
         newthread.start()
 

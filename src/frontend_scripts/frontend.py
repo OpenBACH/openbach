@@ -9,15 +9,13 @@ frontend.py - <+description+>
 import requests, json
 
 
-def add_agent(agent_ip, collector_ip, username, password, name, date):
+def add_agent(agent_ip, collector_ip, username, password, name):
     url = "http://localhost:8000/conductor/agents/add"
 
     payload = {'address': agent_ip, 'username': username, 'password':
                password, 'collector': collector_ip}
     if name != None:
         payload['name'] = name
-    if date != None:
-        payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
@@ -30,12 +28,10 @@ def add_job(job_name, path):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def del_agent(agent_ip, date):
+def del_agent(agent_ip):
     url = "http://localhost:8000/conductor/agents/del"
 
     payload = {'address': agent_ip}
-    if date != None:
-        payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
@@ -48,12 +44,10 @@ def del_job(job_name):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def install_jobs(jobs_name, agents_ip, date):
+def install_jobs(jobs_name, agents_ip):
     url = "http://localhost:8000/conductor/jobs/install"
 
     payload = {'addresses': agents_ip, 'names': jobs_name}
-    if date != None:
-        payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
@@ -134,12 +128,10 @@ def stop_instance(instance_id, date):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def uninstall_jobs(jobs_name, agents_ip, date):
+def uninstall_jobs(jobs_name, agents_ip):
     url = "http://localhost:8000/conductor/jobs/uninstall"
 
     payload = {'addresses': agents_ip, 'names': jobs_name}
-    if date != None:
-        payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 

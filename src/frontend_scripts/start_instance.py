@@ -6,15 +6,24 @@
 start_instance.py - <+description+>
 """
 
-from frontend import start_instance, date_to_timestamp
+from frontend import start_instance, date_to_timestamp, status_instance
 import argparse
 import pprint
 
 
-def main(agent_ip, job_name, arguments, date, interval):
+def main(agent_ip, job_name, arguments, date, interval, status):
     r = start_instance(agent_ip, job_name, arguments, date, interval)
+    print "Start Instance:"
     print r
     pprint.pprint(r.json())
+    if status != None:
+        instance_id = int(r.json()['instance_id'])
+        interval = status
+        r = status_instance(instance_id, interval=interval)
+        print "Start watch of the status:"
+        print r
+        pprint.pprint(r.json())
+        
 
 
 if __name__ == "__main__":
@@ -31,6 +40,8 @@ if __name__ == "__main__":
                         nargs=2, help='Date of the execution')
     parser.add_argument('-i', '--interval', type=str, default=None,
                         help='Interval of the execution')
+    parser.add_argument('-s', '--status', type=str, default=None,
+                        help='Start a watch of the status with this interval')
     
     # get args
     args = parser.parse_args()
@@ -42,9 +53,10 @@ if __name__ == "__main__":
     else:
         date = int(date_to_timestamp(args.date[0] + " " + args.date[1])*1000)
     interval = args.interval
+    status = args.status
     if (date != None) and (interval != None):
         print("You can only provide a date OR an interval, but not both")
         exit(1)
 
-    main(agent_ip, job_name, arguments, date, interval)
+    main(agent_ip, job_name, arguments, date, interval, status)
 

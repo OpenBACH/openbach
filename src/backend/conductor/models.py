@@ -107,3 +107,13 @@ class Instance(models.Model):
     def __str__(self):
         return "Instance " + str(self.id) + " of " + str(self.job)
 
+
+class Watch(models.Model):
+    job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
+    instance_id = models.IntegerField(primary_key=True)
+    interval = models.IntegerField(blank=True)
+
+    def __str__(self):
+        return "Watch of Instance " + str(self.instance_id) + " of " + str(self.job)
+
+

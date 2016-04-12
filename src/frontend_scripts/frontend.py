@@ -20,8 +20,8 @@ def date_to_timestamp(date):
     return timestamp
 
 
-def add_agent(agent_ip, collector_ip, username, password, name):
-    url = "http://localhost:8000/conductor/agents/add"
+def add_agent(agent_ip, collector_ip, username, password, name=None):
+    url = "http://localhost:8000/agents/add"
 
     payload = {'address': agent_ip, 'username': username, 'password':
                password, 'collector': collector_ip}
@@ -32,7 +32,7 @@ def add_agent(agent_ip, collector_ip, username, password, name):
 
 
 def add_job(job_name, path):
-    url = "http://localhost:8000/conductor/jobs/add"
+    url = "http://localhost:8000/jobs/add"
 
     payload = {'name': job_name, 'path': path}
     
@@ -40,7 +40,7 @@ def add_job(job_name, path):
 
 
 def del_agent(agent_ip):
-    url = "http://localhost:8000/conductor/agents/del"
+    url = "http://localhost:8000/agents/del"
 
     payload = {'address': agent_ip}
     
@@ -48,7 +48,7 @@ def del_agent(agent_ip):
 
 
 def del_job(job_name):
-    url = "http://localhost:8000/conductor/jobs/del"
+    url = "http://localhost:8000/jobs/del"
 
     payload = {'name': job_name}
     
@@ -56,7 +56,7 @@ def del_job(job_name):
 
 
 def install_jobs(jobs_name, agents_ip):
-    url = "http://localhost:8000/conductor/jobs/install"
+    url = "http://localhost:8000/jobs/install"
 
     payload = {'addresses': agents_ip, 'names': jobs_name}
     
@@ -64,24 +64,24 @@ def install_jobs(jobs_name, agents_ip):
 
 
 def list_agents():
-    url = "http://localhost:8000/conductor/agents/list"
+    url = "http://localhost:8000/agents/list"
 
     return requests.get(url)
 
 
 def list_installed_jobs(agent_ip):
-    url = "http://localhost:8000/conductor/" + agent_ip + "/jobs/list"
+    url = "http://localhost:8000/" + agent_ip + "/jobs/list"
 
     return requests.get(url)
 
 
 def list_instances(agent_ip):
     if agent_ip == None:
-        url = ["http://localhost:8000/conductor/instances/list"]
+        url = ["http://localhost:8000/instances/list"]
     else:
         url = list()
         for i in agent_ip:
-            url.append("http://localhost:8000/conductor/" + i +
+            url.append("http://localhost:8000/" + i +
                        "/instances/list")
 
     responses = []
@@ -92,13 +92,13 @@ def list_instances(agent_ip):
 
 
 def list_jobs():
-    url = "http://localhost:8000/conductor/jobs/list"
+    url = "http://localhost:8000/jobs/list"
 
     return requests.get(url)
 
 
-def restart_instance(instance_id, arguments, date, interval):
-    url = "http://localhost:8000/conductor/instances/restart"
+def restart_instance(instance_id, arguments=None, date=None, interval=None):
+    url = "http://localhost:8000/instances/restart"
 
     payload = {'instance_id': instance_id}
     if arguments == None:
@@ -107,14 +107,15 @@ def restart_instance(instance_id, arguments, date, interval):
         payload['args'] = arguments
     if interval != None:
         payload['interval'] = interval
-    if date != None:
+    elif date != None:
         payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def start_instance(agent_ip, job_name, arguments, date, interval):
-    url = "http://localhost:8000/conductor/instances/start"
+def start_instance(agent_ip, job_name, arguments=None, date=None,
+                   interval=None):
+    url = "http://localhost:8000/instances/start"
 
     payload = {'agent_ip': agent_ip, 'job_name': job_name}
     if arguments == None:
@@ -123,14 +124,32 @@ def start_instance(agent_ip, job_name, arguments, date, interval):
         payload['args'] = arguments
     if interval != None:
         payload['interval'] = interval
-    if date != None:
+    elif date != None:
         payload['date'] = date
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def stop_instance(instance_id, date):
-    url = "http://localhost:8000/conductor/instances/stop"
+def status_instance(instance_id, date=None, interval=None, stop=None, agent_ip=None,
+                    job_name=None):
+    url = "http://localhost:8000/instances/status"
+
+    payload = {'instance_id': instance_id}
+    if interval != None:
+        payload['interval'] = interval
+    elif date != None:
+        payload['date'] = date
+    elif stop != None:
+        payload['stop'] = stop
+    if agent_ip != None and job_name != None:
+        payload['agent_ip'] = agent_ip
+        payload['job_name'] = job_name
+        
+    return requests.post(url, data={'data': json.dumps(payload)})
+
+
+def stop_instance(instance_id, date=None):
+    url = "http://localhost:8000/instances/stop"
 
     payload = {'instance_id': instance_id}
     if date != None:
@@ -140,7 +159,7 @@ def stop_instance(instance_id, date):
 
 
 def uninstall_jobs(jobs_name, agents_ip):
-    url = "http://localhost:8000/conductor/jobs/uninstall"
+    url = "http://localhost:8000/jobs/uninstall"
 
     payload = {'addresses': agents_ip, 'names': jobs_name}
     

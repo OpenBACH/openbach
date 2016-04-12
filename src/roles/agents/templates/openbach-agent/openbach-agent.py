@@ -136,6 +136,12 @@ def status_job(job_name, job_id, scheduler):
     cmd += status
     s.send(cmd)
     s.close()
+    
+def stop_watch(scheduler, job_name, job_id):
+    try:
+        scheduler.remove_job(job_name + job_id + "_status")
+    except JobLookupError:
+        pass
  
 def ls_jobs():
     global dict_jobs
@@ -430,14 +436,25 @@ class ClientThread(threading.Thread):
                     return []
                 data_recv[4] = int(data_recv[4])
             elif data_recv[3] == 'stop':
-                # S'assurer qu'il n'y a pas d'autres arguments
-                if len(data_recv) != 4:
-                    error_msg = "KO To stop a watch, you don't have to"
-                    error_msg += " specify anything"
+                if len(data_recv) != 5:
+                    error_msg = "KO To stop a watch, you have to"
+                    error_msg += " specify when"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
                     return []
+                if data_recv[4] == 'now':
+                    data_recv[4] = 0
+                try:
+                    int(data_recv[4])
+                except:
+                    error_msg = "KO The date to watch the status should be give"
+                    error_msg += " as timestamp in sec "
+                    self.clientsocket.send(error_msg)
+                    self.clientsocket.close()
+                    syslog.syslog(syslog.LOG_ERR, error_msg)
+                    return []
+                data_recv[4] = int(data_recv[4])/1000.
             else:
                 # TODO Gérer le 'cron' ?
                 error_msg = "KO Only 'date', 'interval' and 'stop' are allowed "
@@ -720,13 +737,24 @@ class ClientThread(threading.Thread):
                     return
             # Déprogrammer
             elif data_recv[3] == 'stop':
+                actual_timestamp = time.time()
+                if data_recv[4] < actual_timestamp:
+                    date = None
+                else:
+                    date = datetime.fromtimestamp(data_recv[4])
                 try:
-                    self.scheduler.remove_job(job_name + job_id + "_status")
+                    self.scheduler.get_job(job_name + job_id + "_status")
+                    # TODO get_job doesn't raise JobLookupError when the job
+                    # isn't found. We have to found a function that does it
                 except JobLookupError:
                     self.clientsocket.send("KO No watch on the status of " +
                                            job_name + " was programmed")
                     self.clientsocket.close()
                     return
+                self.scheduler.add_job(stop_watch, 'date', args=[self.scheduler,
+                                                                 job_name,
+                                                                 job_id],
+                                       run_date=date)
         elif request_type == 'restart':
             # Stop le job si il est lancer
             job_id = data_recv[2]

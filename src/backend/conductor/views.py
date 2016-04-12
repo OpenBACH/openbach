@@ -1,4 +1,4 @@
-from .models import Agent, Job, Installed_Job, Instance
+from .models import Agent, Job, Installed_Job, Instance, Watch
 from django.http import JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
 import json
@@ -23,12 +23,8 @@ def add_agent(request):
     agent.status = "Installing ..."                                                                                
     agent.update_status = timezone.now()
     agent.save()
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
     response_data = {}
-    cmd = "add_agent " + date + " " + agent.address
+    cmd = "add_agent " + agent.address
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('localhost', 1113))
     s.send(cmd)
@@ -54,10 +50,6 @@ def del_agent(request):
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
     try:
         agent = Agent.objects.get(pk=ip_address)
     except ObjectDoesNotExist:
@@ -65,7 +57,7 @@ def del_agent(request):
                          ip_address}
         return JsonResponse(data=response_data, status=404)
     response_data = {}
-    cmd = "del_agent " + date + " " + agent.address
+    cmd = "del_agent " + " " + agent.address
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('localhost', 1113))
     s.send(cmd)
@@ -173,16 +165,12 @@ def install_job(request):
         response_data = {'msg': "At least one of the Jobs isn't in the"
                          " database", 'job_name': data['names'][i]}
         return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
     success = True
     for i in range(len(agents)):
         agent = agents[i]
         for l in range(len(jobs)):
             job = jobs[l]
-            cmd = "install_job " + date + " " + agent.address + " \"" + job.name + "\""
+            cmd = "install_job " + agent.address + " \"" + job.name + "\""
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(('localhost', 1113))
             s.send(cmd)
@@ -227,10 +215,6 @@ def uninstall_job(request):
         response_data = {'msg': "At least one of the Jobs isn't in the"
                          " database", 'job_name': data['names'][i]}
         return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
     success = True
     error_msg = []
     for i in range(len(agents)):
@@ -245,7 +229,7 @@ def uninstall_job(request):
                 error_msg.append("The Installed_Job " + installed_job_name +
                                  " isn't in the database\n")
                 continue
-            cmd = "uninstall_job " + date + " " + agent.address + " \"" + job.name + "\""
+            cmd = "uninstall_job " + agent.address + " \"" + job.name + "\""
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(('localhost', 1113))
             s.send(cmd)
@@ -410,10 +394,6 @@ def restart_instance(request):
         return JsonResponse(data=response_data, status=404)
     if 'date' in data:
         date = data['date']
-    else:
-        date = "now"
-    if 'date' in data:
-        date = data['date']
         date_interval = 'date'
     elif 'interval' in data:
         interval = data['interval']
@@ -449,7 +429,96 @@ def restart_instance(request):
 
 
 def status_instance(request):
-    pass
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    try:
+        instance_id = data['instance_id']
+    except:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    try:
+        instance = Instance.objects.get(pk=instance_id)
+        installed_job = instance.job
+    except ObjectDoesNotExist:
+        if 'agent_ip' not in data or 'job_name' not in data:
+            response_data = {'msg': "POST data malformed"}
+            return JsonResponse(data=response_data, status=404)
+        else:
+            agent_ip = data['agent_ip']
+            job_name = data['job_name']
+            try:
+                agent = Agent.objects.get(pk=agent_ip)
+            except ObjectDoesNotExist:
+                response_data = {'msg': "This Agent isn't in the database", 'address':
+                                 agent_ip}
+                return JsonResponse(data=response_data, status=404)
+            try:
+                job = Job.objects.get(pk=job_name)
+            except ObjectDoesNotExist:
+                response_data = {'msg': "This Job isn't in the database", 'job_name':
+                                 job_name}
+                return JsonResponse(data=response_data, status=404)
+            name = job.name + " on " + agent.address
+            try:
+                installed_job = Installed_Job.objects.get(pk=name)
+            except ObjectDoesNotExist:
+                response_data = {'msg': "This Installed_Job isn't in the database",
+                                 'job_name': name}
+                return JsonResponse(data=response_data, status=404)
+    if 'date' in data:
+        try:
+            Watch.objects.get(pk=instance_id)
+            response_data = {'msg': "A Watch already exist in the database"}
+            return JsonResponse(data=response_data, status=404)
+        except ObjectDoesNotExist:
+            watch = Watch(job=installed_job, instance_id=instance_id,
+                          interval=0) 
+        watch_type = 'date'
+        cmd_type = "date " + str(data['date']) + " "
+    elif 'interval' in data:
+        try:
+            watch = Watch.objects.get(pk=instance_id)
+        except ObjectDoesNotExist:
+            watch = Watch(job=installed_job, instance_id=instance_id)
+        watch_type = 'interval'
+        interval = int(data['interval'])
+        watch.interval = interval
+        cmd_type = "interval " + str(interval) + " "
+    elif 'stop' in data:
+        try:
+            watch = Watch.objects.get(pk=instance_id)
+        except ObjectDoesNotExist:
+            watch = Watch(job=installed_job, instance_id=instance_id,
+                          interval=0)
+        watch_type = 'stop'
+        cmd_type = "stop " + str(data['stop']) + " "
+    else:
+        try:
+            Watch.objects.get(pk=instance_id)
+            response_data = {'msg': "A Watch already exist in the database"}
+            return JsonResponse(data=response_data, status=404)
+        except ObjectDoesNotExist:
+            watch = Watch(job=installed_job, instance_id=instance_id,
+                          interval=0)
+        watch_type = 'date'
+        cmd_type = "date now "
+    watch.save()
+    cmd = "status_instance " + cmd_type +  str(instance_id)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response_data = {'msg': r}
+    if r.split()[0] == 'OK':
+        if watch_type != 'interval':
+            watch.delete()
+        return JsonResponse(data=response_data, status=200)
+    else:
+        watch.delete()
+        return JsonResponse(data=response_data, status=404)
 
 
 def list_instances(request, ip_address):

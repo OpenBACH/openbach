@@ -3,7 +3,7 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-scheduler.py - <+description+>
+conductor.py - <+description+>
 """
 
 import socket
@@ -15,7 +15,7 @@ import getpass
 from django.core.wsgi import get_wsgi_application
 os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
-from conductor.models import Agent, Job, Instance
+from conductor.models import Agent, Job, Instance, Watch
 
 class PlaybookBuilder():
     def __init__(self, path_to_build, path_src):
@@ -51,7 +51,7 @@ class PlaybookBuilder():
             playbook.write("stop " + stop + "\n\n  tasks:\n    - include: ")
         else:
             return False
-        playbook.write(self.path_src + "status_job.yml\n")
+        playbook.write(self.path_src + "status_instance.yml\n")
         return True
 
     def build_restart(self, playbook, job_name, instance_id, job_args, date,
@@ -88,7 +88,9 @@ class ClientThread(threading.Thread):
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job']
         only_date = ['stop_instance']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
-        if request_type in only_date:
+        if request_type in no_date:
+            pass
+        elif request_type in only_date:
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide a "
                 error_msg += "date when to execute the order"
@@ -146,7 +148,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'start_instance' or request_type == 'restart_instance':
+        elif request_type == 'start_instance' or request_type == 'restart_instance' or request_type == 'status_instance':
             if len(data_recv) < 4:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
@@ -356,6 +358,45 @@ class ClientThread(threading.Thread):
             playbook.write("---\n\n")
             self.playbook_builder.build_restart(playbook, job.name, instance_id,
                                                 instance.args, date, interval)
+            playbook.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
+            cmd_ansible += "sh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+            cmd_ansible += playbook_filename
+            p = subprocess.Popen(cmd_ansible, shell=True)
+            p.wait()
+            if p.returncode != 0:
+                self.clientsocket.send('KO')
+                self.clientsocket.close()
+                return
+        elif request_type == 'status_instance':
+            watch_type = data_recv[1]
+            if watch_type == 'date':
+                date = data_recv[2]
+                interval = None
+                stop = None
+            elif watch_type == 'interval':
+                date = None
+                interval = data_recv[2]
+                stop = None
+            elif watch_type == 'stop':
+                date = None
+                interval = None
+                stop = data_recv[2]
+            instance_id = data_recv[3]
+            watch = Watch.objects.get(pk=instance_id)
+            job = watch.job.job
+            agent = watch.job.agent
+            hosts = open('/tmp/openbach_hosts', 'w')
+            hosts.write("[Agents]\n" + agent.address + "\n")
+            hosts.close()
+            playbook_filename = self.playbook_builder.path_to_build + "status_"
+            playbook_filename += job.name + ".yml"
+            playbook = open(playbook_filename, 'w')
+            playbook.write("---\n\n")
+            self.playbook_builder.build_status(playbook, job.name, instance_id,
+                                               date, interval, stop)
             playbook.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
             cmd_ansible += "sh_user=" + agent.username + " -e "

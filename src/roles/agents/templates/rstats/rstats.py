@@ -5,7 +5,10 @@ import logging
 import socket
 import ConfigParser
 import shlex
-import subprocess
+import requests
+from requests.exceptions import ConnectionError
+import resource
+resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 
 class Rstats:
@@ -72,25 +75,22 @@ class Rstats:
         else:
             stat_name = stat_name
         if self.conf.influxdb_version == '0.9' or self.conf.influxdb_version == '0.10':
-            cmd = "curl -X POST 'http://" + self.conf.host + ":" + self.conf.port
-            cmd += "/write?db=" + self.conf.database + "&precision="
-            cmd += self.conf.time_precision + "&u=" + self.conf.username + "&p="
-            cmd += self.conf.password +  "' --data-binary '"
-            cmd += stat_name + " " + stats_v09 + " " + str(time) + "'"
-        else:
-            cmd = "curl -XPOST 'http://" + self.conf.host + ":" + self.conf.port
-            cmd += "/db/" + self.conf.database + "/series?u="
-            cmd += self.conf.username + "&p=" + self.conf.password
-            cmd += "&time_precision=" + self.conf.time_precision
-            cmd += "' -d '[{\"name\":\"" + stat_name
-            cmd += "\",\"columns\":[" + stats_names + "],\"points\":[["
-            cmd += stats_values + "]]}]'"
+            url = "http://" + self.conf.host + ":" + self.conf.port
+            url += "/write?db=" + self.conf.database + "&precision="
+            url += self.conf.time_precision + "&u=" + self.conf.username + "&p="
+            url += self.conf.password
+            data = stat_name + " " + stats_v09 + " " + str(time)
             
         # Envoyer la commande
-        result = subprocess.check_output(cmd, shell=True)
-        if len(result) != 0:
-            self._logger.error(result)
-        return result
+        try:
+            result = requests.post(url, data=data)
+        except ConnectionError:
+            result = "ConnectionError"
+            print result
+            return result
+        if len(result._content) != 0:
+            self._logger.error(result._content)
+        return result._content
  
 
     def reload_conf(self):
@@ -442,6 +442,8 @@ if __name__ == "__main__":
     tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcpsock.bind(("",1111))
+    num_connexion_max = 1000
+    tcpsock.listen(num_connexion_max)
 
     global dict_statsclient
     global mutex_dict
@@ -453,8 +455,6 @@ if __name__ == "__main__":
     conf = Conf("rstats.cfg")
 
     while True:
-        num_connexion_max = 10
-        tcpsock.listen(num_connexion_max)
         (clientsocket, (ip, port)) = tcpsock.accept()
         newthread = ClientThread(ip, port, clientsocket, conf)
         newthread.start()

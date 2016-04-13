@@ -23,6 +23,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 import subprocess
+import resource
+resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 
 
@@ -247,14 +249,19 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
-                return
+                return False
             mutex_jobs.acquire()
             if dict_jobs[job_name]['persistent']:
                 dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
         elif data_recv[3] == 'interval':
             if dict_jobs[job_name]['persistent']:
-                return
+                error_msg = "KO This job " + job_name + " is persistent, you"
+                error_msg += "can't start it with the 'interval' option"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                syslog.syslog(syslog.LOG_ERR, error_msg)
+                return False
             interval = data_recv[4]
             try:
                 self.scheduler.add_job(launch_job, 'interval', seconds=interval,
@@ -265,10 +272,13 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)
-                return
+                return False
             mutex_jobs.acquire()
             dict_jobs[job_name]['set_id'].add(job_id)
             mutex_jobs.release()
+        else:
+            pass
+        return True
 
         
     def parse_and_check(self, r):
@@ -279,7 +289,6 @@ class ClientThread(threading.Thread):
         if len(data_recv) < 1:
             error_msg = "KO Message not formed well. It should have at least an"
             error_msg += " action"
-            #error_msg += "and a job name (with eventually options)"
             self.clientsocket.send(error_msg)
             self.clientsocket.close()
             syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -673,7 +682,8 @@ class ClientThread(threading.Thread):
             del dict_jobs[job_name]
             mutex_jobs.release()
         elif request_type == 'start':
-            self.start_job(mutex_jobs, dict_jobs, data_recv)
+            if not self.start_job(mutex_jobs, dict_jobs, data_recv):
+                return
         elif request_type == 'stop':
             job_id = data_recv[2]
             actual_timestamp = time.time()
@@ -770,7 +780,8 @@ class ClientThread(threading.Thread):
             dict_jobs[job_name]['set_id'].remove(job_id)
             mutex_jobs.release()
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
-            self.start_job(mutex_jobs, dict_jobs, data_recv)
+            if not self.start_job(mutex_jobs, dict_jobs, data_recv):
+                return
         elif request_type == 'ls_jobs':
             self.scheduler.add_job(ls_jobs, 'date')
         self.clientsocket.send("OK")
@@ -783,6 +794,8 @@ if __name__ == "__main__":
     tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcpsock.bind(("",1112))
+    num_connexion_max = 1000
+    tcpsock.listen(num_connexion_max)
 
     # Creation du scheduler
     global scheduler
@@ -844,8 +857,6 @@ if __name__ == "__main__":
                                        persistent=conf.persistent)
 
     while True:
-        num_connexion_max = 10
-        tcpsock.listen(num_connexion_max)
         (clientsocket, (ip, port)) = tcpsock.accept()
         newthread = ClientThread(clientsocket, scheduler, path)
         newthread.start()

@@ -28,14 +28,19 @@ start)
 ;;
 status)
     printf "%-50s" "Checking $NAME..."
+    hostname=`cat /etc/hostname`
+    timestamp=`echo $(date +%s%N)`
     if [ -f $PIDFILE ]; then
     PID=`cat $PIDFILE`
         if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
             printf "%s\n" "Process dead but pidfile exists"
+            curl -i -XPOST 'http://172.20.0.88:8086/write?db=openbach' --data-binary "$hostname status=\"Agent reachable but daemon not running\" $timestamp" > /dev/null 2>&1
         else
+            curl -i -XPOST 'http://172.20.0.88:8086/write?db=openbach' --data-binary "$hostname status=\"Available\" $timestamp" > /dev/null 2>&1
             echo "Running"
         fi
     else
+        curl -i -XPOST 'http://172.20.0.88:8086/write?db=openbach' --data-binary "$hostname status=\"Agent reachable but daemon not running\" $timestamp" > /dev/null 2>&1
         printf "%s\n" "Service not running"
     fi
 ;;

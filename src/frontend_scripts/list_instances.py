@@ -11,24 +11,25 @@ import argparse
 import pprint
 
 
-def main(agent_ip):
-    responses = list_instances(agent_ip)
-    for i in range(len(responses)):
-        r = responses[i]
-        print r
-        pprint.pprint(r.json())
+def main(agents_ip, update):
+    r = list_instances(agents_ip, update)
+    print r
+    pprint.pprint(r.json())
 
 
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-a', '--agent-ip', type=str, default=None,
-                        nargs ='+', help='Ip Address of the Agents')
+    parser.add_argument('agents_ip', metavar='agents_ip', type=str, nargs='*',
+                        help='IP address of the Agents')
+    parser.add_argument('-u', '--update', action='store_true', help='With this '
+                        'option, the status is the last one present on the collector')
     
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip
+    agents_ip = args.agents_ip
+    update = args.update
 
-    main(agent_ip)
+    main(agents_ip, update)
 

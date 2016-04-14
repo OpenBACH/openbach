@@ -44,10 +44,12 @@ def get_hexdigest(algorithm, salt, raw_password):
     raise ValueError("Got unknown password algorithm type in password.")
 
 class Agent(models.Model):
-    name = models.CharField(max_length=200, blank=True)
+    name = models.CharField(max_length=200, blank=True, unique=True)
     address = GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=200, blank=True)
     update_status = models.DateTimeField(blank=True)
+    reachable = models.CharField(max_length=200, blank=True)
+    update_reachable = models.DateTimeField(blank=True)
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)
     collector = GenericIPAddressField()

@@ -20,7 +20,9 @@ def add_agent(request):
         return JsonResponse(data=response_data, status=404)
     if 'name' in data:
         agent.name = data['name']
-    agent.status = "Installing ..."                                                                                
+    agent.reachable = "Installing ..."
+    agent.update_reachable = timezone.now()
+    agent.status = "Installing ..." 
     agent.update_status = timezone.now()
     agent.save()
     response_data = {}
@@ -34,6 +36,8 @@ def add_agent(request):
     if r.split()[0] == 'KO':
         agent.delete()
         return JsonResponse(data=response_data, status=404)
+    agent.reachable = "Agent reachable"
+    agent.update_reachable = timezone.now()
     agent.status = "Available"
     agent.update_status = timezone.now()
     agent.save()
@@ -71,13 +75,31 @@ def del_agent(request):
 
 
 def list_agents(request):
-    if request.method != 'GET':
-        response_data = {'msg': "Only GET method are accepted"}
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
     agents = Agent.objects.all()
-    response_data = {}
+    update = False
+    response_data = {'errors': list()}
+    if 'update' in data:
+        update = data['update']
+    if update:
+        for agent in agents:
+            if agent.reachable == 'Agent reachable' and agent.update_status < agent.update_reachable:
+                cmd = "update_agent " + agent.address
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect(('localhost', 1113))
+                s.send(cmd)
+                r = s.recv(1024)
+                s.close()
+                return_msg = r.split()
+                if return_msg[0] == 'KO':
+                    response_data['errors'].append({'agent_ip': agent.address,
+                                                    'error': ' '.join(return_msg[1:])})
     response_data['agents'] = list()
     for agent in agents:
+        agent.refresh_from_db()
         agent_json = {'address': agent.address, 'status': agent.status,
                       'update_status': agent.update_status, 'name': agent.name}
         response_data['agents'].append(agent_json)
@@ -225,9 +247,8 @@ def uninstall_job(request):
             try:
                 installed_job = Installed_Job.objects.get(pk=installed_job_name)
             except ObjectDoesNotExist:
-                # TODO Fournir un moyen de recuperer le nom du job
-                error_msg.append("The Installed_Job " + installed_job_name +
-                                 " isn't in the database\n")
+                error_msg.append({'error': "The Installed_Job isn't in the "
+                                  "database", 'job_name': installed_job_name})
                 continue
             cmd = "uninstall_job " + agent.address + " \"" + job.name + "\""
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -428,6 +449,34 @@ def restart_instance(request):
         return JsonResponse(data=response_data, status=404)
 
 
+def status_agents(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    if 'addresses' not in data:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    agents_ip = data['addresses']
+    cmd = "status_agents " + ' '.join(agents_ip)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response = r.split()
+    if response[0] == 'OK':
+        response_data = {'msg': r}
+        return JsonResponse(data=response_data, status=200)
+    else:
+        response_data = {'msg': "At least one of the Agents isn't in the"
+                         "database", 'addresses': response}
+        return JsonResponse(data=response_data, status=404)
+
+def status_jobs(request):
+    pass
+
+
 def status_instance(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
@@ -521,51 +570,51 @@ def status_instance(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def list_instances(request, ip_address):
-    if request.method != 'GET':
-        response_data = {'msg': "Only GET method are accepted"}
+def list_instances(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
     try:
-        response_data = get_list_instances_for(ip_address)
-    except ObjectDoesNotExist:
-        response_data = {'msg': "This Agent isn't in the database", 'address':
-                         ip_address}
+        agents_ip = data['agents_ip']
+    except:
+        response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
-    return JsonResponse(response_data, status=200)
-
-
-def list_instances_per_agent(request):
-    if request.method != 'GET':
-        response_data = {'msg': "Only GET method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    agents = Agent.objects.all()
+    if 'update' in data:
+        update = data['update']
+    else:
+        update = False
     response_data = {}
     response_data['instances'] = list()
-    for agent in agents:
+    if len(agents_ip) == 0:
+        agents = Agent.objects.all()
+        for agent in agents:
+            agents_ip.append(agent.address)
+    for ip_address in agents_ip:
         try:
-            instances_for_agent = get_list_instances_for(agent.address)
+            try:
+                agent = Agent.objects.get(pk=ip_address)
+            except ObjectDoesNotExist:
+                raise ObjectDoesNotExist
+            instances_for_agent = {'address': ip_address}
+            instances_for_agent['installed_job'] = list()
+            for installed_job in agent.installed_job_set.get_queryset().iterator():
+                installed_job_json = {'job_name': installed_job.job.name}
+                installed_job_json['instances'] = list()
+                for instance in installed_job.instance_set.get_queryset().iterator():
+                    if update:
+                        # TODO: Connect to the collector and get the status of the instance
+                        pass
+                    instance_json = {'id': instance.id, 'arguments': instance.args,
+                                     'update_status': instance.update_status, 'status':
+                                     instance.status}
+                    installed_job_json['instances'].append(instance_json)
+                instances_for_agent['installed_job'].append(installed_job_json)
         except ObjectDoesNotExist:
             response_data = {'msg': "At least one of the Agents isn't in the"
-                             " database", 'address': agent.address}
+                             " database", 'address': ip_address}
             return JsonResponse(data=response_data, status=404)
         response_data['instances'].append(instances_for_agent)
     return JsonResponse(response_data, status=200)
 
-def get_list_instances_for(ip_address):
-    try:
-        agent = Agent.objects.get(pk=ip_address)
-    except ObjectDoesNotExist:
-        raise ObjectDoesNotExist
-    response_data = {'address': ip_address}
-    response_data['installed_job'] = list()
-    for installed_job in agent.installed_job_set.get_queryset().iterator():
-        installed_job_json = {'job_name': installed_job.job.name}
-        installed_job_json['instances'] = list()
-        for instance in installed_job.instance_set.get_queryset().iterator():
-            instance_json = {'id': instance.id, 'arguments': instance.args,
-                             'update_status': instance.update_status, 'status':
-                             instance.status}
-            installed_job_json['instances'].append(instance_json)
-        response_data['installed_job'].append(installed_job_json)
-    return response_data
- 
+

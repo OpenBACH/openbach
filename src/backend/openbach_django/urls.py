@@ -19,12 +19,11 @@ urlpatterns = [
 
     url(r'^jobs/add$', views.add_job, name='add_job'),
     url(r'^jobs/del$', views.del_job, name='del_job'),
-    url(r'^jobs/list$', views.list_jobs, name='list_jobs'),
+    url(r'^jobs/list$', views.list_jobs_url, name='list_jobs_url'),
 
     url(r'^jobs/install$', views.install_job, name='install_job'),
     url(r'^jobs/uninstall$', views.uninstall_job, name='uninstall_job'),
     url(r'^jobs/status$', views.status_jobs, name='status_jobs'),
-    url(r'^jobs/list$', views.list_installed_jobs, name='list_installed_jobs'),
 
     url(r'^instances/start$', views.start_instance, name='start_instance'),
     url(r'^instances/stop$', views.stop_instance, name='stop_instance'),

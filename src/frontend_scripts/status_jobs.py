@@ -3,16 +3,16 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-list_agents.py - <+description+>
+status_jobs.py - <+description+>
 """
 
-from frontend import list_agents
+from frontend import status_jobs
 import argparse
 import pprint
 
 
-def main(update):
-    r = list_agents(update)
+def main(agents_ip):
+    r = status_jobs(agents_ip)
     print r
     pprint.pprint(r.json())
 
@@ -21,12 +21,12 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-u', '--update', action='store_true', help='With this '
-                        'option, the status is the last one present on the collector')
+    parser.add_argument('agents_ip', metavar='agents_ip', type=str, nargs='+',
+                        help='IP Address of the Agents')
     
     # get args
     args = parser.parse_args()
-    update = args.update
+    agents_ip = args.agents_ip
 
-    main(update)
+    main(agents_ip)
 

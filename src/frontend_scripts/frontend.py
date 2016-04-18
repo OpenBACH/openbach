@@ -73,10 +73,14 @@ def list_agents(update=None):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def list_installed_jobs(agent_ip):
-    url = "http://localhost:8000/" + agent_ip + "/jobs/list"
+def list_installed_jobs(agent_ip, update=None):
+    url = "http://localhost:8000/jobs/list"
 
-    return requests.get(url)
+    payload = {'address': agent_ip}
+    if update != None:
+        payload['update'] = update
+
+    return requests.post(url, data={'data': json.dumps(payload)})
 
 
 def list_instances(agents_ip, update=False):
@@ -151,6 +155,14 @@ def status_instance(instance_id, date=None, interval=None, stop=None, agent_ip=N
         payload['agent_ip'] = agent_ip
         payload['job_name'] = job_name
         
+    return requests.post(url, data={'data': json.dumps(payload)})
+
+
+def status_jobs(agents_ip):
+    url = "http://localhost:8000/jobs/status"
+
+    payload = {'addresses': agents_ip}
+
     return requests.post(url, data={'data': json.dumps(payload)})
 
 

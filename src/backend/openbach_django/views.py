@@ -99,10 +99,13 @@ def list_agents(request):
                                                     'error': ' '.join(return_msg[1:])})
     response_data['agents'] = list()
     for agent in agents:
-        agent.refresh_from_db()
+        if update:
+            agent.refresh_from_db()
         agent_json = {'address': agent.address, 'status': agent.status,
                       'update_status': agent.update_status, 'name': agent.name}
         response_data['agents'].append(agent_json)
+    if len(response_data['errors']) == 0:
+        del response_data['errors']
     return JsonResponse(response_data, status=200)
 
 
@@ -151,7 +154,20 @@ def del_job(request):
     return JsonResponse(data=response_data, status=200)
 
 
+def list_jobs_url(request):
+    if request.method == 'GET':
+        return list_jobs(request)
+    elif request.method == 'POST':
+        return list_installed_jobs(request)
+    else:
+        response_data = {'msg': "Only GET or POST methods are accepted"}
+        return JsonResponse(data=response_data, status=404)
+
+
 def list_jobs(request):
+    '''
+    list all the Jobs available on the benchmark
+    '''
     if request.method != 'GET':
         response_data = {'msg': "Only GET method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -276,19 +292,44 @@ def uninstall_job(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def list_installed_jobs(request, ip_address):
-    if request.method != 'GET':
-        response_data = {'msg': "Only GET method are accepted"}
+def list_installed_jobs(request):
+    '''
+    list all the Jobs installed on an Agent
+    '''
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    try:
+        ip_address = data['address']
+    except:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    update = False
+    if 'update' in data:
+        update = data['update']
     try:
         agent = Agent.objects.get(pk=ip_address)
     except ObjectDoesNotExist:
         response_data = {'msg': "This Agent isn't in the database", 'address':
                          ip_address}
         return JsonResponse(data=response_data, status=404)
-    response_data = {}
-    response_data['agent'] = agent.address
-    response_data['installed_jobs'] = list()
+    response_data = {'errors': list(), 'agent': agent.address, 'installed_jobs':
+                    list()}
+    if update:
+        cmd = "update_jobs " + agent.address
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(('localhost', 1113))
+        s.send(cmd)
+        r = s.recv(1024)
+        s.close()
+        return_msg = r.split()
+        if return_msg[0] == 'KO' and return_msg[1] == '1':
+            response_data['errors'].append({'error': ' '.join(return_msg[2:])})
+        elif return_msg[0] == 'KO' and return_msg[1] == '2':
+            response_data['errors'].append({'jobs_name': ' '.join(return_msg[2:]),
+                                            'error': "These Jobs aren't in the "
+                                            "Job list of the Controller"})
     try:
         installed_jobs = agent.installed_job_set
     except (KeyError, Installed_Job.DoesNotExist):
@@ -297,6 +338,8 @@ def list_installed_jobs(request, ip_address):
         for job in installed_jobs.iterator():
             job_json = {'name': job.job.name, 'update_status': job.update_status}
             response_data['installed_jobs'].append(job_json)
+        if len(response_data['errors']) == 0:
+            del response_data['errors']
         return JsonResponse(response_data, status=200)
 
 
@@ -474,7 +517,28 @@ def status_agents(request):
         return JsonResponse(data=response_data, status=404)
 
 def status_jobs(request):
-    pass
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    if 'addresses' not in data:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    agents_ip = data['addresses']
+    cmd = "status_jobs " + ' '.join(agents_ip)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response = r.split()
+    if response[0] == 'OK':
+        response_data = {'msg': r}
+        return JsonResponse(data=response_data, status=200)
+    else:
+        response_data = {'msg': "At least one of the Agents isn't in the"
+                         "database", 'addresses': response}
+        return JsonResponse(data=response_data, status=404)
 
 
 def status_instance(request):
@@ -592,10 +656,12 @@ def list_instances(request):
             agents_ip.append(agent.address)
     for ip_address in agents_ip:
         try:
-            try:
-                agent = Agent.objects.get(pk=ip_address)
-            except ObjectDoesNotExist:
-                raise ObjectDoesNotExist
+            agent = Agent.objects.get(pk=ip_address)
+        except ObjectDoesNotExist:
+            response_data = {'msg': "At least one of the Agents isn't in the"
+                             " database", 'address': ip_address}
+            return JsonResponse(data=response_data, status=404)
+        else:
             instances_for_agent = {'address': ip_address}
             instances_for_agent['installed_job'] = list()
             for installed_job in agent.installed_job_set.get_queryset().iterator():
@@ -610,10 +676,6 @@ def list_instances(request):
                                      instance.status}
                     installed_job_json['instances'].append(instance_json)
                 instances_for_agent['installed_job'].append(installed_job_json)
-        except ObjectDoesNotExist:
-            response_data = {'msg': "At least one of the Agents isn't in the"
-                             " database", 'address': ip_address}
-            return JsonResponse(data=response_data, status=404)
         response_data['instances'].append(instances_for_agent)
     return JsonResponse(response_data, status=200)
 

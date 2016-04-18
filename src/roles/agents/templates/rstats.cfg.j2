@@ -1,8 +1,8 @@
 [influxdb]
-host: '{{ collector_ip }}'
+host: {{ collector_ip }}
 port: {{ influxdb_port }}
-database: '{{ database_name }}'
-username: '{{ database_username }}'
-password: '{{ database_password }}'
-time_precision: 'ms'
+database: {{ database_name }}
+username: {{ database_username }}
+password: {{ database_password }}
+time_precision: ms
 version: 0.10

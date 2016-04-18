@@ -15,7 +15,7 @@ import getpass
 from django.core.wsgi import get_wsgi_application
 os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
-from openbach_django.models import Agent, Job, Instance, Watch
+from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
 from django.core.exceptions import ObjectDoesNotExist
 import requests
 from datetime import datetime
@@ -85,6 +85,12 @@ class PlaybookBuilder():
         playbook.write("openbach-agent\n      shell: /etc/init.d/openbach-agen")
         playbook.write("t status\n")
         return True
+    
+    def build_ls_jobs(self, playbook):
+        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get the list of")
+        playbook.write("the installed jobs\n      shell: /opt/openbach-agent/o")
+        playbook.write("penbach-baton ls_jobs\n")
+        return True
 
 class ClientThread(threading.Thread):
     def __init__(self, clientsocket):
@@ -96,7 +102,8 @@ class ClientThread(threading.Thread):
     def check_date_interval(self, data_recv):
         request_type = data_recv[0]
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
-                   'status_agents', 'update_agent']
+                   'status_agents', 'update_agent', 'status_jobs',
+                   'update_jobs']
         only_date = ['stop_instance']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
         if request_type in no_date:
@@ -133,7 +140,7 @@ class ClientThread(threading.Thread):
         if not self.check_date_interval(data_recv):
             return []
         request_type = data_recv[0]
-        if request_type == 'add_agent' or request_type == 'del_agent' or request_type == 'update_agent':
+        if request_type == 'add_agent' or request_type == 'del_agent' or request_type == 'update_agent' or request_type == 'update_jobs':
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide the"
                 error_msg += " ip address of the agent"
@@ -185,7 +192,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'status_agents':
+        elif request_type == 'status_agents' or request_type == 'status_jobs':
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "at least one ip address of an agent"
@@ -452,9 +459,7 @@ class ClientThread(threading.Thread):
                         agent.reachable = "Agent unreachable"
                         agent.update_reachable = timezone.now()
                         agent.save()
-                        self.clientsocket.send("OK")
-                        self.clientsocket.close()
-                        return
+                        continue
                     playbook = open(playbook_filename, 'w')
                     playbook.write("---\n\n- hosts: Agents\n\n")
                     playbook.close()
@@ -465,9 +470,7 @@ class ClientThread(threading.Thread):
                     p = subprocess.Popen(cmd_ansible, shell=True)
                     p.wait()
                     if p.returncode != 0:
-                        self.clientsocket.send("OK")
-                        self.clientsocket.close()
-                        return
+                        continue
                     agent.reachable = "Agent reachable"
                     agent.update_reachable = timezone.now()
                     agent.save()
@@ -482,9 +485,7 @@ class ClientThread(threading.Thread):
                     p = subprocess.Popen(cmd_ansible, shell=True)
                     p.wait()
                     if p.returncode != 0:
-                        self.clientsocket.send("KO")
-                        self.clientsocket.close()
-                        return
+                        continue
             if error_msg != '':
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
@@ -517,7 +518,74 @@ class ClientThread(threading.Thread):
             self.clientsocket.send(return_msg)
             self.clientsocket.close()
             return
- 
+        elif request_type == 'status_jobs':
+            agents_ip = data_recv[1:]
+            agents = []
+            error_msg = ''
+            for agent_ip in agents_ip:
+                try:
+                    agents.append(Agent.objects.get(pk=agent_ip))
+                except ObjectDoesNotExist:
+                    error_msg += agent_ip + ' '
+                for agent in agents:
+                    hosts = open('/tmp/openbach_hosts', 'w')
+                    hosts.write("[Agents]\n" + agent.address + "\n")
+                    hosts.close()
+                    playbook_filename = self.playbook_builder.path_to_build
+                    playbook_filename += "status_job.yml"
+                    playbook = open(playbook_filename, 'w')
+                    playbook.write("---\n\n")
+                    self.playbook_builder.build_ls_jobs(playbook) 
+                    playbook.close()
+                    cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
+                    cmd_ansible += "le_ssh_user=" + agent.username + " -e "
+                    cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+                    cmd_ansible += playbook_filename
+                    p = subprocess.Popen(cmd_ansible, shell=True)
+                    p.wait()
+                    if p.returncode != 0:
+                        continue
+            if error_msg != '':
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return
+        elif request_type == 'update_jobs':
+            agent_ip = data_recv[1]
+            agent = Agent.objects.get(pk=agent_ip)
+            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url += "ms&q=SELECT+last(\"jobs_list\")+FROM+\"" + agent.name + "\""
+            r = requests.get(url)
+            if 'series' not in r.json()['results'][0]:
+                self.clientsocket.send("KO 1 " + r.json()['results'][0]['error'])
+                self.clientsocket.close()
+                return
+            columns = r.json()['results'][0]['series'][0]['columns']
+            for i in range(len(columns)):
+                if columns[i] == 'time':
+                    timestamp = r.json()['results'][0]['series'][0]['values'][0][i]/1000.
+                elif columns[i] == 'last':
+                    jobs_list = r.json()['results'][0]['series'][0]['values'][0][i].split()
+            date = datetime.fromtimestamp(timestamp,
+                                          timezone.get_current_timezone())
+            installed_jobs = agent.installed_job_set
+            for job in installed_jobs.iterator():
+                job.delete()
+            error_msg = 'KO 2'
+            for job_name in jobs_list:
+                try:
+                    job = Job.objects.get(pk=job_name)
+                except ObjectDoesNotExist:
+                    error_msg += ' ' + job_name
+                    continue
+                installed_job = Installed_Job(agent=agent, job=job)
+                installed_job.set_name()
+                installed_job.update_status = timezone.now()
+                installed_job.save()
+            if error_msg != 'KO 2':
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return
+                
         self.clientsocket.send('OK')
         self.clientsocket.close()
     

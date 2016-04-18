@@ -103,7 +103,7 @@ class ClientThread(threading.Thread):
         request_type = data_recv[0]
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
                    'status_agents', 'update_agent', 'status_jobs',
-                   'update_jobs']
+                   'update_jobs', 'update_instance']
         only_date = ['stop_instance']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
         if request_type in no_date:
@@ -196,6 +196,19 @@ class ClientThread(threading.Thread):
             if len(data_recv) < 2:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "at least one ip address of an agent"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return []
+        elif request_type == 'update_instance':
+            if len(data_recv) < 2:
+                error_msg = "KO Message not formed well. You should provide the"
+                error_msg += " id of the instance"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return []
+            if len(data_recv) > 2:
+                error_msg = "KO Message not formed well. Too much arguments"
+                error_msg += " given"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
@@ -579,13 +592,39 @@ class ClientThread(threading.Thread):
                     continue
                 installed_job = Installed_Job(agent=agent, job=job)
                 installed_job.set_name()
-                installed_job.update_status = timezone.now()
+                installed_job.update_status = date
                 installed_job.save()
             if error_msg != 'KO 2':
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return
-                
+        elif request_type == 'update_instance':
+            instance_id = data_recv[1]
+            instance = Instance.objects.get(pk=instance_id)
+            agent = instance.job.agent
+            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "."
+            url += instance.job.job.name + instance_id + "\""
+            r = requests.get(url)
+            if 'series' not in r.json()['results'][0]:
+                if 'error' in r.json()['results'][0]:
+                    self.clientsocket.send("KO " + r.json()['results'][0]['error'])
+                else:
+                    self.clientsocket.send("KO No data available")
+                self.clientsocket.close()
+                return
+            columns = r.json()['results'][0]['series'][0]['columns']
+            for i in range(len(columns)):
+                if columns[i] == 'time':
+                    timestamp = r.json()['results'][0]['series'][0]['values'][0][i]/1000.
+                elif columns[i] == 'last':
+                    status = r.json()['results'][0]['series'][0]['values'][0][i]
+            date = datetime.fromtimestamp(timestamp,
+                                          timezone.get_current_timezone())
+            instance.update_status = date
+            instance.status = status
+            instance.save()
+ 
         self.clientsocket.send('OK')
         self.clientsocket.close()
     

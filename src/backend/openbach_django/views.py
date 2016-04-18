@@ -395,7 +395,7 @@ def start_instance(request):
     s.close()
     response_data = {'msg': r}
     if r.split()[0] == 'OK':
-        instance.status = "started"
+        instance.status = "Started"
         instance.update_status = timezone.now()
         instance.save()
         response_data['instance_id'] = instance_id
@@ -668,12 +668,23 @@ def list_instances(request):
                 installed_job_json = {'job_name': installed_job.job.name}
                 installed_job_json['instances'] = list()
                 for instance in installed_job.instance_set.get_queryset().iterator():
+                    error_msg = ''
                     if update:
-                        # TODO: Connect to the collector and get the status of the instance
-                        pass
+                        cmd = "update_instance " + str(instance.id)
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.connect(('localhost', 1113))
+                        s.send(cmd)
+                        r = s.recv(1024)
+                        s.close()
+                        return_msg = r.split()
+                        if return_msg[0] == 'KO':
+                            error_msg = ' '.join(return_msg[1:])
+                        instance.refresh_from_db()
                     instance_json = {'id': instance.id, 'arguments': instance.args,
                                      'update_status': instance.update_status, 'status':
                                      instance.status}
+                    if error_msg != '':
+                        instance_json['error'] = error_msg
                     installed_job_json['instances'].append(instance_json)
                 instances_for_agent['installed_job'].append(installed_job_json)
         response_data['instances'].append(instances_for_agent)

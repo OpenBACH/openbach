@@ -2,31 +2,19 @@
 
 - name: Stop the service
   service: name=openbach-agent state=stopped
-  tags:
-    - uninstall
     
 - name: Remove the service
   file: path=/etc/init.d/openbach-agent state=absent
-  tags:
-    - uninstall
   
 - name: Uninstall the daemon
   file: path=/opt/openbach-agent/ state=absent
-  tags:
-    - uninstall
     
 - name: Remove Jobs' sources
   file: path=/opt/openbach-jobs/ state=absent
-  tags:
-    - uninstall
 
 - name: Remove python-apscheduler
   pip: name=apscheduler state=absent
-  tags:
-    - uninstall
 
 - name: Remove python-pip
   apt: pkg=python-pip state=absent update_cache=false
-  tags:
-    - uninstall
   

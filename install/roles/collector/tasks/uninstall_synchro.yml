@@ -5,7 +5,5 @@
   with_items:
     - ntp
     - ntpdate
-  tags:
-    - uninstall
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
 

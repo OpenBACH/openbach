@@ -2,16 +2,10 @@
 
 - name: Stop Rstats
   service: name=rstats state=stopped
-  tags:
-    - uninstall
 
 - name: Remove Rstats Service
   file: path=/etc/init.d/rstats state=absent
-  tags:
-    - uninstall
 
 - name: Uninstall Rstats
   file: path=/opt/rstats/ state=absent
-  tags:
-    - uninstall
 

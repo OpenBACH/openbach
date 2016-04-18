@@ -1,71 +1,49 @@
 ---
 
 - name: Check if ElasticSearch is installed
-  shell: dpkg-query -W elasticsearch
+  shell: dpkg-query -W -f='${Version}\n' elasticsearch | sed 's/^[0-9]\+://'
   register: elasticsearch_check_deb
-  failed_when: elasticsearch_check_deb.rc > 1
-  changed_when: elasticsearch_check_deb.rc == 1
-  tags:
-    - install
+  ignore_errors: yes
+  changed_when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Download ElasticSearch
   get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
     dest=/tmp/ force=no
-  tags:
-    - install
-  when: elasticsearch_check_deb.rc == 1
+  when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Install ElasticSearch
   shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
-  tags:
-    - install
-  when: elasticsearch_check_deb.rc == 1
+  when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Install openjdk-7-jdk
   apt: pkg=openjdk-7-jdk state=installed update_cache=false
-  tags:
-    - install
   
 - name: Configure ElasticSearch 
-  template: src=roles/collector/templates/elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
+  template: src=elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
     owner=root group=elasticsearch
-  tags:
-    - install
   
 - name: Start ElasticSearch
   service: name=elasticsearch state=started
-  tags:
-    - install
 
 - name: Check if LogStash is installed
-  shell: dpkg-query -W logstash
+  shell: dpkg-query -W -f='${Version}\n' logstash | sed 's/^[0-9]\+://'
   register: logstash_check_deb
-  failed_when: logstash_check_deb.rc > 1
-  changed_when: logstash_check_deb.rc == 1
-  tags:
-    - install
-
+  ignore_errors: yes
+  changed_when: logstash_check_deb.stdout != '{{ version_logstash }}'
+  
 - name: Download LogStash
-  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}-1_all.deb \
+  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}_all.deb \
     dest=/tmp/ force=no
-  tags:
-    - install
-  when: logstash_check_deb.rc == 1
+  when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Install LogStash
-  shell: dpkg -i /tmp/logstash_{{ version_logstash }}-1_all.deb
-  tags:
-    - install
-  when: logstash_check_deb.rc == 1
+  shell: dpkg -i /tmp/logstash_{{ version_logstash }}_all.deb
+  when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Configure LogStash
-  template: src=roles/collector/templates/collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
+  template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
     owner=root group=root
-  tags:
-    - install
   
 - name: Start LogStash
   service: name=logstash state=started
-  tags:
-    - install
 

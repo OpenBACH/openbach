@@ -5,11 +5,7 @@
   with_items:
     - ntp
     - ntpdate
-  tags:
-    - install
     
 - name: Start Ntp server
   service: name=ntp state=started
-  tags:
-    - install
 

@@ -1,7 +1,7 @@
 ---
 
 version_elasticsearch: 2.1.1
-version_logstash: 2.1.1
+version_logstash: 2.1.1-1
 cluster_name: openbach
 influxdb_version: 0.10.0-1
 

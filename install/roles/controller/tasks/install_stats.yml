@@ -1,27 +1,18 @@
 ---
 
-- name: Add the apt repository
-  copy: src=roles/controller/templates/grafana-trusty.list dest=/etc/apt/sources.list.d/
-  tags:
-    - install
-  
 - name: Add the Package Cloud key
   apt_key: url=https://packagecloud.io/gpg.key state=present
-  tags:
-    - install
+  
+- name: Add the apt repository
+  #copy: src=roles/controller/templates/grafana-trusty.list dest=/etc/apt/sources.list.d/
+  apt_repository: repo="deb https://packagecloud.io/grafana/stable/debian/ wheezy main" update_cache=true
   
 - name: Install Grafana
-  apt: pkg=grafana state=installed update_cache=true
-  tags:
-    - install
+  apt: pkg=grafana state=installed
   
 - name: Configure Grafana
-  copy: src=roles/controller/templates/grafana.ini dest=/etc/grafana/ mode=0640
-  tags:
-    - install
+  copy: src=grafana.ini dest=/etc/grafana/ mode=0640
 
 - name: Start Grafana
   service: name=grafana-server state=started
-  tags:
-    - install
 

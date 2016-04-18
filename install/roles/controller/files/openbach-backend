@@ -28,6 +28,7 @@ start)
         if [ -z $PID2 ]; then
             kill -HUP $PID
             printf "%s\n" "Fail"
+            exit 1
         else
             echo $PID2 > $PIDFILE2
         fi
@@ -36,27 +37,33 @@ start)
 ;;
 status)
     printf "%-50s" "Checking $NAME (django part)..."
+    error=0
     if [ -f $PIDFILE ]; then
         PID=`cat $PIDFILE`
         if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
             printf "%s\n" "Process dead but pidfile exists"
+            error=1
         else
             echo "Running"
         fi
     else
         printf "%s\n" "Service not running"
+        error=2
     fi
     printf "%-50s" "Checking $NAME (scheduler part)..."
     if [ -f $PIDFILE2 ]; then
         PID=`cat $PIDFILE2`
         if [ -z "`ps axf | grep ${PID} | grep -v grep`" ]; then
             printf "%s\n" "Process dead but pidfile exists"
+            error=3
         else
             echo "Running"
         fi
     else
+        error=4
         printf "%s\n" "Service not running"
     fi
+    exit $error
 ;;
 stop)
     printf "%-50s" "Stopping $NAME (django part)"

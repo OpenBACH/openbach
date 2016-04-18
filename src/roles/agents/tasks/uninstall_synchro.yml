@@ -2,14 +2,10 @@
 
 - name: Stop Ntp server
   service: name=ntp state=stopped
-  tags:
-    - uninstall
 
 - name: Uninstall ntp and ntpdate
   apt: pkg={{ item }} state=absent update_cache=false
   with_items:
     - ntp
     - ntpdate
-  tags:
-    - uninstall
 

@@ -4,6 +4,4 @@
   authorized_key: user={{ ansible_ssh_user }} key={{ item }}
   with_file:
     - /opt/openbach/id_rsa.pub
-  tags:
-    - install
 

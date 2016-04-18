@@ -2,15 +2,35 @@
 
 # Install
 - include: install_synchro.yml
+  tags:
+    - install
 - include: install_stats.yml
+  tags:
+    - install
 - include: install_logs.yml
+  tags:
+    - install
 - include: install_ansible.yml
+  tags:
+    - install
 - include: install_src.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_synchro.yml
+  tags:
+    - uninstall
 - include: uninstall_stats.yml
+  tags:
+    - uninstall
 - include: uninstall_logs.yml
+  tags:
+    - uninstall
 - include: uninstall_src.yml
+  tags:
+    - uninstall
 - include: uninstall_ansible.yml
+  tags:
+    - uninstall
 

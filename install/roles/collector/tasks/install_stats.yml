@@ -1,41 +1,29 @@
 ---
 
 - name: Check if InfluxDB is installed
-  shell: dpkg-query -W influxdb
+  shell: dpkg-query -W -f='${Version}\n' influxdb | sed 's/^[0-9]\+://'
   register: influxdb_check_deb
-  failed_when: influxdb_check_deb.rc > 1
-  changed_when: influxdb_check_deb.rc == 1
-  tags:
-    - install
+  ignore_errors: yes
+  changed_when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
 
 - name: Download InfluxDB (64bits)
   get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
     dest=/tmp/ force=no
-  tags:
-    - install
-  when: influxdb_check_deb.rc == 1
+  when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
     
 - name: Install InfluxDB (64bits)
   shell: dpkg -i /tmp/influxdb_{{ influxdb_version }}_amd64.deb
-  tags:
-    - install
-  when: influxdb_check_deb.rc == 1
+  when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
   
 - name: Start InfluxDB
   service: name=influxdb state=started
-  tags:
-    - install
   
 - name: Wait a little
-  shell: sleep 2
-  tags:
-    - install
+  wait_for: port={{ influxdb_port }} timeout=10
   
 - name: Database Creation
   shell: curl -G http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
   with_items:
     - CREATE DATABASE "{{ database_name }}"
     - CREATE USER "{{ database_username }}" WITH PASSWORD '{{ database_password }}' WITH ALL PRIVILEGES
-  tags:
-    - install
 

@@ -5,34 +5,24 @@
   with_items:
     - ntp
     - ntpdate
-  tags:
-    - install
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
 
 - name: Start Ntp server
   service: name=ntp state=started
-  tags:
-    - install
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
 
 - name: Delete all ntp source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
-  tags:
-    - install
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
 
 - name: Add Controller as the ntp source server
   lineinfile: dest=/etc/ntp.conf state=present line={{ item }}
   with_items:
     - "\n# Controller ntp server"
     - "server {{ controller_ip }}"
-  tags:
-    - install
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
   
 - name: Restart Ntp server
   service: name=ntp state=restarted
-  tags:
-    - install
-    - only-collector
+  when: inventory_hostname not in groups['Controller']
 

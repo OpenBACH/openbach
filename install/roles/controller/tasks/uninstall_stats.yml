@@ -2,17 +2,11 @@
 
 - name: Uninstall Grafana
   apt: pkg=grafana state=absent update_cache=false
-  tags:
-    - uninstall
   
 - name: Del the apt repository
   file: path=/etc/apt/sources.list.d/grafana-trusty.list state=absent
-  tags:
-    - uninstall
   
 # TODO This action fails
 #- name: Del the Package Cloud key
 #  apt_key: url=https://packagecloud.io/gpg.key state=absent
-#  tags:
-#    - uninstall
   

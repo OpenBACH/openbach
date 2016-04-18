@@ -39,12 +39,6 @@ then
     exit
 fi
 
-if [ $controller_address != $collector_address ]
-then
-    skip_tag_collector=""
-else
-    skip_tag_collector="--skip-tag only-collector"
-fi
 
 list_local_ip=`hostname -I`
 skip_tag_controller=""
@@ -66,7 +60,7 @@ echo "collector_ip: $collector_address" >> configs/ips
 echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags uninstall $skip_tag_controller
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags uninstall
 
 
 echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars

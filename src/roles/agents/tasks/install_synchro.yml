@@ -5,29 +5,19 @@
   with_items:
     - ntp
     - ntpdate
-  tags:
-    - install
 
 - name: Start Ntp server
   service: name=ntp state=started
-  tags:
-    - install
 
 - name: Delete all ntp source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
-  tags:
-    - install
 
 - name: Add Controller as the ntp source server
   lineinfile: dest=/etc/ntp.conf state=present line={{ item }}
   with_items:
     - "# Controller ntp server"
     - "server {{ controller_ip }}"
-  tags:
-    - install
   
 - name: Restart Ntp server
   service: name=ntp state=restarted
-  tags:
-    - install
 

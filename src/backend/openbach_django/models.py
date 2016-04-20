@@ -48,7 +48,7 @@ class Agent(models.Model):
     address = GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=200, blank=True)
     update_status = models.DateTimeField(blank=True)
-    reachable = models.CharField(max_length=200, blank=True)
+    reachable = models.BooleanField()
     update_reachable = models.DateTimeField(blank=True)
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)

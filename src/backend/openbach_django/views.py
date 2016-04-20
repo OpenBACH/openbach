@@ -20,7 +20,7 @@ def add_agent(request):
         return JsonResponse(data=response_data, status=404)
     if 'name' in data:
         agent.name = data['name']
-    agent.reachable = "Installing ..."
+    agent.reachable = True
     agent.update_reachable = timezone.now()
     agent.status = "Installing ..." 
     agent.update_status = timezone.now()
@@ -36,8 +36,6 @@ def add_agent(request):
     if r.split()[0] == 'KO':
         agent.delete()
         return JsonResponse(data=response_data, status=404)
-    agent.reachable = "Agent reachable"
-    agent.update_reachable = timezone.now()
     agent.status = "Available"
     agent.update_status = timezone.now()
     agent.save()
@@ -86,7 +84,7 @@ def list_agents(request):
         update = data['update']
     if update:
         for agent in agents:
-            if agent.reachable == 'Agent reachable' and agent.update_status < agent.update_reachable:
+            if agent.reachable and agent.update_status < agent.update_reachable:
                 cmd = "update_agent " + agent.address
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.connect(('localhost', 1113))
@@ -120,7 +118,7 @@ def add_job(request):
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
-    conffile = job_path + "/templates/" + job_name + '.cfg'
+    conffile = job_path + "/files/" + job_name + '.cfg'
     Config = ConfigParser.ConfigParser()
     Config.read(conffile)
     job_args = Config.get(job_name, 'required')

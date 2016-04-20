@@ -8,7 +8,7 @@
 
   tasks:
   - name: Inform Agent that Synchronization is installed
-    template: src=templates/{{ job_conf }}.j2 dest=/opt/openbach-agent/jobs/{{ job_conf }} mode=0644
+    template: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/{{ job_conf }} mode=0644
     become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml

@@ -81,13 +81,13 @@ class PlaybookBuilder():
         return True
 
     def build_status_agent(self, playbook):
-        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get status of")
+        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get status of ")
         playbook.write("openbach-agent\n      shell: /etc/init.d/openbach-agen")
         playbook.write("t status\n")
         return True
     
     def build_ls_jobs(self, playbook):
-        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get the list of")
+        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get the list of ")
         playbook.write("the installed jobs\n      shell: /opt/openbach-agent/o")
         playbook.write("penbach-baton ls_jobs\n")
         return True
@@ -469,8 +469,10 @@ class ClientThread(threading.Thread):
                     except subprocess.CalledProcessError, e:
                         returncode = e.returncode
                     if returncode != 0:
-                        agent.reachable = "Agent unreachable"
+                        agent.reachable = False
                         agent.update_reachable = timezone.now()
+                        agent.status = "Agent unreachable"
+                        agent.update_status= timezone.now()
                         agent.save()
                         continue
                     playbook = open(playbook_filename, 'w')
@@ -483,8 +485,13 @@ class ClientThread(threading.Thread):
                     p = subprocess.Popen(cmd_ansible, shell=True)
                     p.wait()
                     if p.returncode != 0:
+                        agent.reachable = False
+                        agent.update_reachable = timezone.now()
+                        agent.status = "Agent reachable but connection impossible"
+                        agent.update_status= timezone.now()
+                        agent.save()
                         continue
-                    agent.reachable = "Agent reachable"
+                    agent.reachable = True
                     agent.update_reachable = timezone.now()
                     agent.save()
                     playbook = open(playbook_filename, 'w')

@@ -21,7 +21,7 @@ urlpatterns = [
     url(r'^jobs/del$', views.del_job, name='del_job'),
     url(r'^jobs/list$', views.list_jobs_url, name='list_jobs_url'),
 
-    url(r'^jobs/install$', views.install_job, name='install_job'),
+    url(r'^jobs/install$', views.install_jobs, name='install_jobs'),
     url(r'^jobs/uninstall$', views.uninstall_job, name='uninstall_job'),
     url(r'^jobs/status$', views.status_jobs, name='status_jobs'),
 

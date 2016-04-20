@@ -86,7 +86,7 @@ def list_installed_jobs(agent_ip, update=None):
 def list_instances(agents_ip, update=False):
     url = "http://localhost:8000/instances/list"
     
-    payload = {'agents_ip': agents_ip}
+    payload = {'addresses': agents_ip}
     if update:
         payload['update'] = True
     
@@ -104,9 +104,9 @@ def restart_instance(instance_id, arguments=None, date=None, interval=None):
 
     payload = {'instance_id': instance_id}
     if arguments == None:
-        payload['args'] = list()
+        payload['instance_args'] = list()
     else:
-        payload['args'] = arguments
+        payload['instance_args'] = arguments
     if interval != None:
         payload['interval'] = interval
     elif date != None:
@@ -121,9 +121,9 @@ def start_instance(agent_ip, job_name, arguments=None, date=None,
 
     payload = {'agent_ip': agent_ip, 'job_name': job_name}
     if arguments == None:
-        payload['args'] = list()
+        payload['instance_args'] = list()
     else:
-        payload['args'] = arguments
+        payload['instance_args'] = arguments
     if interval != None:
         payload['interval'] = interval
     elif date != None:

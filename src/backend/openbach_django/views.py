@@ -177,7 +177,7 @@ def list_jobs(request):
     return JsonResponse(response_data, status=200)
 
 
-def install_job(request):
+def install_jobs(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -227,7 +227,7 @@ def install_job(request):
         return JsonResponse(data=response_data, status=404)
 
 
-def uninstall_job(request):
+def uninstall_jobs(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -349,7 +349,7 @@ def start_instance(request):
     try:
         agent_ip = data['agent_ip']
         job_name = data['job_name']
-        instance_args = data['args']
+        instance_args = data['instance_args']
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
@@ -444,7 +444,7 @@ def restart_instance(request):
     data = json.loads(request.POST['data'])
     try:
         instance_id = data['instance_id']
-        instance_args = data['args']
+        instance_args = data['instance_args']
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
@@ -638,7 +638,7 @@ def list_instances(request):
         return JsonResponse(data=response_data, status=404)
     data = json.loads(request.POST['data'])
     try:
-        agents_ip = data['agents_ip']
+        agents_ip = data['addresses']
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)

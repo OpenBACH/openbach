@@ -7,8 +7,12 @@
     - job_conf: iperf.cfg
 
   tasks:
+  - name: Install iperf
+    apt: name=iperf state=present
+    become: yes
+
   - name: Inform Agent that Iperf is installed
-    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
 
   - include: ../../../../roles/backend/tasks/add_job.yml

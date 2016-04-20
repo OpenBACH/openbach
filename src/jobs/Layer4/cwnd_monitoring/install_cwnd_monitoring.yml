@@ -12,7 +12,7 @@
     become: yes
 
   - name: Install Cwnd Monitoring
-    copy: src=templates/{{ item }} dest=/opt/openbach-jobs/cwnd_monitoring/ mode=0644
+    copy: src=files/{{ item }} dest=/opt/openbach-jobs/cwnd_monitoring/ mode=0644
     become: yes
     with_items:
       - cwnd.py
@@ -20,7 +20,7 @@
       - tcp_probe_new_fix.ko
       
   - name: Inform Agent that Cwnd Monitoring is installed
-    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml

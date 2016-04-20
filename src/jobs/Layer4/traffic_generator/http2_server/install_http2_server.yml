@@ -78,7 +78,7 @@
     become: yes
 
   - name: Download HTTP2 Server sources
-    copy: src=templates/server.tar.gz dest=/opt/openbach-jobs/http2_server/ mode=0644
+    copy: src=files/server.tar.gz dest=/opt/openbach-jobs/http2_server/ mode=0644
     become: yes
     
   - name: Install HTTP2 Server
@@ -86,7 +86,7 @@
     become: yes
     
   - name: Install HTTP2 Server configuration file
-    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
     
   - include: ../../../../roles/backend/tasks/add_job.yml

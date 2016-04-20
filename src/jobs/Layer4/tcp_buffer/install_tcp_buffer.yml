@@ -12,11 +12,11 @@
     become: yes
 
   - name: Install Tcp Buffer
-    copy: src=templates/tcp_buffer.sh dest=/opt/openbach-jobs/tcp_buffer/ mode=0755
+    copy: src=files/tcp_buffer.sh dest=/opt/openbach-jobs/tcp_buffer/ mode=0755
     become: yes
       
   - name: Inform Agent that Tcp Buffer is installed
-    copy: src=templates/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
 
   - include: ../../../roles/backend/tasks/add_job.yml

@@ -497,7 +497,8 @@ class ClientThread(threading.Thread):
             mutex_jobs.release()
             if request_type == 'start':
                 if job_id in job['set_id']:
-                    error_msg = "KO job " + job_name + " is already started"
+                    error_msg = "KO job " + job_name + "with id " + job_id
+                    error_msg += " is already started"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)

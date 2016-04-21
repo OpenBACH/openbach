@@ -15,12 +15,15 @@ class Rstats:
     DefaultLogPath = "/var/log/rstats.log"
     
     def __init__(self, logpath=DefaultLogPath, confpath="", conf=None,
-                 prefix=None):
+                 prefix=None, id=None):
         self.__mutex = threading.Lock()
         self.conf = conf
         self.prefix = prefix
         
-        self._logger = logging.getLogger('Rstats')
+        if id != None:
+            self._logger = logging.getLogger('Rstats' + str(id))
+        else:
+            self._logger = logging.getLogger('Rstats')
         self._logger.setLevel(logging.INFO)
         try:
             fhd = logging.FileHandler(logpath, mode="a")
@@ -360,17 +363,19 @@ class ClientThread(threading.Thread):
             return
         request_type = int(data_recv[0])
         if request_type == 1:
+            last_id += 1
             # creer le rstatsclient
             if len(data_recv) == 2:
-                stats_client = Rstats(confpath=data_recv[1], conf=self.conf)
+                stats_client = Rstats(confpath=data_recv[1], conf=self.conf,
+                                      id=last_id)
             else:
                 stats_client = Rstats(confpath=data_recv[1],
-                                      prefix=data_recv[2], conf=self.conf)
+                                      prefix=data_recv[2], conf=self.conf,
+                                      id=last_id)
             # creer un mutex associe
             stats_client_mutex = threading.Lock()
             # ajouter le rstatsclient et son mutex au dict
             mutex_dict.acquire()
-            last_id += 1
             dict_statsclient[last_id] = [stats_client, stats_client_mutex]
             mutex_dict.release()
             # envoyer OK

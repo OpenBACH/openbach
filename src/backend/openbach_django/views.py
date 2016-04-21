@@ -185,6 +185,14 @@ def install_jobs(request):
     if 'addresses' not in data and 'names' not in data:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
+    if 'severity' in data:
+        severity = data['severity']
+    else:
+        severity = 4
+    if 'local_severity' in data:
+        local_severity = data['local_severity']
+    else:
+        local_severity = 4
     agents = []
     jobs = []
     try:
@@ -213,7 +221,9 @@ def install_jobs(request):
             r = s.recv(1024)
             s.close()
             if r.split()[0] == 'OK':
-                installed_job = Installed_Job(agent=agent, job=job)
+                installed_job = Installed_Job(agent=agent, job=job,
+                                              severity=severity,
+                                              local_severity=local_severity)
                 installed_job.set_name()
                 installed_job.update_status = timezone.now()
                 installed_job.save()
@@ -687,5 +697,63 @@ def list_instances(request):
                 instances_for_agent['installed_job'].append(installed_job_json)
         response_data['instances'].append(instances_for_agent)
     return JsonResponse(response_data, status=200)
+
+
+def update_log_severity(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    try:
+        agent_ip = data['address']
+        job_name = data['job_name']
+        severity = data['severity']
+    except:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    if 'date' in data:
+        date = data['date']
+    else:
+        date = 'now'
+    name = job_name + " on " + agent_ip
+    try:
+        installed_job = Installed_Job.objects.get(pk=name)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "This Installed_Job isn't in the database",
+                         'job_name': name}
+        return JsonResponse(data=response_data, status=404)
+    try:
+        logs_job = Installed_Job.objects.get(pk="logs on " + agent_ip)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "The Logs Job isn't in the database",
+                         'job_name': "logs on " + agent_ip}
+        return JsonResponse(data=response_data, status=404)
+    if 'local_severity' in data:
+        local_severity = data['local_severity']
+    else:
+        local_severity = installed_job.local_severity
+    instance = Instance(job=logs_job)
+    instance.args = ""
+    instance.status = "starting ..."
+    instance.update_status = timezone.now()
+    instance.save()
+    instance.args = job_name + " " + str(instance.id)
+    if not instance.check_args():
+        response_data = {'msg': "Arguments given don't match with arguments "
+                         "needed"}
+        return JsonResponse(data=response_data, status=404)
+    instance.save()
+    cmd = "update_log_severity " + date + " " + str(instance.id) + " "
+    cmd += str(severity) + " " + str(local_severity)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response_data = {'msg' : r}
+    if r.split()[0] == 'KO':
+        instance.delete()
+        return JsonResponse(data=response_data, status=404)
+    return JsonResponse(data=response_data, status=200)
 
 

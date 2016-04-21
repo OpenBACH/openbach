@@ -83,6 +83,8 @@ class Installed_Job(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     update_status = models.DateTimeField(blank=True)
+    severity = models.IntegerField()
+    local_severity = models.IntegerField()
 
     def set_name(self):
         self.name = self.job.name + " on " + self.agent.address

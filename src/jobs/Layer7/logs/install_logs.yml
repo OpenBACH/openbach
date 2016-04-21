@@ -7,9 +7,17 @@
     - job_conf: logs.cfg
 
   tasks:
+  - name: Create Logs repository
+    file: path=/opt/openbach-jobs/logs/ state=directory
+    become: yes
+
+  - name: Install Logs
+    copy: src=files/logs.sh dest=/opt/openbach-jobs/logs/
+    become: yes
+    
   - name: Inform Agent that Logs is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
 
-  - include: ../../../roles/backend/tasks/add_job.yml
+  - include: /opt/openbach/roles/backend/tasks/add_job.yml
 

@@ -21,75 +21,102 @@ import requests
 from datetime import datetime
 from django.utils import timezone
 
+def convert_severity(severity):
+    error = 0
+    warning = 1
+    informational = 2
+    debug = 3
+    if severity == error:
+        return 3
+    elif severity == warning:
+        return 4
+    elif severity == informational:
+        return 6
+    elif severity == debug:
+        return 7
+    else:
+        return 8
+
 class PlaybookBuilder():
     def __init__(self, path_to_build, path_src):
         self.path_to_build = path_to_build
         self.path_src = path_src
 
     def build_start(self, playbook, job_name, instance_id, job_args, date,
-                    interval):
-        playbook.write("- hosts: Agents\n  vars:\n    - job_name: ")
-        playbook.write(job_name + "\n    - id: " + instance_id + "\n    - job_")
-        playbook.write("options: " + job_args + "\n    - date_interval: ")
+                    interval, extra_vars):
+        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
+                         "\njob_options: " + job_args + "\ndate_interval: ")
         if date != None:
-            playbook.write("date " + date + "\n\n  tasks:\n    - include: ")
+            extra_vars.write("date " + date)
         elif interval != None:
-            playbook.write("interval " + interval + "\n\n  tasks:\n    -")
-            playbook.write(" include: ")
+            extra_vars.write("interval " + interval)
         else:
             return False
-        playbook.write(self.path_src + "start_instance.yml\n")
+        playbook.write("    - include: " + self.path_src +
+                       "start_instance.yml\n")
         return True
 
     def build_status(self, playbook, job_name, instance_id, date, interval,
-                     stop):
-        playbook.write("- hosts: Agents\n  vars:\n    - job_name: ")
-        playbook.write(job_name + "\n    - id: " + instance_id + "\n    - date")
-        playbook.write("_interval_stop: ")
+                     stop, extra_vars):
+        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
+                         "\ndate_interval_stop: ")
         if date != None:
-            playbook.write("date " + date + "\n\n  tasks:\n    - include: ")
+            extra_vars.write("date " + date )
         elif interval != None:
-            playbook.write("interval " + interval + "\n\n  tasks:\n    -")
-            playbook.write(" include: ")
+            extra_vars.write("interval " + interval)
         elif stop != None:
-            playbook.write("stop " + stop + "\n\n  tasks:\n    - include: ")
+            extra_vars.write("stop " + stop)
         else:
             return False
-        playbook.write(self.path_src + "status_instance.yml\n")
+        playbook.write("\n\n    - include: " + self.path_src +
+                       "status_instance.yml\n")
         return True
 
     def build_restart(self, playbook, job_name, instance_id, job_args, date,
-                      interval):
-        playbook.write("- hosts: Agents\n  vars:\n    - job_name: ")
-        playbook.write(job_name + "\n    - id: " + instance_id + "\n    - job_")
-        playbook.write("options: " + job_args + "\n    - date_interval: ")
+                      interval, extra_vars):
+        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
+                         "\njob_options: " + job_args + "\ndate_interval: ")
         if date != None:
-            playbook.write("date " + date + "\n\n  tasks:\n    - include: ")
+            extra_vars.write("date " + date)
         elif interval != None:
-            playbook.write("interval " + interval + "\n\n  tasks:\n    -")
-            playbook.write(" include: ")
+            extra_vars.write("interval " + interval)
         else:
             return False
-        playbook.write(self.path_src + "restart_instance.yml\n")
+        playbook.write("\n\n    - include: " + self.path_src +
+                       "restart_instance.yml\n")
         return True
 
-    def build_stop(self, playbook, job_name, instance_id, date):
-        playbook.write("- hosts: Agents\n  vars:\n    - job_name: ")
-        playbook.write(job_name + "\n    - id: " + instance_id + "\n    - date")
-        playbook.write(": date " + date + "\n\n  tasks:\n    - include: ")
-        playbook.write(self.path_src + "stop_instance.yml\n")
+    def build_stop(self, playbook, job_name, instance_id, date, extra_vars):
+        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
+                         "\ndate: date " + date)
+        playbook.write("\n\n    - include: " + self.path_src +
+                       "stop_instance.yml\n")
         return True
 
     def build_status_agent(self, playbook):
-        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get status of ")
-        playbook.write("openbach-agent\n      shell: /etc/init.d/openbach-agen")
-        playbook.write("t status\n")
+        playbook.write("    - name: Get status of openbach-agent\n      shell:"
+                       + "/etc/init.d/openbach-agent status\n")
         return True
     
     def build_ls_jobs(self, playbook):
-        playbook.write("- hosts: Agents\n  tasks:\n    - name: Get the list of ")
-        playbook.write("the installed jobs\n      shell: /opt/openbach-agent/o")
-        playbook.write("penbach-baton ls_jobs\n")
+        playbook.write("    - name: Get the list of the installed jobs\n" +
+                       "shell: /opt/openbach-agent/openbach-baton ls_jobs\n")
+        return True
+    
+    def build_enable_log(self, playbook, syslogseverity, syslogseverity_local,
+                         job_path):
+        if syslogseverity != 8 or syslogseverity_local != 8:
+            playbook.write("    - name: Push new conf files\n      template:" +
+                           " src=" + job_path + "templates/{{ item.src }} " +
+                           "dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}{{" +
+                           " item.dst }}.locked owner=root group=root\n" +
+                           "      with_items:\n   ")
+        if syslogseverity != 8:
+            playbook.write("     - { src: 'job.j2', dst: '.conf' }\n   ")
+        if syslogseverity_local != 8:
+            playbook.write("     - { src: 'job_local.j2', dst: '_local.conf' }")
+        if syslogseverity != 8 or syslogseverity_local != 8:
+            playbook.write("\n      become: yes\n\n")
         return True
 
 class ClientThread(threading.Thread):
@@ -98,13 +125,23 @@ class ClientThread(threading.Thread):
         self.clientsocket = clientsocket
         self.playbook_builder = PlaybookBuilder("/tmp/",
                                                 "/opt/openbach/roles/backend/tasks/")
+    
+    def launch_playbook(self, cmd_ansible):
+        p = subprocess.Popen(cmd_ansible, shell=True)
+        p.wait()
+        if p.returncode != 0:
+            self.clientsocket.send('KO')
+            self.clientsocket.close()
+            return False
+        return True
+        
 
     def check_date_interval(self, data_recv):
         request_type = data_recv[0]
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
                    'status_agents', 'update_agent', 'status_jobs',
                    'update_jobs', 'update_instance']
-        only_date = ['stop_instance']
+        only_date = ['stop_instance', 'update_log_severity']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
         if request_type in no_date:
             pass
@@ -212,6 +249,20 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
+        elif request_type == 'update_log_severity':
+            if len(data_recv) < 5:
+                error_msg = "KO Message not formed well. You should provide the"
+                error_msg += " instance id of the logs Job, the"
+                error_msg += " log severity and the local log severity to set"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return []
+            if len(data_recv) > 5:
+                error_msg = "KO Message not formed well. Too much arguments"
+                error_msg += " given"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return []
         else:
             error_msg = "KO Request type not defined"
             self.clientsocket.send(error_msg)
@@ -247,11 +298,7 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password
             cmd_ansible += " /opt/openbach/agent.yml --tags install"
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'del_agent':
             agent_ip = data_recv[1]
@@ -273,11 +320,7 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password
             cmd_ansible += " /opt/openbach/agent.yml --tags uninstall"
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'install_job':
             agent_ip = data_recv[1]
@@ -292,11 +335,7 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += job.path + "/install_" + job.name + ".yml"
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'uninstall_job':
             agent_ip = data_recv[1]
@@ -311,11 +350,7 @@ class ClientThread(threading.Thread):
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += job.path + "/uninstall_" + job.name + ".yml"
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'start_instance':
             if data_recv[1] == 'date':
@@ -334,20 +369,20 @@ class ClientThread(threading.Thread):
             playbook_filename = self.playbook_builder.path_to_build + "start_"
             playbook_filename += job.name + ".yml"
             playbook = open(playbook_filename, 'w')
-            playbook.write("---\n\n")
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
             self.playbook_builder.build_start(playbook, job.name, instance_id,
-                                              instance.args, date, interval)
+                                              instance.args, date, interval,
+                                              extra_vars)
             playbook.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " -e "
+            extra_vars.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += playbook_filename
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'stop_instance':
             date = data_recv[1]
@@ -361,20 +396,19 @@ class ClientThread(threading.Thread):
             playbook_filename = self.playbook_builder.path_to_build + "stop_"
             playbook_filename += job.name + ".yml"
             playbook = open(playbook_filename, 'w')
-            playbook.write("---\n\n")
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
             self.playbook_builder.build_stop(playbook, job.name, instance_id,
-                                             date)
+                                             date, extra_vars)
             playbook.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " -e "
+            extra_vars.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += playbook_filename
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'restart_instance':
             if data_recv[1] == 'date':
@@ -393,20 +427,20 @@ class ClientThread(threading.Thread):
             playbook_filename = self.playbook_builder.path_to_build + "restart_"
             playbook_filename += job.name + ".yml"
             playbook = open(playbook_filename, 'w')
-            playbook.write("---\n\n")
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
             self.playbook_builder.build_restart(playbook, job.name, instance_id,
-                                                instance.args, date, interval)
+                                                instance.args, date, interval,
+                                                extra_vars)
             playbook.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " -e "
+            extra_vars.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += playbook_filename
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'status_instance':
             watch_type = data_recv[1]
@@ -432,20 +466,19 @@ class ClientThread(threading.Thread):
             playbook_filename = self.playbook_builder.path_to_build + "status_"
             playbook_filename += job.name + ".yml"
             playbook = open(playbook_filename, 'w')
-            playbook.write("---\n\n")
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
             self.playbook_builder.build_status(playbook, job.name, instance_id,
-                                               date, interval, stop)
+                                               date, interval, stop, extra_vars)
             playbook.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansible_s"
-            cmd_ansible += "sh_user=" + agent.username + " -e "
+            extra_vars.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
             cmd_ansible += playbook_filename
-            p = subprocess.Popen(cmd_ansible, shell=True)
-            p.wait()
-            if p.returncode != 0:
-                self.clientsocket.send('KO')
-                self.clientsocket.close()
+            if not self.launch_playbook(cmd_ansible):
                 return
         elif request_type == 'status_agents':
             agents_ip = data_recv[1:]
@@ -495,7 +528,7 @@ class ClientThread(threading.Thread):
                     agent.update_reachable = timezone.now()
                     agent.save()
                     playbook = open(playbook_filename, 'w')
-                    playbook.write("---\n\n")
+                    playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
                     self.playbook_builder.build_status_agent(playbook) 
                     playbook.close()
                     cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
@@ -554,7 +587,7 @@ class ClientThread(threading.Thread):
                     playbook_filename = self.playbook_builder.path_to_build
                     playbook_filename += "status_job.yml"
                     playbook = open(playbook_filename, 'w')
-                    playbook.write("---\n\n")
+                    playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
                     self.playbook_builder.build_ls_jobs(playbook) 
                     playbook.close()
                     cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
@@ -631,6 +664,61 @@ class ClientThread(threading.Thread):
             instance.update_status = date
             instance.status = status
             instance.save()
+        elif request_type == 'update_log_severity':
+            date = data_recv[1]
+            instance_id = data_recv[2]
+            severity = data_recv[3]
+            local_severity = data_recv[4]
+            instance = Instance.objects.get(pk=instance_id)
+            agent = instance.job.agent
+            logs_job_path = instance.job.job.path
+            job_name = instance.args.split()[0]
+            syslogseverity = convert_severity(int(severity))
+            syslogseverity_local = convert_severity(int(local_severity))
+            disable = 0
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            if syslogseverity != 8:
+                collector_ip = agent.collector
+                extra_vars.write("collector_ip: " + collector_ip +
+                                 "\nsyslogseverity: " + str(syslogseverity) +
+                                 "\n")
+            else:
+                disable = 1
+            if syslogseverity_local != 8:
+                extra_vars.write("syslogseverity_local: " +
+                                 str(syslogseverity_local) + "\n")
+            else:
+                if disable == 1:
+                    disable = 3
+                else:
+                    disable = 2
+            extra_vars.write("job: " + job_name + "\ninstance_id: " +
+                             str(instance.id))
+            instance.args += " " + str(disable)
+            instance.save()
+            hosts = open('/tmp/openbach_hosts', 'w')
+            hosts.write("[Agents]\n" + agent.address + "\n")
+            hosts.close()
+            playbook_filename = self.playbook_builder.path_to_build + "logs.yml"
+            playbook = open(playbook_filename, 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
+            self.playbook_builder.build_enable_log(playbook, syslogseverity,
+                                                   syslogseverity_local,
+                                                   logs_job_path)
+            self.playbook_builder.build_start(playbook, 'logs', instance_id,
+                                              instance.args, date, None,
+                                              extra_vars)
+            extra_vars.close()
+            playbook.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "@/opt/openbach/configs/all -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password
+            cmd_ansible += " " + playbook_filename
+            if not self.launch_playbook(cmd_ansible):
+                return
  
         self.clientsocket.send('OK')
         self.clientsocket.close()

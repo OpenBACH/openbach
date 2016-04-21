@@ -1,8 +1,4 @@
 ---
 
-# Rsyslog
 job_name: logs
-job: rstats
-syslogseverity: 6
-syslogseverity_local: 6
 

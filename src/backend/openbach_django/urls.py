@@ -24,8 +24,10 @@ urlpatterns = [
     url(r'^jobs/install$', views.install_jobs, name='install_jobs'),
     url(r'^jobs/uninstall$', views.uninstall_jobs, name='uninstall_jobs'),
     url(r'^jobs/status$', views.status_jobs, name='status_jobs'),
-    url(r'^jobs/severity', views.update_log_severity,
-        name='update_log_severity'),
+    url(r'^jobs/log_severity', views.update_job_log_severity,
+        name='update_job_log_severity'),
+    url(r'^jobs/stat_policy', views.update_job_stat_policy,
+        name='update_job_stat_policy'),
 
     url(r'^instances/start$', views.start_instance, name='start_instance'),
     url(r'^instances/stop$', views.stop_instance, name='stop_instance'),

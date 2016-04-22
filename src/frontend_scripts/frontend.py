@@ -183,9 +183,9 @@ def uninstall_jobs(jobs_name, agents_ip):
     
     return requests.post(url, data={'data': json.dumps(payload)})
 
-def update_log_severity(agent_ip, job_name, severity, local_severity=None,
-                        date=None):
-    url = "http://localhost:8000/jobs/severity"
+def update_job_log_severity(agent_ip, job_name, severity, local_severity=None,
+                            date=None):
+    url = "http://localhost:8000/jobs/log_severity"
     
     payload = {'address': agent_ip, 'job_name': job_name, 'severity': severity}
     if local_severity != None:
@@ -193,6 +193,19 @@ def update_log_severity(agent_ip, job_name, severity, local_severity=None,
     if date != None:
         payload['date'] = date
     
+    return requests.post(url, data={'data': json.dumps(payload)})
+
+
+def update_job_stat_policy(agent_ip, job_name, accept_stats, deny_stats,
+                           default_policy=True, date=None):
+    url = "http://localhost:8000/jobs/stat_policy"
+
+    payload = {'address': agent_ip, 'job_name': job_name, 'accept_stats':
+               accept_stats, 'deny_stats': deny_stats, 'default_policy':
+               default_policy}
+    if date != None:
+        payload['date'] = date
+
     return requests.post(url, data={'data': json.dumps(payload)})
 
 

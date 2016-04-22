@@ -3,16 +3,16 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-update_log_severity.py - <+description+>
+update_job_log_severity.py - <+description+>
 """
 
-from frontend import update_log_severity, date_to_timestamp
+from frontend import update_job_log_severity, date_to_timestamp
 import argparse
 import pprint
 
 
 def main(agent_ip, job_name, severity, local_severity, date):
-    r = update_log_severity(agent_ip, job_name, severity, local_severity, date)
+    r = update_job_log_severity(agent_ip, job_name, severity, local_severity, date)
     print r
     pprint.pprint(r.json())
 

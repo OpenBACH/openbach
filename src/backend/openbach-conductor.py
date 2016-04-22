@@ -106,7 +106,7 @@ class PlaybookBuilder():
     def build_enable_log(self, playbook, syslogseverity, syslogseverity_local,
                          job_path):
         if syslogseverity != 8 or syslogseverity_local != 8:
-            playbook.write("    - name: Push new conf files\n      template:" +
+            playbook.write("    - name: Push new rsyslog conf files\n      template:" +
                            " src=" + job_path + "templates/{{ item.src }} " +
                            "dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}{{" +
                            " item.dst }}.locked owner=root group=root\n" +
@@ -117,6 +117,15 @@ class PlaybookBuilder():
             playbook.write("     - { src: 'job_local.j2', dst: '_local.conf' }")
         if syslogseverity != 8 or syslogseverity_local != 8:
             playbook.write("\n      become: yes\n\n")
+        return True
+    
+    def build_enable_stats(self, playbook, rstats_filter_filename, job_name,
+                           instance_id):
+        playbook.write("    - name: Push new rstats conf file\n      copy: src="
+                       + rstats_filter_filename + " dest=" +
+                       "/opt/openbach-jobs/" + job_name + "/" + job_name +
+                       instance_id + "_rstats_filter.conf.locked\n      become:"
+                       + " yes\n\n")
         return True
 
 class ClientThread(threading.Thread):
@@ -141,7 +150,8 @@ class ClientThread(threading.Thread):
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
                    'status_agents', 'update_agent', 'status_jobs',
                    'update_jobs', 'update_instance']
-        only_date = ['stop_instance', 'update_log_severity']
+        only_date = ['stop_instance', 'update_job_log_severity',
+                     'update_job_stat_policy']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
         if request_type in no_date:
             pass
@@ -216,7 +226,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'stop_instance':
+        elif request_type == 'stop_instance' or request_type == 'update_job_stat_policy':
             if len(data_recv) < 3:
                 error_msg = "KO Message not formed well. You should provide "
                 error_msg += "the id of the instance"
@@ -249,7 +259,7 @@ class ClientThread(threading.Thread):
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
-        elif request_type == 'update_log_severity':
+        elif request_type == 'update_job_log_severity':
             if len(data_recv) < 5:
                 error_msg = "KO Message not formed well. You should provide the"
                 error_msg += " instance id of the logs Job, the"
@@ -664,7 +674,7 @@ class ClientThread(threading.Thread):
             instance.update_status = date
             instance.status = status
             instance.save()
-        elif request_type == 'update_log_severity':
+        elif request_type == 'update_job_log_severity':
             date = data_recv[1]
             instance_id = data_recv[2]
             severity = data_recv[3]
@@ -705,9 +715,51 @@ class ClientThread(threading.Thread):
             self.playbook_builder.build_enable_log(playbook, syslogseverity,
                                                    syslogseverity_local,
                                                    logs_job_path)
-            self.playbook_builder.build_start(playbook, 'logs', instance_id,
-                                              instance.args, date, None,
-                                              extra_vars)
+            self.playbook_builder.build_start(playbook, 'rsyslog_job',
+                                              instance_id, instance.args, date,
+                                              None, extra_vars)
+            extra_vars.close()
+            playbook.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
+            cmd_ansible += "@/tmp/openbach_extra_vars -e "
+            cmd_ansible += "@/opt/openbach/configs/all -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password
+            cmd_ansible += " " + playbook_filename
+            if not self.launch_playbook(cmd_ansible):
+                return
+        elif request_type == 'update_job_stat_policy':
+            date = data_recv[1]
+            instance_id = data_recv[2]
+            instance = Instance.objects.get(pk=instance_id)
+            agent = instance.job.agent
+            rstats_job_path = instance.job.job.path
+            job_name = instance.args.split()[0]
+            installed_job = Installed_Job.objects.get(pk=job_name + " on " +
+                                                      agent.address)
+            rstats_filter_filename = '/tmp/openbach_rstats_filter'
+            rstats_filter = open(rstats_filter_filename, 'w')
+            rstats_filter.write("[default]\nenabled=" +
+                                str(installed_job.stats_default_policy) + "\n")
+            for stats in installed_job.accept_stats.split():
+                rstats_filter.write("[" + stats + "]\nenabled=True\n")
+            for stats in installed_job.deny_stats.split():
+                rstats_filter.write("[" + stats + "]\nenabled=False\n")
+            rstats_filter.close()
+            hosts = open('/tmp/openbach_hosts', 'w')
+            hosts.write("[Agents]\n" + agent.address + "\n")
+            hosts.close()
+            playbook_filename = self.playbook_builder.path_to_build + "rstats.yml"
+            playbook = open(playbook_filename, 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
+            extra_vars = open('/tmp/openbach_extra_vars', 'w')
+            self.playbook_builder.build_enable_stats(playbook,
+                                                     rstats_filter_filename,
+                                                     job_name, instance_id)
+            self.playbook_builder.build_start(playbook, 'rstats_job',
+                                              instance_id, instance.args, date,
+                                              None, extra_vars)
             extra_vars.close()
             playbook.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "

@@ -223,7 +223,10 @@ def install_jobs(request):
             if r.split()[0] == 'OK':
                 installed_job = Installed_Job(agent=agent, job=job,
                                               severity=severity,
-                                              local_severity=local_severity)
+                                              local_severity=local_severity,
+                                              stats_default_policy=True,
+                                              accept_stats="",
+                                              deny_stats="")
                 installed_job.set_name()
                 installed_job.update_status = timezone.now()
                 installed_job.save()
@@ -699,7 +702,7 @@ def list_instances(request):
     return JsonResponse(response_data, status=200)
 
 
-def update_log_severity(request):
+def update_job_log_severity(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}
         return JsonResponse(data=response_data, status=404)
@@ -743,7 +746,7 @@ def update_log_severity(request):
                          "needed"}
         return JsonResponse(data=response_data, status=404)
     instance.save()
-    cmd = "update_log_severity " + date + " " + str(instance.id) + " "
+    cmd = "update_job_log_severity " + date + " " + str(instance.id) + " "
     cmd += str(severity) + " " + str(local_severity)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('localhost', 1113))
@@ -753,6 +756,75 @@ def update_log_severity(request):
     response_data = {'msg' : r}
     if r.split()[0] == 'KO':
         instance.delete()
+        return JsonResponse(data=response_data, status=404)
+    return JsonResponse(data=response_data, status=200)
+
+
+def update_job_stat_policy(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    try:
+        agent_ip = data['address']
+        job_name = data['job_name']
+        accept_stats = data['accept_stats']
+        deny_stats = data['deny_stats']
+    except:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    if 'default_policy' in data:
+        default_policy = bool(data['default_policy'])
+    else:
+        default_policy = True
+    if 'date' in data:
+        date = data['date']
+    else:
+        date = 'now'
+    name = job_name + " on " + agent_ip
+    try:
+        installed_job = Installed_Job.objects.get(pk=name)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "This Installed_Job isn't in the database",
+                         'job_name': name}
+        return JsonResponse(data=response_data, status=404)
+    old_default_policy = installed_job.stats_default_policy
+    old_accept_stats = installed_job.accept_stats
+    old_deny_stats = installed_job.deny_stats
+    installed_job.stats_default_policy = default_policy
+    installed_job.accept_stats = ' '.join(accept_stats)
+    installed_job.deny_stats = ' '.join(deny_stats)
+    installed_job.save()
+    try:
+        rstats_job = Installed_Job.objects.get(pk="rstats_job on " + agent_ip)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "The Rstats Job isn't in the database",
+                         'job_name': "rstats_job on " + agent_ip}
+        return JsonResponse(data=response_data, status=404)
+    instance = Instance(job=rstats_job)
+    instance.args = ""
+    instance.status = "starting ..."
+    instance.update_status = timezone.now()
+    instance.save()
+    instance.args = job_name + " " + str(instance.id)
+    if not instance.check_args():
+        response_data = {'msg': "Arguments given don't match with arguments "
+                         "needed"}
+        return JsonResponse(data=response_data, status=404)
+    instance.save()
+    cmd = "update_job_stat_policy " + date + " " + str(instance.id)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response_data = {'msg' : r}
+    if r.split()[0] == 'KO':
+        instance.delete()
+        installed_job.stats_default_policy = old_default_policy
+        installed_job.accept_stats = old_accept_stats
+        installed_job.deny_stats = old_deny_stats
+        installed_job.save()
         return JsonResponse(data=response_data, status=404)
     return JsonResponse(data=response_data, status=200)
 

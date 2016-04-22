@@ -85,6 +85,9 @@ class Installed_Job(models.Model):
     update_status = models.DateTimeField(blank=True)
     severity = models.IntegerField()
     local_severity = models.IntegerField()
+    stats_default_policy = models.BooleanField()
+    accept_stats = models.CharField(max_length=200)
+    deny_stats = models.CharField(max_length=200)
 
     def set_name(self):
         self.name = self.job.name + " on " + self.agent.address

@@ -88,7 +88,7 @@ def main(rule, interval):
         if serr.errno == errno.ECONNREFUSED:
             syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
         raise serr
-    s.send("1 /opt/openbach-plugins/rate_monitoring/rate_rstats_filter.conf")
+    s.send("1 /opt/openbach-plugins/rate_monitoring/rate_monitoring_rstats_filter.conf")
     r = s.recv(9999)
     s.close()
     data = r.split(" ")

@@ -1,0 +1,23 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: rstats_job.cfg
+
+  tasks:
+  - name: Create Rstats_job repository
+    file: path=/opt/openbach-jobs/rstats_job/ state=directory
+    become: yes
+
+  - name: Install Rstats_job
+    copy: src=files/rstats_job.sh dest=/opt/openbach-jobs/rstats_job/ mode=0755
+    become: yes
+    
+  - name: Inform Agent that Rstats_job is installed
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: /opt/openbach/roles/backend/tasks/add_job.yml
+

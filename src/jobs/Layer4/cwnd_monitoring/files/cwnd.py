@@ -25,6 +25,7 @@ def signal_term_handler(signal, frame):
     sys.exit(0)
                  
 signal.signal(signal.SIGHUP, signal_term_handler)
+signal.signal(signal.SIGTERM, signal_term_handler)
 
 
 def watch(fn):

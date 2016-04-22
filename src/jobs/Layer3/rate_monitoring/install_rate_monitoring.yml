@@ -23,8 +23,8 @@
     copy: src=files/{{ item }} dest=/opt/openbach-jobs/rate_monitoring/ mode=0644
     become: yes
     with_items:
-      - rate.py
-      - rate_rstats_filter.conf
+      - rate_monitoring.py
+      - rate_monitoring_rstats_filter.conf
       
   - name: Inform Agent that Rate Monitoring is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644

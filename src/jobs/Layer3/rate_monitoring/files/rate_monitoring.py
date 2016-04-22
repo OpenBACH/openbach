@@ -3,7 +3,7 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-rate.py - <+description+>
+rate_monitoring.py - <+description+>
 """
 
 import time
@@ -24,6 +24,7 @@ def signal_term_handler(signal, frame):
     sys.exit(0)
               
 signal.signal(signal.SIGHUP, signal_term_handler)
+signal.signal(signal.SIGTERM, signal_term_handler)
 
 
 def monitor():

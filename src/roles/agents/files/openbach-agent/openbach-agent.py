@@ -60,7 +60,7 @@ def launch_job(job_name, instance_id, command, args):
     os.system(cmd)
     
 def stop_job(job_name, instance_id):
-    cmd = "PID=`cat /var/run/" + job_name + instance_id + ".pid`; kill -HUP $PID; rm"
+    cmd = "PID=`cat /var/run/" + job_name + instance_id + ".pid`; kill -TERM -$PID; rm"
     cmd += " /var/run/" + job_name + instance_id + ".pid"
     os.system(cmd)
     

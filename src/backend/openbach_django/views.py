@@ -38,6 +38,9 @@ def add_agent(request):
         return JsonResponse(data=response_data, status=404)
     agent.status = "Available"
     agent.update_status = timezone.now()
+    if agent.name == "":
+        # TODO Trouver un moyen de recuperer l'hostname
+        pass
     agent.save()
     return JsonResponse(data=response_data, status=200)
 

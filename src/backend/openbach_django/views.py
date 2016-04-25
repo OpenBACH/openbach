@@ -729,7 +729,7 @@ def update_job_log_severity(request):
                          'job_name': name}
         return JsonResponse(data=response_data, status=404)
     try:
-        logs_job = Installed_Job.objects.get(pk="logs on " + agent_ip)
+        logs_job = Installed_Job.objects.get(pk="rsyslog_job on " + agent_ip)
     except ObjectDoesNotExist:
         response_data = {'msg': "The Logs Job isn't in the database",
                          'job_name': "logs on " + agent_ip}

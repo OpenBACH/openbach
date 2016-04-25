@@ -25,6 +25,7 @@
     with_items:
       - rate_monitoring.py
       - rate_monitoring_rstats_filter.conf
+      - rate_monitoring.help
       
   - name: Inform Agent that Rate Monitoring is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644

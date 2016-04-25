@@ -12,7 +12,10 @@
     become: yes
 
   - name: Install Rstats_job
-    copy: src=files/rstats_job.sh dest=/opt/openbach-jobs/rstats_job/ mode=0755
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/rstats_job/ mode={{ item.mode }}
+    with_items:
+      - { file: 'rstats_job.sh', mode: '0755' }
+      - { file: 'rstats_job.help', mode: '0644' }
     become: yes
     
   - name: Inform Agent that Rstats_job is installed

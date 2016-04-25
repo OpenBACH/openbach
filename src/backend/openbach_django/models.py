@@ -7,7 +7,7 @@ models.py - <+description+>
 """
 
 from django.db import models
-from django.db.models.fields import GenericIPAddressField, FilePathField
+from django.db.models.fields import GenericIPAddressField, FilePathField, TextField
 from django.utils.encoding import smart_str
 import sys
 if sys.version_info >= (2, 5):
@@ -71,6 +71,7 @@ class Job(models.Model):
     name = models.CharField(max_length=200, primary_key=True)
     path = FilePathField(path="/opt/openbach/jobs", recursive=True,
                          allow_folders=True, allow_files=False)
+    help = TextField(blank=True)
     nb_args = models.IntegerField()
     optional_args = models.BooleanField()
     

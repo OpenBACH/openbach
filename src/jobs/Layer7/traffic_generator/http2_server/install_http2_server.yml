@@ -78,7 +78,10 @@
     become: yes
 
   - name: Download HTTP2 Server sources
-    copy: src=files/server.tar.gz dest=/opt/openbach-jobs/http2_server/ mode=0644
+    copy: src=files/{{ item }} dest=/opt/openbach-jobs/http2_server/ mode=0644
+    with_items:
+      - server.tar.gz
+      - http2_server.help
     become: yes
     
   - name: Install HTTP2 Server

@@ -127,8 +127,14 @@ def add_job(request):
     job_args = Config.get(job_name, 'required')
     optional_args = bool(Config.get(job_name, 'optional'))
     nb_args = len(job_args.split())
+    help_filename = job_path + "/files/" + job_name + '.help'
+    try:
+        help_file = open(help_filename, 'r')
+        help = ''.join(help_file.readlines())
+    except:
+        help = ""
     job = Job(name = job_name, path = job_path, nb_args = nb_args,
-              optional_args = optional_args)
+              optional_args = optional_args, help = help)
     job.save()
     response_data = {'msg': "OK"}
     return JsonResponse(data=response_data, status=200)
@@ -178,6 +184,25 @@ def list_jobs(request):
     for job in jobs:
         response_data['jobs'].append(job.name)
     return JsonResponse(response_data, status=200)
+
+
+def get_job_help(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    if 'name' not in data:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    job_name = data['name']
+    try:
+        job = Job.objects.get(pk=job_name)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "This Job isn't in the database", 'job_name':
+                         job_name}
+        return JsonResponse(data=response_data, status=404)
+    response_data = {'job_name': job_name, 'help': job.help}
+    return JsonResponse(data=response_data, status=200)
 
 
 def install_jobs(request):

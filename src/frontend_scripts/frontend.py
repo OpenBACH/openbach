@@ -55,6 +55,14 @@ def del_job(job_name):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
+def get_job_help(job_name):
+    url = "http://localhost:8000/jobs/help"
+
+    payload = {'name': job_name}
+    
+    return requests.post(url, data={'data': json.dumps(payload)})
+
+
 def install_jobs(jobs_name, agents_ip):
     url = "http://localhost:8000/jobs/install"
 

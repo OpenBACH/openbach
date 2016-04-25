@@ -16,8 +16,9 @@
     become: yes
     with_items:
       - cwnd.py
-      - cwnd_rstats_filter.conf
+      - cwnd_monitoring_rstats_filter.conf
       - tcp_probe_new_fix.ko
+      - cwnd_monitoring.help
       
   - name: Inform Agent that Cwnd Monitoring is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644

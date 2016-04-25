@@ -12,7 +12,10 @@
     become: yes
 
   - name: Install Initial Spreading Fq
-    copy: src=files/initial_spreading_fq.sh dest=/opt/openbach-jobs/initial_spreading_fq/ mode=0755
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/initial_spreading_fq/ mode={{ item.mode }}
+    with_items:
+      - { file: 'initial_spreading_fq.sh', mode: '0755' }
+      - { file: 'initial_spreading_fq.help', mode: '0644' }
     become: yes
       
   - name: Inform Agent that Initial Spreading Fq is installed

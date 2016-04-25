@@ -12,7 +12,10 @@
     become: yes
 
   - name: Install Tcp Buffer
-    copy: src=files/tcp_buffer.sh dest=/opt/openbach-jobs/tcp_buffer/ mode=0755
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/tcp_buffer/ mode={{ item.mode }}
+    with_items:
+      - { file: 'tcp_buffer.sh', mode: '0755' }
+      - { file: 'tcp_buffer.help', mode: '0644' }
     become: yes
       
   - name: Inform Agent that Tcp Buffer is installed

@@ -12,7 +12,10 @@
     become: yes
 
   - name: Install HTTP2 Client
-    copy: src=files/http2_client.py dest=/opt/openbach-jobs/http2_client/ mode=0644
+    copy: src=files/{{ item }} dest=/opt/openbach-jobs/http2_client/ mode=0644
+    with_items:
+      - http2_client.py
+      - http2_client.help
     become: yes
     
   - name: Install HTTP2 Client configuration file

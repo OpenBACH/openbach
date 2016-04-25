@@ -7,9 +7,18 @@
     - job_conf: iperf.cfg
 
   tasks:
-  - name: Install iperf
+  - name: Install package iperf
     apt: name=iperf state=present
     become: yes
+    
+  - name: Create Iperf repository
+    file: path=/opt/openbach-jobs/iperf state=directory mode=0755
+    become: yes
+  
+  - name: Install Iperf
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/iperf/ mode={{ item.mode }}
+    with_items:
+      - { file: 'iperf.help', mode: '0644' }
 
   - name: Inform Agent that Iperf is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644

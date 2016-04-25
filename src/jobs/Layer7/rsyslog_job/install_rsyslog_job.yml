@@ -12,7 +12,10 @@
     become: yes
 
   - name: Install Rsyslog_job
-    copy: src=files/rsyslog_job.sh dest=/opt/openbach-jobs/rsyslog_job/ mode=0755
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/rsyslog_job/ mode={{ item.mode }}
+    with_items:
+      - { file: 'rsyslog_job.sh', mode: '0755' }
+      - { file: 'rsyslog_job.help', mode: '0644' }
     become: yes
     
   - name: Inform Agent that Rsyslog_job is installed

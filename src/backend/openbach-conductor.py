@@ -95,7 +95,7 @@ class PlaybookBuilder():
 
     def build_status_agent(self, playbook):
         playbook.write("    - name: Get status of openbach-agent\n      shell:"
-                       + "/etc/init.d/openbach-agent status\n")
+                       + " /etc/init.d/openbach-agent status\n")
         return True
     
     def build_ls_jobs(self, playbook):
@@ -107,7 +107,7 @@ class PlaybookBuilder():
                          job_path):
         if syslogseverity != 8 or syslogseverity_local != 8:
             playbook.write("    - name: Push new rsyslog conf files\n      template:" +
-                           " src=" + job_path + "templates/{{ item.src }} " +
+                           " src=" + job_path + "/templates/{{ item.src }} " +
                            "dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}{{" +
                            " item.dst }}.locked owner=root group=root\n" +
                            "      with_items:\n   ")
@@ -499,56 +499,56 @@ class ClientThread(threading.Thread):
                     agents.append(Agent.objects.get(pk=agent_ip))
                 except ObjectDoesNotExist:
                     error_msg += agent_ip + ' '
-                for agent in agents:
-                    hosts = open('/tmp/openbach_hosts', 'w')
-                    hosts.write("[Agents]\n" + agent.address + "\n")
-                    hosts.close()
-                    playbook_filename = self.playbook_builder.path_to_build
-                    playbook_filename += "status_agent.yml"
-                    try:
-                        subprocess.check_output(["ping", "-c1", "-w2",
-                                                 agent.address])
-                        returncode = 0
-                    except subprocess.CalledProcessError, e:
-                        returncode = e.returncode
-                    if returncode != 0:
-                        agent.reachable = False
-                        agent.update_reachable = timezone.now()
-                        agent.status = "Agent unreachable"
-                        agent.update_status= timezone.now()
-                        agent.save()
-                        continue
-                    playbook = open(playbook_filename, 'w')
-                    playbook.write("---\n\n- hosts: Agents\n\n")
-                    playbook.close()
-                    cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
-                    cmd_ansible += "le_ssh_user=" + agent.username + " -e "
-                    cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-                    cmd_ansible += playbook_filename
-                    p = subprocess.Popen(cmd_ansible, shell=True)
-                    p.wait()
-                    if p.returncode != 0:
-                        agent.reachable = False
-                        agent.update_reachable = timezone.now()
-                        agent.status = "Agent reachable but connection impossible"
-                        agent.update_status= timezone.now()
-                        agent.save()
-                        continue
-                    agent.reachable = True
+            for agent in agents:
+                hosts = open('/tmp/openbach_hosts', 'w')
+                hosts.write("[Agents]\n" + agent.address + "\n")
+                hosts.close()
+                playbook_filename = self.playbook_builder.path_to_build
+                playbook_filename += "status_agent.yml"
+                try:
+                    subprocess.check_output(["ping", "-c1", "-w2",
+                                             agent.address])
+                    returncode = 0
+                except subprocess.CalledProcessError, e:
+                    returncode = e.returncode
+                if returncode != 0:
+                    agent.reachable = False
                     agent.update_reachable = timezone.now()
+                    agent.status = "Agent unreachable"
+                    agent.update_status= timezone.now()
                     agent.save()
-                    playbook = open(playbook_filename, 'w')
-                    playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-                    self.playbook_builder.build_status_agent(playbook) 
-                    playbook.close()
-                    cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
-                    cmd_ansible += "le_ssh_user=" + agent.username + " -e "
-                    cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-                    cmd_ansible += playbook_filename
-                    p = subprocess.Popen(cmd_ansible, shell=True)
-                    p.wait()
-                    if p.returncode != 0:
-                        continue
+                    continue
+                playbook = open(playbook_filename, 'w')
+                playbook.write("---\n\n- hosts: Agents\n\n")
+                playbook.close()
+                cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
+                cmd_ansible += "le_ssh_user=" + agent.username + " -e "
+                cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+                cmd_ansible += playbook_filename
+                p = subprocess.Popen(cmd_ansible, shell=True)
+                p.wait()
+                if p.returncode != 0:
+                    agent.reachable = False
+                    agent.update_reachable = timezone.now()
+                    agent.status = "Agent reachable but connection impossible"
+                    agent.update_status= timezone.now()
+                    agent.save()
+                    continue
+                agent.reachable = True
+                agent.update_reachable = timezone.now()
+                agent.save()
+                playbook = open(playbook_filename, 'w')
+                playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
+                self.playbook_builder.build_status_agent(playbook) 
+                playbook.close()
+                cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
+                cmd_ansible += "le_ssh_user=" + agent.username + " -e "
+                cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
+                cmd_ansible += playbook_filename
+                p = subprocess.Popen(cmd_ansible, shell=True)
+                p.wait()
+                if p.returncode != 0:
+                    continue
             if error_msg != '':
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
@@ -560,7 +560,8 @@ class ClientThread(threading.Thread):
             url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "\""
             r = requests.get(url)
             if 'series' not in r.json()['results'][0]:
-                self.clientsocket.send("KO " + r.json()['results'][0]['error'])
+                self.clientsocket.send("KO Required Stats doesn't exist in"
+                                       " the Database")
                 self.clientsocket.close()
                 return
             columns = r.json()['results'][0]['series'][0]['columns']
@@ -775,7 +776,7 @@ class ClientThread(threading.Thread):
         self.clientsocket.send('OK')
         self.clientsocket.close()
     
-
+    
 if __name__ == "__main__":
     # Ouverture de la socket d'ecoute
     tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

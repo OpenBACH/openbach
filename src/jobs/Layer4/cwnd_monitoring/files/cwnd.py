@@ -7,13 +7,12 @@ cwnd.py - Process congestion window
 """
 
 import argparse
-import socket
-import syslog
-import errno
 import time
 import os
 import sys
 import signal
+sys.path.insert(0, "/opt/rstats/")
+import rstats_api as rstats
 
 
 def signal_term_handler(signal, frame):
@@ -60,38 +59,12 @@ def main(path, port, interval):
     stat_name = f.readline().split('\n')[0]
     f.close()
     stat_name += ".cwnd." + str(port)
+    
+    conffile = "/opt/openbach-plugins/cwnd_monitoring/cwnd_rstats_filter.conf"
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect(("", 1111))
-    except socket.error as serr:
-        if serr.errno == errno.ECONNREFUSED:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
-        raise serr
-    s.send("1 /opt/openbach-plugins/cwnd_monitoring/cwnd_rstats_filter.conf")
-    r = s.recv(9999)
-    s.close()
-    data = r.split(" ")
-    if data[0] == 'OK':
-        if len(data) != 2:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        try:
-            int(data[1])
-        except:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        connection_id = data[1]
-        syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Identifiant de connexion = " + connection_id)
-    elif data[0] == 'KO':
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Something went wrong :")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
-        quit()
-    else:
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
+    # Connexion au service de collecte de l'agent
+    connection_id = rstats.register_stat(conffile)
+    if connection_id == 0:
         quit()
 
     i = 1
@@ -105,13 +78,9 @@ def main(path, port, interval):
                 timestamp = timestamp_sec + timestamp_nsec[:3]
                 cwnd = data[6]
                 try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    s.connect(("", 1111))
-                    cmd = "2 " + connection_id + " " + stat_name + " " + \
-                    str(timestamp) + " value " + cwnd
-                    s.send(cmd)
-                    r = s.recv(9999)
-                    s.close()
+                    # Envoie de la stat au collecteur
+                    r = rstats.send_stat(connection_id, stat_name, timestamp,
+                                         "value", cwnd)
                 except Exception as ex: 
                     print "Erreur: %s" % ex
             i = 1

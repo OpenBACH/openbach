@@ -12,6 +12,9 @@
 - name: Copy the sources
   copy: src=../src/ dest=/opt/openbach/
     
+- name: Set the influxdb port to use
+  replace: dest=/opt/openbach/backend/openbach-conductor.py regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
+
 - name: Initialize the database
   shell: python /opt/openbach/backend/manage.py {{ item }}
   with_items:

@@ -60,7 +60,8 @@ def launch_job(job_name, instance_id, command, args):
     os.system(cmd)
     
 def stop_job(job_name, instance_id):
-    cmd = "PID=`cat /var/run/" + job_name + instance_id + ".pid`; kill -TERM -$PID; rm"
+    cmd = "PID=`cat /var/run/" + job_name + instance_id + ".pid`; pkill -TERM -P"
+    cmd += "$PID; kill -TERM $PID; rm"
     cmd += " /var/run/" + job_name + instance_id + ".pid"
     os.system(cmd)
     
@@ -309,7 +310,7 @@ class ClientThread(threading.Thread):
             mutex_jobs.acquire()
             if job_name in dict_jobs:
                 mutex_jobs.release()
-                error_msg = "KO A job " + job_name + " is already installed"
+                error_msg = "OK A job " + job_name + " is already installed"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 syslog.syslog(syslog.LOG_ERR, error_msg)

@@ -4,7 +4,6 @@
   apt_key: url=https://packagecloud.io/gpg.key state=present
   
 - name: Add the apt repository
-  #copy: src=roles/controller/templates/grafana-trusty.list dest=/etc/apt/sources.list.d/
   apt_repository: repo="deb https://packagecloud.io/grafana/stable/debian/ wheezy main" update_cache=true
   
 - name: Install Grafana

@@ -1,1 +1,14 @@
-TODO
+This Job principaly launch the ping command. It sends syslog in case of error.
+
+Required Arguments:
+  - dest : it is the IP destination you want to ping
+
+Optionnal Arguments:
+  all the arguments of the ping command are accepted
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Ping 172.20.0.83 : "172.20.0.83"
+  - Ping 172.20.0.83 with packets of size 100 bytes : "172.20.0.83 -s 100"
+

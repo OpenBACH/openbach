@@ -1,1 +1,11 @@
-TODO
+This Job measures the rate of a flow. It uses an Iptable entry to measure the number of packets and the size of data.
+
+Required Arguments:
+  interval : it is the interval of time the Job will measure the rate
+  chain : it is the Iptable chain used to choose if a packet should be consider in the measure (same synthax as Iptable)
+  
+Statistics: it only produces one statistic. The name of the stats is 'rate_monitoring'. The only value there is in the stats is named 'rate' and is produced every *interval*
+
+Example:
+  - Measure every 2 seconds the rate of the TCP connexions on the port 5001 and the destination address 172.20.0.83 : "2 OUTPUT -p tcp --dport 5001 -d 172.20.0.83"
+

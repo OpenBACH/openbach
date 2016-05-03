@@ -1,1 +1,14 @@
-TODO
+This Job simply launch the iperf command.
+
+Required Arguments:
+  type : you have to specify if you want to launch a server or a client
+
+Optionnal Arguments:
+  all the arguments taken by the iperf command
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Launch an iperf server : "-s"
+  - Lannch an iperf client that will connect with the server in 172.20.0.83 : "-c 172.20.0.83" 
+

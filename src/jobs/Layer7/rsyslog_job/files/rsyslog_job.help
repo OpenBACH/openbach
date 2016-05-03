@@ -1,1 +1,17 @@
-TODO
+This Job is used by OpenBACH to modify the logs policy of a Job. It moves a configuration file pushed by the Controller in advanced to be the configuration file consider by Rsyslog then restart Rsyslog.
+
+Required Arguments:
+ job_name :  the name of the Job you want to change the logs policy
+ instance_id : the id of the current instance
+
+Optionnal Arguments:
+  disable_code : 1 to disable sending logs to the Collector
+                 2 to disable local registery of logs
+                 3 to disable both
+                 0 to disable none of them
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Change the policy of the Job 'rate_monitoring' (currently the instance_id is 5) : "rate_monitoring 5"
+

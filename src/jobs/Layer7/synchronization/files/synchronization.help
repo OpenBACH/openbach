@@ -1,1 +1,10 @@
-TODO
+This Job simply launch the ntpdate command.
+
+Required Arguments:
+  address_ip : the ip address with who you want to synchronize
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Synchronize with the host 172.20.0.83 : "172.20.0.83"
+

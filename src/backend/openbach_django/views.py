@@ -382,6 +382,35 @@ def list_installed_jobs(request):
         return JsonResponse(response_data, status=200)
 
 
+def push_file(request):
+    if request.method != 'POST':
+        response_data = {'msg': "Only POST method are accepted"}
+        return JsonResponse(data=response_data, status=404)
+    data = json.loads(request.POST['data'])
+    try:
+        local_path = data['local_path']
+        remote_path = data['remote_path']
+        agent_ip = data['agent_ip']
+    except:
+        response_data = {'msg': "POST data malformed"}
+        return JsonResponse(data=response_data, status=404)
+    try:
+        agent = Agent.objects.get(pk=agent_ip)
+    except ObjectDoesNotExist:
+        response_data = {'msg': "This Agent isn't in the database", 'address':
+                         agent_ip}
+    cmd = "push_file " + local_path + " " + remote_path + " " + agent_ip
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 1113))
+    s.send(cmd)
+    r = s.recv(1024)
+    s.close()
+    response_data = {'msg': r}
+    if r.split()[0] == 'OK':
+        return JsonResponse(data=response_data, status=200)
+    return JsonResponse(data=response_data, status=404)
+
+
 def start_instance(request):
     if request.method != 'POST':
         response_data = {'msg': "Only POST method are accepted"}

@@ -107,6 +107,15 @@ def list_jobs():
     return requests.get(url)
 
 
+def push_file(local_path, remote_path, agent_ip):
+    url = "http://localhost:8000/file/push"
+    
+    payload = {'local_path': local_path, 'remote_path': remote_path, 'agent_ip':
+               agent_ip}
+    
+    return requests.post(url, data={'data': json.dumps(payload)})
+
+
 def restart_instance(instance_id, arguments=None, date=None, interval=None):
     url = "http://localhost:8000/instances/restart"
 

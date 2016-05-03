@@ -35,5 +35,7 @@ urlpatterns = [
     url(r'^instances/restart$', views.restart_instance, name='restart_instance'),
     url(r'^instances/status$', views.status_instance, name='status_instance'),
     url(r'^instances/list$', views.list_instances, name='list_instances'),
+
+    url(r'^file/push$', views.push_file, name='push_file'),
 ]
 

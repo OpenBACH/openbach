@@ -119,13 +119,9 @@ class PlaybookBuilder():
             playbook.write("\n      become: yes\n\n")
         return True
     
-    def build_enable_stats(self, playbook, rstats_filter_filename, job_name,
-                           instance_id):
-        playbook.write("    - name: Push new rstats conf file\n      copy: src="
-                       + rstats_filter_filename + " dest=" +
-                       "/opt/openbach-jobs/" + job_name + "/" + job_name +
-                       instance_id + "_rstats_filter.conf.locked\n      become:"
-                       + " yes\n\n")
+    def build_push_file(self, playbook, local_path, remote_path):
+        playbook.write("    - name: Push file\n      copy: src=" + local_path
+                       + " dest=" + remote_path + "\n      become: yes\n\n")
         return True
 
 class ClientThread(threading.Thread):
@@ -149,7 +145,7 @@ class ClientThread(threading.Thread):
         request_type = data_recv[0]
         no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
                    'status_agents', 'update_agent', 'status_jobs',
-                   'update_jobs', 'update_instance']
+                   'update_jobs', 'update_instance', 'push_file']
         only_date = ['stop_instance', 'update_job_log_severity',
                      'update_job_stat_policy']
         date_interval = ['start_instance', 'restart_instance', 'status_instance']
@@ -270,6 +266,15 @@ class ClientThread(threading.Thread):
             if len(data_recv) > 5:
                 error_msg = "KO Message not formed well. Too much arguments"
                 error_msg += " given"
+                self.clientsocket.send(error_msg)
+                self.clientsocket.close()
+                return []
+        elif request_type == 'push_file':
+            if len(data_recv) != 4:
+                error_msg = "KO Message not formed well. You should provide the"
+                error_msg += " local_path of the file you want to send, the"
+                error_msg += " remote_path where you want to put the file and "
+                error_msg += " the ip address of the Agent"
                 self.clientsocket.send(error_msg)
                 self.clientsocket.close()
                 return []
@@ -556,7 +561,7 @@ class ClientThread(threading.Thread):
         elif request_type == 'update_agent':
             agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
-            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
             url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "\""
             r = requests.get(url)
             if 'series' not in r.json()['results'][0]:
@@ -616,7 +621,7 @@ class ClientThread(threading.Thread):
         elif request_type == 'update_jobs':
             agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
-            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
             url += "ms&q=SELECT+last(\"jobs_list\")+FROM+\"" + agent.name + "\""
             r = requests.get(url)
             if 'series' not in r.json()['results'][0]:
@@ -653,7 +658,7 @@ class ClientThread(threading.Thread):
             instance_id = data_recv[1]
             instance = Instance.objects.get(pk=instance_id)
             agent = instance.job.agent
-            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
             url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "."
             url += instance.job.job.name + instance_id + "\""
             r = requests.get(url)
@@ -755,9 +760,11 @@ class ClientThread(threading.Thread):
             playbook = open(playbook_filename, 'w')
             playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
             extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            self.playbook_builder.build_enable_stats(playbook,
+            remote_path = "/opt/openbach-jobs/" + job_name + "/" + job_name
+            remote_path += instance_id + "_rstats_filter.conf.locked"
+            self.playbook_builder.build_push_file(playbook,
                                                      rstats_filter_filename,
-                                                     job_name, instance_id)
+                                                     remote_path)
             self.playbook_builder.build_start(playbook, 'rstats_job',
                                               instance_id, instance.args, date,
                                               None, extra_vars)
@@ -766,6 +773,27 @@ class ClientThread(threading.Thread):
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
             cmd_ansible += "@/tmp/openbach_extra_vars -e "
             cmd_ansible += "@/opt/openbach/configs/all -e "
+            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
+            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
+            cmd_ansible += "ansible_ssh_pass=" + agent.password
+            cmd_ansible += " " + playbook_filename
+            if not self.launch_playbook(cmd_ansible):
+                return
+        elif request_type == 'push_file':
+            local_path = data_recv[1]
+            remote_path = data_recv[2]
+            agent_ip = data_recv[3]
+            agent = Agent.objects.get(pk=agent_ip)
+            hosts = open('/tmp/openbach_hosts', 'w')
+            hosts.write("[Agents]\n" + agent.address + "\n")
+            hosts.close()
+            playbook_filename = self.playbook_builder.path_to_build + "push_file.yml"
+            playbook = open(playbook_filename, 'w')
+            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
+            self.playbook_builder.build_push_file(playbook, local_path,
+                                                     remote_path)
+            playbook.close()
+            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
             cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
             cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
             cmd_ansible += "ansible_ssh_pass=" + agent.password

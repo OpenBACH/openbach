@@ -3,7 +3,7 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-cwnd.py - Process congestion window
+cwnd_monitoring.py - Process congestion window
 """
 
 import argparse
@@ -16,8 +16,8 @@ import rstats_api as rstats
 
 
 def signal_term_handler(signal, frame):
-    cmd = "PID=`cat /var/run/cwnd.pid`; kill -HUP $PID; rm "
-    cmd += "/var/run/cwnd.pid"
+    cmd = "PID=`cat /var/run/cwnd_monitoring.pid`; kill -HUP $PID; rm "
+    cmd += "/var/run/cwnd_monitoring.pid"
     os.system(cmd)
     cmd = "rmmod tcp_probe_new_fix > /dev/null 2>&1"
     os.system(cmd)
@@ -51,16 +51,13 @@ def main(path, port, interval):
     cmd = "chmod 444 /proc/net/tcpprobe"
     os.system(cmd)
     cmd = "PID=`cat /proc/net/tcpprobe > " + path + " & echo $!`; echo $PID >"
-    cmd += " /var/run/cwnd.pid"
+    cmd += " /var/run/cwnd_monitoring.pid"
     os.system(cmd)
 
     # Contruction du nom de la stat
-    f = open("/etc/hostname", "r")
-    stat_name = f.readline().split('\n')[0]
-    f.close()
-    stat_name += ".cwnd." + str(port)
+    stat_name = "cwnd_monitoring." + str(port)
     
-    conffile = "/opt/openbach-plugins/cwnd_monitoring/cwnd_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs/cwnd_monitoring/cwnd_monitoring_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
     connection_id = rstats.register_stat(conffile)

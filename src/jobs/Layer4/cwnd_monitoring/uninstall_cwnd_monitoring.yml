@@ -8,14 +8,6 @@
 
   tasks:
   - name: Uninstall Cwnd Monitoring
-    file: path=/opt/openbach-jobs/cwnd_monitoring/{{ item }} state=absent
-    become: yes
-    with_items:
-      - cwnd.py
-      - cwnd_rstats_filter.conf
-      - tcp_probe_new_fix.ko
-
-  - name: Remove Cwnd Monitoring repository
     file: path=/opt/openbach-jobs/cwnd_monitoring state=absent
     become: yes
 

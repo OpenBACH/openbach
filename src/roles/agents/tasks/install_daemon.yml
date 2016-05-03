@@ -25,7 +25,7 @@
   copy: src=openbach-agent/openbach-baton dest=/opt/openbach-agent/ mode=0755
   
 - name: Create the service
-  copy: src=openbach-agent/openbach-agent dest=/etc/init.d/ mode=0755
+  template: src=openbach-agent.j2 dest=/etc/init.d/openbach-agent mode=0755
 
 - name: Start the service
   service: name=openbach-agent state=started

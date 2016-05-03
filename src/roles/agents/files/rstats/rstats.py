@@ -18,7 +18,12 @@ class Rstats:
                  prefix=None, id=None):
         self.__mutex = threading.Lock()
         self.conf = conf
-        self.prefix = prefix
+        if prefix == None:
+            f = open("/etc/hostname", "r")
+            self.prefix = f.readline().split('\n')[0]
+            f.close()
+        else:
+            self.prefix = prefix
         
         if id != None:
             self._logger = logging.getLogger('Rstats' + str(id))
@@ -40,6 +45,10 @@ class Rstats:
         self.__mutex.acquire()
         local = self._filter.is_denied(stat_name)
         self.__mutex.release()
+        if self.prefix != None:
+            stat_name = self.prefix + '.' + stat_name
+        else:
+            stat_name = stat_name
         
         # recuperation des stats
         time = stats["time"]
@@ -70,13 +79,9 @@ class Rstats:
 
         self._logger.info(logs)
         if local:
-            return
+            return []
 
         # Former la commande
-        if self.prefix != None:
-            stat_name = self.prefix + '.' + stat_name
-        else:
-            stat_name = stat_name
         if self.conf.influxdb_version == '0.9' or self.conf.influxdb_version == '0.10':
             url = "http://" + self.conf.host + ":" + self.conf.port
             url += "/write?db=" + self.conf.database + "&precision="
@@ -271,9 +276,9 @@ def load_filter_from_conf(filter, filepath):
                 continue
 
             status = RstatsRule.ACCEPT
-            if dummy[1] == "true":
+            if dummy[1] == "true" or dummy[1] == "True":
                 status = RstatsRule.ACCEPT
-            elif dummy[1] == "false":
+            elif dummy[1] == "false" or dummy[1] == "False":
                 status = RstatsRule.DENY
             else:
                 step = step_error

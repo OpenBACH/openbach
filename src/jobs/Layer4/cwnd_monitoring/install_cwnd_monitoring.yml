@@ -15,7 +15,7 @@
     copy: src=files/{{ item }} dest=/opt/openbach-jobs/cwnd_monitoring/ mode=0644
     become: yes
     with_items:
-      - cwnd.py
+      - cwnd_monitoring.py
       - cwnd_monitoring_rstats_filter.conf
       - tcp_probe_new_fix.ko
       - cwnd_monitoring.help

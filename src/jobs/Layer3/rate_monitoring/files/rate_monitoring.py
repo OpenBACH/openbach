@@ -35,10 +35,7 @@ def monitor():
     global previous_timestamp
     
     # Contruction du nom de la stat
-    f = open("/etc/hostname", "r")
-    stat_name = f.readline().split('\n')[0]
-    f.close()
-    stat_name += ".rate_monitoring"
+    stat_name = "rate_monitoring"
     
     # Refresh de la table (pour avoir des stats a jour)
     table = iptc.Table(iptc.Table.FILTER)
@@ -74,7 +71,7 @@ def main(rule, interval):
     global previous_bytes_count
     global previous_timestamp
     
-    conffile = "/opt/openbach-plugins/rate_monitoring/rate_monitoring_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
     
     # Connexion au service de collecte de l'agent
     connection_id = rstats.register_stat(conffile)

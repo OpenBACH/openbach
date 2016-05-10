@@ -99,8 +99,8 @@ class PlaybookBuilder():
         return True
     
     def build_ls_jobs(self, playbook):
-        playbook.write("    - name: Get the list of the installed jobs\n" +
-                       "shell: /opt/openbach-agent/openbach-baton ls_jobs\n")
+        playbook.write("    - name: Get the list of the installed jobs\n   " +
+                       "   shell: /opt/openbach-agent/openbach-baton ls_jobs\n")
         return True
     
     def build_enable_log(self, playbook, syslogseverity, syslogseverity_local,
@@ -561,7 +561,7 @@ class ClientThread(threading.Thread):
         elif request_type == 'update_agent':
             agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
-            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
+            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
             url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "\""
             r = requests.get(url)
             if 'series' not in r.json()['results'][0]:
@@ -621,24 +621,32 @@ class ClientThread(threading.Thread):
         elif request_type == 'update_jobs':
             agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
-            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
-            url += "ms&q=SELECT+last(\"jobs_list\")+FROM+\"" + agent.name + "\""
+            stat_name = agent.name + ".jobs_list"
+            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
+            url += "ms&q=SELECT+*+FROM+\"" + stat_name + "\"+LIMIT+1"
             r = requests.get(url)
             if 'series' not in r.json()['results'][0]:
                 self.clientsocket.send("KO 1 " + r.json()['results'][0]['error'])
                 self.clientsocket.close()
                 return
-            columns = r.json()['results'][0]['series'][0]['columns']
-            for i in range(len(columns)):
-                if columns[i] == 'time':
-                    timestamp = r.json()['results'][0]['series'][0]['values'][0][i]/1000.
-                elif columns[i] == 'last':
-                    jobs_list = r.json()['results'][0]['series'][0]['values'][0][i].split()
+            jobs_list = []
+            results = r.json()['results'][0]['series'][0]
+            for i in range(len(results['columns'])):
+                if results['columns'][i] == "time":
+                    timestamp = results['values'][0][i]/1000.
+                    continue
+                if results['columns'][i] == "nb":
+                    continue
+                jobs_list.append(results['values'][0][i])
             date = datetime.fromtimestamp(timestamp,
                                           timezone.get_current_timezone())
             installed_jobs = agent.installed_job_set
             for job in installed_jobs.iterator():
-                job.delete()
+                job_name = job.job.name
+                if job_name not in jobs_list:
+                    job.delete()
+                else:
+                    jobs_list.remove(job_name)
             error_msg = 'KO 2'
             for job_name in jobs_list:
                 try:
@@ -649,6 +657,9 @@ class ClientThread(threading.Thread):
                 installed_job = Installed_Job(agent=agent, job=job)
                 installed_job.set_name()
                 installed_job.update_status = date
+                installed_job.severity = 4
+                installed_job.local_severity = 4
+                installed_job.stats_default_policy=True
                 installed_job.save()
             if error_msg != 'KO 2':
                 self.clientsocket.send(error_msg)
@@ -658,7 +669,7 @@ class ClientThread(threading.Thread):
             instance_id = data_recv[1]
             instance = Instance.objects.get(pk=instance_id)
             agent = instance.job.agent
-            url = "http://" + agent.collector + ":8087/query?db=openbach&epoch="
+            url = "http://" + agent.collector + ":8086/query?db=openbach&epoch="
             url += "ms&q=SELECT+last(\"status\")+FROM+\"" + agent.name + "."
             url += instance.job.job.name + instance_id + "\""
             r = requests.get(url)

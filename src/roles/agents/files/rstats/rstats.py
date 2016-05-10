@@ -318,12 +318,12 @@ class ClientThread(threading.Thread):
             self.clientsocket.close()
             return []
         if request_type == 1:
-            if len(data_recv) != 2 & len(data_recv) != 3:
+            if len(data_recv) != 2 and len(data_recv) != 3:
                 self.clientsocket.send("KO Message not formed well")
                 self.clientsocket.close()
                 return []
         elif request_type == 2:
-            if (len(data_recv) < 6) | (len(data_recv)%2 != 0):
+            if (len(data_recv) < 6) or (len(data_recv)%2 != 0):
                 self.clientsocket.send("KO Message not formed well")
                 self.clientsocket.close()
                 return []

@@ -11,7 +11,7 @@ import syslog
 import errno
 
 
-def register_stat(conffile, database_name=None):
+def register_stat(conffile, prefix=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect(("", 1111))
@@ -21,8 +21,8 @@ def register_stat(conffile, database_name=None):
                           "maybe rstats service isn't started")
         raise serr
     cmd = "1 " + conffile
-    if database_name != None:
-        cmd += " " + database_name
+    if prefix != None:
+        cmd += " " + prefix
     s.send(cmd)
     r = s.recv(9999)
     s.close()

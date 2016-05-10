@@ -11,7 +11,6 @@ import threading
 import syslog
 import os
 import sys
-import errno
 import time
 import signal
 import ConfigParser
@@ -25,6 +24,8 @@ from apscheduler.util import datetime_repr
 import subprocess
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
+sys.path.insert(0, "/opt/rstats/")
+import rstats_api as rstats
 
 
 
@@ -94,51 +95,16 @@ def status_job(job_name, instance_id, scheduler):
             pass
     
     # Construction du nom de la stat
-    f = open("/etc/hostname", "r")
-    stat_name = f.readline().split('\n')[0]
-    f.close()
-    stat_name += "." + job_name + instance_id
+    stat_name = job_name + instance_id
     
-    # Envoie de la stat à Rstats
     # Connexion au service de collecte de l'agent
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect(("", 1111))
-    except socket.error as serr:
-        if serr.errno == errno.ECONNREFUSED:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
-        raise serr
-    s.send("1 /opt/openbach-agent/openbach-agent_filter.conf")
-    r = s.recv(9999)
-    s.close()
-    data = r.split(" ")
-    if data[0] == 'OK':
-        if len(data) != 2:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        try:
-            int(data[1])
-        except:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        connection_id = data[1]
-        syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Identifiant de connexion = " + connection_id)
-    elif data[0] == 'KO':
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Something went wrong :")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
+    conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
+    connection_id = rstats.register_stat(conffile)
+    if connection_id == 0:
         quit()
-    else:
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
-        quit()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("", 1111))
-    cmd = "2 " + connection_id + " " + stat_name + " " + str(timestamp) + " status "
-    cmd += status
-    s.send(cmd)
-    s.close()
+        
+    # Envoie de la stat à Rstats
+    r = rstats.send_stat(connection_id, stat_name, timestamp, "status", status)
     
 def stop_watch(scheduler, job_name, instance_id):
     try:
@@ -153,58 +119,26 @@ def ls_jobs():
     # Récupération des jobs disponibles
     timestamp = int(round(time.time() * 1000))
     mutex_jobs.acquire()
-    jobs = ''
+    value_names = ['nb']
+    values = [0]
     for job_name in dict_jobs.keys():
-        if jobs != '':
-            jobs += ' '
-        jobs += job_name
+        values[0] += 1
+        value_names.append('job' + str(values[0]))
+        values.append(job_name)
     mutex_jobs.release()
     
     # Construction du nom de la stat
-    f = open("/etc/hostname", "r")
-    stat_name = f.readline().split('\n')[0]
-    f.close()
+    stat_name = "jobs_list"
     
-    # Envoie de la stat à Rstats
     # Connexion au service de collecte de l'agent
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        s.connect(("", 1111))
-    except socket.error as serr:
-        if serr.errno == errno.ECONNREFUSED:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, maybe rstats service isn't started")
-        raise serr
-    s.send("1 /opt/openbach-agent/openbach-agent_filter.conf")
-    r = s.recv(9999)
-    s.close()
-    data = r.split(" ")
-    if data[0] == 'OK':
-        if len(data) != 2:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        try:
-            int(data[1])
-        except:
-            syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-            syslog.syslog(syslog.LOG_ERR, "\t" + r)
-            quit()
-        connection_id = data[1]
-        syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Identifiant de connexion = " + connection_id)
-    elif data[0] == 'KO':
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Something went wrong :")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
+    conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
+    connection_id = rstats.register_stat(conffile)
+    if connection_id == 0:
         quit()
-    else:
-        syslog.syslog(syslog.LOG_ERR, "ERROR: Return message isn't well formed")
-        syslog.syslog(syslog.LOG_ERR, "\t" + r)
-        quit()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("", 1111))
-    cmd = "2 " + connection_id + " " + stat_name + " " + str(timestamp)
-    cmd += " jobs_list \"" + jobs + "\""
-    s.send(cmd)
-    s.close()
+        
+    # Envoie de la stat à Rstats
+    r = rstats.send_stat(connection_id, stat_name, timestamp, value_names,
+                         values)
     
     
 class Conf:
@@ -521,7 +455,7 @@ class ClientThread(threading.Thread):
                     int(data_recv[4])
                 except:
                     error_msg = "KO The date to begin should be give as"
-                    error_msg += "timestamp in sec "
+                    error_msg += " timestamp in milliseconds"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)
@@ -614,7 +548,7 @@ class ClientThread(threading.Thread):
                     int(data_recv[4])
                 except:
                     error_msg = "KO The date to stop should be give as"
-                    error_msg += "timestamp in sec "
+                    error_msg += " timestamp in milliseconds"
                     self.clientsocket.send(error_msg)
                     self.clientsocket.close()
                     syslog.syslog(syslog.LOG_ERR, error_msg)

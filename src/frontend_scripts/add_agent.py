@@ -29,7 +29,7 @@ if __name__ == "__main__":
                         help='Username of the Agent')
     parser.add_argument('password', metavar='password', type=str, nargs=1,
                         help='Password of the Agent')
-    parser.add_argument('-n', '--name', type=str, default=None,
+    parser.add_argument('name', metavar='name', type=str, nargs=1,
                         help='Name of the Agent')
     
     # get args
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     collector_ip = args.collector_ip[0]
     username = args.username[0]
     password = args.password[0]
-    name = args.name
+    name = args.name[0]
 
     main(agent_ip, collector_ip, username, password, name)
 

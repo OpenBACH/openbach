@@ -1,6 +1,7 @@
 from .models import Agent, Job, Installed_Job, Instance, Watch
 from django.http import JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import IntegrityError
 import json
 import socket
 import ConfigParser
@@ -14,17 +15,20 @@ def add_agent(request):
     data = json.loads(request.POST['data'])
     try:
         agent = Agent(address = data['address'], username = data['username'],
-                      password = data['password'], collector = data['collector'])
+                      password = data['password'], collector =
+                      data['collector'], name = data['name'])
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
-    if 'name' in data:
-        agent.name = data['name']
     agent.reachable = True
     agent.update_reachable = timezone.now()
     agent.status = "Installing ..." 
     agent.update_status = timezone.now()
-    agent.save()
+    try:
+        agent.save()
+    except IntegrityError:
+        response_data = {'msg': "Name of the Agent already used"}
+        return JsonResponse(data=response_data, status=404)
     response_data = {}
     cmd = "add_agent " + agent.address
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,9 +42,6 @@ def add_agent(request):
         return JsonResponse(data=response_data, status=404)
     agent.status = "Available"
     agent.update_status = timezone.now()
-    if agent.name == "":
-        # TODO Trouver un moyen de recuperer l'hostname
-        pass
     agent.save()
     return JsonResponse(data=response_data, status=200)
 

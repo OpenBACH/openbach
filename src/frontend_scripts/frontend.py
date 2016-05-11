@@ -20,13 +20,11 @@ def date_to_timestamp(date):
     return timestamp
 
 
-def add_agent(agent_ip, collector_ip, username, password, name=None):
+def add_agent(agent_ip, collector_ip, username, password, name):
     url = "http://localhost:8000/agents/add"
 
     payload = {'address': agent_ip, 'username': username, 'password':
-               password, 'collector': collector_ip}
-    if name != None:
-        payload['name'] = name
+               password, 'collector': collector_ip, 'name': name}
     
     return requests.post(url, data={'data': json.dumps(payload)})
 

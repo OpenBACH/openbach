@@ -1,0 +1,18 @@
+This Job will try to connect to an HTTP2 server in order to monitor the delay.
+
+Required Arguments:
+  server_address : the IP address of the server
+
+Optionnal Arguments:
+  simu_name : name of the generated statistic (default=traffic_monitor_http2_client)
+  lambd : exponential law lambda (default=1.0)
+  sim_t : simulation time in seconds (default=60)
+  n_req : number of connections (default=0)
+  page : page number (default=1)
+
+Statistics: it only produces one statistic. The name of the stats is *simu_name*. The only value there is in the stats is named 'value' and is produced for each page loaded
+
+Example:
+  - Monitor HTTP2 traffic with 172.20.0.83 : "172.20.0.83"
+  - Monitor HTTP2 traffic with 172.20.0.83 during 2 minutes : "172.20.0.83 traffic_monitor_http2_client 1.0 120"
+

@@ -45,7 +45,7 @@ def watch(fn):
  
 def main(path, port, interval):
     # Mise en place du monitoring
-    cmd = "insmod /opt/openbach-plugins/cwnd_monitoring/tcp_probe_new_fix.ko"
+    cmd = "insmod /opt/openbach-jobs/cwnd_monitoring/tcp_probe_new_fix.ko"
     cmd += " port=" + str(port) + " full=1 > /dev/null 2>&1"
     os.system(cmd)
     cmd = "chmod 444 /proc/net/tcpprobe"

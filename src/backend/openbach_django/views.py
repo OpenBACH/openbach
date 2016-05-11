@@ -441,7 +441,7 @@ def start_instance(request):
         date_interval = 'date'
     instance = Instance(job=installed_job)
     if len(instance_args) != 0:
-        instance.args = " ".join(instance_args)
+        instance.args = " ".join(str(instance_args))
     if not instance.check_args():
         response_data = {'msg': "Arguments given don't match with arguments "
                          "needed"}

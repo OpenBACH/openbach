@@ -181,10 +181,10 @@ def status_jobs(agents_ip):
     return requests.post(url, data={'data': json.dumps(payload)})
 
 
-def stop_instance(instance_id, date=None):
+def stop_instance(instance_ids, date=None):
     url = "http://localhost:8000/instances/stop"
 
-    payload = {'instance_id': instance_id}
+    payload = {'instance_ids': instance_ids}
     if date != None:
         payload['date'] = date
     

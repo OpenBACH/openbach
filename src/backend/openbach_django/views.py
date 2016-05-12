@@ -441,8 +441,8 @@ def start_instance(request):
         date = 'now'
         date_interval = 'date'
     instance = Instance(job=installed_job)
-    if len(instance_args) != 0:
-        instance.args = " ".join(str(instance_args))
+    for i in range(len(instance_args)):
+        instance.args += str(instance_args[i])
     if not instance.check_args():
         response_data = {'msg': "Arguments given don't match with arguments "
                          "needed"}
@@ -480,32 +480,44 @@ def stop_instance(request):
         return JsonResponse(data=response_data, status=404)
     data = json.loads(request.POST['data'])
     try:
-        instance_id = data['instance_id']
+        instance_ids = data['instance_ids']
     except:
         response_data = {'msg': "POST data malformed"}
         return JsonResponse(data=response_data, status=404)
-    try:
-        instance = Instance.objects.get(pk=instance_id)
-    except ObjectDoesNotExist:
-        response_data = {'msg': "This Instance isn't in the database",
-                         'instance_id': instance_id}
-        return JsonResponse(data=response_data, status=404)
+    instances = {}
+    response_data = {}
+    for instance_id in instance_ids:
+        try:
+            instance = Instance.objects.get(pk=instance_id)
+            instances[instance_id] = instance
+        except ObjectDoesNotExist:
+            response_data['errors'] = "These Instances aren't in the database"
+            if 'instance_ids' not in response_data:
+                response_data['instance_ids'] = []
+            response_data['instance_id'].append(instance_id)
+            return JsonResponse(data=response_data, status=404)
     if 'date' in data:
         date = data['date']
     else:
         date = "now"
-    cmd = "stop_instance " + date + " " + instance_id
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg': r}
-    if r.split()[0] == 'OK':
-        instance.delete()
-        return JsonResponse(data=response_data, status=200)
-    else:
-        return JsonResponse(data=response_data, status=404)
+    status = 200
+    response_data['error'] = []
+    for instance_id in instance_ids:
+        cmd = "stop_instance " + date + " " + instance_id
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(('localhost', 1113))
+        s.send(cmd)
+        r = s.recv(1024)
+        s.close()
+        if r.split()[0] == 'OK':
+            instances[instance_id].delete()
+        else:
+            status = 404
+            response_data['msg'] = "Some went wrong"
+            response_data['error'].append({'msg': r, 'instance': instance_id})
+    if 'msg' not in response_data:
+        response_data['msg'] = "OK"
+    return JsonResponse(data=response_data, status=status)
 
 
 def restart_instance(request):

@@ -1,5 +1,8 @@
 ---
 
+- name: Remove Rstats log repository
+  file: path=/var/log/openbach state=absent
+
 - name: Stop Rstats
   service: name=rstats state=stopped
 

@@ -2,6 +2,7 @@
 
 logstash_port: 10514
 elasticsearch_port: 9200
+collectstats_port: 2222
 influxdb_port: 8086
 database_name: openbach
 database_username: openbach

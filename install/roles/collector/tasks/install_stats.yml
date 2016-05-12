@@ -1,5 +1,17 @@
 ---
 
+- name: Install Collectstats
+  copy: src=collectstats/ dest=/opt/collectstats/ mode=0644
+
+- name: Configure Collectstats
+  template: src=collectstats.cfg.j2 dest=/opt/collectstats/collectstats.cfg
+
+- name: Create Collectstats Service
+  copy: src=collectstats_service dest=/etc/init.d/collectstats mode=0755
+
+- name: Start Collectstats
+  service: name=collectstats state=started
+
 - name: Check if InfluxDB is installed
   shell: dpkg-query -W -f='${Version}\n' influxdb | sed 's/^[0-9]\+://'
   register: influxdb_check_deb

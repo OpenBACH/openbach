@@ -9,6 +9,9 @@
 - name: Uninstall the daemon
   file: path=/opt/openbach-agent/ state=absent
     
+- name: Remove openbach pid repository
+  file: path=/var/run/openbach state=absent
+  
 - name: Remove Jobs' sources
   file: path=/opt/openbach-jobs/ state=absent
 

@@ -12,6 +12,9 @@
 - name: Create openbach-agent repository
   file: path=/opt/openbach-agent state=directory mode=0755
   
+- name: Create openbach pid repository
+  file: path=/var/run/openbach state=directory mode=0755
+  
 - name: Create openbach-agent jobs repository
   file: path=/opt/openbach-agent/jobs state=directory mode=0755
   

@@ -5,42 +5,45 @@ import logging
 import socket
 import ConfigParser
 import shlex
-import requests
-from requests.exceptions import ConnectionError
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 
 class Rstats:
-    DefaultLogPath = "/var/log/rstats.log"
-    
+    DefaultLogPath = "/var/log/openbach/"
+
     def __init__(self, logpath=DefaultLogPath, confpath="", conf=None,
-                 prefix=None, id=None):
+                 prefix=None, id=None, job_name=None):
         self.__mutex = threading.Lock()
         self.conf = conf
+        if job_name == None:
+            self.job_name = "rstats"
+        else:
+            self.job_name = job_name
         if prefix == None:
             f = open("/etc/hostname", "r")
             self.prefix = f.readline().split('\n')[0]
             f.close()
         else:
             self.prefix = prefix
-        
+
         if id != None:
             self._logger = logging.getLogger('Rstats' + str(id))
         else:
             self._logger = logging.getLogger('Rstats')
         self._logger.setLevel(logging.INFO)
         try:
-            fhd = logging.FileHandler(logpath, mode="a")
+            logfile = logpath + self.job_name + ".log"
+            fhd = logging.FileHandler(logfile, mode="a")
             fhd.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
             self._logger.addHandler(fhd)
         except:
             pass
-         
+
         self._confpath = confpath
         self._filter = None
         self.reload_conf()
-        
+
     def _send_stat(self, stat_name, stats):
         self.__mutex.acquire()
         local = self._filter.is_denied(stat_name)
@@ -49,57 +52,41 @@ class Rstats:
             stat_name = self.prefix + '.' + stat_name
         else:
             stat_name = stat_name
-        
+
         # recuperation des stats
         time = stats["time"]
         del stats["time"]
         logs = 'Stat: ' + str(stat_name) + ', Time: ' + str(time)
-        stats_names = "\"time\""
-        stats_values = str(time)
-        stats_v09 = ''
+        stats_to_send = ''
         for k, v in stats.iteritems():
-            if stats_v09 != '':
-                stats_v09 += ','
-            try:
-                int(v)
-                stats_v09 += k + "=" + v + "i"
-            except:
-                try:
-                    float(v)
-                    stats_v09 += k + "=" + v
-                except:
-                    boolean=['t','T','true','True','TRUE','f','F','false','False','FALSE']
-                    if v in boolean:
-                        stats_v09 += k + "=" + v
-                    else:
-                        stats_v09 += k + "=\"" + v + "\""
-            stats_names += ",\"" + k + "\""
-            stats_values += ",\"" + v + "\""
+            if stats_to_send != '':
+                stats_to_send += ' '
+            stats_to_send += k + " " + v
             logs += ", " + k + ": " + v
 
         self._logger.info(logs)
         if local:
             return []
-
-        # Former la commande
-        if self.conf.influxdb_version == '0.9' or self.conf.influxdb_version == '0.10':
-            url = "http://" + self.conf.host + ":" + self.conf.port
-            url += "/write?db=" + self.conf.database + "&precision="
-            url += self.conf.time_precision + "&u=" + self.conf.username + "&p="
-            url += self.conf.password
-            data = stat_name + " " + stats_v09 + " " + str(time)
-            
-        # Envoyer la commande
+        data = stat_name + " " + str(time) + " " + stats_to_send
+        print data
+        
+        # Creer la socket udp
         try:
-            result = requests.post(url, data=data)
-        except ConnectionError:
-            result = "ConnectionError"
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        except socket.error:
+            result = 'Failed to create socket'
             print result
             return result
-        if len(result._content) != 0:
-            self._logger.error(result._content)
-        return result._content
  
+        # Envoyer la commande
+        try:
+            s.sendto(data, (self.conf.host, int(self.conf.port)))
+        except socket.error, msg:
+            result = 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+            print result
+            return result
+        return []
+
 
     def reload_conf(self):
         self.__mutex.acquire()
@@ -117,13 +104,8 @@ class Conf:
     def __init__(self, confpath="config.ini"):
         Config = ConfigParser.ConfigParser()
         Config.read(confpath)
-        self.host = Config.get('influxdb', 'host')
-        self.port = Config.get('influxdb', 'port')
-        self.database = Config.get('influxdb', 'database')
-        self.username = Config.get('influxdb', 'username')
-        self.password = Config.get('influxdb', 'password')
-        self.time_precision = Config.get('influxdb', 'time_precision')
-        self.influxdb_version = Config.get('influxdb', 'version')
+        self.host = Config.get('collectstats', 'host')
+        self.port = Config.get('collectstats', 'port')
 
 
 class RstatsRule:
@@ -301,13 +283,11 @@ def load_filter_from_conf(filter, filepath):
 
 
 class ClientThread(threading.Thread):
-    def __init__(self, ip, port, clientsocket, conf):
+    def __init__(self, clientsocket, conf):
         threading.Thread.__init__(self)
-        self.ip = ip
-        self.port = port
         self.clientsocket = clientsocket
         self.conf = conf
-        
+
     def parse_and_check(self, r):
         data_recv = shlex.split(r)
         try:
@@ -318,7 +298,7 @@ class ClientThread(threading.Thread):
             self.clientsocket.close()
             return []
         if request_type == 1:
-            if len(data_recv) != 2 and len(data_recv) != 3:
+            if len(data_recv) != 3 and len(data_recv) != 4:
                 self.clientsocket.send("KO Message not formed well")
                 self.clientsocket.close()
                 return []
@@ -355,7 +335,7 @@ class ClientThread(threading.Thread):
             self.clientsocket.close()
             return []
         return data_recv
-            
+
 
     def run(self): 
         global dict_statsclient
@@ -370,12 +350,14 @@ class ClientThread(threading.Thread):
         if request_type == 1:
             last_id += 1
             # creer le rstatsclient
-            if len(data_recv) == 2:
-                stats_client = Rstats(confpath=data_recv[1], conf=self.conf,
+            if len(data_recv) == 3:
+                stats_client = Rstats(confpath=data_recv[1],
+                                      job_name=data_recv[2], conf=self.conf,
                                       id=last_id)
             else:
                 stats_client = Rstats(confpath=data_recv[1],
-                                      prefix=data_recv[2], conf=self.conf,
+                                      job_name=data_recv[2],
+                                      prefix=data_recv[3], conf=self.conf,
                                       id=last_id)
             # creer un mutex associe
             stats_client_mutex = threading.Lock()
@@ -461,11 +443,11 @@ if __name__ == "__main__":
     dict_statsclient = {}
     mutex_dict = threading.Lock()
     last_id = 0
-    
+
     conf = Conf("rstats.cfg")
 
     while True:
         (clientsocket, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(ip, port, clientsocket, conf)
+        newthread = ClientThread(clientsocket, conf)
         newthread.start()
-    
+

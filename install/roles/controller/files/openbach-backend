@@ -7,7 +7,7 @@ DAEMON_PATH="/opt/openbach/backend/"
 
 DAEMON=./manage.py
 DAEMON2=./openbach-conductor.py
-DAEMONOPTS="runserver"
+DAEMONOPTS="runserver 0.0.0.0:8000"
 
 NAME=openbach-backend
 NAME2=openbach-backend2

@@ -27,7 +27,7 @@ output = ''
 conffile = "/home/opensand/filter.conf"
 
 # Connexion au service de collecte de l'agent
-connection_id = rstats.register_stat(conffile)
+connection_id = rstats.register_stat(conffile, 'traffic_monitor_http2_client')
 if connection_id == 0:
     quit()
 

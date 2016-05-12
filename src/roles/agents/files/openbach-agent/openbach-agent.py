@@ -44,6 +44,8 @@ def signal_term_handler(signal, frame):
     while len(scheduler.get_jobs()) != 0:
         time.sleep(0.5)
     scheduler.shutdown()
+    cmd = "rm /var/run/openbach/*"
+    os.system(cmd)
     sys.exit(0)
                  
 signal.signal(signal.SIGHUP, signal_term_handler)
@@ -57,13 +59,13 @@ syslog.openlog("openbach-agent", syslog.LOG_PID, syslog.LOG_USER)
 
 def launch_job(job_name, instance_id, command, args):
     cmd = "PID=`" + command + " " + args + " > /dev/null 2>&1 & echo $!`; echo"
-    cmd += " $PID > /var/run/" + job_name + instance_id + ".pid"
+    cmd += " $PID > /var/run/openbach/" + job_name + instance_id + ".pid"
     os.system(cmd)
     
 def stop_job(job_name, instance_id):
-    cmd = "PID=`cat /var/run/" + job_name + instance_id + ".pid`; pkill -TERM -P"
+    cmd = "PID=`cat /var/run/openbach/" + job_name + instance_id + ".pid`; pkill -TERM -P"
     cmd += "$PID; kill -TERM $PID; rm"
-    cmd += " /var/run/" + job_name + instance_id + ".pid"
+    cmd += " /var/run/openbach/" + job_name + instance_id + ".pid"
     os.system(cmd)
     
 def status_job(job_name, instance_id, scheduler):
@@ -72,14 +74,14 @@ def status_job(job_name, instance_id, scheduler):
     job = scheduler.get_job(job_name + instance_id)
     if job == None:
         try:
-            pid_file = open("/var/run/" + job_name + instance_id + ".pid", 'r')
+            pid_file = open("/var/run/openbach/" + job_name + instance_id + ".pid", 'r')
             pid = int(pid_file.readline())
             pid_file.close()
             if os.path.exists("/proc/" + str(pid)):
                 status = "Running"
             else:
                 status = "\"Not Running\""
-                cmd = "rm /var/run/" + job_name + instance_id + ".pid"
+                cmd = "rm /var/run/openbach/" + job_name + instance_id + ".pid"
                 os.system(cmd)
         except (IOError, ValueError):
             status = "\"Not Running\""
@@ -99,7 +101,7 @@ def status_job(job_name, instance_id, scheduler):
     
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
-    connection_id = rstats.register_stat(conffile)
+    connection_id = rstats.register_stat(conffile, 'openbach-agent')
     if connection_id == 0:
         quit()
         
@@ -132,7 +134,7 @@ def ls_jobs():
     
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
-    connection_id = rstats.register_stat(conffile)
+    connection_id = rstats.register_stat(conffile, 'openbach-agent')
     if connection_id == 0:
         quit()
         

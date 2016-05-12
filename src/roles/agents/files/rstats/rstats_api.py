@@ -11,7 +11,7 @@ import syslog
 import errno
 
 
-def register_stat(conffile, prefix=None):
+def register_stat(conffile, job_name, prefix=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect(("", 1111))
@@ -20,7 +20,7 @@ def register_stat(conffile, prefix=None):
             syslog.syslog(syslog.LOG_ERR, "ERROR: Connexion to rstats refused, "
                           "maybe rstats service isn't started")
         raise serr
-    cmd = "1 " + conffile
+    cmd = "1 " + conffile + " " + job_name
     if prefix != None:
         cmd += " " + prefix
     s.send(cmd)

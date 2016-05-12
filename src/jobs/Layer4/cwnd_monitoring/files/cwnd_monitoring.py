@@ -60,7 +60,7 @@ def main(path, port, interval):
     conffile = "/opt/openbach-jobs/cwnd_monitoring/cwnd_monitoring_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile)
+    connection_id = rstats.register_stat(conffile, 'cwnd_monitoring')
     if connection_id == 0:
         quit()
 

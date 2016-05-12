@@ -303,7 +303,8 @@ class ClientThread(threading.Thread):
             agents.write("agents:\n  - " + agent.address)
             agents.close()
             extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            extra_vars.write("local_username: " + getpass.getuser())
+            extra_vars.write("local_username: " + getpass.getuser() +
+                             "\nagent_name: " + agent.name)
             extra_vars.close()
             cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
             cmd_ansible += "@/tmp/openbach_agents -e "

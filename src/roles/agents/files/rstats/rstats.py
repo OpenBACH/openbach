@@ -21,9 +21,7 @@ class Rstats:
         else:
             self.job_name = job_name
         if prefix == None:
-            f = open("/etc/hostname", "r")
-            self.prefix = f.readline().split('\n')[0]
-            f.close()
+            self.prefix = self.conf.prefix
         else:
             self.prefix = prefix
 
@@ -106,6 +104,7 @@ class Conf:
         Config.read(confpath)
         self.host = Config.get('collectstats', 'host')
         self.port = Config.get('collectstats', 'port')
+        self.prefix = Config.get('agent', 'prefix')
 
 
 class RstatsRule:

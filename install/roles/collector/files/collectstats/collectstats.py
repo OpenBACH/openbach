@@ -11,11 +11,9 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 
 class ClientThread(threading.Thread):
-    def __init__(self, data, conf):
+    def __init__(self, conf):
         threading.Thread.__init__(self)
-        self.data = data
         self.conf = conf
-
 
     def send_stat(self, stat_name, stats):
         # recuperation des stats
@@ -50,11 +48,10 @@ class ClientThread(threading.Thread):
         try:
             result = requests.post(url, data=data)
         except ConnectionError:
-            result = "ConnectionError"
-            print result
-            return result
+            error = "ConnectionError"
+            print error
+            return error
         return result._content
-
 
     def parse_and_check(self, r):
         data_recv = shlex.split(r)
@@ -70,16 +67,66 @@ class ClientThread(threading.Thread):
             return []
         return data_recv
 
-
-    def run(self): 
-        data_recv = self.parse_and_check(self.data)
+    def check_and_send(self, data):
+        data_recv = self.parse_and_check(data)
         if len(data_recv) == 0:
-            return
+            return False
         stat_name = data_recv[0]
         stats = { 'time': data_recv[1] }
         for i in range((len(data_recv) - 2)/2):
             stats[data_recv[2+2*i]] = data_recv[3+2*i]
         self.send_stat(stat_name, stats)
+        return True
+
+
+class ClientThreadTcp(ClientThread):
+    def __init__(self, clientsocket, conf):
+        ClientThread.__init__(self, conf)
+        self.clientsocket = clientsocket
+
+    def run(self):
+        r = self.clientsocket.recv(2048)
+        response = self.check_and_send(r)
+        if not response:
+            self.clientsocket.send("KO")
+            self.clientsocket.close()
+            return
+        self.clientsocket.send("OK")
+        self.clientsocket.close()
+
+
+class ClientThreadUdp(ClientThread):
+    def __init__(self, data, conf):
+        ClientThread.__init__(self, conf)
+        self.data = data
+
+    def run(self):
+        return self.check_and_send(self.data)
+
+
+class TcpThread(threading.Thread):
+    def __init__(self, tcpsock):
+        threading.Thread.__init__(self)
+        self.tcpsock = tcpsock
+
+    def run(self):
+        while True:
+            (clientsocket, (ip, port)) = tcpsock.accept()
+            newthread = ClientThreadTcp(clientsocket, conf)
+            newthread.start()
+
+
+class UdpThread(threading.Thread):
+    def __init__(self, udpsock):
+        threading.Thread.__init__(self)
+        self.udpsock = udpsock
+    
+    def run(self):
+        while True:
+            d = self.udpsock.recvfrom(1024)
+            data = d[0]
+            newthread = ClientThreadUdp(data, conf)
+            newthread.start()
 
 
 class Conf:
@@ -97,12 +144,19 @@ class Conf:
 if __name__ == "__main__":
     conf = Conf("collectstats.cfg")
 
+    # Creer la socket udp
     udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udpsock.bind(("", int(conf.collectstats_port)))
-    
-    while True:
-        d = udpsock.recvfrom(1024)
-        data = d[0]
-        newthread = ClientThread(data, conf)
-        newthread.start()
+
+    # Creer la socket tcp
+    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcpsock.bind(("", int(conf.collectstats_port)))
+    num_connexion_max = 1000
+    tcpsock.listen(num_connexion_max)
+
+    # Lancer l'ecoute sur les deux sockets
+    newthread_tcp = TcpThread(tcpsock)
+    newthread_tcp.start()
+    newthread_udp = UdpThread(udpsock)
+    newthread_udp.start()
 

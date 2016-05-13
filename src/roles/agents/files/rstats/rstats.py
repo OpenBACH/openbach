@@ -66,25 +66,15 @@ class Rstats:
         if local:
             return []
         data = stat_name + " " + str(time) + " " + stats_to_send
-        print data
-        
-        # Creer la socket udp
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        except socket.error:
-            result = 'Failed to create socket'
-            print result
-            return result
- 
-        # Envoyer la commande
-        try:
-            s.sendto(data, (self.conf.host, int(self.conf.port)))
-        except socket.error, msg:
-            result = 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-            print result
-            return result
-        return []
 
+        if self.conf.mode == 'udp':
+            return send_udp(self.conf.host, self.conf.port, data)
+        elif self.conf.mode == 'tcp':
+            return send_tcp(self.conf.host, self.conf.port, data)
+        else:
+            error = "Mode not known"
+            print error
+            return error
 
     def reload_conf(self):
         self.__mutex.acquire()
@@ -98,12 +88,62 @@ class Rstats:
         self.__mutex.release()
 
 
+def send_tcp(host, port, data):
+    # Creer la socket tcp
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except socket.error:
+        error = 'Failed to create socket'
+        print error
+        return error
+
+    # Se connecter au serveur
+    try:
+        s.connect((host,int(port)))
+    except socket.error:
+        error = 'Failed to connect to the server'
+        print error
+        return error
+
+    # Envoyer les donnees
+    s.send(data)
+
+    # Traiter la reponse
+    r = s.recv(9999)
+    s.close()
+    if r != 'OK':
+        error = "Server notifies an error : " + r
+        print error
+        return error
+    return []
+
+
+def send_udp(host, port, data):
+    # Creer la socket udp
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    except socket.error:
+        error = 'Failed to create socket'
+        print error
+        return error
+ 
+    # Envoyer la commande
+    try:
+        s.sendto(data, (host, int(port)))
+    except socket.error, msg:
+        error = 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+        print error
+        return error
+    return []
+
+
 class Conf:
     def __init__(self, confpath="config.ini"):
         Config = ConfigParser.ConfigParser()
         Config.read(confpath)
         self.host = Config.get('collectstats', 'host')
         self.port = Config.get('collectstats', 'port')
+        self.mode = Config.get('collectstats', 'mode')
         self.prefix = Config.get('agent', 'prefix')
 
 

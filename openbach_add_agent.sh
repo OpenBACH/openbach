@@ -53,7 +53,7 @@ then
     exit
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
-echo "controller_ip: $controller_address" > configs/ips
+echo "controller_ip: $controller_address" >> configs/ips
 echo "collector_ip: $collector_address" >> configs/ips
 echo "ansible_ssh_user: $username" > configs/extra_vars
 echo "ansible_ssh_pass: $password" >> configs/extra_vars

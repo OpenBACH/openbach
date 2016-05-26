@@ -1,6 +1,8 @@
 #!/bin/bash
 
 read -p "Agent Ip Address : " agent_address
+read -p "Agent Name : " agent_name
+
 if [ -z $agent_address ]
 then
     echo "You should provide at least one IP address"
@@ -11,8 +13,10 @@ echo "agents:" > configs/ips
 while [ ! -z $agent_address ]
 do
     echo "$agent_address" >> configs/hosts_controller
-    echo "  - $agent_address" >> configs/ips
+    echo "  - ip: $agent_address" >> configs/ips
+	echo "    name: $agent_name" >> configs/agents_name
     read -p "Agent Ip Address : " agent_address
+    read -p "Agent Name : " agent_name
 done
 read -p "SSH Agents Username : " agent_username
 if [ -z $agent_username ]
@@ -53,7 +57,7 @@ then
     exit
 fi
 echo -e "[Controller]\n$controller_address\n" > configs/hosts
-echo "controller_ip: $controller_address" > configs/ips
+echo "controller_ip: $controller_address" >> configs/ips
 echo "collector_ip: $collector_address" >> configs/ips
 echo "ansible_ssh_user: $username" > configs/extra_vars
 echo "ansible_ssh_pass: $password" >> configs/extra_vars
@@ -64,5 +68,5 @@ echo "agent_password: $agent_password" >> configs/extra_vars
 
 ansible-playbook -i configs/hosts -e @configs/ips -e @configs/extra_vars install/agent.yml --tags add_agent
 
-rm configs/hosts_controller configs/hosts configs/ips configs/extra_vars
+#rm configs/hosts_controller configs/hosts configs/ips configs/extra_vars
 

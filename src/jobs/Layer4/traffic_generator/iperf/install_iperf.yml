@@ -19,6 +19,7 @@
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/iperf/ mode={{ item.mode }}
     with_items:
       - { file: 'iperf.help', mode: '0644' }
+    become: yes
 
   - name: Inform Agent that Iperf is installed
     copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644

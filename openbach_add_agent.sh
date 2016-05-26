@@ -14,7 +14,7 @@ while [ ! -z $agent_address ]
 do
     echo "$agent_address" >> configs/hosts_controller
     echo "  - ip: $agent_address" >> configs/ips
-	echo "    name: $agent_name" >> configs/agents_name
+	echo "    name: $agent_name" >> configs/ips
     read -p "Agent Ip Address : " agent_address
     read -p "Agent Name : " agent_name
 done

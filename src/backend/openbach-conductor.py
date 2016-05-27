@@ -6,534 +6,481 @@
 conductor.py - <+description+>
 """
 
+import os
 import socket
 import shlex
 import threading
-import os
 import subprocess
 import getpass
-from django.core.wsgi import get_wsgi_application
-os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
-application = get_wsgi_application()
-from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
-from django.core.exceptions import ObjectDoesNotExist
 import requests
 from datetime import datetime
 from django.utils import timezone
+from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.wsgi import get_wsgi_application
+os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
+application = get_wsgi_application()
+
+
+_SEVERITY_MAPPING = {
+    0: 3,   # Error
+    1: 4,   # Warning
+    2: 6,   # Informational
+    3: 7,   # Debug
+}
+
 
 def convert_severity(severity):
-    error = 0
-    warning = 1
-    informational = 2
-    debug = 3
-    if severity == error:
-        return 3
-    elif severity == warning:
-        return 4
-    elif severity == informational:
-        return 6
-    elif severity == debug:
-        return 7
-    else:
-        return 8
+    return _SEVERITY_MAPPING.get(severity, 8)
+
 
 class PlaybookBuilder():
     def __init__(self, path_to_build, path_src):
         self.path_to_build = path_to_build
         self.path_src = path_src
 
-    def build_start(self, playbook, job_name, instance_id, job_args, date,
-                    interval, extra_vars):
-        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
-                         "\njob_options: " + job_args + "\ndate_interval: ")
-        if date != None:
-            extra_vars.write("date " + date)
-        elif interval != None:
-            extra_vars.write("interval " + interval)
+    def _build_helper(self, instance_type, playbook, extra_vars, extra_vars_filename):
+        for key, value in extra_vars.items():
+            print(key, value, file=extra_vars_file)
+
+        if instance_type is not None:
+            print('    - include: {}{}_instance.yml'
+                      .format(self.path_src, instance_type),
+                  file=playbook_file)
+
+        return bool(instance_type)
+
+    def playbook_filename(self, filename):
+        return os.path.join(self.path_to_build, '{}.yml'.format(filename))
+
+    def build_start(self, job_name, instance_id, job_args, date, interval,
+                    playbook_handle, extra_vars_handle):
+        instance = 'start'
+        variables = {
+                'job_name:': job_name,
+                'id:': instance_id,
+                'job_options:': job_args,
+        }
+
+        if date is not None:
+            variables['date_interval: date'] = date
+        elif interval is not None:
+            variables['date_interval: interval'] = interval
         else:
-            return False
-        playbook.write("    - include: " + self.path_src +
-                       "start_instance.yml\n")
-        return True
+            instance = None
 
-    def build_status(self, playbook, job_name, instance_id, date, interval,
-                     stop, extra_vars):
-        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
-                         "\ndate_interval_stop: ")
-        if date != None:
-            extra_vars.write("date " + date )
-        elif interval != None:
-            extra_vars.write("interval " + interval)
-        elif stop != None:
-            extra_vars.write("stop " + stop)
+        return self._build_helper(instance, playbook_handle,
+                                  variables, extra_vars_handle)
+
+    def build_status(self, job_name, instance_id, date, interval, stop,
+                     playbook_handle, extra_vars_handle):
+        instance = 'status'
+        variables = {
+                'job_name:': job_name,
+                'id:': instance_id,
+        }
+
+        if date is not None:
+            variables['date_interval_stop: date'] = date
+        elif interval is not None:
+            variables['date_interval_stop: interval'] = interval
+        elif stop is not None:
+            variables['date_interval_stop: stop'] = stop
         else:
-            return False
-        playbook.write("\n\n    - include: " + self.path_src +
-                       "status_instance.yml\n")
-        return True
+            instance = None
 
-    def build_restart(self, playbook, job_name, instance_id, job_args, date,
-                      interval, extra_vars):
-        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
-                         "\njob_options: " + job_args + "\ndate_interval: ")
-        if date != None:
-            extra_vars.write("date " + date)
-        elif interval != None:
-            extra_vars.write("interval " + interval)
+        return self._build_helper(instance, playbook_handle,
+                                  variables, extra_vars_handle)
+
+    def build_restart(self, job_name, instance_id, job_args, date, interval,
+                      playbook_handle, extra_vars_handle):
+        instance = 'restart'
+        variables = {
+                'job_name:': job_name,
+                'id:': instance_id,
+                'job_options:': job_args,
+        }
+        if date is not None:
+            variables['date_interval: date'] = date
+        elif interval is not None:
+            variables['date_interval: interval'] = interval
         else:
-            return False
-        playbook.write("\n\n    - include: " + self.path_src +
-                       "restart_instance.yml\n")
-        return True
+            instance = None
 
-    def build_stop(self, playbook, job_name, instance_id, date, extra_vars):
-        extra_vars.write("\njob_name: " + job_name + "\nid: " + instance_id +
-                         "\ndate: date " + date)
-        playbook.write("\n\n    - include: " + self.path_src +
-                       "stop_instance.yml\n")
-        return True
+        return self._build_helper(instance, playbook_handle,
+                                  variables, extra_vars_handle)
 
-    def build_status_agent(self, playbook):
-        playbook.write("    - name: Get status of openbach-agent\n      shell:"
-                       + " /etc/init.d/openbach-agent status\n")
+    def build_stop(self, job_name, instance_id, date, playbook, extra_vars):
+        variables = {
+                'job_name:': job_name,
+                'id:': instance_id,
+                'date:': date,
+        }
+        return self._build_helper('stop', playbook, variables, extra_vars)
+
+    def build_status_agent(self, playbook_file):
+        print('    - name: Get status of openbach-agent', file=playbook_file)
+        print('    - shell: /etc/init.d/openbach-agent status', file=playbook_file)
         return True
     
-    def build_ls_jobs(self, playbook):
-        playbook.write("    - name: Get the list of the installed jobs\n   " +
-                       "   shell: /opt/openbach-agent/openbach-baton ls_jobs\n")
+    def build_ls_jobs(self, playbook_file):
+        print('    - name: Get the list of the installed jobs', file=playbook_file)
+        print('      shell: /opt/openbach-agent/openbach-baton ls_jobs', file=playbook_file)
         return True
     
-    def build_enable_log(self, playbook, syslogseverity, syslogseverity_local,
-                         job_path):
+    def build_enable_log(self, syslogseverity, syslogseverity_local, job_path,
+            playbook_file):
         if syslogseverity != 8 or syslogseverity_local != 8:
-            playbook.write("    - name: Push new rsyslog conf files\n      template:" +
-                           " src=" + job_path + "/templates/{{ item.src }} " +
-                           "dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}{{" +
-                           " item.dst }}.locked owner=root group=root\n" +
-                           "      with_items:\n   ")
-        if syslogseverity != 8:
-            playbook.write("     - { src: 'job.j2', dst: '.conf' }\n   ")
-        if syslogseverity_local != 8:
-            playbook.write("     - { src: 'job_local.j2', dst: '_local.conf' }")
-        if syslogseverity != 8 or syslogseverity_local != 8:
-            playbook.write("\n      become: yes\n\n")
+            src_file = 'src={}/template/{{{{ item.src }}}}'.format(job_path)
+            print('    - name: Push new rsyslog conf files', file=playbook_file)
+            print('      template:', src_file,
+                  'dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}'
+                  '{{ item.dst }}.locked owner=root group=root',
+                  file=playbook_file)
+            print('      with_items:', file=playbook_file)
+            if syslogseverity != 8:
+                print("         - { src: 'job.j2', dst: '.conf' }", file=playbook_file)
+            if syslogseverity_local != 8:
+                print("         - { src: 'job_local.j2', dst: '_local.conf' }", file=playbook_file)
+            print(file=playbook_file)
+            print('      become: yes', file=playbook_file)
         return True
     
-    def build_push_file(self, playbook, local_path, remote_path):
-        playbook.write("    - name: Push file\n      copy: src=" + local_path
-                       + " dest=" + remote_path + "\n      become: yes\n\n")
+    def build_push_file(self, local_path, remote_path, playbook_file):
+        print('    - name: Push file', file=playbook_file)
+        print('      copy: src={} dest={}'.format(local_path, remote_path), file=playbook_file)
+        print('      become: yes', file=playbook_file)
         return True
+
+
+class BadRequest(Exception):
+    """Custom exception raised when parsing of a request failed"""
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
 
 class ClientThread(threading.Thread):
+    REQUESTS_CHECKER = {
+            'add_agent': (2, 'the ip address of the agent'),
+            'del_agent': (2, 'the ip address of the agent'),
+            'update_agent': (2, 'the ip address of the agent'),
+            'update_jobs': (2, 'the ip address of the agent'),
+            'install_job':
+                (3, 'the ip address of the agent and the name of the job'),
+            'uninstall_job':
+                (3, 'the ip address of the agent and the name of the job'),
+            'start_instance': (4, 'the id of the instance'),
+            'restart_instance': (4, 'the id of the instance'),
+            'status_instance': (4, 'the id of the instance'),
+            'stop_instance': (3, 'the id of the instance'),
+            'update_job_stat_policy': (3, 'the id of the instance'),
+            'status_agents': (2, 'at least one ip address of an agent'),
+            'status_jobs': (2, 'at least one ip address of an agent'),
+            'update_instance': (2, 'the id of the instance'),
+            'update_job_log_severity':
+                (5, 'the instance id of the log jobs, the log '
+                'severity and the local log severity to set'),
+            'push_file':
+                (4, 'the local path of the file you want to send, '
+                'the remote path where you want to put the file and '
+                'the ip address of the agent'),
+    }
+
+    NO_UPPER_LENGTH_CHECK = {
+            'status_agents', 'status_jobs'
+    }
+
+    NO_DATE_REQUESTS = {
+            'add_agent', 'del_agent', 'install_job',
+            'uninstall_job', 'status_agents', 'update_agent',
+            'status_jobs', 'update_jobs', 'update_instance',
+            'push_file',
+    }
+    ONLY_DATE_REQUESTS = {
+            'stop_instance', 'update_job_log_severity', 'update_job_stat_policy',
+    }
+    DATE_INTERVAL_REQUESTS = {
+            'start_instance', 'restart_instance', 'status_instance',
+    }
+
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
         self.clientsocket = clientsocket
-        self.playbook_builder = PlaybookBuilder("/tmp/",
-                                                "/opt/openbach/roles/backend/tasks/")
+        self.playbook_builder = PlaybookBuilder('/tmp/', '/opt/openbach/roles/backend/tasks/')
     
-    def launch_playbook(self, cmd_ansible):
-        p = subprocess.Popen(cmd_ansible, shell=True)
-        p.wait()
-        if p.returncode != 0:
-            self.clientsocket.send('KO')
-            self.clientsocket.close()
-            return False
-        return True
+    def launch_playbook(self, cmd_ansible, send_status=True):
+        p = subprocess.run(cmd_ansible, shell=True)
+        status = not p.returncode
+        if send_status:
+            self.clientsocket.send(b'OK' if status else b'KO')
+        return status
         
-
     def check_date_interval(self, data_recv):
-        request_type = data_recv[0]
-        no_date = ['add_agent', 'del_agent', 'install_job', 'uninstall_job',
-                   'status_agents', 'update_agent', 'status_jobs',
-                   'update_jobs', 'update_instance', 'push_file']
-        only_date = ['stop_instance', 'update_job_log_severity',
-                     'update_job_stat_policy']
-        date_interval = ['start_instance', 'restart_instance', 'status_instance']
-        if request_type in no_date:
-            pass
-        elif request_type in only_date:
-            if len(data_recv) < 2:
-                error_msg = "KO Message not formed well. You should provide a "
-                error_msg += "date when to execute the order"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return False
-        elif request_type in date_interval:
-            if len(data_recv) < 3:
-                error_msg = "KO Message not formed well. You should provide a "
-                error_msg += "date or an interval in order to execute the order"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return False
-        else:
-            error_msg = "KO Message not formed well. Request not knwown"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            return False
-        return True
+        try:
+            request_type, *date_params = data_recv
+        except ValueError:
+            raise BadRequest('KO Message not formed well. '
+                             'You should provide a request')
 
-    def parse_and_check(self, r):
-        data_recv = shlex.split(r)
-        if len(data_recv) < 1:
-            error_msg = "KO Message not formed well. You should provide a "
-            error_msg += "request"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            return []
-        if not self.check_date_interval(data_recv):
-            return []
-        request_type = data_recv[0]
-        if request_type == 'add_agent' or request_type == 'del_agent' or request_type == 'update_agent' or request_type == 'update_jobs':
-            if len(data_recv) < 2:
-                error_msg = "KO Message not formed well. You should provide the"
-                error_msg += " ip address of the agent"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 2:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'install_job' or request_type == 'uninstall_job':
-            if len(data_recv) < 3:
-                error_msg = "KO Message not formed well. You should provide "
-                error_msg += "the ip address of the agent and the name of the job"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 3:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'start_instance' or request_type == 'restart_instance' or request_type == 'status_instance':
-            if len(data_recv) < 4:
-                error_msg = "KO Message not formed well. You should provide "
-                error_msg += "the id of the instance"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 4:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'stop_instance' or request_type == 'update_job_stat_policy':
-            if len(data_recv) < 3:
-                error_msg = "KO Message not formed well. You should provide "
-                error_msg += "the id of the instance"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 3:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'status_agents' or request_type == 'status_jobs':
-            if len(data_recv) < 2:
-                error_msg = "KO Message not formed well. You should provide "
-                error_msg += "at least one ip address of an agent"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'update_instance':
-            if len(data_recv) < 2:
-                error_msg = "KO Message not formed well. You should provide the"
-                error_msg += " id of the instance"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 2:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'update_job_log_severity':
-            if len(data_recv) < 5:
-                error_msg = "KO Message not formed well. You should provide the"
-                error_msg += " instance id of the logs Job, the"
-                error_msg += " log severity and the local log severity to set"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-            if len(data_recv) > 5:
-                error_msg = "KO Message not formed well. Too much arguments"
-                error_msg += " given"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        elif request_type == 'push_file':
-            if len(data_recv) != 4:
-                error_msg = "KO Message not formed well. You should provide the"
-                error_msg += " local_path of the file you want to send, the"
-                error_msg += " remote_path where you want to put the file and "
-                error_msg += " the ip address of the Agent"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return []
-        else:
-            error_msg = "KO Request type not defined"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            return []
-        return data_recv
+        for length, commands in enumerate((
+                self.NO_DATE_REQUESTS,
+                self.ONLY_DATE_REQUESTS,
+                self.DATE_INTERVAL_REQUESTS)):
+            if request_type in commands:
+                if len(date_params) == length:
+                    return
+                raise BadRequest('KO Message not formed well. '
+                        'Expected {} date parameters to execute the order'
+                        ' but got {}.'.format(length, len(date_params)))
+
+        raise BadRequest('KO Message not formed well. Request not knwown.')
+
+    def parse_and_check(self, message):
+        data_received = shlex.split(message)
+        self.check_date_interval(data_received):
+
+        request_type = data_received[0]
+        try:
+            length, error_message = self.REQUESTS_CHECKER[request_type]
+        except KeyError:
+            raise BadRequest('KO Request type not defined')
+
+        actual_length = len(data_received)
+        if actual_length < length:
+            raise BadRequest('KO Message not formed well. You should '
+                    'provide {}'.format(error_message))
+
+        if (actual_length > length and
+                request_type not in self.NO_UPPER_LENGTH_CHECK):
+            raise BadRequest(
+                    'KO Message not formed well. Too much arguments given')
+
+        return data_received
             
     
     def run(self): 
-        r = self.clientsocket.recv(2048)
-
-        data_recv = self.parse_and_check(r)
-        if len(data_recv) == 0:
+        try:
+            data = self.parse_and_check(self.clientsocket.recv(2048))
+        except BadRequest as error:
+            self.clientsocket.send(error.reason.encode())
+            self.clientsocket.close()
             return
-        request_type = data_recv[0]
+
+        request_type = data[0]
         if request_type == 'add_agent':
-            agent_ip = data_recv[1]
-            agent = Agent.objects.get(pk=agent_ip)
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            agents = open('/tmp/openbach_agents', 'w')
-            agents.write("agents:\n  - " + agent.address)
-            agents.close()
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            extra_vars.write("local_username: " + getpass.getuser() +
-                             "\nagent_name: " + agent.name)
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/tmp/openbach_agents -e "
-            cmd_ansible += "@/opt/openbach/configs/ips -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e @/opt/openbach/configs"
-            cmd_ansible += "/all -e ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password
-            cmd_ansible += " /opt/openbach/agent.yml --tags install"
-            if not self.launch_playbook(cmd_ansible):
-                return
+            agent = Agent.objects.get(pk=data[1])
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            with open('/tmp/openbach_agents', 'w') as agents:
+                print('agents:', file=agents)
+                print('  -', agent.address, file=agents)
+            with open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('local_username:', getpass.getuser(), file=extra_vars)
+                print('agent_name:', agent.name)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_agents -e '
+                '@/opt/openbach/configs/ips -e '
+                '@/tmp/openbach_extra_vars -e @/opt/openbach/configs'
+                '/all -e ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password}'
+                ' /opt/openbach/agent.yml --tags install').format(agent=agent)
         elif request_type == 'del_agent':
-            agent_ip = data_recv[1]
-            agent = Agent.objects.get(pk=agent_ip)
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            agents = open('/tmp/openbach_agents', 'w')
-            agents.write("agents:\n  - " + agent.address)
-            agents.close()
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            extra_vars.write("local_username: " + getpass.getuser())
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/opt/openbach/configs/all -e "
-            cmd_ansible += "@/tmp/openbach_agents -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e " 
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password
-            cmd_ansible += " /opt/openbach/agent.yml --tags uninstall"
-            if not self.launch_playbook(cmd_ansible):
-                return
+            agent = Agent.objects.get(pk=data[1])
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            with open('/tmp/openbach_agents', 'w') as agents:
+                print('agents:', file=agents)
+                print('  -', agent.address, file=agents)
+            with open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('local_username:', getpass.getuser(), file=extra_vars)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/opt/openbach/configs/all -e '
+                '@/tmp/openbach_agents -e '
+                '@/tmp/openbach_extra_vars -e ' 
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password}'
+                ' /opt/openbach/agent.yml --tags uninstall'
+            ).format(agent=agent)
         elif request_type == 'install_job':
-            agent_ip = data_recv[1]
-            job_name = data_recv[2]
-            agent = Agent.objects.get(pk=agent_ip)
-            job = Job.objects.get(pk=job_name)
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += job.path + "/install_" + job.name + ".yml"
-            if not self.launch_playbook(cmd_ansible):
-                return
+            agent = Agent.objects.get(pk=data[1])
+            job = Job.objects.get(pk=data[2])
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} '
+                '{job.path}/install_{job.name}.yml'
+            ).format(agent=agent, job=job)
         elif request_type == 'uninstall_job':
-            agent_ip = data_recv[1]
-            job_name = data_recv[2]
-            agent = Agent.objects.get(pk=agent_ip)
-            job = Job.objects.get(pk=job_name)
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += job.path + "/uninstall_" + job.name + ".yml"
-            if not self.launch_playbook(cmd_ansible):
-                return
+            agent = Agent.objects.get(pk=data[1])
+            job = Job.objects.get(pk=data[2])
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} '
+                '{job.path}/uninstall_{job.name}.yml'
+            ).format(agent=agent, job=job)
         elif request_type == 'start_instance':
-            if data_recv[1] == 'date':
-                date = data_recv[2]
-                interval = None
-            elif data_recv[1] == 'interval':
-                date = None
-                interval = data_recv[2]
-            instance_id = data_recv[3]
-            instance = Instance.objects.get(pk=instance_id)
+            watch_type = data[1]
+            date = data[2] if watch_type == 'date' else None
+            interval = data[2] if watch_type == 'interval' else None
+            instance = Instance.objects.get(pk=data[3])
             job = instance.job.job
             agent = instance.job.agent
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            playbook_filename = self.playbook_builder.path_to_build + "start_"
-            playbook_filename += job.name + ".yml"
-            playbook = open(playbook_filename, 'w')
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-            self.playbook_builder.build_start(playbook, job.name, instance_id,
-                                              instance.args, date, interval,
-                                              extra_vars)
-            playbook.close()
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += playbook_filename
-            if not self.launch_playbook(cmd_ansible):
-                return
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            playbook_filename = self.playbook_builder.playbook_filename(
+                    'start_{}'.format(job.name))
+            with open(playbook_filename, 'w') as playbook,
+                    open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('---', file=playbook)
+                print(file=playbook)
+                print('- hosts: Agents', file=playbook)
+                print('  tasks:', file=playbook)
+                self.playbook_builder.build_start(
+                        job.name, instance.id,
+                        instance.args, date, interval,
+                        playbook, extra_vars)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+            ).format(playbook_filename, agent=agent)
         elif request_type == 'stop_instance':
-            date = data_recv[1]
-            instance_id = data_recv[2]
-            instance = Instance.objects.get(pk=instance_id)
+            date = data[1]
+            instance = Instance.objects.get(pk=data[2])
             job = instance.job.job
             agent = instance.job.agent
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            playbook_filename = self.playbook_builder.path_to_build + "stop_"
-            playbook_filename += job.name + ".yml"
-            playbook = open(playbook_filename, 'w')
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-            self.playbook_builder.build_stop(playbook, job.name, instance_id,
-                                             date, extra_vars)
-            playbook.close()
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += playbook_filename
-            if not self.launch_playbook(cmd_ansible):
-                return
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            playbook_filename = self.playbook_builder.playbook_filename(
+                    'stop_{}'.format(job.name))
+            with open(playbook_filename, 'w') as playbook,
+                    open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('---', file=playbook)
+                print(file=playbook)
+                print('- hosts: Agents', file=playbook)
+                print('  tasks:', file=playbook)
+                self.playbook_builder.build_stop(
+                        job.name, instance.id, date,
+                        playbook, extra_vars)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+            ).format(playbook_filename, agent=agent)
         elif request_type == 'restart_instance':
-            if data_recv[1] == 'date':
-                date = data_recv[2]
-                interval = None
-            elif data_recv[1] == 'interval':
-                date = None
-                interval = data_recv[2]
-            instance_id = data_recv[3]
-            instance = Instance.objects.get(pk=instance_id)
+            watch_type = data[1]
+            date = data[2] if watch_type == 'date' else None
+            interval = data[2] if watch_type == 'interval' else None
+            instance = Instance.objects.get(pk=data[3])
             job = instance.job.job
             agent = instance.job.agent
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            playbook_filename = self.playbook_builder.path_to_build + "restart_"
-            playbook_filename += job.name + ".yml"
-            playbook = open(playbook_filename, 'w')
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-            self.playbook_builder.build_restart(playbook, job.name, instance_id,
-                                                instance.args, date, interval,
-                                                extra_vars)
-            playbook.close()
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += playbook_filename
-            if not self.launch_playbook(cmd_ansible):
-                return
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            playbook_filename = self.playbook_builder.playbook_filename(
+                    'restart_{}'.format(job.name))
+            with open(playbook_filename, 'w') as playbook,
+                    open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('---', file=playbook)
+                print(file=playbook)
+                print('- hosts: Agents', file=playbook)
+                print('  tasks:', file=playbook)
+                self.playbook_builder.build_restart(
+                        job.name, instance.id,
+                        instance.args, date, interval,
+                        playbook, extra_vars)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+            ).format(playbook_filename, agent=agent)
         elif request_type == 'status_instance':
-            watch_type = data_recv[1]
-            if watch_type == 'date':
-                date = data_recv[2]
-                interval = None
-                stop = None
-            elif watch_type == 'interval':
-                date = None
-                interval = data_recv[2]
-                stop = None
-            elif watch_type == 'stop':
-                date = None
-                interval = None
-                stop = data_recv[2]
-            instance_id = data_recv[3]
-            watch = Watch.objects.get(pk=instance_id)
+            watch_type = data[1]
+            date = data[2] if watch_type == 'date' else None
+            interval = data[2] if watch_type == 'interval' else None
+            stop = data[2] if watch_type == 'stop' else None
+            watch = Watch.objects.get(pk=data[3])
             job = watch.job.job
             agent = watch.job.agent
-            hosts = open('/tmp/openbach_hosts', 'w')
-            hosts.write("[Agents]\n" + agent.address + "\n")
-            hosts.close()
-            playbook_filename = self.playbook_builder.path_to_build + "status_"
-            playbook_filename += job.name + ".yml"
-            playbook = open(playbook_filename, 'w')
-            extra_vars = open('/tmp/openbach_extra_vars', 'w')
-            playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-            self.playbook_builder.build_status(playbook, job.name, instance_id,
-                                               date, interval, stop, extra_vars)
-            playbook.close()
-            extra_vars.close()
-            cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e "
-            cmd_ansible += "@/tmp/openbach_extra_vars -e "
-            cmd_ansible += "ansible_ssh_user=" + agent.username + " -e "
-            cmd_ansible += "ansible_sudo_pass=" + agent.password + " -e "
-            cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-            cmd_ansible += playbook_filename
-            if not self.launch_playbook(cmd_ansible):
-                return
+            with open('/tmp/openbach_hosts', 'w') as hosts:
+                print('[Agents]', file=hosts)
+                print(agent.address, file=hosts)
+            playbook_filename = self.playbook_builder.playbook_filename(
+                    'status_{}'.format(job.name))
+            with open(playbook_filename, 'w') as playbook,
+                    open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+                print('---', file=playbook)
+                print(file=playbook)
+                print('- hosts: Agents', file=playbook)
+                print('  tasks:', file=playbook)
+                self.playbook_builder.build_status(
+                        job.name, instance.id,
+                        date, interval, stop,
+                        playbook, extra_vars)
+            cmd_ansible = (
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+            ).format(playbook_filename, agent=agent)
         elif request_type == 'status_agents':
-            agents_ip = data_recv[1:]
-            agents = []
             error_msg = ''
-            for agent_ip in agents_ip:
+            for agent_ip in data[1:]:
                 try:
-                    agents.append(Agent.objects.get(pk=agent_ip))
+                    agent = Agent.objects.get(pk=agent_ip)
                 except ObjectDoesNotExist:
                     error_msg += agent_ip + ' '
-            for agent in agents:
-                hosts = open('/tmp/openbach_hosts', 'w')
-                hosts.write("[Agents]\n" + agent.address + "\n")
-                hosts.close()
-                playbook_filename = self.playbook_builder.path_to_build
-                playbook_filename += "status_agent.yml"
+                    continue
+                with open('/tmp/openbach_hosts', 'w') as hosts:
+                    print('[Agents]', file=hosts)
+                    print(agent.address, file=hosts)
+                playbook_filename =
+                    self.playbook_builder.playbook_filename('status_agent')
                 try:
-                    subprocess.check_output(["ping", "-c1", "-w2",
-                                             agent.address])
-                    returncode = 0
-                except subprocess.CalledProcessError, e:
-                    returncode = e.returncode
-                if returncode != 0:
+                    subprocess.check_output(
+                            ['ping', '-c1', '-w2', agent.address])
+                except subprocess.CalledProcessError:
                     agent.reachable = False
                     agent.update_reachable = timezone.now()
                     agent.status = "Agent unreachable"
                     agent.update_status= timezone.now()
                     agent.save()
                     continue
-                playbook = open(playbook_filename, 'w')
-                playbook.write("---\n\n- hosts: Agents\n\n")
-                playbook.close()
-                cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
-                cmd_ansible += "le_ssh_user=" + agent.username + " -e "
-                cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-                cmd_ansible += playbook_filename
-                p = subprocess.Popen(cmd_ansible, shell=True)
-                p.wait()
-                if p.returncode != 0:
+                with open(playbook_filename, 'w') as playbook:
+                    print('---', file=playbook)
+                    print(file=playbook)
+                    print('- hosts: Agents', file=playbook)
+                cmd_ansible = (
+                    'ansible-playbook -i /tmp/openbach_hosts -e ansib'
+                    'le_ssh_user={agent.username} -e '
+                    'ansible_ssh_pass={agent.password} {}'
+                ).format(playbook_filename, agent=agent)
+                if not self.launch_playbook(cmd_ansible, False):
                     agent.reachable = False
                     agent.update_reachable = timezone.now()
                     agent.status = "Agent reachable but connection impossible"
@@ -543,22 +490,22 @@ class ClientThread(threading.Thread):
                 agent.reachable = True
                 agent.update_reachable = timezone.now()
                 agent.save()
-                playbook = open(playbook_filename, 'w')
-                playbook.write("---\n\n- hosts: Agents\n  tasks:\n")
-                self.playbook_builder.build_status_agent(playbook) 
-                playbook.close()
-                cmd_ansible = "ansible-playbook -i /tmp/openbach_hosts -e ansib"
-                cmd_ansible += "le_ssh_user=" + agent.username + " -e "
-                cmd_ansible += "ansible_ssh_pass=" + agent.password + " "
-                cmd_ansible += playbook_filename
-                p = subprocess.Popen(cmd_ansible, shell=True)
-                p.wait()
-                if p.returncode != 0:
-                    continue
-            if error_msg != '':
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                return
+                with open(playbook_filename, 'w') as playbook:
+                    print('---', file=playbook)
+                    print(file=playbook)
+                    print('- hosts: Agents', file=playbook)
+                    print('  tasks:', file=playbook)
+                    self.playbook_builder.build_status_agent(playbook) 
+                cmd_ansible = (
+                    'ansible-playbook -i /tmp/openbach_hosts -e ansib'
+                    'le_ssh_user={agent.username} -e '
+                    'ansible_ssh_pass={agent.password} {}'
+                ).format(playbook_filename, agent=agent)
+                self.launch_playbook(cmd_ansible, False)
+            if error_msg:
+                self.clientsocket.send(error_msg.encode())
+            self.clientsocket.close()
+            return
         elif request_type == 'update_agent':
             agent_ip = data_recv[1]
             agent = Agent.objects.get(pk=agent_ip)
@@ -813,20 +760,19 @@ class ClientThread(threading.Thread):
             if not self.launch_playbook(cmd_ansible):
                 return
  
-        self.clientsocket.send('OK')
+        self.launch_playbook(cmd_ansible)
         self.clientsocket.close()
     
     
-if __name__ == "__main__":
+if __name__ == '__main__':
     # Ouverture de la socket d'ecoute
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcpsock.bind(("",1113))
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp_socket.bind(('', 1113))
     
+    num_connexion_max = 10
+    tcp_socket.listen(num_connexion_max)
     while True:
-        num_connexion_max = 10
-        tcpsock.listen(num_connexion_max)
-        (clientsocket, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(clientsocket)
-        newthread.start()
+        client_socket, _ = tcp_socket.accept()
+        ClientThread(client_socket).start()
 

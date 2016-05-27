@@ -6,57 +6,54 @@
 start_instance.py - <+description+>
 """
 
-from frontend import start_instance, date_to_timestamp, status_instance
 import argparse
-import pprint
+from frontend import start_instance, status_instance, pretty_print
 
 
-def main(agent_ip, job_name, arguments, date, interval, status):
-    r = start_instance(agent_ip, job_name, arguments, date, interval)
-    print "Start Instance:"
-    print r
-    pprint.pprint(r.json())
-    if status != None:
-        instance_id = int(r.json()['instance_id'])
-        interval = status
-        r = status_instance(instance_id, interval=interval)
-        print "Start watch of the status:"
-        print r
-        pprint.pprint(r.json())
-        
+class DateMetavarHelper:
+    def __init__(self):
+        self.first = False
+
+    def __repr__(self):
+        self.first = not self.first
+        return 'DATE' if self.first else 'TIME'
+
+
+def main(agent_ip, job_name, arguments, date, interval, status=None):
+    response = start_instance(agent_ip, job_name, arguments, date, interval)
+    print('Start Instance:')
+    print(response)
+    infos = response.json()
+    pprint.pprint(infos)
+
+    if status is not None:
+        instance_id = int(infos['instance_id'])
+        print('Start watch of the status:')
+        pretty_print(status_instance)(instance_id, interval=status)
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - Start and Status Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
-                        help='IP address of the Agent')
-    parser.add_argument('job_name', metavar='job_name', type=str, nargs=1,
-                        help='Name of the Job')
-    parser.add_argument('-a', '--arguments', type=str, default=None,
-                        nargs ='+', help='Arguments of the Instance')
-    parser.add_argument('-d', '--date', type=str, default=None,
+    parser.add_argument('agent_ip', help='IP address of the Agent')
+    parser.add_argument('job_name', help='Name of the Job')
+    parser.add_argument('-a', '--arguments', nargs='+', help='Arguments of the Instance')
+    parser.add_argument('-s', '--status', help='Start a watch of the status with this interval')
+    # Not sure here, you may want required=False
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
-    parser.add_argument('-i', '--interval', type=str, default=None,
-                        help='Interval of the execution')
-    parser.add_argument('-s', '--status', type=str, default=None,
-                        help='Start a watch of the status with this interval')
+    group.add_argument('-i', '--interval', help='Interval of the execution')
     
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip[0]
-    job_name = args.job_name[0]
+    agent_ip = args.agent_ip
+    job_name = args.job_name
     arguments = args.arguments
-    if args.date == None:
-        date = None
-    else:
-        date = int(date_to_timestamp(args.date[0] + " " + args.date[1])*1000)
+    date = args.date
     interval = args.interval
     status = args.status
-    if (date != None) and (interval != None):
-        print("You can only provide a date OR an interval, but not both")
-        exit(1)
 
     main(agent_ip, job_name, arguments, date, interval, status)
 

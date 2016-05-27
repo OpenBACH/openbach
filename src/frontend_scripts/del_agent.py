@@ -6,27 +6,19 @@
 del_agent.py - <+description+>
 """
 
-from frontend import del_agent
 import argparse
-import pprint
-
-
-def main(agent_ip):
-    r = del_agent(agent_ip)
-    print r
-    pprint.pprint(r.json())
+from frontend import del_agent, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - Delete Agent',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
-                        help='IP Address of the Agent')
+    parser.add_argument('agent_ip', help='IP Address of the Agent')
     
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip[0]
+    agent_ip = args.agent_ip
 
-    main(agent_ip)
+    pretty_print(del_agent)(agent_ip)
 

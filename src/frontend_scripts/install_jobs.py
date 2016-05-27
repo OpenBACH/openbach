@@ -6,34 +6,39 @@
 install_jobs.py - <+description+>
 """
 
-from frontend import install_jobs
 import argparse
-import pprint
-
-
-def main(jobs_name, agents_ip):
-    r = install_jobs(jobs_name, agents_ip)
-    print r
-    pprint.pprint(r.json())
+import itertools
+from frontend import install_jobs, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_name', metavar='job_name', type=str, nargs='+',
-                        help='Name of the Jobs to install')
-    parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
-                        help='IP address of the agent')
+    parser = argparse.ArgumentParser(description='OpenBach - Install Job')
+    parser.add_argument('-j', '--job_name', metavar='NAME', action='append',
+            nargs='+', required=True, help='Name of the Jobs to install on '
+            'the next agent. May be specified several times to install '
+            'different sets of jobs on different agents.')
+    parser.add_argument('-a', '--agent_ip', metavar='ADDRESS', action='append',
+            required=True, help='IP address of the agent where the next set '
+            'of jobs should be installed. May be specified several times to '
+            'install different sets of jobs on different agents.')
     
     # get args
     args = parser.parse_args()
-    jobs_name = args.job_name
-    agent_ip = args.agent_ip[0]
-    # TODO On devra plus tard pouvoir demander l'install de plusieurs jobs sur
-    # plusieurs agents
-    agents_ip = list()
-    agents_ip.append(agent_ip)
+    jobs_names = args.job_name
+    agents_ips = args.agent_ip
 
-    main(jobs_name, agents_ip)
+    # If user specified more set of jobs than agent ips
+    # we can't figure it out
+    if len(jobs_names) != len(agents_ips):
+        parser.error('-j and -a arguments should appear by pairs')
+
+    # Backward compatibility: change the backend behaviour
+    # before removing the next 4 lines
+    #  -> flatten jobs_names so we have a list instead of a list of lists
+    jobs_names = list(itertools.chain.from_iterable(jobs_names))
+    #  -> use only the first agent ip
+    agents_ips = [agents_ips[0]]
+
+    pretty_print(install_jobs)(jobs_name, agents_ip)
 

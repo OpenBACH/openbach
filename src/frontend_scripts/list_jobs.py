@@ -6,24 +6,16 @@
 list_jobs.py - <+description+>
 """
 
-from frontend import list_jobs
 import argparse
-import pprint
-
-
-def main():
-    r = list_jobs()
-    print r
-    pprint.pprint(r.json())
+from frontend import list_jobs, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - List Jobs',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     # get args
     args = parser.parse_args()
 
-    main()
-
+    pretty_print(list_jobs)()

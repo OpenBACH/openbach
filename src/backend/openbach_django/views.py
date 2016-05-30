@@ -23,7 +23,8 @@ def check_post_data(f):
         except KeyError:
             response = {'msg': '"data" payload missing'}
             return JsonResponse(data=response, status=400)
-        return f(json.loads(data))
+        response, status = f(json.loads(data))
+        return JsonResponse(data=response, status=status)
     return wrapper
 
 
@@ -42,8 +43,7 @@ def add_agent(data):
         agent_data = {key: data[key] for key in ('address', 'username', 'collector', 'name')}
         password = data['password']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     agent = Agent(**agent_data)
     agent.set_password(password)
@@ -54,19 +54,17 @@ def add_agent(data):
     try:
         agent.save()
     except IntegrityError:
-        response_data = {'msg': 'Name of the Agent already used'}
-        return JsonResponse(data=response_data, status=409)
+        return {'msg': 'Name of the Agent already used'}, 409
 
     result = conductor_execute('add_agent {}'.format(agent.address))
     response = {'msg': result}
-    status = 200
     if result.startswith('KO'):
         agent.delete()
-        status = 404
+        return response, 404
     agent.status = 'Available'
     agent.update_status = timezone.now()
     agent.save()
-    return JsonResponse(data=response, status=status)
+    return response, 200
 
 
 @check_post_data
@@ -74,25 +72,22 @@ def del_agent(data):
     try:
         ip_address = data['address']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     try:
         agent = Agent.objects.get(pk=ip_address)
     except ObjectDoesNotExist:
-        response_data = {
+        return {
                 'msg': 'This Agent isn\'t in the database',
                 'address': ip_address,
-        }
-        return JsonResponse(data=response_data, status=404)
+        }, 404
 
     result = conductor_execute('del_agent {}'.format(agent.address))
     response = {'msg': result}
-    status = 404
     if result == 'OK':
         agent.delete()
-        status = 200
-    return JsonResponse(data=response, status=status)
+        return response, 200
+    return response, 404
 
 
 @check_post_data
@@ -121,7 +116,7 @@ def list_agents(data):
             'name': agent.name,
         } for agent in agents]
 
-    return JsonResponse(data=response, status=200)
+    return response, 200
 
 
 @check_post_data
@@ -130,8 +125,7 @@ def add_job(data):
         job_name = data['name']
         job_path = data['path']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     config_prefix = os.path.join(job_path, 'files', job_name)
     config = ConfigParser.ConfigParser()
@@ -152,7 +146,7 @@ def add_job(data):
         help=help
     ).save()
 
-    return JsonResponse(data={'msg', 'OK'}, status=200)
+    return {'msg': 'OK'}, 200
 
 
 @check_post_data
@@ -160,20 +154,18 @@ def del_job(data):
     try:
         job_name = data['name']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     try:
         job = Job.objects.get(pk=job_name)
     except ObjectDoesNotExist:
-        response_data = {
+        return {
                 'msg': 'This Job isn\'t in the database',
                 'job_name': job_name,
-        }
-        return JsonResponse(data=response_data, status=404)
+        }, 404
 
     job.delete()
-    return JsonResponse(data={'msg': 'OK'}, status=200)
+    return {'msg': 'OK'}, 200
 
 
 def list_jobs_url(request):
@@ -208,20 +200,17 @@ def get_job_help(data):
     try:
         job_name = data['name']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     try:
         job = Job.objects.get(pk=job_name)
     except ObjectDoesNotExist:
-        response_data = {
+        return {
                 'msg': 'This Job isn\'t in the database',
                 'job_name': job_name,
-        }
-        return JsonResponse(data=response_data, status=404)
+        }, 404
 
-    response_data = {'job_name': job_name, 'help': job.help}
-    return JsonResponse(data=response_data, status=200)
+    return {'job_name': job_name, 'help': job.help}, 200
 
 
 @check_pots_data
@@ -230,8 +219,7 @@ def install_jobs(data):
         addresses = data['addresses']
         names = data['names']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     severity = data.get('severity', 4)
     local_severity = data.get('local_severity', 4)
@@ -257,12 +245,9 @@ def install_jobs(data):
                 success = False
 
     if success:
-        response = {'msg': 'OK'}
-        status = 200
+        return {'msg': 'OK'}, 200
     else:
-        response = {'msg': 'At least one of the installation have failed'}
-        status = 404
-    return JsonResponse(data=response, status=status)
+        return {'msg': 'At least one of the installation have failed'}, 404
 
 
 @check_post_data
@@ -271,8 +256,7 @@ def uninstall_jobs(data):
         addresses = data['addresses']
         names = data['names']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     agents = Agent.objects.filter(pk__in=addresses)
     jobs = Job.objects.filter(pk__in=names)
@@ -300,12 +284,9 @@ def uninstall_jobs(data):
                 })
 
     if error_msg:
-        response = {'msg': error_msg}
-        status = 404
+        return {'msg': error_msg}, 404
     else:
-        response = {'msg': 'OK'}
-        status = 200
-    return JsonResponse(data=response, status=status)
+        return {'msg': 'OK'}, 200
 
 
 @check_post_data
@@ -316,18 +297,16 @@ def list_installed_jobs(data):
     try:
         ip_address = data['address']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     update = data.get('update', False)
     try:
         agent = Agent.objects.get(pk=ip_address)
     except ObjectDoesNotExist:
-        response_data = {
+        return {
             'msg': 'This Agent isn\'t in the database',
             'address': ip_address,
-        }
-        return JsonResponse(data=response_data, status=404)
+        }, 404
 
     response = {'errors': [], 'agent': agent.address}
     if update:
@@ -352,7 +331,7 @@ def list_installed_jobs(data):
             } for job in installed_jobs
         ]
     finally:
-        return JsonResponse(data=response, status=200)
+        return response, 200
 
 
 @check_post_data
@@ -362,8 +341,7 @@ def push_file(data):
         remote_path = data['remote_path']
         agent_ip = data['agent_ip']
     except KeyError:
-        response_data = {'msg': 'POST data malformed'}
-        return JsonResponse(data=response_data, status=400)
+        return {'msg': 'POST data malformed'}, 400
 
     try:
         agent = Agent.objects.get(pk=agent_ip)
@@ -376,494 +354,397 @@ def push_file(data):
     result = conductor_execute('push_file {} {} {}'.format(local_path, remote_path, agent_ip))
     response_data = {'msg': result}
     if result == 'OK':
-        return JsonResponse(data=response_data, status=200)
-    return JsonResponse(data=response_data, status=404)
+        return response_data, 200
+    return response_data, 404
 
 
-def start_instance(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def start_instance(data):
     try:
         agent_ip = data['agent_ip']
         job_name = data['job_name']
         instance_args = data['instance_args']
-    except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    name = job_name + " on " + agent_ip
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    name = '{} on {}'.format(job_name, agent_ip)
     try:
         installed_job = Installed_Job.objects.get(pk=name)
     except ObjectDoesNotExist:
-        response_data = {'msg': "This Installed_Job isn't in the database",
-                         'job_name': name}
-        return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-        date_interval = 'date'
-    elif 'interval' in data:
-        interval = data['interval']
-        date_interval = 'interval'
-    else:
-        date = 'now'
-        date_interval = 'date'
+        return {
+                'msg': 'This Installed_Job isn\'t in the database',
+                'job_name': name,
+        }, 404
+
     instance = Instance(job=installed_job)
-    for i in range(len(instance_args)):
-        instance.args += str(instance_args[i])
-    if not instance.check_args():
-        response_data = {'msg': "Arguments given don't match with arguments "
-                         "needed"}
-        return JsonResponse(data=response_data, status=404)
+    # TODO: Vérifier s’il faut pas joindre avec un espace
+    instance.args = ''.join(instance_args)
+    try:
+        instance.validate_args_len()  # Maybe use instance.set_arguments(instance_args) instead
+    except ValueError:
+        return {
+                'msg': 'Arguments given don\'t match with arguments needed',
+        }, 400
+
     instance.status = "starting ..."
     instance.update_status = timezone.now()
     instance.save()
-    instance_id = str(instance.id)
-    cmd = "start_instance "
-    if date_interval == 'date':
-        cmd += "date " + str(date)
+
+    if 'interval' in data:
+        cmd = 'start_instance interval {} {}'.format(data['interval'], instance.id)
     else:
-        cmd += "interval " + str(interval)
-    cmd += " " + instance_id
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg': r}
-    if r.split()[0] == 'OK':
+        cmd = 'start_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+
+    result = conductor_execute(cmd)
+    response = {'msg': result}
+    if result == 'OK':
         instance.status = "Started"
         instance.update_status = timezone.now()
         instance.save()
-        response_data['instance_id'] = instance_id
-        return JsonResponse(data=response_data, status=200)
+        response['instance_id'] = instance.id
+        return response, 200
     else:
         instance.delete()
-        return JsonResponse(data=response_data, status=404)
+        return response, 404
 
 
-def stop_instance(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def stop_instance(data):
     try:
         instance_ids = data['instance_ids']
-    except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    instances = {}
-    response_data = {}
-    for instance_id in instance_ids:
-        try:
-            instance = Instance.objects.get(pk=instance_id)
-            instances[instance_id] = instance
-        except ObjectDoesNotExist:
-            response_data['errors'] = "These Instances aren't in the database"
-            if 'instance_ids' not in response_data:
-                response_data['instance_ids'] = []
-            response_data['instance_id'].append(instance_id)
-            return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = "now"
-    status = 200
-    response_data['error'] = []
-    for instance_id in instance_ids:
-        cmd = "stop_instance " + date + " " + instance_id
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(('localhost', 1113))
-        s.send(cmd)
-        r = s.recv(1024)
-        s.close()
-        if r.split()[0] == 'OK':
-            instances[instance_id].delete()
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    
+    instances = Instance.objects.filter(pk__in=instances_ids)
+    date = data.get('date', 'now')
+
+    response = {'msg': 'OK', 'error': []}
+    for instance in instances:
+        result = conductor_execute('stop_instance {} {}'.format(date, instance.id))
+        if result == 'OK':
+            instance.delete()
         else:
-            status = 404
-            response_data['msg'] = "Some went wrong"
-            response_data['error'].append({'msg': r, 'instance': instance_id})
-    if 'msg' not in response_data:
-        response_data['msg'] = "OK"
-    return JsonResponse(data=response_data, status=status)
+            response['msg'] = 'Something went wrong'
+            response['error'].append({'msg': result, 'instance': instance.id})
+
+    if response['error']:
+        return response, 404
+    else:
+        return response, 200
 
 
-def restart_instance(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def restart_instance(data):
     try:
         instance_id = data['instance_id']
         instance_args = data['instance_args']
     except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
+        return {'msg': 'POST data malformed'}, 400
+
     try:
         instance = Instance.objects.get(pk=instance_id)
     except ObjectDoesNotExist:
-        response_data = {'msg': "This Instance isn't in the database",
-                         'instance_id': instance_id}
-        return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-        date_interval = 'date'
-    elif 'interval' in data:
-        interval = data['interval']
-        date_interval = 'interval'
+        return {
+                'msg': 'This Instance isn\'t in the database',
+                'instance_id': instance_id,
+        }, 404
+
+    # TODO: keep it consistent with start_instance
+    instance.args = ' '.join(instance_args)
+    try:
+        instance.validate_args_len()
+    except ValueError:
+        return {
+                'msg': 'Arguments given don\'t match with arguments needed',
+        }, 400
+
+    instance.save()
+
+    if 'interval' in data:
+        cmd = 'restart_instance interval {} {}'.format(data['interval'], instance.id)
     else:
-        date = 'now'
-        date_interval = 'date'
-    if len(instance_args) != 0:
-        instance.args = " ".join(instance_args)
-        if not instance.check_args():
-            response_data = {'msg': "Arguments given don't match with arguments "
-                             "needed"}
-            return JsonResponse(data=response_data, status=404)
-        instance.save()
-    instance_id = str(instance.id)
-    cmd = "restart_instance "
-    if date_interval == 'date':
-        cmd += "date " + date
-    else:
-        cmd += "interval " + interval
-    cmd += " " + instance_id
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg': r}
-    if r.split()[0] == 'OK':
-        return JsonResponse(data=response_data, status=200)
+        cmd = 'restart_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+
+    result = conductor_execute(cmd)
+    response = {'msg': result}
+    if result == 'OK':
+        return response, 200
     else:
         # TODO delete or keep the instance in the database ?
-        return JsonResponse(data=response_data, status=404)
+        return response, 404
 
 
-def status_agents(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
-    if 'addresses' not in data:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    agents_ip = data['addresses']
-    cmd = "status_agents " + ' '.join(agents_ip)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response = r.split()
-    if response[0] == 'OK':
-        response_data = {'msg': r}
-        return JsonResponse(data=response_data, status=200)
+@check_post_data
+def status_agents(data):
+    try:
+        agents_ips = data['addresses']
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    result = conductor_execute('status_agents {}'.format(' '.join(agents_ips)))
+    if result == 'OK':
+        return {'msg': result}, 200
     else:
-        response_data = {'msg': "At least one of the Agents isn't in the"
-                         "database", 'addresses': response}
-        return JsonResponse(data=response_data, status=404)
+        return {
+                'msg': 'At least one of the Agents isn\'t in the database',
+                'addresses': response,
+        }, 404
 
-def status_jobs(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
-    if 'addresses' not in data:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    agents_ip = data['addresses']
-    cmd = "status_jobs " + ' '.join(agents_ip)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response = r.split()
-    if response[0] == 'OK':
-        response_data = {'msg': r}
-        return JsonResponse(data=response_data, status=200)
+
+@check_post_data
+def status_jobs(data):
+    try:
+        agents_ips = data['addresses']
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    result = conductor_execute('status_jobs {}'.format(' '.join(agents_ips)))
+    if result == 'OK':
+        return {'msg': result}, 200
     else:
-        response_data = {'msg': "At least one of the Agents isn't in the"
-                         "database", 'addresses': response}
-        return JsonResponse(data=response_data, status=404)
+        return {
+                'msg': 'At least one of the Agents isn\'t in the database',
+                'addresses': response,
+        }, 404
 
 
-def status_instance(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def status_instance(data):
     try:
         instance_id = data['instance_id']
     except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
+        return {'msg': 'POST data malformed'}, 400
+
     try:
         instance = Instance.objects.get(pk=instance_id)
-        installed_job = instance.job
     except ObjectDoesNotExist:
-        if 'agent_ip' not in data or 'job_name' not in data:
-            response_data = {'msg': "POST data malformed"}
-            return JsonResponse(data=response_data, status=404)
-        else:
+        # User didn't specify a valid instance, try to get it from
+        # the agent ip and job name provided, if any
+        try:
             agent_ip = data['agent_ip']
             job_name = data['job_name']
-            try:
-                agent = Agent.objects.get(pk=agent_ip)
-            except ObjectDoesNotExist:
-                response_data = {'msg': "This Agent isn't in the database", 'address':
-                                 agent_ip}
-                return JsonResponse(data=response_data, status=404)
-            try:
-                job = Job.objects.get(pk=job_name)
-            except ObjectDoesNotExist:
-                response_data = {'msg': "This Job isn't in the database", 'job_name':
-                                 job_name}
-                return JsonResponse(data=response_data, status=404)
-            name = job.name + " on " + agent.address
-            try:
-                installed_job = Installed_Job.objects.get(pk=name)
-            except ObjectDoesNotExist:
-                response_data = {'msg': "This Installed_Job isn't in the database",
-                                 'job_name': name}
-                return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
+        except KeyError:
+            return {'msg': 'POST data malformed'}, 400
+
         try:
-            Watch.objects.get(pk=instance_id)
-            response_data = {'msg': "A Watch already exist in the database"}
-            return JsonResponse(data=response_data, status=404)
+            agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
-            watch = Watch(job=installed_job, instance_id=instance_id,
-                          interval=0) 
-        watch_type = 'date'
-        cmd_type = "date " + str(data['date']) + " "
-    elif 'interval' in data:
+            return {
+                    'msg': 'This Agent isn\'t in the database',
+                    'address': agent_ip,
+            }, 404
+
         try:
-            watch = Watch.objects.get(pk=instance_id)
+            job = Job.objects.get(pk=job_name)
         except ObjectDoesNotExist:
-            watch = Watch(job=installed_job, instance_id=instance_id)
-        watch_type = 'interval'
+            return {
+                    'msg': 'This Job isn\'t in the database',
+                    'job_name': job_name,
+            }, 404
+
+        name = '{} on {}'.format(job.name, agent.address)
+        try:
+            installed_job = Installed_Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            return {
+                    'msg': 'This Installed_Job isn\'t in the database',
+                     'job_name': name,
+            }, 404
+    else:
+        installed_job = instance.job
+
+    try:
+        watch = Watch.objects.get(pk=instance_id)
+        if 'interval' not in data and 'stop' not in data:
+            return {'msg': 'A Watch already exists in the database'}, 400
+    except ObjectDoesNotExist:
+        watch = Watch(job=installed_job, instance_id=instance_id, interval=0)
+
+    should_delete_watch = True
+    if 'interval' in data:
+        should_delete_watch = False
         interval = int(data['interval'])
         watch.interval = interval
-        cmd_type = "interval " + str(interval) + " "
+        cmd = 'status_instance interval {} {}'.format(interval, instance_id)
     elif 'stop' in data:
-        try:
-            watch = Watch.objects.get(pk=instance_id)
-        except ObjectDoesNotExist:
-            watch = Watch(job=installed_job, instance_id=instance_id,
-                          interval=0)
-        watch_type = 'stop'
-        cmd_type = "stop " + str(data['stop']) + " "
+        cmd = 'status_instance stop {} {}'.format(data['stop'], instance_id)
     else:
-        try:
-            Watch.objects.get(pk=instance_id)
-            response_data = {'msg': "A Watch already exist in the database"}
-            return JsonResponse(data=response_data, status=404)
-        except ObjectDoesNotExist:
-            watch = Watch(job=installed_job, instance_id=instance_id,
-                          interval=0)
-        watch_type = 'date'
-        cmd_type = "date now "
+        cmd = 'status_instance date {} {}'.format(data.get('date', 'now'), instance_id)
     watch.save()
-    cmd = "status_instance " + cmd_type +  str(instance_id)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg': r}
-    if r.split()[0] == 'OK':
-        if watch_type != 'interval':
+
+    result = conductor_execute(cmd)
+    response = {'msg': result}
+    if result == 'OK':
+        if should_delete_watch:
             watch.delete()
-        return JsonResponse(data=response_data, status=200)
+        return response, 200
     else:
         watch.delete()
-        return JsonResponse(data=response_data, status=404)
+        return response, 404
+
+.
+def _build_instance_infos(instance, update):
+    """Helper function to simplify `list_instances`"""
+    error_msg = None
+    if update:
+        result = conductor_execute('update_instance {}'.format(instance.id))
+        if result.startswith('KO'):
+            error_msg = result[3:]
+        instance.refresh_from_db()
+    instance_infos = {
+            'id': instance.id,
+            'arguments': instance.args,
+            'update_status': instance.update_status,
+            'status': instance.status,
+    }
+    if error_msg is not None:
+        instance_infos['error'] = error_msg
+    return instance_infos
 
 
-def list_instances(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def list_instances(data):
     try:
         agents_ip = data['addresses']
-    except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    if 'update' in data:
-        update = data['update']
-    else:
-        update = False
-    response_data = {}
-    response_data['instances'] = list()
-    if len(agents_ip) == 0:
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    update = data.get('update', False)
+
+    # TODO: see prefetch_related or select_related to avoid
+    # hitting the DB once more for each agent in the next loop
+    if not agents_ip:
         agents = Agent.objects.all()
-        for agent in agents:
-            agents_ip.append(agent.address)
-    for ip_address in agents_ip:
-        try:
-            agent = Agent.objects.get(pk=ip_address)
-        except ObjectDoesNotExist:
-            response_data = {'msg': "At least one of the Agents isn't in the"
-                             " database", 'address': ip_address}
-            return JsonResponse(data=response_data, status=404)
-        else:
-            instances_for_agent = {'address': ip_address}
-            instances_for_agent['installed_job'] = list()
-            for installed_job in agent.installed_job_set.get_queryset().iterator():
-                installed_job_json = {'job_name': installed_job.job.name}
-                installed_job_json['instances'] = list()
-                for instance in installed_job.instance_set.get_queryset().iterator():
-                    error_msg = ''
-                    if update:
-                        cmd = "update_instance " + str(instance.id)
-                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        s.connect(('localhost', 1113))
-                        s.send(cmd)
-                        r = s.recv(1024)
-                        s.close()
-                        return_msg = r.split()
-                        if return_msg[0] == 'KO':
-                            error_msg = ' '.join(return_msg[1:])
-                        instance.refresh_from_db()
-                    instance_json = {'id': instance.id, 'arguments': instance.args,
-                                     'update_status': instance.update_status, 'status':
-                                     instance.status}
-                    if error_msg != '':
-                        instance_json['error'] = error_msg
-                    installed_job_json['instances'].append(instance_json)
-                instances_for_agent['installed_job'].append(installed_job_json)
-        response_data['instances'].append(instances_for_agent)
-    return JsonResponse(response_data, status=200)
+    else:
+        agents = Agent.objects.filter(pk__in=agents_ip)
+
+    response = {'instances': [
+        {
+            'address': ip_address,
+            'installed_job': [
+                {
+                    'job_name': j.job.name,
+                    'instances': [
+                        _build_instance_infos(i, update)
+                        for i in j.instance_set.all()
+                    ],
+                } for j in agent.installed_job_set.all()
+            ],
+        } for agent in agents
+    ]}
+    return response, 200
 
 
-def update_job_log_severity(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def update_job_log_severity(data):
     try:
         agent_ip = data['address']
         job_name = data['job_name']
         severity = data['severity']
-    except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
-    name = job_name + " on " + agent_ip
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    name = '{} on {}'.format(job_name, agent_ip)
     try:
         installed_job = Installed_Job.objects.get(pk=name)
     except ObjectDoesNotExist:
-        response_data = {'msg': "This Installed_Job isn't in the database",
-                         'job_name': name}
-        return JsonResponse(data=response_data, status=404)
+        return {
+                'msg': 'This Installed_Job isn\'t in the database',
+                 'job_name': name,
+        }, 404
+
     try:
-        logs_job = Installed_Job.objects.get(pk="rsyslog_job on " + agent_ip)
+        logs_job = Installed_Job.objects.get(pk='rsyslog_job on {}'.format(agent_ip))
     except ObjectDoesNotExist:
-        response_data = {'msg': "The Logs Job isn't in the database",
-                         'job_name': "logs on " + agent_ip}
-        return JsonResponse(data=response_data, status=404)
-    if 'local_severity' in data:
-        local_severity = data['local_severity']
-    else:
-        local_severity = installed_job.local_severity
+        return {
+                'msg': 'The Logs Job isn\'t in the database',
+                'job_name': 'logs on {}'.format(agent_ip),
+        }, 404
+
     instance = Instance(job=logs_job)
-    instance.args = ""
     instance.status = "starting ..."
     instance.update_status = timezone.now()
     instance.save()
-    instance.args = job_name + " " + str(instance.id)
-    if not instance.check_args():
-        response_data = {'msg': "Arguments given don't match with arguments "
-                         "needed"}
-        return JsonResponse(data=response_data, status=404)
+
+    instance.args = '{} {}'.format(job_name, instance.id)
+    try:
+        instance.validate_args_len()
+    except ValueError:
+        return {'msg', 'Arguments given don\'t match with arguments needed'}, 400
     instance.save()
-    cmd = "update_job_log_severity " + date + " " + str(instance.id) + " "
-    cmd += str(severity) + " " + str(local_severity)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg' : r}
-    if r.split()[0] == 'KO':
+
+    result = conductor_execute(
+            'update_job_log_severity {} {} {} {}'
+            .format(
+                data.get('date', 'now'),
+                instance.id, severity,
+                data.get('local_severity', installed_job.local_severity)))
+    response = {'msg' : result}
+    if result == 'KO':
         instance.delete()
-        return JsonResponse(data=response_data, status=404)
-    return JsonResponse(data=response_data, status=200)
+        return response, 404
+    return response, 200
 
 
-def update_job_stat_policy(request):
-    if request.method != 'POST':
-        response_data = {'msg': "Only POST method are accepted"}
-        return JsonResponse(data=response_data, status=404)
-    data = json.loads(request.POST['data'])
+@check_post_data
+def update_job_stat_policy(data):
     try:
         agent_ip = data['address']
         job_name = data['job_name']
         accept_stats = data['accept_stats']
         deny_stats = data['deny_stats']
-    except:
-        response_data = {'msg': "POST data malformed"}
-        return JsonResponse(data=response_data, status=404)
-    if 'default_policy' in data:
-        default_policy = bool(data['default_policy'])
-    else:
-        default_policy = True
-    if 'date' in data:
-        date = data['date']
-    else:
-        date = 'now'
-    name = job_name + " on " + agent_ip
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 404
+
+    name = '{} on {}'.format(job_name, agent_ip)
     try:
         installed_job = Installed_Job.objects.get(pk=name)
     except ObjectDoesNotExist:
-        response_data = {'msg': "This Installed_Job isn't in the database",
-                         'job_name': name}
-        return JsonResponse(data=response_data, status=404)
+        return {
+                'msg': 'This Installed_Job isn\'t in the database',
+                'job_name': name,
+        }, 404
+
     old_default_policy = installed_job.stats_default_policy
     old_accept_stats = installed_job.accept_stats
     old_deny_stats = installed_job.deny_stats
-    installed_job.stats_default_policy = default_policy
+    installed_job.stats_default_policy = bool(data.get('default_policy', True))
     installed_job.accept_stats = ' '.join(accept_stats)
     installed_job.deny_stats = ' '.join(deny_stats)
     installed_job.save()
+
+    rstat_name = 'rstats_job on {}'.format(agent_ip)
     try:
-        rstats_job = Installed_Job.objects.get(pk="rstats_job on " + agent_ip)
+        rstats_job = Installed_Job.objects.get(pk=rstat_name)
     except ObjectDoesNotExist:
-        response_data = {'msg': "The Rstats Job isn't in the database",
-                         'job_name': "rstats_job on " + agent_ip}
-        return JsonResponse(data=response_data, status=404)
+        return {
+                'msg': 'The Rstats Job isn\'t in the database',
+                'job_name': rstat_name,
+        }, 404
+
     instance = Instance(job=rstats_job)
-    instance.args = ""
     instance.status = "starting ..."
     instance.update_status = timezone.now()
     instance.save()
-    instance.args = job_name + " " + str(instance.id)
-    if not instance.check_args():
-        response_data = {'msg': "Arguments given don't match with arguments "
-                         "needed"}
-        return JsonResponse(data=response_data, status=404)
+
+    instance.args = '{} {}'.format(job_name, instance.id)
+    try:
+        instance.validate_args_len()
+    except ValueError:
+        return {'msg': 'Arguments given don\'t match with arguments needed'}, 400
     instance.save()
-    cmd = "update_job_stat_policy " + date + " " + str(instance.id)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', 1113))
-    s.send(cmd)
-    r = s.recv(1024)
-    s.close()
-    response_data = {'msg' : r}
-    if r.split()[0] == 'KO':
+
+    result = conductor_execute(
+            'update_job_stat_policy {} {}'
+            .format(data.get('date', 'now'), instance.id))
+    response = {'msg' : result}
+    if result == 'KO':
         instance.delete()
         installed_job.stats_default_policy = old_default_policy
         installed_job.accept_stats = old_accept_stats
         installed_job.deny_stats = old_deny_stats
         installed_job.save()
-        return JsonResponse(data=response_data, status=404)
-    return JsonResponse(data=response_data, status=200)
-
+        return response, 404
+    return response, 200
 

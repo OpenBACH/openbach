@@ -41,7 +41,7 @@ def register_stat(conffile, job_name, prefix=None):
             syslog.syslog(syslog.LOG_ERR, 'ERROR: Return message isn\'t well formed')
             syslog.syslog(syslog.LOG_ERR, '\t{}'.format(result))
         else:
-            syslgo.syslog(syslog.LOG_NOTICE, 'NOTICE: Identifiant de connexion = {}'.format(id))
+            syslog.syslog(syslog.LOG_NOTICE, 'NOTICE: Identifiant de connexion = {}'.format(id))
             return id
     elif result.startswith('KO'):
         syslog.syslog(syslog.LOG_ERR, 'ERROR: Something went wrong :')
@@ -76,6 +76,6 @@ def reload_all_stats():
 
 if __name__ == '__main__':
     # Reload rstat when calling this file
-    result = reload_alll_stats()
+    result = reload_all_stats()
     print('Rstat reloaded. Message was', result)
 

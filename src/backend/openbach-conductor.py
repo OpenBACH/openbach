@@ -45,12 +45,12 @@ class PlaybookBuilder():
 
     def _build_helper(self, instance_type, playbook, extra_vars, extra_vars_filename):
         for key, value in extra_vars.items():
-            print(key, value, file=extra_vars_file)
+            print(key, value, file=extra_vars_filename)
 
         if instance_type is not None:
             print('    - include: {}{}_instance.yml'
                       .format(self.path_src, instance_type),
-                  file=playbook_file)
+                  file=playbook)
 
         return bool(instance_type)
 

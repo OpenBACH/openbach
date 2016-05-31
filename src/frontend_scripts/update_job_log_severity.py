@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,7 +6,7 @@ update_job_log_severity.py - <+description+>
 """
 
 import argparse
-from frontend import update_job_log_severity, pretty_print
+from frontend import update_job_log_severity, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -37,7 +36,7 @@ if __name__ == "__main__":
     job_name = args.job_name
     severity = args.severity
     local_severity = args.local_severity
-    date = args.date
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
     pretty_print(update_job_log_severity)(agent_ip, job_name, severity, local_severity, date)
 

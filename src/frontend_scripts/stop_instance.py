@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,7 +6,7 @@ stop_instance.py - <+description+>
 """
 
 import argparse
-from frontend import stop_instance, pretty_print
+from frontend import stop_instance, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -30,7 +29,7 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
     instance_ids = args.instance_ids
-    date = args.date
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
     pretty_print(stop_instance)(instance_ids, date)
 

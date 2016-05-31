@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,7 +6,7 @@ start_instance.py - <+description+>
 """
 
 import argparse
-from frontend import start_instance, status_instance, pretty_print
+from frontend import start_instance, status_instance, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -40,8 +39,7 @@ if __name__ == "__main__":
     parser.add_argument('job_name', help='Name of the Job')
     parser.add_argument('-a', '--arguments', nargs='+', help='Arguments of the Instance')
     parser.add_argument('-s', '--status', help='Start a watch of the status with this interval')
-    # Not sure here, you may want required=False
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
     group.add_argument('-i', '--interval', help='Interval of the execution')
@@ -51,7 +49,7 @@ if __name__ == "__main__":
     agent_ip = args.agent_ip
     job_name = args.job_name
     arguments = args.arguments
-    date = args.date
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
     status = args.status
 

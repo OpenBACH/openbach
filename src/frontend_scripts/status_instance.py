@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,7 +6,7 @@ status_instance.py - <+description+>
 """
 
 import argparse
-from frontend import status_instance, pretty_print
+from frontend import status_instance, date_to_timestamp, pretty_print
 import pprint
 
 
@@ -27,8 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('instance_id', help='Id of the Instance')
     parser.add_argument('-a', '--agent-ip', help='IP address of the Agent')
     parser.add_argument('-j', '--job-name', help='Name of the Job')
-    # Not sure here, you may want required=False
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                        nargs=2, help='Date when the status will be check')
     group.add_argument('-i', '--interval',
@@ -39,9 +37,9 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
     instance_id = args.instance_id
-    date = args.date
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
-    stop = args.stop
+    stop = date_to_timestamp('{} {}'.format(*args.stop)) if args.stop else None
     agent_ip = args.agent_ip
     job_name = args.job_name
 

@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,7 +6,7 @@ update_job_stat_policy.py - <+description+>
 """
 
 import argparse
-from frontend import update_job_stat_policy, pretty_print
+from frontend import update_job_stat_policy, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -39,7 +38,7 @@ if __name__ == "__main__":
     accept_stats = args.accept_stats
     deny_stats = args.deny_stats
     default_policy = args.default_policy
-    date = args.date
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
     pretty_print(update_job_stat_policy)(agent_ip, job_name, accept_stats, deny_stats, default_policy, date)
 

@@ -103,8 +103,7 @@ def restart_instance(instance_id, arguments=None, date=None, interval=None):
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=)
 
     return action('instances', 'restart')
 
@@ -116,8 +115,7 @@ def start_instance(agent_ip, job_name, arguments=None, date=None,
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=date)
 
     return action('instances', 'start')
 
@@ -134,11 +132,9 @@ def status_instance(instance_id, date=None, interval=None, stop=None, agent_ip=N
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=date)
     if stop is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*stop))
-        action = partial(action, stop=timestamp)
+        action = partial(action, stop=stop)
 
     return action('instances', 'status')
 
@@ -150,8 +146,7 @@ def status_jobs(agents_ip):
 def stop_instance(instance_ids, date=None):
     action = partial(_post_message, instance_ids=instance_ids)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=date)
 
     return action('instances', 'stop')
 
@@ -168,8 +163,7 @@ def update_job_log_severity(agent_ip, job_name, severity, local_severity=None,
     if local_severity is not None:
         action = partial(action, local_severity=local_severity)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=date)
 
     return action('jobs', 'log_severity')
 
@@ -180,7 +174,6 @@ def update_job_stat_policy(agent_ip, job_name, accept_stats, deny_stats,
             job_name=job_name, accept_stats=accept_stats,
             deny_stats=deny_stats, default_policy=default_policy)
     if date is not None:
-        timestamp = date_to_timestamp('{} {}'.format(*date))
-        action = partial(action, date=timestamp)
+        action = partial(action, date=date)
 
     return action('jobs', 'stat_policy')

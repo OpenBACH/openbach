@@ -23,9 +23,6 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 
-_UPDATE_AGENT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
-_UPDATE_JOB_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+LIMIT+1'
-_UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}{}"'
 _SEVERITY_MAPPING = {
     0: 3,   # Error
     1: 4,   # Warning
@@ -223,12 +220,18 @@ class ClientThread(threading.Thread):
             'status_jobs', 'update_jobs', 'update_instance',
             'push_file',
     }
+
     ONLY_DATE_REQUESTS = {
             'stop_instance', 'update_job_log_severity', 'update_job_stat_policy',
     }
+
     DATE_INTERVAL_REQUESTS = {
             'start_instance', 'restart_instance', 'status_instance',
     }
+
+    UPDATE_AGENT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
+    UPDATE_JOB_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+LIMIT+1'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}{}"'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -491,7 +494,7 @@ class ClientThread(threading.Thread):
 
     def update_agent(self, agent_id):
         agent = Agent.objects.get(pk=agent_id)
-        url = _UPDATE_AGENT_URL.format(agent=agent)
+        url = self.UPDATE_AGENT_URL.format(agent=agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -537,7 +540,7 @@ class ClientThread(threading.Thread):
 
     def update_jobs(self, agent_id):
         agent = Agent.objects.get(pk=agent_id)
-        url = _UPDATE_JOB_URL.format(agent=agent)
+        url = self.UPDATE_JOB_URL.format(agent=agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -583,7 +586,7 @@ class ClientThread(threading.Thread):
 
     def update_instance(self, instance_id):
         instance = Instance.objects.get(pk=instance_id)
-        url = _UPDATE_INSTANCE_URL.format(
+        url = self.UPDATE_INSTANCE_URL.format(
                 instance.job.job.name, instance.id, agent=instance.job.agent)
         result = requests.get(url).json()
         try:

@@ -103,7 +103,7 @@ def restart_instance(instance_id, arguments=None, date=None, interval=None):
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
-        action = partial(action, date=)
+        action = partial(action, date=date)
 
     return action('instances', 'restart')
 

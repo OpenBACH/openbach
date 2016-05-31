@@ -23,17 +23,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='OpenBach - Restart Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('instance_id', help='Id of the instance')
-    parser.add_argument('-a', '--arguments', nargs='+',
-            help='Arguments of the Instance')
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
             nargs=2, help='Date of the execution')
     group.add_argument('-i', '--interval', help='Interval of the execution')
+    subparsers = parser.add_subparsers()
+    subparser = subparsers.add_parser('arguments',
+            help='Arguments of the Instance', prefix_chars='¤')
+    subparser.add_argument('arguments', nargs='+')
     
     # get args
     args = parser.parse_args()
     instance_id = args.instance_id
-    arguments = args.arguments
+    arguments = getattr(args, 'arguments', [])
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
 

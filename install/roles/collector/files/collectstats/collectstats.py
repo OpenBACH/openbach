@@ -1,12 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
-import itertools
 import threading
 import socket
 import shlex
 import requests
 import traceback
-import ConfigParser
+from configparser import ConfigParser
 
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
@@ -31,21 +30,17 @@ def parse_type(value):
                 return '"{}"'.format(value)
 
 
-def send_stat(stat_name, stats, url):
-    # recuperation des stats
-    time = stats["time"]
-    del stats["time"]
-
+def send_stat(stat_name, time, stats, url):
     # Former la commande
-    stats_v09 = ','.join('{}={}'.format(k, parse_type(v)) for k, v in stats.items())
-    data = '{} {} {}'.format(stat_name, stats_v09, time)
+    data = '{0} {2} {1}'.format(stat_name, time,
+        ','.join('{}={}'.format(k, parse_type(v)) for k, v in stats.items()))
 
     # Envoyer la commande
     try:
         result = requests.post(url, data=data)
     except requests.ConnectionError:
         traceback.print_stack()
-        return "ConnectionError"
+        return 'ConnectionError'
     return result._content
 
 
@@ -64,10 +59,9 @@ def parse_and_check(data):
     return data_received
 
 
-def pairwise(iterable):
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return itertools.zip_longest(a, b).
+def grouper(iterable, n):
+    args = [iter(iterable)] * n
+    return zip(*args)
 
 
 def check_and_send(data, url):
@@ -77,18 +71,17 @@ def check_and_send(data, url):
         traceback.print_stack()
         return False
 
-    stat_name = request[0]
-    stats = {'time': request[1]}
-    for key, value in pairwise(request[2:]):
-        stats[key] = value
-    send_stat(stat_name, stats, url)
+    request_iterator = grouper(request, 2)
+    stat_name, time = next(request_iterator)
+    stats = {key:value for key, value in request_iterator}
+    send_stat(stat_name, time, stats, url)
 
     return True
 
 
 def handle_command_tcp(client_socket, url):
     data = client_socket.recv(2048)
-    response = parse_command_udp(data, url)
+    response = check_and_send(data, url)
     client_socket.send(b'KO' if not response else b'OK')
     client_socket.close()
 
@@ -119,14 +112,16 @@ class UdpThread(threading.Thread):
 
 class Conf:
     def __init__(self, conf_path='config.ini'):
-        config = ConfigParser.ConfigParser()
+        config = ConfigParser()
         config.read(conf_path)
-        self.collectstats_port = int(config.get('collectstats', 'port'))
-        self.port = config.get('influxdb', 'port')
-        self.database = config.get('influxdb', 'database')
-        self.username = config.get('influxdb', 'username')
-        self.password = config.get('influxdb', 'password')
-        self.time_precision = config.get('influxdb', 'time_precision')
+        self.collectstats_port = int(config['collectstats']['port'])
+
+        database = config['influxdb']
+        self.port = database['port']
+        self.database = database['database']
+        self.username = database['username']
+        self.password = database['password']
+        self.time_precision = database['time_precision']
 
 
 if __name__ == '__main__':

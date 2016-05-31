@@ -1,5 +1,4 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
@@ -7,22 +6,19 @@ openbach-agent.py - <+description+>
 """
 
 import os
-import sys
 import time
-import datetime
 import socket
 import threading
 import syslog
 import signal
 import shutil
 import subprocess
+from configparser import ConfigParser
 from functools import partial
+from datetime import datetime
 
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
-
-import ConfigParser
-from ConfigParser import NoSectionError, MissingSectionHeaderError, NoOptionError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
@@ -30,12 +26,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 
+import sys.path
 sys.path.insert(0, '/opt/rstats/')
 import rstats_api as rstats
 
 
-TRUE_VALUES = frozenset({'True', 'true'})
-FALSE_VALUES = frozenset({'False', 'false'})
 PID_FOLDER = '/var/run/openbach'
 RSTAT_REGISTER_STAT = partial(
         rstat.register_stat,
@@ -45,7 +40,7 @@ RSTAT_REGISTER_STAT = partial(
 
 class JobManager:
     """Context manager around job scheduling"""
-    __shared_state = {}
+    __shared_state = {}  # Borg pattern
 
     def __init__(self, job=None, init=False):
         self.__dict__ = self.__class__.__shared_state
@@ -167,6 +162,12 @@ def ls_jobs():
         
     # Envoie de la stat à Rstats
     rstats.send_stat(connection, 'jobs_list', timestamp, header, values)
+        
+
+class BadRequest(ValueError):
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
     
     
 class JobConfiguration:
@@ -174,47 +175,47 @@ class JobConfiguration:
         filename = '{}.cfg'.format(job_name)
         conf_file = os.path.join(conf_path, filename)
 
-        config = ConfigParser.ConfigParser()
+        config = ConfigParser()
         config.read(conf_file)
 
-        self.command = config.get(job_name, 'command')
-        self.required = config.get(job_name, 'required')
-        self.optional = config.get(job_name, 'optional')
-        self.persistent = config.get(job_name, 'persistent')
+        try:
+            job = config[job_name]
+        except KeyError:
+            raise BadRequest(
+                    'KO Conf file {} does not contain a '
+                    'section for job {}'.format(filename, job_name))
 
+        self.command = self.parse(job, 'command', job_name)
+        self.required = self.parse(job, 'required', job_name).split()
+        self.optional = self.parse(job, 'optional', job_name, True)
+        self.persistent = self.parse(job, 'persistent', job_name, True)
 
-class BadRequest(ValueError):
-    def __init__(self, reason):
-        super().__init__(reason)
-        self.reason = reason
-
-
-def parse_configuration(path, job):
-    try:
-        conf = JobConfiguration(path, job)
-    except (NoSectionError, MissingSectionHeaderError, NoOptionError):
-        raise BadRequest(
-                'KO Conf files for job {} isn\'t formed well'.format(job))
-
-    if conf.optional in TRUE_VALUES:
-        conf.optional = True
-    elif conf.optional in FALSE_VALUES:
-        conf.optional = False
-    else:
-        raise BadRequest(
-                'KO Conf "optional" for job {} '
-                'should be a boolean'.format(job))
-
-    if conf.persistent in TRUE_VALUES:
-        conf.persistent = True
-    elif conf.persistent in FALSE_VALUES:
-        conf.persistent = False
-    else:
-        raise BadRequest(
-                'KO Conf "persistent" for job {} '
-                'should be a boolean'.format(job))
-
-    conf.required = False if not conf.required else conf.required.split()
+    @staticmethod
+    def parse(job, option, name, boolean=False):
+        if boolean:
+            try:
+                value = job.getboolean(option)
+            except ValueError:
+                raise BadRequest(
+                        'KO Conf "{}" for job {} should be '
+                        'a boolean'.format(option, name))
+            else:
+                # [Mathias] You can replace the next 3 lines with
+                # `return bool(value)` if it's OK to _not_ have 
+                # 'persistent' or 'optional' in the conf file
+                # It will be considered False when value is missing
+                if value is None:
+                    raise BadRequest(
+                            'KO Conf file for job {} doesn\'t '
+                            'contain the "{}" option'.format(name, option))
+                return value
+        else:
+            try:
+                return job[option]
+            except KeyError:
+                raise BadRequest(
+                        'KO Conf file for job {} doesn\'t '
+                        'contain the "{}" option'.format(name, option))
 
 
 class ClientThread(threading.Thread):
@@ -222,10 +223,20 @@ class ClientThread(threading.Thread):
             'ls_job': (0, ''),
             'add': (1, 'You should provide the job name'),
             'del': (1, 'You should provide the job name'),
-            'status': (4, 'You should provide a job name, an instance id, a watch type and its value'),
-            'start': (4, 'You should provide a job name, an instance id, a watch type and its value. Optional arguments may follow'),
-            'restart': (4, 'You should provide a job name, an instance id, a watch type and its value. Optional arguments may follow'),
-            'stop': (4, 'You should provide a job name, an instance id, a watch type and its value'),
+            'status':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value'),
+            'start':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value. '
+                'Optional arguments may follow'),
+            'restart':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value. '
+                'Optional arguments may follow'),
+            'stop':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value'),
     }
 
     def __init__(self, client_socket, path):
@@ -240,7 +251,7 @@ class ClientThread(threading.Thread):
         arguments = ' '.join(args)
         timestamp = time.time()
         if date_type == 'date':
-            date = None if date_value < timestamp else datetime.datetime.fromtimestamp(date_value)
+            date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'date', run_date=date,
@@ -303,7 +314,7 @@ class ClientThread(threading.Thread):
                             'OK A job {} is already installed'
                             .format(job_name))
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
-            conf = parse_configuration(self.path, job_name)
+            conf = JobConfiguration(self.path, job_name)
             args.append(conf.command)
             args.append(conf.required)
             args.append(conf.optional)
@@ -389,7 +400,7 @@ class ClientThread(threading.Thread):
             # On vérifie si il au moins autant d'arguments 
             # qu'exigé pour lancer la commande
             with JobManager(job_name) as job:
-                nb_args = 0 if not job['required'] else len(job['required'])
+                nb_args = len(job['required'])
                 optional = job['optional']
 
             if len(args) < required_args + nb_args:
@@ -436,8 +447,6 @@ class ClientThread(threading.Thread):
             job_name, command, required, optional, persistent = extra_args
             # TODO Vérifier que l'appli a bien été installé ?
             with JobManager() as jobs:
-                if required:
-                    required = required.split()
                 jobs[job_name] = {
                         'command': command,
                         'required': required,
@@ -464,7 +473,7 @@ class ClientThread(threading.Thread):
         elif request == 'stop':
             job_name, instance, _, value = extra_args
             timestamp = time.time()
-            date = None if value < timestamp else datetime.datetime.fromtimestamp(value)
+            date = None if value < timestamp else datetime.fromtimestamp(value)
             scheduler.add_job(stop_job, 'date', run_date=date, args=(job_name, instance))
             try:
                 scheduler.remove_job(job_name + instance_id)
@@ -483,7 +492,7 @@ class ClientThread(threading.Thread):
 
             # Récupérer le status actuel
             if date_type == 'date':
-                date = None if date_value < timestamp else datetime.datetime.fromtimestamp(date_value)
+                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
                 try:
                     scheduler.add_job(
                             status_job, 'date', run_date=date,
@@ -506,7 +515,7 @@ class ClientThread(threading.Thread):
                             .format(job_name, instance_id))
             # Déprogrammer
             elif date_type == 'stop':
-                date = None if date_value < timestamp else datetime.datetime.fromtimestamp(date_value)
+                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
                 status_job = '{}{}_status'.format(job_name, instance)
 
                 # TODO get_job doesn't raise JobLookupError when the job
@@ -555,7 +564,7 @@ class ClientThread(threading.Thread):
             self.socket.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     signal.signal(signal.SIGHUP, signal_term_handler)
 
     # TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
@@ -568,7 +577,7 @@ if __name__ == "__main__":
         for job in list_jobs_in_dir(path):
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
             try:
-                conf = parse_configuration(path, job)
+                conf = JobConfiguration(path, job)
             except BadRequest as e:
                 syslog.syslog(syslog.LOG_ERR, e.reason)
                 continue

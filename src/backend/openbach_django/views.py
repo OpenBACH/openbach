@@ -1,7 +1,7 @@
 import os.path
 import json
 import socket
-import ConfigParser
+from configparser import ConfigParser
 from functools import wraps
 
 from django.utils import timezone
@@ -128,10 +128,11 @@ def add_job(data):
         return {'msg': 'POST data malformed'}, 400
 
     config_prefix = os.path.join(job_path, 'files', job_name)
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser()
     config.read('{}.cfg'.format(config_prefix))
-    job_args = config.get(job_name, 'required').split()
-    optional_args = bool(config.get(job_name, 'optional'))
+    job = config[job_name]
+    job_args = job['required'].split()
+    optional_args = job.getboolean('optional')
     try:
         with open('{}.help'.format(config_prefix)) as f:
             help = f.read()

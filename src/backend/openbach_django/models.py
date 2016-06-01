@@ -20,14 +20,15 @@ class Agent(models.Model):
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)
     collector = models.GenericIPAddressField()
-    
+
     def set_password(self, raw_password):
         # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
-        self.password = hasher.make_password(raw_password, algo='sha1')
+        self.password = hashers.make_password(raw_password, algo='sha1')
+        self.password = raw_password
 
     def check_password(self, raw_password):
-        return hasher.check_password(raw_password, self.password)
-    
+        return hashers.check_password(raw_password, self.password)
+
     def __str__(self):
         return self.address
 

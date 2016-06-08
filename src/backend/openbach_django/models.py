@@ -7,71 +7,38 @@ models.py - <+description+>
 """
 
 from django.db import models
-from django.db.models.fields import GenericIPAddressField, FilePathField, TextField
-from django.utils.encoding import smart_str
-import sys
-if sys.version_info >= (2, 5):
-    import hashlib
-    md5_constructor = hashlib.md5
-    md5_hmac = md5_constructor
-    sha_constructor = hashlib.sha1
-    sha_hmac = sha_constructor
-else:
-    import md5
-    md5_constructor = md5.new
-    md5_hmac = md5
-    import sha
-    sha_constructor = sha.new
-    sha_hmac = sha
+from django.contrib.auth import hashers
 
-def get_hexdigest(algorithm, salt, raw_password):
-    """
-    Returns a string of the hexdigest of the given plaintext password and salt
-    using the given algorithm ('md5', 'sha1' or 'crypt').
-    """
-    raw_password, salt = smart_str(raw_password), smart_str(salt)
-    if algorithm == 'crypt':
-        try:
-            import crypt
-        except ImportError:
-            raise ValueError('"crypt" password algorithm not supported in this environment')
-        return crypt.crypt(raw_password, salt)
-
-    if algorithm == 'md5':
-        return md5_constructor(salt + raw_password).hexdigest()
-    elif algorithm == 'sha1':
-        return sha_constructor(salt + raw_password).hexdigest()
-    raise ValueError("Got unknown password algorithm type in password.")
 
 class Agent(models.Model):
     name = models.CharField(max_length=200, blank=True, unique=True)
-    address = GenericIPAddressField(primary_key=True)
+    address = models.GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=200, blank=True)
     update_status = models.DateTimeField(blank=True)
     reachable = models.BooleanField()
     update_reachable = models.DateTimeField(blank=True)
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)
-    collector = GenericIPAddressField()
-    
+    collector = models.GenericIPAddressField()
+
     def set_password(self, raw_password):
-        # TODO How do we register the password ?
-        import random
-        algo = 'sha1'
-        salt = get_hexdigest(algo, str(random.random()),
-                             str(random.random()))[:5]
-        hsh = get_hexdigest(algo, salt, raw_password)
-        self.password = '%s$%s$%s' % (algo, salt, hsh)
-    
+        # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
+        #self.password = hashers.make_password(raw_password, algo='sha1')
+        self.password = raw_password
+
+    def check_password(self, raw_password):
+        return hashers.check_password(raw_password, self.password)
+
     def __str__(self):
         return self.address
 
 
 class Job(models.Model):
     name = models.CharField(max_length=200, primary_key=True)
-    path = FilePathField(path="/opt/openbach/jobs", recursive=True,
-                         allow_folders=True, allow_files=False)
-    help = TextField(blank=True)
+    path = models.FilePathField(
+            path="/opt/openbach/jobs", recursive=True,
+            allow_folders=True, allow_files=False)
+    help = models.TextField(blank=True)
     nb_args = models.IntegerField()
     optional_args = models.BooleanField()
     
@@ -91,7 +58,7 @@ class Installed_Job(models.Model):
     deny_stats = models.CharField(max_length=200)
 
     def set_name(self):
-        self.name = self.job.name + " on " + self.agent.address
+        self.name = '{0.job} on {0.agent}'.format(self)
 
     def __str__(self):
         return self.name
@@ -103,17 +70,15 @@ class Instance(models.Model):
     status = models.CharField(max_length=200, blank=True)
     update_status = models.DateTimeField(blank=True)
 
-    def check_args(self):
-        nb_args = len(self.args.split())
-        if nb_args < self.job.job.nb_args:
-            return False
-        elif nb_args > self.job.job.nb_args:
-            return self.job.job.optional_args
-        else:
-            return True
+    def validate_args_len(self):
+        args_count = len(self.args.split())
+        if args_count < self.job.job.nb_args:
+            raise ValueError('not enough arguments')
+
+        return min(args_count, self.job.job.nb_args)
 
     def __str__(self):
-        return "Instance " + str(self.id) + " of " + str(self.job)
+        return 'Instance {} of {}'.format(self.id, self.job)
 
 
 class Watch(models.Model):
@@ -122,6 +87,4 @@ class Watch(models.Model):
     interval = models.IntegerField(blank=True)
 
     def __str__(self):
-        return "Watch of Instance " + str(self.instance_id) + " of " + str(self.job)
-
-
+        return 'Watch of Instance {0.instance_id} of {0.job}'.format(self)

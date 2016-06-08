@@ -1,47 +1,43 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
 restart_instance.py - <+description+>
 """
 
-from frontend import restart_instance, date_to_timestamp
 import argparse
-import pprint
+from frontend import restart_instance, date_to_timestamp, pretty_print
 
 
-def main(instance_id, arguments, date, interval):
-    r = restart_instance(instance_id, arguments, date, interval)
-    print r
-    pprint.pprint(r.json())
+class DateMetavarHelper:
+    def __init__(self):
+        self.first = False
+
+    def __repr__(self):
+        self.first = not self.first
+        return 'DATE' if self.first else 'TIME'
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - Restart Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('instance_id', metavar='instance_id', type=str, nargs=1,
-                        help='Id of the instance')
-    parser.add_argument('-a', '--arguments', type=str, default=None,
-                        nargs='+', help='Arguments of the Instance')
-    parser.add_argument('-d', '--date', type=str, default=None,
-                        nargs=2, help='Date of the execution')
-    parser.add_argument('-i', '--interval', type=str, default=None,
-                        help='Interval of the execution')
+    parser.add_argument('instance_id', help='Id of the instance')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
+            nargs=2, help='Date of the execution')
+    group.add_argument('-i', '--interval', help='Interval of the execution')
+    subparsers = parser.add_subparsers()
+    subparser = subparsers.add_parser('arguments',
+            help='Arguments of the Instance', prefix_chars='¤')
+    subparser.add_argument('arguments', nargs='+')
     
     # get args
     args = parser.parse_args()
-    instance_id = args.instance_id[0]
-    arguments = args.arguments
-    if args.date == None:
-        date = None
-    else:
-        date = int(date_to_timestamp(args.date[0] + " " + args.date[1])*1000)
+    instance_id = args.instance_id
+    arguments = getattr(args, 'arguments', [])
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
-    if (date != None) and (interval != None):
-        print("You can only provide a date OR an interval, but not both")
-        exit(1)
 
-    main(instance_id, arguments, date, interval)
+    pretty_print(restart_instance)(instance_id, arguments, date, interval)
 

@@ -1,805 +1,620 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
 openbach-agent.py - <+description+>
 """
 
+import os
+import time
 import socket
 import threading
 import syslog
-import os
-import sys
-import time
 import signal
-import ConfigParser
+import shutil
+import subprocess
+from configparser import ConfigParser
+from functools import partial
 from datetime import datetime
-from ConfigParser import NoSectionError, MissingSectionHeaderError, NoOptionError
+
+import resource
+resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
-import subprocess
-import resource
-resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
-sys.path.insert(0, "/opt/rstats/")
+
+import sys
+sys.path.insert(0, '/opt/rstats/')
 import rstats_api as rstats
 
 
 
+PID_FOLDER = '/var/run/openbach'
+RSTAT_REGISTER_STAT = partial(
+        rstats.register_stat,
+        '/opt/openbach-agent/openbach-agent_filter.conf',
+        'openbach-agent')
+
+
+class JobManager:
+    """Context manager around job scheduling"""
+    __shared_state = {}  # Borg pattern
+
+    def __init__(self, job=None, init=False):
+        self.__dict__ = self.__class__.__shared_state
+
+        if init:
+            self.scheduler = BackgroundScheduler()
+            self.scheduler.start()
+            self.jobs = {}
+            self.mutex = threading.Lock()
+        self._required_job = self.jobs if job is None else self.jobs[job]
+
+    def __enter__(self):
+        self.mutex.acquire()
+        return self._required_job
+
+    def __exit__(self, t, v, tb):
+        self.mutex.release()
+
+
+def list_jobs_in_dir(dirname):
+    for filename in os.listdir(dirname):
+        name, ext = os.path.splitext(filename)
+        if ext == '.cfg':
+            yield name
+
+
 def signal_term_handler(signal, frame):
-    global dict_jobs
-    global mutex_jobs
-    global scheduler
+    scheduler = JobManager().scheduler
     scheduler.remove_all_jobs()
-    mutex_jobs.acquire()
-    for (job_name, job) in dict_jobs.iteritems():
-        if len(job['set_id']) != 0:
+    with JobManager() as all_jobs:
+        for name, job in all_jobs.items():
             for instance_id in job['set_id']:
-                scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                          instance_id])
-    mutex_jobs.release()
-    while len(scheduler.get_jobs()) != 0:
+                scheduler.add_job(stop_job, 'date', args=(name, instance_id))
+
+    while scheduler.get_jobs():
         time.sleep(0.5)
     scheduler.shutdown()
-    cmd = "rm /var/run/openbach/*"
-    os.system(cmd)
-    sys.exit(0)
-                 
-signal.signal(signal.SIGHUP, signal_term_handler)
-                 
-
-
-# TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
-# Configure logger
-syslog.openlog("openbach-agent", syslog.LOG_PID, syslog.LOG_USER)
+    for root, _, filename in os.walk(PID_FOLDER):
+        os.remove(os.path.join(root, filename))
+    exit(0)
 
 
 def launch_job(job_name, instance_id, command, args):
-    cmd = "PID=`" + command + " " + args + " > /dev/null 2>&1 & echo $!`; echo"
-    cmd += " $PID > /var/run/openbach/" + job_name + instance_id + ".pid"
-    os.system(cmd)
+    proc = subprocess.Popen(
+            command.split() + args.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+    with open('{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id), 'w') as f:
+        print(proc.pid, file=f)
+
     
 def stop_job(job_name, instance_id):
-    cmd = "PID=`cat /var/run/openbach/" + job_name + instance_id + ".pid`; pkill -TERM -P"
-    cmd += "$PID; kill -TERM $PID; rm"
-    cmd += " /var/run/openbach/" + job_name + instance_id + ".pid"
-    os.system(cmd)
+    pid_filename = '{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id)
+    try:
+        with open(pid_filename) as f:
+            pid = int(f.read())
+    except FileNotFoundError:
+        return
+
+    p = subprocess.Popen('pkill -TERM -P {0}; kill -TERM {0}'.format(pid), shell=True)
+    p.wait()
+    os.remove(pid_filename)
+
     
-def status_job(job_name, instance_id, scheduler):
-    # Récupération du status
-    timestamp = int(round(time.time() * 1000))
-    job = scheduler.get_job(job_name + instance_id)
-    if job == None:
-        try:
-            pid_file = open("/var/run/openbach/" + job_name + instance_id + ".pid", 'r')
-            pid = int(pid_file.readline())
-            pid_file.close()
-            if os.path.exists("/proc/" + str(pid)):
-                status = "Running"
-            else:
-                status = "\"Not Running\""
-                cmd = "rm /var/run/openbach/" + job_name + instance_id + ".pid"
-                os.system(cmd)
-        except (IOError, ValueError):
-            status = "\"Not Running\""
-    else:
-        status = "\"Programmed "
-        if type(job.trigger) == DateTrigger:
-            status += "on " + datetime_repr(job.trigger.run_date) + "\""
-        elif type(job.trigger) == IntervalTrigger:
-            status += "every " + str(job.trigger.interval_length) + " seconds\""
-        else:
-            # Attention : Potentiellement ça peut être du CronTrigger
-            # mais on ne l'utilise pas pour le moment
-            pass
-    
+def status_job(job_name, instance_id):
     # Construction du nom de la stat
     stat_name = job_name + instance_id
-    
+    timestamp = round(time.time() * 1000)
+
+    # Récupération du status
+    job = JobManager().scheduler.get_job(stat_name)
+    if job is None:
+        pid_filename = '{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id)
+        try:
+            with open(pid_filename) as f:
+                pid = int(f.read())
+        except (IOError, ValueError):
+            status = '"Not Running"'
+        else:
+            if os.path.exists('/proc/{}'.format(pid)):
+                status = 'Running'
+            else:
+                status = '"Not Running"'
+                os.remove(pid_filename)
+    else:
+        if isinstance(job.trigger, DateTrigger):
+            status = '"Programmed on {}"'.format(datetime_repr(job.trigger.run_date))
+        elif isinstance(job.trigger, IntervalTrigger):
+            status = '"Programmed every {}"'.format(job.trigger.interval_length)
+
     # Connexion au service de collecte de l'agent
-    conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
-    connection_id = rstats.register_stat(conffile, 'openbach-agent')
-    if connection_id == 0:
-        quit()
-        
+    connection = RSTAT_REGISTER_STAT()
+    if not connection:
+        quit()  # [Mathias] quit()?? not return??
+
     # Envoie de la stat à Rstats
-    r = rstats.send_stat(connection_id, stat_name, timestamp, "status", status)
+    rstats.send_stat(connection, stat_name, timestamp, 'status', status)
     
-def stop_watch(scheduler, job_name, instance_id):
+
+def stop_watch(job_id):
     try:
-        scheduler.remove_job(job_name + instance_id + "_status")
+        JobManager().scheduler.remove_job(job_id)
     except JobLookupError:
         pass
+
  
 def ls_jobs():
-    global dict_jobs
-    global mutex_jobs
+    timestamp = int(round(time.time() * 1000))
     
     # Récupération des jobs disponibles
-    timestamp = int(round(time.time() * 1000))
-    mutex_jobs.acquire()
-    value_names = ['nb']
-    values = [0]
-    for job_name in dict_jobs.keys():
-        values[0] += 1
-        value_names.append('job' + str(values[0]))
-        values.append(job_name)
-    mutex_jobs.release()
+    with JobManager() as jobs:
+        count = len(jobs)
+        # TODO send_stat(..., **kwargs)
+        # job_names = {'nb': count}
+        # job_names.update({'job{}'.format(i): job for i, job in enumerate(jobs, 1)})
+        values = [count] + list(jobs)
+        header = ['job{}'.format(i) for i in range(count)]
+        header.insert(0, 'nb')
     
     # Construction du nom de la stat
     stat_name = "jobs_list"
     
     # Connexion au service de collecte de l'agent
-    conffile = "/opt/openbach-agent/openbach-agent_filter.conf"
-    connection_id = rstats.register_stat(conffile, 'openbach-agent')
-    if connection_id == 0:
-        quit()
+    connection = RSTAT_REGISTER_STAT()
+    if not connection:
+        quit()  # [Mathias] same than status_job
         
     # Envoie de la stat à Rstats
-    r = rstats.send_stat(connection_id, stat_name, timestamp, value_names,
-                         values)
+    rstats.send_stat(connection, 'jobs_list', timestamp, header, values)
+    # TODO send_stat(..., **kwargs)
+    # rstats.send_stat(connection, 'jobs_list', timestamp, **job_names)
+        
+
+class BadRequest(ValueError):
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
     
     
-class Conf:
-    def __init__(self, job_name, confpath):
-        conffile = confpath + job_name + '.cfg'
-        Config = ConfigParser.ConfigParser()
-        Config.read(conffile)
-        self.command = Config.get(job_name, 'command')
-        self.required = Config.get(job_name, 'required')
-        self.optional = Config.get(job_name, 'optional')
-        self.persistent = Config.get(job_name, 'persistent')
- 
+class JobConfiguration:
+    def __init__(self, conf_path, job_name):
+        filename = '{}.cfg'.format(job_name)
+        conf_file = os.path.join(conf_path, filename)
+
+        config = ConfigParser()
+        config.read(conf_file)
+
+        try:
+            job = config[job_name]
+        except KeyError:
+            raise BadRequest(
+                    'KO Conf file {} does not contain a '
+                    'section for job {}'.format(filename, job_name))
+
+        self.command = self.parse(job, 'command', job_name)
+        self.required = self.parse(job, 'required', job_name).split()
+        self.optional = self.parse(job, 'optional', job_name, True)
+        self.persistent = self.parse(job, 'persistent', job_name, True)
+
+    @staticmethod
+    def parse(job, option, name, boolean=False):
+        if boolean:
+            try:
+                value = job.getboolean(option)
+            except ValueError:
+                raise BadRequest(
+                        'KO Conf "{}" for job {} should be '
+                        'a boolean'.format(option, name))
+            else:
+                # [Mathias] You can replace the next 3 lines with
+                # `return bool(value)` if it's OK to _not_ have 
+                # 'persistent' or 'optional' in the conf file
+                # It will be considered False when value is missing
+                if value is None:
+                    raise BadRequest(
+                            'KO Conf file for job {} doesn\'t '
+                            'contain the "{}" option'.format(name, option))
+                return value
+        else:
+            try:
+                return job[option]
+            except KeyError:
+                raise BadRequest(
+                        'KO Conf file for job {} doesn\'t '
+                        'contain the "{}" option'.format(name, option))
+
 
 class ClientThread(threading.Thread):
-    def __init__(self, clientsocket, scheduler, path):
-        threading.Thread.__init__(self)
-        self.clientsocket = clientsocket
-        self.scheduler = scheduler
+    REQUIREMENTS = {
+            'ls_jobs': (0, ''),
+            'add': (1, 'You should provide the job name'),
+            'del': (1, 'You should provide the job name'),
+            'status':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value'),
+            'start':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value. '
+                'Optional arguments may follow'),
+            'restart':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value. '
+                'Optional arguments may follow'),
+            'stop':
+                (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value'),
+    }
+
+    def __init__(self, client_socket, path):
+        super().__init__()
+        self.socket = client_socket
         self.path = path
         
-    def start_job(self, mutex_job, dict_jobs, data_recv):
-        job_name = data_recv[1]
-        instance_id = data_recv[2]
-        mutex_jobs.acquire()
-        command = dict_jobs[job_name]['command']
-        mutex_jobs.release()
-        args = ' '.join(data_recv[5:])
-        actual_timestamp = time.time()
-        if data_recv[3] == 'date':
-            if data_recv[4] < actual_timestamp:
-                date = None
-            else:
-                try:
-                    date = datetime.fromtimestamp(data_recv[4])
-                except:
-                    date = None
-            try:
-                self.scheduler.add_job(launch_job, 'date', run_date=date,
-                                       args=[job_name, instance_id, command, args],
-                                       id=job_name + instance_id)
-            except ConflictingIdError:
-                error_msg = "KO A job " + job_name + " is already programmed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return False
-            mutex_jobs.acquire()
-            if dict_jobs[job_name]['persistent']:
-                dict_jobs[job_name]['set_id'].add(instance_id)
-            mutex_jobs.release()
-        elif data_recv[3] == 'interval':
-            if dict_jobs[job_name]['persistent']:
-                error_msg = "KO This job " + job_name + " is persistent, you"
-                error_msg += "can't start it with the 'interval' option"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return False
-            interval = data_recv[4]
-            try:
-                self.scheduler.add_job(launch_job, 'interval', seconds=interval,
-                                       args=[job_name, instance_id, command, args],
-                                       id=job_name + instance_id)
-            except ConflictingIdError:
-                error_msg = "KO An instance " + job_name + "with the id "
-                error_msg += instance_id + " is already programmed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return False
-            mutex_jobs.acquire()
-            dict_jobs[job_name]['set_id'].add(instance_id)
-            mutex_jobs.release()
-        else:
-            pass
-        return True
+    def start_job(self, name, instance_id, date_type, date_value, args):
+        with JobManager(name) as job:
+            command = job['command']
 
-        
-    def parse_and_check(self, r):
-        global dict_jobs
-        global mutex_jobs
-        data_recv = r.split()
-        # Récupération du type de la requete et du nom du job
-        if len(data_recv) < 1:
-            error_msg = "KO Message not formed well. It should have at least an"
-            error_msg += " action"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            return []
-        request_type = data_recv[0]
-        if len(data_recv) < 2 and request_type != 'ls_jobs':
-            error_msg = "KO Message not formed well. It should have an action "
-            error_msg += "and a job name (with eventually options)"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            return []
-        elif request_type != 'ls_jobs':
-            job_name = data_recv[1]
-        if request_type == 'add':
+        arguments = ' '.join(args)
+        timestamp = time.time()
+        if date_type == 'date':
+            date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+            try:
+                JobManager().scheduler.add_job(
+                        launch_job, 'date', run_date=date,
+                        args=(name, instance_id, command, arguments),
+                        id=name+instance_id)
+            except ConflictingIdError:
+                raise BadRequest('KO A job {} is already programmed'.format(name))
+
+            with JobManager(name) as job:
+                if job['persistent']:
+                    job['set_id'].add(instance_id)
+
+        elif date_type == 'interval':
+            with JobManager(name) as job:
+                if job['persistent']:
+                    raise BadRequest(
+                            'KO This job {} is persistent, you can\'t '
+                            'start it with the "interval" option'
+                            .format(name))
+
+            try:
+                JobManager().scheduler.add_job(
+                        launch_job, 'interval', seconds=date_value,
+                        args=(name, instance_id, command, arguments),
+                        id=name+instance_id)
+            except ConflictingIdError:
+                raise BadRequest(
+                        'KO An instance {} with the id {} '
+                        'is already programmed'.format(name, instance_id))
+
+            with JobManager(name) as job:
+                job['set_id'].add(instance_id)
+
+    def parse(self, request):
+        try:
+            # Récupération du type de la requete et du nom du job
+            request, *args = request.split()
+        except ValueError:
+            raise BadRequest('KO Message not formed well. It '
+                    'should have at least an action')
+
+        try:
+            required_args, error_msg = self.REQUIREMENTS[request]
+        except KeyError:
+            raise BadRequest(
+                    'KO Action not recognize. Actions possibles are : {}'
+                    .format(' '.join(self.REQUIREMENTS.keys())))
+
+        provided_args = len(args)
+        if provided_args < required_args:
+            raise BadRequest('KO Message not formed well. {}.'.format(error_msg))
+
+        if provided_args > required_args and request not in ('start', 'restart'):
+            raise BadRequest('KO Message not formed well. Too much arguments.')
+
+        if request == 'add':
+            job_name = args[0]
             # On vérifie si le job est déjà installé
-            mutex_jobs.acquire()
-            if job_name in dict_jobs:
-                mutex_jobs.release()
-                error_msg = "OK A job " + job_name + " is already installed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            mutex_jobs.release()
-            # On vérifie qu'il n'y ai pas d'autre argument
-            if len(data_recv) > 2:
-                error_msg = "KO Message not formed well. To add a job,"
-                error_msg += " you should only provide the job name"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+            with JobManager() as jobs:
+                if job_name in jobs:
+                    raise BadRequest(
+                            'OK A job {} is already installed'
+                            .format(job_name))
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
-            try:
-                conf = Conf(job_name, self.path)
-            except (NoSectionError, MissingSectionHeaderError, NoOptionError):
-                error_msg = "KO Conf files for job " + job_name + " isn't formed well"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            data_recv.append(conf.command)
-            if conf.required == '':
-                data_recv.append(False)
-            else:
-                data_recv.append(conf.required)
-            if conf.optional == 'True' or conf.optional == 'true':
-                data_recv.append(True)
-            elif conf.optional == 'False' or conf.optional == 'false':
-                data_recv.append(False)
-            else:
-                error_msg = "KO Conf 'optional' for job " + job_name + " should"
-                error_msg += "be a boolean"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            if conf.persistent == 'True' or conf.persistent == 'true':
-                data_recv.append(True)
-            elif conf.persistent == 'False' or conf.persistent == 'false':
-                data_recv.append(False)
-            else:
-                error_msg = "KO Conf 'persistent' for job " + job_name + " should"
-                error_msg += "be a boolean"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        elif request_type == 'del':
+            conf = JobConfiguration(self.path, job_name)
+            args.append(conf.command)
+            args.append(conf.required)
+            args.append(conf.optional)
+            args.append(conf.persistent)
+
+        elif request == 'del':
+            job_name = args[0]
             # On vérifie que le job soit bien installé
-            mutex_jobs.acquire()
-            if not job_name in dict_jobs:
-                mutex_jobs.release()
-                error_msg = "OK No job " + job_name + " is installed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            mutex_jobs.release()
-            # On vérifie qu'il n'y ait pas d'arguments indésirables
-            if len(data_recv) != 2:
-                error_msg = "KO Message not formed well. To delete"
-                error_msg += ", no more arguments are needed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        elif request_type == 'status':
+            with JobManager() as jobs:
+                if job_name not in jobs:
+                    raise BadRequest(
+                            'OK No job {} is installed'.format(job_name))
+
+        elif request == 'status':
+            job_name = args[0]
             # On vérifie que le job soit bien installé
-            mutex_jobs.acquire()
-            if not job_name in dict_jobs:
-                mutex_jobs.release()
-                error_msg = "KO No job " + job_name + " is installed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            mutex_jobs.release()
-            # On vérifie que l'instance_id est donné
-            if len(data_recv) < 3:
-                error_msg = "KO To start or restart a job, you should provide an "
-                error_msg += "instance_id (to be able to get the status or stop the job)"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            instance_id = data_recv[2]
-            # On vérifie que le message soit bien formé
-            if len(data_recv) < 4:
-                error_msg = "KO To get a status, start or stop a watch you have"
-                error_msg += " to tell it ('date', 'interval' or 'stop')"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+            with JobManager() as jobs:
+                if job_name not in jobs:
+                    raise BadRequest(
+                            'KO No job {} is installed'.format(job_name))
+
             # On récupère la date ou l'interval
-            if data_recv[3] == 'date':
-                if len(data_recv) != 5:
-                    error_msg = "KO To get a status, you have"
-                    error_msg += " to specify when"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                if data_recv[4] == 'now':
-                    data_recv[4] = 0
+            if args[2] in ('date', 'stop'):
                 try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The date to watch the status should be give"
-                    error_msg += " as timestamp in sec "
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])/1000.
-            elif data_recv[3] == 'interval':
-                if len(data_recv) != 5:
-                    error_msg = "KO To start a watch, you have"
-                    error_msg += " to specify the interval"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
+                    # [Mathias] warning, will put floats in here use // instead of / if integers are required
+                    args[3] = 0 if args[3] == 'now' else int(args[3]) / 1000
+                except ValueError:
+                    raise BadRequest(
+                            'KO The {} to watch the status should '
+                            'be given as a timestamp in milliseconds'
+                            .format(args[2]))
+            elif args[2] == 'interval':
                 try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The interval to execute the job should be"
-                    error_msg +=  " give in sec "
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])
-            elif data_recv[3] == 'stop':
-                if len(data_recv) != 5:
-                    error_msg = "KO To stop a watch, you have to"
-                    error_msg += " specify when"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                if data_recv[4] == 'now':
-                    data_recv[4] = 0
-                try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The date to watch the status should be give"
-                    error_msg += " as timestamp in sec "
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])/1000.
+                    args[3] = int(args[3])
+                except ValueError:
+                    raise BadRequest(
+                            'KO The interval to execute the job '
+                            'should be given in seconds')
             else:
                 # TODO Gérer le 'cron' ?
-                error_msg = "KO Only 'date', 'interval' and 'stop' are allowed "
-                error_msg += "with the 'status' action"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        elif request_type == 'start' or request_type == 'restart':
+                raise BadRequest(
+                        'KO Only "date", "interval" and "stop" '
+                        'are allowed with the status action')
+
+        elif request in ('start', 'restart'):
+            job_name = args[0]
             # On vérifie que le job soit bien installé
-            mutex_jobs.acquire()
-            if not job_name in dict_jobs:
-                mutex_jobs.release()
-                error_msg = "KO No job " + job_name + " is installed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            # On vérifie que l'instance_id est donné
-            if len(data_recv) < 3:
-                error_msg = "KO To start or restart a job, you should provide an "
-                error_msg += "instance_id (to be able to get the status or stop the job)"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            instance_id = data_recv[2]
-            # On vérifie si il n'est pas déjà demarré (seulement dans le cas
-            # 'start')
-            job = dict_jobs[job_name]
-            mutex_jobs.release()
-            if request_type == 'start':
-                if instance_id in job['set_id']:
-                    error_msg = "KO instance " + job_name + "with id " + instance_id
-                    error_msg += " is already started"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-            # On vérifie que la date ou l'intervalle est donné
-            if len(data_recv) < 5:
-                error_msg = "KO To start or restart an instance, you should "
-                error_msg += "provide a date or an interval"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+            with JobManager() as jobs:
+                if job_name not in jobs:
+                    raise BadRequest('KO No job {} is installed'.format(job_name))
+
+            instance_id = args[1]
+            # On vérifie si il n'est pas déjà demarré
+            # (seulement dans le cas 'start')
+            if request == 'start':
+                with JobManager(job_name) as job:
+                    if instance_id in job['set_id']:
+                        raise BadRequest(
+                                'KO Instance {} with id {} is '
+                                'already started'.format(job_name, instance_id)) 
+
             # On récupère la date ou l'interval
-            if data_recv[3] == 'date':
-                if data_recv[4] == 'now':
-                    data_recv[4] = 0
+            if args[2] == 'date':
                 try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The date to begin should be give as"
-                    error_msg += " timestamp in milliseconds"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])/1000.
-            elif data_recv[3] == 'interval':
-                if dict_jobs[job_name]['persistent']:
-                    error_msg = "KO You can only start a watch on jobs that are"
-                    error_msg += " not persistent"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
+                    # [Mathias] warning, will put floats in here use // instead of / if integers are required
+                    args[3] = 0 if args[3] == 'now' else int(args[3]) / 1000
+                except ValueError:
+                    raise BadRequest(
+                            'KO The date to begin should be '
+                            'given as a timestamp in milliseconds')
+            elif args[2] == 'interval':
                 try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The interval to execute the job should be"
-                    error_msg +=  " give in sec "
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])
+                    args[3] = int(args[3])
+                except ValueError:
+                    raise BadRequest(
+                            'KO The interval to execute the '
+                            'job should be given in seconds')
             else:
                 # TODO Gérer le 'cron' ?
-                error_msg = "KO Only 'date' and 'interval' are allowed to "
-                error_msg += "specify when execute the job"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            # On vérifie si il au moins autant d'arguments qu'exigé pour lancer
-            # la commande
-            if not job['required']:
-                nb_args = 0
-            else:
+                raise BadRequest(
+                        'KO Only "date" and "interval" are allowed '
+                        'to be specified when executing the job')
+            # On vérifie si il au moins autant d'arguments 
+            # qu'exigé pour lancer la commande
+            with JobManager(job_name) as job:
                 nb_args = len(job['required'])
-            if len(data_recv) < nb_args + 5:
-                error_msg = "KO job " + job_name + " required at least "
-                error_msg += str(len(job['required'])) + " arguments"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+                optional = job['optional']
+
+            if len(args) < required_args + nb_args:
+                raise BadRequest(
+                        'KO Job {} requires at least {} arguments'
+                        .format(job_name, nb_args))
+
             # On vérifié qu'il n'y ait pas trop d'arguments
-            if (not job['optional']) and len(data_recv) > nb_args + 5:
-                error_msg = "KO job " + job_name + " doesn't require more "
-                error_msg += "than " + str(len(job['required'])) + " arguments"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        elif request_type == 'stop':
+            if not optional and len(args) > required_args + nb_args:
+                raise BadRequest(
+                        'KO Job {} does not require more than {} arguments'
+                        .format(job_name, nb_args))
+
+        elif request == 'stop':
+            job_name = args[0]
             # On vérifie que le job soit bien installé
-            mutex_jobs.acquire()
-            if not job_name in dict_jobs:
-                mutex_jobs.release()
-                error_msg = "KO No job " + job_name + " is installed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            mutex_jobs.release()
-            # On vérifie que l'instance_id est donné
-            if len(data_recv) < 3:
-                error_msg = "KO To stop a job, you should provide it instance_id"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            # On vérifie si il y a autant d'arguments qu'exigé
-            # (la date à laquelle il faut stopper le job)
-            if len(data_recv) < 5:
-                error_msg = "KO To stop a job you have to specify the date"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-            elif len(data_recv) > 5:
-                error_msg = "KO To stop a job you just have to specify the date"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
+            with JobManager() as jobs:
+                if job_name not in jobs:
+                    raise BadRequest('KO No job {} installed'.format(job_name))
+
             # On récupère la date
-            if data_recv[3] == 'date':
-                if data_recv[4] == 'now':
-                    data_recv[4] = 0
+            if args[2] == 'date':
                 try:
-                    int(data_recv[4])
-                except:
-                    error_msg = "KO The date to stop should be give as"
-                    error_msg += " timestamp in milliseconds"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return []
-                data_recv[4] = int(data_recv[4])/1000.
+                    # [Mathias] warning, will put floats in here use // instead of / if integers are required
+                    args[3] = 0 if args[3] == 'now' else int(args[3]) / 1000
+                except ValueError:
+                    raise BadRequest(
+                            'KO The date to stop should be '
+                            'given as a timestamp in milliseconds')
             else:
-                error_msg = "KO To stop a job you have to specify the date"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        elif request_type == 'ls_jobs':
-            # On vérifie qu'il n'y ait pas d'arguments indésirables
-            if len(data_recv) != 1:
-                error_msg = "KO Message not formed well. For ls_jobs"
-                error_msg += ", no more arguments are needed"
-                self.clientsocket.send(error_msg)
-                self.clientsocket.close()
-                syslog.syslog(syslog.LOG_ERR, error_msg)
-                return []
-        else:
-            error_msg = "KO Action not recognize. Actions possibles are : "
-            error_msg += "add del status start stop restart ls_jobs"
-            self.clientsocket.send(error_msg)
-            self.clientsocket.close()
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            return []
-        return data_recv
-            
+                raise BadRequest(
+                        'KO To stop a job, only a date can be specified')
 
-    def run(self): 
-        global dict_jobs
-        global mutex_jobs
-        r = self.clientsocket.recv(2048)
+        return request, args
 
-        data_recv = self.parse_and_check(r)
-        if len(data_recv) == 0:
-            return
-        request_type = data_recv[0]
-        if request_type != 'ls_jobs':
-            job_name = data_recv[1]
-        if request_type == 'add':
-            # TODO Vérifié que l'appli a bien été installé ?
-            mutex_jobs.acquire()
-            if not data_recv[3]:
-                dict_jobs[job_name] = dict(command=data_recv[2],
-                                           required=data_recv[3],
-                                           optional=data_recv[4],
-                                           set_id = set(),
-                                           persistent=data_recv[5])
-            else:
-                dict_jobs[job_name] = dict(command=data_recv[2],
-                                           required=str(data_recv[3]).split(' '),
-                                           optional=data_recv[4],
-                                           set_id = set(),
-                                           persistent=data_recv[5])
-            mutex_jobs.release()
-        elif request_type == 'del':
+    def execute_request(self, request): 
+        request, extra_args = self.parse(request)
+        scheduler = JobManager().scheduler
+
+        if request == 'ls_jobs':
+            scheduler.add_job(ls_jobs, 'date')
+
+        if request == 'add':
+            job_name, command, required, optional, persistent = extra_args
+            # TODO Vérifier que l'appli a bien été installé ?
+            with JobManager() as jobs:
+                jobs[job_name] = {
+                        'command': command,
+                        'required': required,
+                        'optional': optional,
+                        'persistent': persistent,
+                        'set_id': set(),
+                }
+
+        elif request == 'del':
+            job_name, = extra_args
             # On vérifie si le job n'est pas en train de tourner
-            mutex_jobs.acquire()
-            if len(dict_jobs[job_name]['set_id']) != 0:
-                for instance_id in dict_jobs[job_name]['set_id']:
-                    self.scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                                   instance_id])
-            mutex_jobs.release()
-            # TODO Vérifié que l'appli a bien été déinstallé ?
-            mutex_jobs.acquire()
-            del dict_jobs[job_name]
-            mutex_jobs.release()
-        elif request_type == 'start':
-            if not self.start_job(mutex_jobs, dict_jobs, data_recv):
-                return
-        elif request_type == 'stop':
-            instance_id = data_recv[2]
-            actual_timestamp = time.time()
-            if data_recv[4] < actual_timestamp:
-                date = None
-            else:
-                date = datetime.fromtimestamp(data_recv[4])
-            self.scheduler.add_job(stop_job, 'date', run_date=date,
-                                   args=[job_name, instance_id])
+            with JobManager(job_name) as job:
+                for instance_id in job['set_id']:
+                    scheduler.add_job(stop_job, 'date', args=(job_name,
+                                                              instance_id))
+
+            # TODO Vérifier que l'appli a bien été désinstallé ?
+            with JobManager() as jobs:
+                del jobs[job_name]
+
+        elif request == 'start':
+            job, instance_id, date, value, *args = extra_args
+            self.start_job(job, instance_id, date, value, args)
+
+        elif request == 'stop':
+            job_name, instance_id, _, value = extra_args
+            timestamp = time.time()
+            date = None if value < timestamp else datetime.fromtimestamp(value)
+            scheduler.add_job(stop_job, 'date', run_date=date, args=(job_name,
+                                                                     instance_id))
             try:
-                self.scheduler.remove_job(job_name + instance_id)
+                scheduler.remove_job(job_name + instance_id)
             except JobLookupError:
                 # On vérifie si il n'est pas déjà stoppé
-                mutex_jobs.acquire()
-                job = dict_jobs[job_name]
-                mutex_jobs.release()
-                if not instance_id in job['set_id']:
-                    error_msg = "OK job " + job_name + "with id " + instance_id
-                    error_msg += " is already stopped"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return
-            mutex_jobs.acquire()
-            dict_jobs[job_name]['set_id'].remove(instance_id)
-            mutex_jobs.release()
-        elif request_type == 'status':
-            instance_id = data_recv[2]
+                with JobManager(job_name) as job:
+                    if instance_id not in job['set_id']:
+                        raise BadRequest('OK job {} with id {} is already '
+                                         'stopped'.format(job_name, instance_id))
+
+            with JobManager(job_name) as job:
+                job['set_id'].remove(instance_id)
+
+        elif request == 'status':
+            job_name, instance_id, date_type, date_value = extra_args
+            timestamp = time.time()
+
             # Récupérer le status actuel
-            if data_recv[3] == 'date':
-                actual_timestamp = time.time()
-                if data_recv[4] < actual_timestamp:
-                    date = None
-                else:
-                    date = datetime.fromtimestamp(data_recv[4])
+            if date_type == 'date':
+                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
                 try:
-                    self.scheduler.add_job(status_job, 'date', run_date=date,
-                                           args=[job_name, instance_id,
-                                                 self.scheduler], id=job_name
-                                           + instance_id + "_status")
+                    scheduler.add_job(
+                            status_job, 'date', run_date=date,
+                            args=(job_name, instance_id),
+                            id='{}{}_status'.format(job_name, instance_id))
                 except ConflictingIdError:
-                    error_msg = "KO A watch on instance " + job_name + " with "
-                    error_msg += "id " + instance_id + " is already programmed"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return
+                    raise BadRequest('KO A watch on instance {} with '
+                            'id {} is already programmed'
+                            .format(job_name, instance_id))
             # Programmer de regarder le status régulièrement
-            elif data_recv[3] == 'interval':
-                interval = data_recv[4]
+            elif date_type == 'interval':
                 try:
-                    self.scheduler.add_job(status_job, 'interval', seconds=interval,
-                                           args=[job_name, instance_id,
-                                                 self.scheduler], id=job_name
-                                           + instance_id + "_status")
+                    scheduler.add_job(
+                            status_job, 'interval', seconds=date_value,
+                            args=(job_name, instance_id),
+                            id='{}{}_status'.format(job_name, instance_id))
                 except ConflictingIdError:
-                    error_msg = "KO A watch on instance " + job_name + " with "
-                    error_msg += "id " + instance_id + " is already programmed"
-                    self.clientsocket.send(error_msg)
-                    self.clientsocket.close()
-                    syslog.syslog(syslog.LOG_ERR, error_msg)
-                    return
+                    raise BadRequest('KO A watch on instance {} with '
+                            'id {} is already programmed'
+                            .format(job_name, instance_id))
             # Déprogrammer
-            elif data_recv[3] == 'stop':
-                actual_timestamp = time.time()
-                if data_recv[4] < actual_timestamp:
-                    date = None
-                else:
-                    date = datetime.fromtimestamp(data_recv[4])
-                try:
-                    self.scheduler.get_job(job_name + instance_id + "_status")
-                    # TODO get_job doesn't raise JobLookupError when the job
-                    # isn't found. We have to found a function that does it
-                except JobLookupError:
-                    self.clientsocket.send("KO No watch on the status of the "
-                                           "instance" + job_name + " with the "
-                                           "id " + instance_id + " was programmed")
-                    self.clientsocket.close()
-                    return
-                self.scheduler.add_job(stop_watch, 'date', args=[self.scheduler,
-                                                                 job_name,
-                                                                 instance_id],
-                                       run_date=date)
-        elif request_type == 'restart':
-            # Stop le job si il est lancer
-            instance_id = data_recv[2]
-            mutex_jobs.acquire()
-            if instance_id in dict_jobs[job_name]['set_id']:
-                self.scheduler.add_job(stop_job, 'date', args=[job_name,
-                                                               instance_id])
-            mutex_jobs.release()
+            elif date_type == 'stop':
+                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+                status_job_id = '{}{}_status'.format(job_name, instance_id)
+
+                # TODO get_job doesn't raise JobLookupError when the job
+                # isn't found. We have to found a function that does it
+                # [Mathias] maybe like that:
+                if scheduler.get_job(status_job_id) is None:
+                    raise BadRequest('KO No watch on the status '
+                            'of the instance {} '
+                            'with the id {} was programmed'
+                            .format(job_name, instance_id))
+                scheduler.add_job(
+                        stop_watch, 'date', args=(status_job_id,), run_date=date)
+
+        elif request == 'restart':
+            job_name, instance_id, date, value, *args = extra_args
+            # Stoppe le job si il est lancé
+            with JobManager(job_name) as job:
+                if instance_id in job['set_id']:
+                    scheduler.add_job(
+                            stop_job, 'date', args=(job_name, instance_id))
+
             try:
-                self.scheduler.remove_job(job_name + instance_id)
+                scheduler.remove_job(job_name + instance_id)
             except JobLookupError:
                 pass
-            mutex_jobs.acquire()
-            dict_jobs[job_name]['set_id'].remove(instance_id)
-            mutex_jobs.release()
+
+            with JobManager(job_name) as job:
+                job['set_id'].remove(instance_id)
+
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
-            if not self.start_job(mutex_jobs, dict_jobs, data_recv):
-                return
-        elif request_type == 'ls_jobs':
-            self.scheduler.add_job(ls_jobs, 'date')
-        self.clientsocket.send("OK")
-        self.clientsocket.close()
+            self.start_job(job_name, instance_id, date, value, args)
+
+    def run(self):
+        request = self.socket.recv(2048)
+        try:
+            self.execute_request(request.decode())
+        except BadRequest as e:
+            syslog.syslog(syslog.LOG_ERR, e.reason)
+            self.socket.send(e.reason.encode())
+        except Exception as e:
+            msg = 'Error on request: {} {}'.format(e.__class__.__name__, e)
+            syslog.syslog(syslog.LOG_ERR, msg)
+            self.socket.send('KO {}'.format(msg).encode())
+        else:
+            self.socket.send(b'OK')
+        finally:
+            self.socket.close()
 
 
+if __name__ == '__main__':
+    signal.signal(signal.SIGHUP, signal_term_handler)
 
-if __name__ == "__main__":
-    # Ouverture de la socket d'ecoute
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcpsock.bind(("",1112))
-    num_connexion_max = 1000
-    tcpsock.listen(num_connexion_max)
+    # TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
+    # Configure logger
+    syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
 
-    # Creation du scheduler
-    global scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.start()
-    
-    # Liste de job disponible (+ son mutex)
-    global dict_jobs
-    global mutex_jobs
-    dict_jobs = {}
-    mutex_jobs = threading.Lock()
     # On ajoute tous les jobs déjà présent
     path = '/opt/openbach-agent/jobs/'
-    result_ls = subprocess.check_output(["ls", path]).split('\n')
-    jobs = []
-    for job in result_ls:
-        if job[-4:] == '.cfg':
-            jobs.append(job[:-4])
-    for job_name in jobs:
-        # On vérifie que ce fichier de conf contient tout ce qu'il faut
-        try:
-            conf = Conf(job_name, path)
-        except (NoSectionError, MissingSectionHeaderError, NoOptionError):
-            error_msg = "KO Conf files for job " + job_name + " isn't formed well"
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            continue
-        if conf.required == '':
-            conf.required = False
-        if conf.optional == 'True' or conf.optional == 'true':
-            conf.optional = True
-        elif conf.optional == 'False' or conf.optional == 'false':
-            conf.optional = False
-        else:
-            error_msg = "KO Conf 'optional' for job " + job_name + " should"
-            error_msg += "be a boolean"
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            continue
-        if conf.persistent == 'True' or conf.persistent == 'true':
-            conf.persistent = True
-        elif conf.persistent == 'False' or conf.persistent == 'false':
-            conf.persistent = False
-        else:
-            error_msg = "KO Conf 'persistent' for job " + job_name + " should"
-            error_msg += "be a boolean"
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            continue
-        # On ajoute le job a la liste des jobs disponibles
-        if not conf.required:
-            dict_jobs[job_name] = dict(command=conf.command,
-                                       required=conf.required,
-                                       optional=conf.optional,
-                                       set_id = set(),
-                                       persistent=conf.persistent)
-        else:
-            dict_jobs[job_name] = dict(command=conf.command,
-                                       required=str(conf.required).split(' '),
-                                       optional=conf.optional,
-                                       set_id = set(),
-                                       persistent=conf.persistent)
+    with JobManager(init=True) as jobs:
+        for job in list_jobs_in_dir(path):
+            # On vérifie que ce fichier de conf contient tout ce qu'il faut
+            try:
+                conf = JobConfiguration(path, job)
+            except BadRequest as e:
+                syslog.syslog(syslog.LOG_ERR, e.reason)
+                continue
+
+            # On ajoute le job a la liste des jobs disponibles
+            jobs[job] = {
+                    'command': conf.command,
+                    'required': conf.required,
+                    'optional': conf.optional,
+                    'set_id': set(),
+                    'persistent': conf.persistent,
+            }
+
+    # Ouverture de la socket d'ecoute
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp_socket.bind(('',1112))
+    tcp_socket.listen(1000)
 
     while True:
-        (clientsocket, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(clientsocket, scheduler, path)
-        newthread.start()
+        client_socket, _ = tcp_socket.accept()
+        ClientThread(client_socket, path).start()
 

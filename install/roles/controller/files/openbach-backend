@@ -19,12 +19,12 @@ case "$1" in
 start)
     printf "%-50s" "Starting $NAME..."
     cd $DAEMON_PATH
-    PID=`python $DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
+    PID=`$DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
     if [ -z $PID ]; then
         printf "%s\n" "Fail"
     else
         echo $PID > $PIDFILE
-        PID2=`python $DAEMON2 > /dev/null 2>&1 & echo $!`
+        PID2=`$DAEMON2 > /dev/null 2>&1 & echo $!`
         if [ -z $PID2 ]; then
             kill -HUP $PID
             printf "%s\n" "Fail"

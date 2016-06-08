@@ -1,44 +1,31 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
 add_agent.py - <+description+>
 """
 
-from frontend import add_agent
 import argparse
-import pprint
-
-
-def main(agent_ip, collector_ip, username, password, name):
-    r = add_agent(agent_ip, collector_ip, username, password, name)
-    print r
-    pprint.pprint(r.json())
+from frontend import add_agent, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - Add Agent',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', metavar='agent_ip', type=str, nargs=1,
-                        help='IP Address of the Agent')
-    parser.add_argument('collector_ip', metavar='collector_ip', type=str, nargs=1,
-                        help='IP Address of the Collector')
-    parser.add_argument('username', metavar='username', type=str, nargs=1,
-                        help='Username of the Agent')
-    parser.add_argument('password', metavar='password', type=str, nargs=1,
-                        help='Password of the Agent')
-    parser.add_argument('name', metavar='name', type=str, nargs=1,
-                        help='Name of the Agent')
+    parser.add_argument('agent_ip', help='IP Address of the Agent')
+    parser.add_argument('collector_ip', help='IP Address of the Collector')
+    parser.add_argument('username', help='Username of the Agent')
+    parser.add_argument('password', help='Password of the Agent')
+    parser.add_argument('name', help='Name of the Agent')
     
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip[0]
-    collector_ip = args.collector_ip[0]
-    username = args.username[0]
-    password = args.password[0]
-    name = args.name[0]
+    agent_ip = args.agent_ip
+    collector_ip = args.collector_ip
+    username = args.username
+    password = args.password
+    name = args.name
 
-    main(agent_ip, collector_ip, username, password, name)
+    pretty_print(add_agent)(agent_ip, collector_ip, username, password, name)
 

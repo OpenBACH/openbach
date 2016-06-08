@@ -1,162 +1,144 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import threading
 import socket
 import shlex
 import requests
-import ConfigParser
-from requests.exceptions import ConnectionError
+import traceback
+from configparser import ConfigParser
+
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 
-class ClientThread(threading.Thread):
-    def __init__(self, conf):
-        threading.Thread.__init__(self)
-        self.conf = conf
+BOOLEAN = frozenset({'t', 'T', 'true', 'True', 'TRUE', 'f', 'F', 'false', 'False', 'FALSE'})
+URL = 'http://127.0.0.1:{}/write?db={}&precision={}&u={}&p={}'
 
-    def send_stat(self, stat_name, stats):
-        # recuperation des stats
-        time = stats["time"]
-        del stats["time"]
-        stats_v09 = ''
-        for k, v in stats.iteritems():
-            if stats_v09 != '':
-                stats_v09 += ','
-            try:
-                int(v)
-                stats_v09 += k + "=" + v + "i"
-            except:
-                try:
-                    float(v)
-                    stats_v09 += k + "=" + v
-                except:
-                    boolean=['t','T','true','True','TRUE','f','F','false','False','FALSE']
-                    if v in boolean:
-                        stats_v09 += k + "=" + v
-                    else:
-                        stats_v09 += k + "=\"" + v + "\""
 
-        # Former la commande
-        url = "http://" + '127.0.0.1' + ":" + self.conf.port
-        url += "/write?db=" + self.conf.database + "&precision="
-        url += self.conf.time_precision + "&u=" + self.conf.username + "&p="
-        url += self.conf.password
-        data = stat_name + " " + stats_v09 + " " + str(time)
-
-        # Envoyer la commande
+def parse_type(value):
+    try:
+        int(value)
+        return '{}i'.format(value)
+    except ValueError:
         try:
-            result = requests.post(url, data=data)
-        except ConnectionError:
-            error = "ConnectionError"
-            print error
-            return error
-        return result._content
-
-    def parse_and_check(self, r):
-        data_recv = shlex.split(r)
-        if (len(data_recv) < 4) | (len(data_recv)%2 != 0):
-            error = "Message not formed well"
-            print error
-            return []
-        try:
-            data_recv[1] = int(data_recv[1])
-        except:
-            error = "Timestamp should be an int in millisecond"
-            print error
-            return []
-        return data_recv
-
-    def check_and_send(self, data):
-        data_recv = self.parse_and_check(data)
-        if len(data_recv) == 0:
-            return False
-        stat_name = data_recv[0]
-        stats = { 'time': data_recv[1] }
-        for i in range((len(data_recv) - 2)/2):
-            stats[data_recv[2+2*i]] = data_recv[3+2*i]
-        self.send_stat(stat_name, stats)
-        return True
+            float(value)
+            return value
+        except ValueError:
+            if value in BOOLEAN:
+                return value
+            else:
+                return '"{}"'.format(value)
 
 
-class ClientThreadTcp(ClientThread):
-    def __init__(self, clientsocket, conf):
-        ClientThread.__init__(self, conf)
-        self.clientsocket = clientsocket
+def send_stat(stat_name, time, stats, url):
+    # Former la commande
+    data = '{0} {2} {1}'.format(stat_name, time,
+        ','.join('{}={}'.format(k, parse_type(v)) for k, v in stats.items()))
 
-    def run(self):
-        r = self.clientsocket.recv(2048)
-        response = self.check_and_send(r)
-        if not response:
-            self.clientsocket.send("KO")
-            self.clientsocket.close()
-            return
-        self.clientsocket.send("OK")
-        self.clientsocket.close()
+    # Envoyer la commande
+    try:
+        result = requests.post(url, data=data)
+    except requests.ConnectionError:
+        traceback.print_stack()
+        return 'ConnectionError'
+    return result._content
 
 
-class ClientThreadUdp(ClientThread):
-    def __init__(self, data, conf):
-        ClientThread.__init__(self, conf)
-        self.data = data
+def parse_and_check(data):
+    data_received = shlex.split(data)
 
-    def run(self):
-        return self.check_and_send(self.data)
+    num_args = len(data_received)
+    if num_args < 4 or num_args % 2:
+        raise ValueError('Message not formed well')
+
+    try:
+        data_received[1] = int(data_received[1])
+    except ValueError:
+        raise ValueError('Timestamp should be an int in milliseconds')
+
+    return data_received
+
+
+def grouper(iterable, n):
+    args = [iter(iterable)] * n
+    return zip(*args)
+
+
+def check_and_send(data, url):
+    try:
+        request = parse_and_check(data.decode())
+    except ValueError as err:
+        print(err)
+        traceback.print_stack()
+        return False
+
+    request_iterator = grouper(request, 2)
+    stat_name, time = next(request_iterator)
+    stats = {key:value for key, value in request_iterator}
+    send_stat(stat_name, time, stats, url)
+
+    return True
+
+
+def handle_command_tcp(client_socket, url):
+    data = client_socket.recv(2048)
+    response = check_and_send(data, url)
+    client_socket.send(b'KO' if not response else b'OK')
+    client_socket.close()
 
 
 class TcpThread(threading.Thread):
-    def __init__(self, tcpsock):
-        threading.Thread.__init__(self)
-        self.tcpsock = tcpsock
+    def __init__(self, tcp_socket, url):
+        super().__init__()
+        self.socket = tcp_socket
+        self.url = url
 
     def run(self):
         while True:
-            (clientsocket, (ip, port)) = tcpsock.accept()
-            newthread = ClientThreadTcp(clientsocket, conf)
-            newthread.start()
+            client, _ = self.socket.accept()
+            threading.Thread(target=handle_command_tcp, args=(client, self.url)).start()
 
 
 class UdpThread(threading.Thread):
-    def __init__(self, udpsock):
-        threading.Thread.__init__(self)
-        self.udpsock = udpsock
+    def __init__(self, udp_socket, url):
+        super().__init__()
+        self.socket = udp_socket
+        self.url = url
     
     def run(self):
         while True:
-            d = self.udpsock.recvfrom(1024)
-            data = d[0]
-            newthread = ClientThreadUdp(data, conf)
-            newthread.start()
+            data = self.socket.recv(1024)
+            threading.Thread(target=check_and_send, args=(data, self.url)).start()
 
 
 class Conf:
-    def __init__(self, confpath="config.ini"):
-        Config = ConfigParser.ConfigParser()
-        Config.read(confpath)
-        self.collectstats_port = Config.get('collectstats', 'port')
-        self.port = Config.get('influxdb', 'port')
-        self.database = Config.get('influxdb', 'database')
-        self.username = Config.get('influxdb', 'username')
-        self.password = Config.get('influxdb', 'password')
-        self.time_precision = Config.get('influxdb', 'time_precision')
+    def __init__(self, conf_path='config.ini'):
+        config = ConfigParser()
+        config.read(conf_path)
+        self.collectstats_port = int(config['collectstats']['port'])
+
+        database = config['influxdb']
+        self.port = database['port']
+        self.database = database['database']
+        self.username = database['username']
+        self.password = database['password']
+        self.time_precision = database['time_precision']
 
 
-if __name__ == "__main__":
-    conf = Conf("collectstats.cfg")
+if __name__ == '__main__':
+    conf = Conf('collectstats.cfg')
+    url = URL.format(conf.port, conf.database, conf.time_precision, conf.username, conf.password)
 
     # Creer la socket udp
-    udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udpsock.bind(("", int(conf.collectstats_port)))
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(('', conf.collectstats_port))
 
     # Creer la socket tcp
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcpsock.bind(("", int(conf.collectstats_port)))
-    num_connexion_max = 1000
-    tcpsock.listen(num_connexion_max)
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(('', conf.collectstats_port))
+    tcp.listen(1000)
 
     # Lancer l'ecoute sur les deux sockets
-    newthread_tcp = TcpThread(tcpsock)
-    newthread_tcp.start()
-    newthread_udp = UdpThread(udpsock)
-    newthread_udp.start()
+    TcpThread(tcp, url).start()
+    UdpThread(udp, url).start()
 

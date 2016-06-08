@@ -1,33 +1,42 @@
 ---
 
-- name: Install python-pip
-  apt: pkg=python-pip state=installed update_cache=false
+- name: Install python3-pip
+  apt: pkg=python3-pip state=installed update_cache=false
 
 - name: Install Django
-  pip: name=django
+  pip: name=django executable=pip3
 
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach/
 
 - name: Copy the sources
   copy: src=../src/ dest=/opt/openbach/
-    
+
 - name: Set the influxdb port to use
   replace: dest=/opt/openbach/backend/openbach-conductor.py regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
 
+- name: Copy openbach-frontend scripts
+  copy: src=../src/frontend_scripts/ dest=/opt/openbach/frontend_scripts/ mode=0755
+
+- name: Copy openbach-controller scripts
+  copy: src=../src/backend/{{ item }} dest=/opt/openbach/backend mode=0755
+  with_items:
+    - manage.py
+    - openbach-conductor.py
+
 - name: Initialize the database
-  shell: python /opt/openbach/backend/manage.py {{ item }}
+  shell: /opt/openbach/backend/manage.py {{ item }}
   with_items:
     - makemigrations
     - migrate
-    
+
 - name: Create a default superuser on the database
-  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | python /opt/openbach/backend/manage.py shell
+  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach/backend/manage.py shell
   ignore_errors: yes
 
 - name: Create openbach-backend service
   copy: src=openbach-backend dest=/etc/init.d/ mode=0755
-    
+
 - name: Start openbach-backend
   service: name=openbach-backend state=started
 

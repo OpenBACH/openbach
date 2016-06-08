@@ -38,7 +38,7 @@ def conductor_execute(command):
 
 
 @check_post_data
-def add_agent(data):
+def install_agent(data):
     try:
         agent_data = {key: data[key] for key in ('address', 'username', 'collector', 'name')}
         password = data['password']
@@ -56,7 +56,7 @@ def add_agent(data):
     except IntegrityError:
         return {'msg': 'Name of the Agent already used'}, 409
 
-    result = conductor_execute('add_agent {}'.format(agent.address))
+    result = conductor_execute('install_agent {}'.format(agent.address))
     response = {'msg': result}
     if result.startswith('KO'):
         agent.delete()
@@ -68,7 +68,7 @@ def add_agent(data):
 
 
 @check_post_data
-def del_agent(data):
+def uninstall_agent(data):
     try:
         ip_address = data['address']
     except KeyError:
@@ -82,7 +82,7 @@ def del_agent(data):
                 'address': ip_address,
         }, 404
 
-    result = conductor_execute('del_agent {}'.format(agent.address))
+    result = conductor_execute('uninstall_agent {}'.format(agent.address))
     response = {'msg': result}
     if result == 'OK':
         agent.delete()
@@ -360,7 +360,7 @@ def push_file(data):
 
 
 @check_post_data
-def start_instance(data):
+def start_job_instance(data):
     try:
         agent_ip = data['agent_ip']
         job_name = data['job_name']
@@ -391,9 +391,9 @@ def start_instance(data):
     instance.save()
 
     if 'interval' in data:
-        cmd = 'start_instance interval {} {}'.format(data['interval'], instance.id)
+        cmd = 'start_job_instance interval {} {}'.format(data['interval'], instance.id)
     else:
-        cmd = 'start_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+        cmd = 'start_job_instance date {} {}'.format(data.get('date', 'now'), instance.id)
 
     result = conductor_execute(cmd)
     response = {'msg': result}
@@ -409,7 +409,7 @@ def start_instance(data):
 
 
 @check_post_data
-def stop_instance(data):
+def stop_job_instance(data):
     try:
         instance_ids = data['instance_ids']
     except KeyError:
@@ -421,7 +421,7 @@ def stop_instance(data):
 
     response = {'msg': 'OK', 'error': []}
     for instance in instances:
-        result = conductor_execute('stop_instance {} {}'.format(date, instance.id))
+        result = conductor_execute('stop_job_instance {} {}'.format(date, instance.id))
         if result == 'OK':
             instance.delete()
         else:
@@ -435,7 +435,7 @@ def stop_instance(data):
 
 
 @check_post_data
-def restart_instance(data):
+def restart_job_instance(data):
     try:
         instance_id = data['instance_id']
         instance_args = data['instance_args']
@@ -450,7 +450,7 @@ def restart_instance(data):
                 'instance_id': instance_id,
         }, 404
 
-    # TODO: keep it consistent with start_instance
+    # TODO: keep it consistent with start_job_instance
     if len(instance_args) != 0:
         instance.args = ' '.join(instance_args)
         try:
@@ -463,9 +463,9 @@ def restart_instance(data):
         instance.save()
 
     if 'interval' in data:
-        cmd = 'restart_instance interval {} {}'.format(data['interval'], instance.id)
+        cmd = 'restart_job_instance interval {} {}'.format(data['interval'], instance.id)
     else:
-        cmd = 'restart_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+        cmd = 'restart_job_instance date {} {}'.format(data.get('date', 'now'), instance.id)
 
     result = conductor_execute(cmd)
     response = {'msg': result}
@@ -511,7 +511,7 @@ def status_jobs(data):
 
 
 @check_post_data
-def status_instance(data):
+def status_job_instance(data):
     try:
         instance_id = data['instance_id']
     except:
@@ -567,11 +567,11 @@ def status_instance(data):
         should_delete_watch = False
         interval = int(data['interval'])
         watch.interval = interval
-        cmd = 'status_instance interval {} {}'.format(interval, instance_id)
+        cmd = 'status_job_instance interval {} {}'.format(interval, instance_id)
     elif 'stop' in data:
-        cmd = 'status_instance stop {} {}'.format(data['stop'], instance_id)
+        cmd = 'status_job_instance stop {} {}'.format(data['stop'], instance_id)
     else:
-        cmd = 'status_instance date {} {}'.format(data.get('date', 'now'), instance_id)
+        cmd = 'status_job_instance date {} {}'.format(data.get('date', 'now'), instance_id)
     watch.save()
 
     result = conductor_execute(cmd)
@@ -586,7 +586,7 @@ def status_instance(data):
 
 
 def _build_instance_infos(instance, update):
-    """Helper function to simplify `list_instances`"""
+    """Helper function to simplify `list_job_instances`"""
     error_msg = None
     if update:
         result = conductor_execute('update_instance {}'.format(instance.id))
@@ -605,7 +605,7 @@ def _build_instance_infos(instance, update):
 
 
 @check_post_data
-def list_instances(data):
+def list_job_instances(data):
     try:
         agents_ip = data['addresses']
     except KeyError:

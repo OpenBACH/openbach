@@ -2,12 +2,12 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-start_instance.py - <+description+>
+start_job_instance.py - <+description+>
 """
 
 import argparse
 import pprint
-from frontend import start_instance, status_instance, date_to_timestamp, pretty_print
+from frontend import start_job_instance, status_job_instance, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -20,7 +20,7 @@ class DateMetavarHelper:
 
 
 def main(agent_ip, job_name, arguments, date, interval, status=None):
-    response = start_instance(agent_ip, job_name, arguments, date, interval)
+    response = start_job_instance(agent_ip, job_name, arguments, date, interval)
     print('Start Instance:')
     print(response)
     infos = response.json()
@@ -29,7 +29,7 @@ def main(agent_ip, job_name, arguments, date, interval, status=None):
     if status is not None:
         instance_id = int(infos['instance_id'])
         print('Start watch of the status:')
-        pretty_print(status_instance)(instance_id, interval=status)
+        pretty_print(status_job_instance)(instance_id, interval=status)
 
 
 if __name__ == "__main__":

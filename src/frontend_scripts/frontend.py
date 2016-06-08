@@ -45,7 +45,7 @@ def date_to_timestamp(date, fmt='%Y-%m-%d %H:%M:%S.%f'):
     return int(timestamp * 1000)
 
 
-def add_agent(agent_ip, collector_ip, username, password, name):
+def install_agent(agent_ip, collector_ip, username, password, name):
     return _post_message('agents', 'add',
             address=agent_ip, username=username,
             password=password, collector=collector_ip,
@@ -56,7 +56,7 @@ def add_job(job_name, path):
     return _post_message('jobs', 'add', name=job_name, path=path)
 
 
-def del_agent(agent_ip):
+def uninstall_agent(agent_ip):
     return _post_message('agents', 'del', address=agent_ip)
 
 
@@ -82,7 +82,7 @@ def list_installed_jobs(agent_ip, update=None):
             address=agent_ip, update=bool(update))
 
 
-def list_instances(agents_ip, update=None):
+def list_job_instances(agents_ip, update=None):
     return _post_message('instances', 'list',
             addresses=agents_ip, update=bool(update))
 
@@ -97,7 +97,7 @@ def push_file(local_path, remote_path, agent_ip):
             agent_ip=agent_ip)
 
 
-def restart_instance(instance_id, arguments=None, date=None, interval=None):
+def restart_job_instance(instance_id, arguments=None, date=None, interval=None):
     action = partial(_post_message, instance_id=instance_id,
             instance_args=[] if arguments is None else arguments)
     if interval is not None:
@@ -108,7 +108,7 @@ def restart_instance(instance_id, arguments=None, date=None, interval=None):
     return action('instances', 'restart')
 
 
-def start_instance(agent_ip, job_name, arguments=None, date=None,
+def start_job_instance(agent_ip, job_name, arguments=None, date=None,
                    interval=None):
     action = partial(_post_message, agent_ip=agent_ip, job_name=job_name,
             instance_args=[] if arguments is None else arguments)
@@ -124,7 +124,7 @@ def status_agents(agents_ip):
     return _post_message('agents', 'status', addresses=agents_ip)
 
 
-def status_instance(instance_id, date=None, interval=None, stop=None, agent_ip=None,
+def status_job_instance(instance_id, date=None, interval=None, stop=None, agent_ip=None,
                     job_name=None):
     action = partial(_post_message, instance_id=instance_id)
     if agent_ip is not None and job_name is not None:
@@ -143,7 +143,7 @@ def status_jobs(agents_ip):
     return _post_message('jobs', 'status', addresses=agents_ip)
 
 
-def stop_instance(instance_ids, date=None):
+def stop_job_instance(instance_ids, date=None):
     action = partial(_post_message, instance_ids=instance_ids)
     if date is not None:
         action = partial(action, date=date)

@@ -2,11 +2,11 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-add_agent.py - <+description+>
+install_agent.py - <+description+>
 """
 
 import argparse
-from frontend import add_agent, pretty_print
+from frontend import install_agent, pretty_print
 
 
 if __name__ == "__main__":
@@ -27,5 +27,5 @@ if __name__ == "__main__":
     password = args.password
     name = args.name
 
-    pretty_print(add_agent)(agent_ip, collector_ip, username, password, name)
+    pretty_print(install_agent)(agent_ip, collector_ip, username, password, name)
 

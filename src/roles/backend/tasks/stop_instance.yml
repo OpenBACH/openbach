@@ -1,4 +1,0 @@
----
-
-- name: Stop Instance
-  shell: /opt/openbach-agent/openbach-baton stop {{ job_name }} {{ id }} {{ date }}

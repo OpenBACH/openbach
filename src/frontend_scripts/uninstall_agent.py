@@ -3,11 +3,11 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-del_agent.py - <+description+>
+uninstall_agent.py - <+description+>
 """
 
 import argparse
-from frontend import del_agent, pretty_print
+from frontend import uninstall_agent, pretty_print
 
 
 if __name__ == "__main__":
@@ -20,5 +20,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     agent_ip = args.agent_ip
 
-    pretty_print(del_agent)(agent_ip)
+    pretty_print(uninstall_agent)(agent_ip)
 

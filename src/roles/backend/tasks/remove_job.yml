@@ -1,4 +1,4 @@
 ---
 
 - name: Remove Job
-  shell: /opt/openbach-agent/openbach-baton del {{ job_name }}
+  shell: /opt/openbach-agent/openbach-baton del_job_agent {{ job_name }}

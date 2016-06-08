@@ -231,21 +231,21 @@ class JobConfiguration:
 
 class ClientThread(threading.Thread):
     REQUIREMENTS = {
-            'ls_jobs': (0, ''),
-            'add': (1, 'You should provide the job name'),
-            'del': (1, 'You should provide the job name'),
-            'status':
+            'list_jobs_agent': (0, ''),
+            'add_job_agent': (1, 'You should provide the job name'),
+            'del_job_agent': (1, 'You should provide the job name'),
+            'status_job_instance_agent':
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),
-            'start':
+            'start_job_instance_agent':
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value. '
                 'Optional arguments may follow'),
-            'restart':
+            'restart_job_instance_agent':
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value. '
                 'Optional arguments may follow'),
-            'stop':
+            'stop_job_instance_agent':
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),
     }
@@ -315,10 +315,10 @@ class ClientThread(threading.Thread):
         if provided_args < required_args:
             raise BadRequest('KO Message not formed well. {}.'.format(error_msg))
 
-        if provided_args > required_args and request not in ('start', 'restart'):
+        if provided_args > required_args and request not in ('start_job_instance_agent', 'restart_job_instance_agent'):
             raise BadRequest('KO Message not formed well. Too much arguments.')
 
-        if request == 'add':
+        if request == 'add_job_agent':
             job_name = args[0]
             # On vérifie si le job est déjà installé
             with JobManager() as jobs:
@@ -333,7 +333,7 @@ class ClientThread(threading.Thread):
             args.append(conf.optional)
             args.append(conf.persistent)
 
-        elif request == 'del':
+        elif request == 'del_job_agent':
             job_name = args[0]
             # On vérifie que le job soit bien installé
             with JobManager() as jobs:
@@ -341,7 +341,7 @@ class ClientThread(threading.Thread):
                     raise BadRequest(
                             'OK No job {} is installed'.format(job_name))
 
-        elif request == 'status':
+        elif request == 'status_job_instance_agent':
             job_name = args[0]
             # On vérifie que le job soit bien installé
             with JobManager() as jobs:
@@ -372,7 +372,7 @@ class ClientThread(threading.Thread):
                         'KO Only "date", "interval" and "stop" '
                         'are allowed with the status action')
 
-        elif request in ('start', 'restart'):
+        elif request in ('start_job_instance_agent', 'restart_job_instance_agent'):
             job_name = args[0]
             # On vérifie que le job soit bien installé
             with JobManager() as jobs:
@@ -427,7 +427,7 @@ class ClientThread(threading.Thread):
                         'KO Job {} does not require more than {} arguments'
                         .format(job_name, nb_args))
 
-        elif request == 'stop':
+        elif request == 'stop_job_instance_agent':
             job_name = args[0]
             # On vérifie que le job soit bien installé
             with JobManager() as jobs:
@@ -453,10 +453,10 @@ class ClientThread(threading.Thread):
         request, extra_args = self.parse(request)
         scheduler = JobManager().scheduler
 
-        if request == 'ls_jobs':
+        if request == 'list_jobs_agent':
             scheduler.add_job(ls_jobs, 'date')
 
-        if request == 'add':
+        if request == 'add_job_instance_agent':
             job_name, command, required, optional, persistent = extra_args
             # TODO Vérifier que l'appli a bien été installé ?
             with JobManager() as jobs:
@@ -468,7 +468,7 @@ class ClientThread(threading.Thread):
                         'set_id': set(),
                 }
 
-        elif request == 'del':
+        elif request == 'del_job_instance_agent':
             job_name, = extra_args
             # On vérifie si le job n'est pas en train de tourner
             with JobManager(job_name) as job:
@@ -480,11 +480,11 @@ class ClientThread(threading.Thread):
             with JobManager() as jobs:
                 del jobs[job_name]
 
-        elif request == 'start':
+        elif request == 'start_job_instance_agent':
             job, instance_id, date, value, *args = extra_args
             self.start_job(job, instance_id, date, value, args)
 
-        elif request == 'stop':
+        elif request == 'stop_job_instance_agent':
             job_name, instance_id, _, value = extra_args
             timestamp = time.time()
             date = None if value < timestamp else datetime.fromtimestamp(value)
@@ -502,7 +502,7 @@ class ClientThread(threading.Thread):
             with JobManager(job_name) as job:
                 job['set_id'].remove(instance_id)
 
-        elif request == 'status':
+        elif request == 'status_job_instance_agent':
             job_name, instance_id, date_type, date_value = extra_args
             timestamp = time.time()
 
@@ -545,7 +545,7 @@ class ClientThread(threading.Thread):
                 scheduler.add_job(
                         stop_watch, 'date', args=(status_job_id,), run_date=date)
 
-        elif request == 'restart':
+        elif request == 'restart_job_instance_agent':
             job_name, instance_id, date, value, *args = extra_args
             # Stoppe le job si il est lancé
             with JobManager(job_name) as job:

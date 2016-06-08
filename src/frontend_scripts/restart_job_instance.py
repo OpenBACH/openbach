@@ -2,11 +2,11 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-restart_instance.py - <+description+>
+restart_job_instance.py - <+description+>
 """
 
 import argparse
-from frontend import restart_instance, date_to_timestamp, pretty_print
+from frontend import restart_job_instance, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -39,5 +39,5 @@ if __name__ == "__main__":
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
 
-    pretty_print(restart_instance)(instance_id, arguments, date, interval)
+    pretty_print(restart_job_instance)(instance_id, arguments, date, interval)
 

@@ -1,0 +1,4 @@
+---
+
+- name: Get the status of the Job Instance
+  shell: /opt/openbach-agent/openbach-baton status_job_instance_agent {{ job_name }} {{ id }} {{ date_interval_stop }}

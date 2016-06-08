@@ -2,11 +2,11 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-status_instance.py - <+description+>
+status_job_instance.py - <+description+>
 """
 
 import argparse
-from frontend import status_instance, date_to_timestamp, pretty_print
+from frontend import status_job_instance, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -46,5 +46,5 @@ if __name__ == "__main__":
     if any(pair_ip_name) and not all(pair_ip_name):
         parser.error('-a and -j arguments must be provided by pairs')
 
-    pretty_print(status_instance)(instance_id, date, interval, stop, agent_ip, job_name)
+    pretty_print(status_job_instance)(instance_id, date, interval, stop, agent_ip, job_name)
 

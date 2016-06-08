@@ -46,7 +46,7 @@ class PlaybookBuilder():
             print(key, value, file=extra_vars_filename)
 
         if instance_type is not None:
-            print('    - include: {}{}_instance.yml'
+            print('    - include: {}{}.yml'
                       .format(self.path_src, instance_type),
                   file=playbook)
 
@@ -79,7 +79,7 @@ class PlaybookBuilder():
 
     def build_start(self, job_name, instance_id, job_args, date, interval,
                     playbook_handle, extra_vars_handle):
-        instance = 'start'
+        instance = 'start_job_instance_agent'
         variables = {
                 'job_name:': job_name,
                 'id:': instance_id,
@@ -98,7 +98,7 @@ class PlaybookBuilder():
 
     def build_status(self, job_name, instance_id, date, interval, stop,
                      playbook_handle, extra_vars_handle):
-        instance = 'status'
+        instance = 'status_job_instance_agent'
         variables = {
                 'job_name:': job_name,
                 'id:': instance_id,
@@ -118,7 +118,7 @@ class PlaybookBuilder():
 
     def build_restart(self, job_name, instance_id, job_args, date, interval,
                       playbook_handle, extra_vars_handle):
-        instance = 'restart'
+        instance = 'restart_job_instance_agent'
         variables = {
                 'job_name:': job_name,
                 'id:': instance_id,
@@ -140,16 +140,16 @@ class PlaybookBuilder():
                 'id:': instance_id,
                 'date: date': date,
         }
-        return self._build_helper('stop', playbook, variables, extra_vars)
+        return self._build_helper('stop_job_instance_agent', playbook, variables, extra_vars)
 
     def build_status_agent(self, playbook_file):
         print('    - name: Get status of openbach-agent', file=playbook_file)
         print('      shell: /etc/init.d/openbach-agent status', file=playbook_file)
         return True
     
-    def build_ls_jobs(self, playbook_file):
+    def build_list_jobs_agent(self, playbook_file):
         print('    - name: Get the list of the installed jobs', file=playbook_file)
-        print('      shell: /opt/openbach-agent/openbach-baton ls_jobs', file=playbook_file)
+        print('      shell: /opt/openbach-agent/openbach-baton list_jobs_agent', file=playbook_file)
         return True
     
     def build_enable_log(self, syslogseverity, syslogseverity_local, job_path,
@@ -186,18 +186,18 @@ class BadRequest(Exception):
 
 class ClientThread(threading.Thread):
     REQUESTS_CHECKER = {
-            'add_agent': (2, 'the ip address of the agent'),
-            'del_agent': (2, 'the ip address of the agent'),
+            'install_agent': (2, 'the ip address of the agent'),
+            'uninstall_agent': (2, 'the ip address of the agent'),
             'update_agent': (2, 'the ip address of the agent'),
             'update_jobs': (2, 'the ip address of the agent'),
             'install_job':
                 (3, 'the ip address of the agent and the name of the job'),
             'uninstall_job':
                 (3, 'the ip address of the agent and the name of the job'),
-            'start_instance': (4, 'the id of the instance'),
-            'restart_instance': (4, 'the id of the instance'),
-            'status_instance': (4, 'the id of the instance'),
-            'stop_instance': (3, 'the id of the instance'),
+            'start_job_instance': (4, 'the id of the instance'),
+            'restart_job_instance': (4, 'the id of the instance'),
+            'status_job_instance': (4, 'the id of the instance'),
+            'stop_job_instance': (3, 'the id of the instance'),
             'update_job_stat_policy': (3, 'the id of the instance'),
             'status_agents': (2, 'at least one ip address of an agent'),
             'status_jobs': (2, 'at least one ip address of an agent'),
@@ -216,18 +216,18 @@ class ClientThread(threading.Thread):
     }
 
     NO_DATE_REQUESTS = {
-            'add_agent', 'del_agent', 'install_job',
+            'install_agent', 'uninstall_agent', 'install_job',
             'uninstall_job', 'status_agents', 'update_agent',
             'status_jobs', 'update_jobs', 'update_instance',
             'push_file',
     }
 
     ONLY_DATE_REQUESTS = {
-            'stop_instance', 'update_job_log_severity', 'update_job_stat_policy',
+            'stop_job_instance', 'update_job_log_severity', 'update_job_stat_policy',
     }
 
     DATE_INTERVAL_REQUESTS = {
-            'start_instance', 'restart_instance', 'status_instance',
+            'start_job_instance', 'restart_job_instance', 'status_job_instance',
     }
 
     UPDATE_AGENT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
@@ -294,7 +294,7 @@ class ClientThread(threading.Thread):
         # name of one of the following method: call it
         getattr(self, request)(*args)
 
-    def add_agent(self, agent_id):
+    def install_agent(self, agent_id):
         agent = Agent.objects.get(pk=agent_id)
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
@@ -312,7 +312,7 @@ class ClientThread(threading.Thread):
             ' /opt/openbach/agent.yml --tags install'
             .format(agent=agent))
 
-    def del_agent(self, agent_id):
+    def uninstall_agent(self, agent_id):
         agent = Agent.objects.get(pk=agent_id)
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
@@ -353,7 +353,7 @@ class ClientThread(threading.Thread):
             '{job.path}/uninstall_{job.name}.yml'
             .format(agent=agent, job=job))
 
-    def start_instance(self, watch_type, time_value, instance_id):
+    def start_job_instance(self, watch_type, time_value, instance_id):
             date = time_value if watch_type == 'date' else None
             interval = time_value if watch_type == 'interval' else None
             instance = Instance.objects.get(pk=instance_id)
@@ -374,7 +374,7 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
 
-    def stop_instance(self, date, instance_id):
+    def stop_job_instance(self, date, instance_id):
         instance = Instance.objects.get(pk=instance_id)
         job = instance.job.job
         agent = instance.job.agent
@@ -392,7 +392,7 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
 
-    def restart_instance(self, watch_type, time_value, instance_id):
+    def restart_job_instance(self, watch_type, time_value, instance_id):
             date = time_value if watch_type == 'date' else None
             interval = time_value if watch_type == 'interval' else None
             instance = Instance.objects.get(pk=instance_id)
@@ -413,7 +413,7 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
 
-    def status_instance(self, watch_type, time_value, instance_id):
+    def status_job_instance(self, watch_type, time_value, instance_id):
         date = time_value if watch_type == 'date' else None
         interval = time_value if watch_type == 'interval' else None
         stop = time_value if watch_type == 'stop' else None
@@ -524,7 +524,7 @@ class ClientThread(threading.Thread):
 
             self.playbook_builder.write_hosts(agent.address)
             with self.playbook_builder.playbook_file('status_jobs') as playbook:
-                self.playbook_builder.build_ls_jobs(playbook) 
+                self.playbook_builder.build_list_jobs_agent(playbook) 
             try:
                 self.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '

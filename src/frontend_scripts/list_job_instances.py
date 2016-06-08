@@ -3,11 +3,11 @@
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
 """
-list_instances.py - <+description+>
+list_job_instances.py - <+description+>
 """
 
 import argparse
-from frontend import list_instances, pretty_print
+from frontend import list_job_instances, pretty_print
 
 
 if __name__ == "__main__":
@@ -23,5 +23,5 @@ if __name__ == "__main__":
     agents_ip = args.agents_ip
     update = args.update
 
-    pretty_print(list_instances)(agents_ip, update)
+    pretty_print(list_job_instances)(agents_ip, update)
 

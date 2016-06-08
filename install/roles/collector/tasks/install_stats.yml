@@ -1,7 +1,10 @@
 ---
 
+- name: Create Collectstats repository
+  file: path=/opt/collectstats state=directory
+
 - name: Install Collectstats
-  copy: src=collectstats/ dest=/opt/collectstats/ mode=0644
+  copy: src=collectstats/collectstats.py dest=/opt/collectstats/ mode=0755
 
 - name: Configure Collectstats
   template: src=collectstats.cfg.j2 dest=/opt/collectstats/collectstats.cfg

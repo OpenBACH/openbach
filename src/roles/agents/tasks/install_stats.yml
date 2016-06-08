@@ -4,7 +4,7 @@
   file: path=/var/log/openbach state=directory mode=0755
 
 - name: Install Rstats
-  copy: src=rstats/ dest=/opt/rstats/ mode=0644
+  copy: src=rstats/ dest=/opt/rstats/ mode=0755
 
 - name: Configure Rstats
   template: src=rstats.cfg.j2 dest=/opt/rstats/rstats.cfg

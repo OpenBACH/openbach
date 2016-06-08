@@ -6,6 +6,7 @@ start_instance.py - <+description+>
 """
 
 import argparse
+import pprint
 from frontend import start_instance, status_instance, date_to_timestamp, pretty_print
 
 

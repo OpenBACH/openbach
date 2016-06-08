@@ -1,5 +1,2 @@
 ---
 
-- name: Uninstall Rsyslog
-  apt: pkg=rsyslog state=absent update_cache=false
-

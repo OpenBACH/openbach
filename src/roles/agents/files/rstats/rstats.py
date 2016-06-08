@@ -4,6 +4,7 @@ import threading
 import logging
 import socket
 import shlex
+import os.path
 from configparser import ConfigParser
 from collections import namedtuple
 
@@ -107,24 +108,25 @@ class Rstats:
 
     def send_stat(self, stat_name, stats):
         self._mutex.acquire()
-        local = self.is_denied(stat_name)
+        local = self._is_denied(stat_name)
         if self.prefix:
             stat_name = '{}.{}'.format(self.prefix, stat_name)
 
         # recuperation des stats
-        time = stats['time']
+        time = str(stats['time'])
         del stats['time']
-        formatted_stats = [
+        formatted_header_log = [
                 'Stat{{0}}{}'.format(stat_name),
                 'Time{{0}}{}'.format(time),
-        ] + ['{}{{0}}{}'.format(k, v) for k, v in stats.items()]
-        stats_to_send = ' '.join(formatted_stats).format(' ')
-        logs = ', '.join(formatted_stats).format(': ')
+        ]
+        formatted_stats = ['{}{{0}}{}'.format(k, v) for k, v in stats.items()]
+        stats_to_send = stat_name + ' ' + time + ' ' + ' '.join(formatted_stats).format(' ')
+        logs = ', '.join(formatted_header_log).format(': ') + ', ' + ', '.join(formatted_stats).format(': ')
         self._logger.info(logs)
 
         if not local:
             try:
-                send_function = {'udp': self._send_upd, 'tcp': self._send_tcp}[self.conf.mode]
+                send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
             except KeyError:
                 raise BadRequest('Mode not known')
             send_function(stats_to_send)
@@ -162,7 +164,7 @@ def grouper(iterable, n):
 
 class Conf:
     def __init__(self, conf_path='config.ini'):
-        config = configparser.ConfigParser()
+        config = ConfigParser()
         config.read(conf_path)
         self.host = config.get('collectstats', 'host')
         self.port = config.get('collectstats', 'port')
@@ -188,7 +190,7 @@ class ClientThread(threading.Thread):
         data_received = shlex.split(data)
         try:
             request_type = int(data_received[0])
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
         bounds = [(3, 4), (6, None), (2, 2), (1, 1)]
@@ -291,7 +293,7 @@ class ClientThread(threading.Thread):
         return functions[request-1](*args)
 
     def run(self):
-        data = self.clientsocket.recv(2048)
+        data = self.socket.recv(2048)
         try:
             result = self.execute_request(data.decode())
         except BadRequest as e:
@@ -318,6 +320,6 @@ if __name__ == '__main__':
     conf = Conf('rstats.cfg')
 
     while True:
-        client = tcp_socket.accept()
+        client, _ = tcp_socket.accept()
         ClientThread(client, conf).start()
 

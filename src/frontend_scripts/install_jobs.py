@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
@@ -40,5 +40,5 @@ if __name__ == "__main__":
     #  -> use only the first agent ip
     agents_ips = [agents_ips[0]]
 
-    pretty_print(install_jobs)(jobs_name, agents_ip)
+    pretty_print(install_jobs)(jobs_names, agents_ips)
 

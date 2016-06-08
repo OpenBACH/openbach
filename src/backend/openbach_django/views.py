@@ -136,7 +136,7 @@ def add_job(data):
     try:
         with open('{}.help'.format(config_prefix)) as f:
             help = f.read()
-    except FileNotFoundError:
+    except OSError:
         help = ''
 
     Job(
@@ -214,7 +214,7 @@ def get_job_help(data):
     return {'job_name': job_name, 'help': job.help}, 200
 
 
-@check_pots_data
+@check_post_data
 def install_jobs(data):
     try:
         addresses = data['addresses']
@@ -313,10 +313,10 @@ def list_installed_jobs(data):
     if update:
         result = conductor_execute('update_jobs {}'.format(agent.address))
         if result.startswith('KO 1'):
-            response_data['errors'].append({'error': result[5:]})
+            response['errors'].append({'error': result[5:]})
         elif result.startswith('KO 2'):
-            response_data['errors'].append({
-                'jobs_name': results[5:],
+            response['errors'].append({
+                'jobs_name': result[5:],
                 'error': 'These Jobs aren\'t in the Job list of the Controller',
             })
 
@@ -378,8 +378,7 @@ def start_instance(data):
         }, 404
 
     instance = Instance(job=installed_job)
-    # TODO: Vérifier s’il faut pas joindre avec un espace
-    instance.args = ''.join(instance_args)
+    instance.args = ' '.join(instance_args)
     try:
         instance.validate_args_len()  # Maybe use instance.set_arguments(instance_args) instead
     except ValueError:
@@ -417,7 +416,7 @@ def stop_instance(data):
         return {'msg': 'POST data malformed'}, 400
 
     
-    instances = Instance.objects.filter(pk__in=instances_ids)
+    instances = Instance.objects.filter(pk__in=instance_ids)
     date = data.get('date', 'now')
 
     response = {'msg': 'OK', 'error': []}
@@ -452,15 +451,16 @@ def restart_instance(data):
         }, 404
 
     # TODO: keep it consistent with start_instance
-    instance.args = ' '.join(instance_args)
-    try:
-        instance.validate_args_len()
-    except ValueError:
-        return {
-                'msg': 'Arguments given don\'t match with arguments needed',
-        }, 400
+    if len(instance_args) != 0:
+        instance.args = ' '.join(instance_args)
+        try:
+            instance.validate_args_len()
+        except ValueError:
+            return {
+                    'msg': 'Arguments given don\'t match with arguments needed',
+            }, 400
 
-    instance.save()
+        instance.save()
 
     if 'interval' in data:
         cmd = 'restart_instance interval {} {}'.format(data['interval'], instance.id)
@@ -489,7 +489,7 @@ def status_agents(data):
     else:
         return {
                 'msg': 'At least one of the Agents isn\'t in the database',
-                'addresses': response,
+                'addresses': result,
         }, 404
 
 
@@ -506,7 +506,7 @@ def status_jobs(data):
     else:
         return {
                 'msg': 'At least one of the Agents isn\'t in the database',
-                'addresses': response,
+                'addresses': result,
         }, 404
 
 
@@ -584,7 +584,7 @@ def status_instance(data):
         watch.delete()
         return response, 404
 
-.
+
 def _build_instance_infos(instance, update):
     """Helper function to simplify `list_instances`"""
     error_msg = None
@@ -622,7 +622,7 @@ def list_instances(data):
 
     response = {'instances': [
         {
-            'address': ip_address,
+            'address': agent.address,
             'installed_job': [
                 {
                     'job_name': j.job.name,
@@ -664,15 +664,13 @@ def update_job_log_severity(data):
         }, 404
 
     instance = Instance(job=logs_job)
-    instance.status = "starting ..."
-    instance.update_status = timezone.now()
-    instance.save()
-
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
         instance.validate_args_len()
     except ValueError:
         return {'msg', 'Arguments given don\'t match with arguments needed'}, 400
+    instance.status = "starting ..."
+    instance.update_status = timezone.now()
     instance.save()
 
     result = conductor_execute(
@@ -685,6 +683,9 @@ def update_job_log_severity(data):
     if result == 'KO':
         instance.delete()
         return response, 404
+    instance.status = "Started"
+    instance.update_status = timezone.now()
+    instance.save()
     return response, 200
 
 
@@ -725,15 +726,13 @@ def update_job_stat_policy(data):
         }, 404
 
     instance = Instance(job=rstats_job)
-    instance.status = "starting ..."
-    instance.update_status = timezone.now()
-    instance.save()
-
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
         instance.validate_args_len()
     except ValueError:
         return {'msg': 'Arguments given don\'t match with arguments needed'}, 400
+    instance.status = "starting ..."
+    instance.update_status = timezone.now()
     instance.save()
 
     result = conductor_execute(
@@ -747,5 +746,8 @@ def update_job_stat_policy(data):
         installed_job.deny_stats = old_deny_stats
         installed_job.save()
         return response, 404
+    instance.status = "Started"
+    instance.update_status = timezone.now()
+    instance.save()
     return response, 200
 

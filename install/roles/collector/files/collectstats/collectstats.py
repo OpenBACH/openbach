@@ -67,7 +67,8 @@ def grouper(iterable, n):
 def check_and_send(data, url):
     try:
         request = parse_and_check(data.decode())
-    except ValueError:
+    except ValueError as err:
+        print(err)
         traceback.print_stack()
         return False
 

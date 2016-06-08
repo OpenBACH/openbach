@@ -16,8 +16,8 @@
   file: path=/opt/openbach-jobs/ state=absent
 
 - name: Remove python-apscheduler
-  pip: name=apscheduler state=absent
+  pip: name=apscheduler state=absent executable=pip3
 
-- name: Remove python-pip
-  apt: pkg=python-pip state=absent update_cache=false
+- name: Remove python3-pip
+  apt: pkg=python3-pip state=absent update_cache=false
   

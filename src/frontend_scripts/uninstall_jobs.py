@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
@@ -7,6 +7,7 @@ uninstall_jobs.py - <+description+>
 """
 
 import argparse
+import itertools
 from frontend import uninstall_jobs, pretty_print
 
 

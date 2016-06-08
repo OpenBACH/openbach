@@ -23,7 +23,7 @@ class Agent(models.Model):
 
     def set_password(self, raw_password):
         # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
-        self.password = hashers.make_password(raw_password, algo='sha1')
+        #self.password = hashers.make_password(raw_password, algo='sha1')
         self.password = raw_password
 
     def check_password(self, raw_password):

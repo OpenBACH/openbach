@@ -51,18 +51,19 @@ def register_stat(conffile, job_name, prefix=None):
         syslog.syslog(syslog.LOG_ERR, '\t{}'.format(result))
 
 
-def send_stat(connection_id, stat_name, timestamp, value_name, value):
-    cmd = '2 ' + connection_id + ' ' + stat_name + ' ' +  str(timestamp)
-    if type(value_name) == list:
-        if type(value) == list:
-            if len(value) != len(value_name):
+def send_stat(connection_id, stat_name, timestamp, value_names, values):
+    # TODO send_stat(..., **kwargs)
+    cmd = '2 {} {} {}'.format(connection_id, stat_name, timestamp)
+    if isinstance(value_names, list):
+        if isinstance(values, list):
+            if len(values) != len(value_names):
                 return 'KO, You should provide as many value as value_name'
-            for i in range(len(value)):
-                cmd += ' ' + value_name[i] + ' ' + str(value[i])
+            args = ' '.join('{} {}'.format(name, value) for name, value in zip(value_names, values))
+            cmd = '{} {}'.format(cmd, args)
         else:
             return 'KO, You should provide as many value as value_name'
     else:
-        cmd +=  ' ' + value_name + ' ' +  str(value)
+        cmd = '{} {} {}'.format(cmd, value_names, values)
     return _rstat_send_message(cmd)
 
 

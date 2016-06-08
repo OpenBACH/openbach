@@ -8,7 +8,6 @@ status_jobs.py - <+description+>
 
 import argparse
 from frontend import status_jobs, pretty_print
-import pprint
 
 
 if __name__ == "__main__":
@@ -21,5 +20,5 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_jobs)(args._agents_ip)
+    pretty_print(status_jobs)(args.agents_ip)
 

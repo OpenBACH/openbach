@@ -7,7 +7,6 @@ status_instance.py - <+description+>
 
 import argparse
 from frontend import status_instance, date_to_timestamp, pretty_print
-import pprint
 
 
 class DateMetavarHelper:

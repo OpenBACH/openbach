@@ -15,12 +15,13 @@ import requests
 from datetime import datetime
 from contextlib import contextmanager
 
-from django.utils import timezone
-from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.wsgi import get_wsgi_application
 os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
+
+from django.utils import timezone
+from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
+from django.core.exceptions import ObjectDoesNotExist
 
 
 _SEVERITY_MAPPING = {
@@ -137,13 +138,13 @@ class PlaybookBuilder():
         variables = {
                 'job_name:': job_name,
                 'id:': instance_id,
-                'date:': date,
+                'date: date': date,
         }
         return self._build_helper('stop', playbook, variables, extra_vars)
 
     def build_status_agent(self, playbook_file):
         print('    - name: Get status of openbach-agent', file=playbook_file)
-        print('    - shell: /etc/init.d/openbach-agent status', file=playbook_file)
+        print('      shell: /etc/init.d/openbach-agent status', file=playbook_file)
         return True
     
     def build_ls_jobs(self, playbook_file):
@@ -154,7 +155,7 @@ class PlaybookBuilder():
     def build_enable_log(self, syslogseverity, syslogseverity_local, job_path,
             playbook_file):
         if syslogseverity != 8 or syslogseverity_local != 8:
-            src_file = 'src={}/template/{{{{ item.src }}}}'.format(job_path)
+            src_file = 'src={}/templates/{{{{ item.src }}}}'.format(job_path)
             print('    - name: Push new rsyslog conf files', file=playbook_file)
             print('      template:', src_file,
                   'dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}'
@@ -238,9 +239,10 @@ class ClientThread(threading.Thread):
         self.clientsocket = clientsocket
         self.playbook_builder = PlaybookBuilder('/tmp/', '/opt/openbach/roles/backend/tasks/')
     
-    def launch_playbook(self, cmd_ansible)
-        p = subprocess.run(cmd_ansible, shell=True)
-        if not p.returncode:
+    def launch_playbook(self, cmd_ansible):
+        p = subprocess.Popen(cmd_ansible, shell=True)
+        p.wait()
+        if p.returncode:
             raise BadRequest('KO')
 
     def check_date_interval(self, data_recv):
@@ -255,7 +257,7 @@ class ClientThread(threading.Thread):
                 self.ONLY_DATE_REQUESTS,
                 self.DATE_INTERVAL_REQUESTS)):
             if request_type in commands:
-                if len(date_params) == length:
+                if len(date_params) >= length:
                     return
                 raise BadRequest('KO Message not formed well. '
                         'Expected {} date parameters to execute the order'
@@ -265,7 +267,7 @@ class ClientThread(threading.Thread):
 
     def parse_and_check(self, message):
         data_received = shlex.split(message)
-        self.check_date_interval(data_received):
+        self.check_date_interval(data_received)
 
         request_type = data_received[0]
         try:
@@ -296,9 +298,9 @@ class ClientThread(threading.Thread):
         agent = Agent.objects.get(pk=agent_id)
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
-        with self.playbook_builder.extra_vars_file():
+        with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
-            print('agent_name:', agent.name)
+            print('agent_name:', agent.name, file=extra_vars)
         self.launch_playbook(
             'ansible-playbook -i /tmp/openbach_hosts -e '
             '@/tmp/openbach_agents -e '
@@ -359,8 +361,7 @@ class ClientThread(threading.Thread):
             agent = instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
             with self.playbook_builder.playbook_file(
-                    'start_{}'.format(job.name)) as playbook,
-            self.playbook_builder.extra_vars_file() as extra_vars:
+                    'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
                 self.playbook_builder.build_start(
                         job.name, instance.id,
                         instance.args, date, interval,
@@ -379,8 +380,7 @@ class ClientThread(threading.Thread):
         agent = instance.job.agent
         self.playbook_builder.write_hosts(agent.address)
         with self.playbook_builder.playbook_file(
-                'stop_{}'.format(job.name)) as playbook,
-        self.playbook_builder.extra_vars_file() as extra_vars:
+                'stop_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_stop(
                     job.name, instance.id, date,
                     playbook, extra_vars)
@@ -400,8 +400,7 @@ class ClientThread(threading.Thread):
             agent = instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
             with self.playbook_builder.playbook_file(
-                    'restart_{}'.format(job.name)) as playbook,
-            self.playbook_builder.extra_vars_file() as extra_vars:
+                    'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
                 self.playbook_builder.build_restart(
                         job.name, instance.id,
                         instance.args, date, interval,
@@ -414,19 +413,18 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
 
-    def status_instance(self, watch_type, time_value, watch_id):
+    def status_instance(self, watch_type, time_value, instance_id):
         date = time_value if watch_type == 'date' else None
         interval = time_value if watch_type == 'interval' else None
         stop = time_value if watch_type == 'stop' else None
-        watch = Watch.objects.get(pk=watch_id)
+        watch = Watch.objects.get(pk=instance_id)
         job = watch.job.job
         agent = watch.job.agent
         self.playbook_builder.write_hosts(agent.address)
         with self.playbook_builder.playbook_file(
-                'status_{}'.format(job.name)) as playbook,
-        self.playbook_builder.extra_vars_file() as extra_vars:
+                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_status(
-                    job.name, instance.id,
+                    job.name, instance_id,
                     date, interval, stop,
                     playbook, extra_vars)
         self.launch_playbook(
@@ -515,17 +513,17 @@ class ClientThread(threading.Thread):
             raise BadRequest('OK Status Updated')
         raise BadRequest('OK Status Not Updated')
 
-    def status_job(self, *agents_ips):
+    def status_jobs(self, *agents_ips):
         error_msg = ''
         for agent_ip in agents_ips:
             try:
-                agents.append(Agent.objects.get(pk=agent_ip))
+                agent = Agent.objects.get(pk=agent_ip)
             except ObjectDoesNotExist:
                 error_msg += agent_ip + ' '
                 continue
 
             self.playbook_builder.write_hosts(agent.address)
-            with self.playbook_builder.playbook_file('status_job') as playbook:
+            with self.playbook_builder.playbook_file('status_jobs') as playbook:
                 self.playbook_builder.build_ls_jobs(playbook) 
             try:
                 self.launch_playbook(
@@ -617,8 +615,7 @@ class ClientThread(threading.Thread):
         syslogseverity_local = convert_severity(int(local_severity))
         disable = 0
         self.playbook_builder.write_hosts(agent.address)
-        with self.playbook_builder.playbook_file('logs') as playbook,
-        self.playbook_builder.extra_vars_file() as extra_vars:
+        with self.playbook_builder.playbook_file('logs') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             if syslogseverity == 8:
                 disable += 1
             else:
@@ -654,7 +651,7 @@ class ClientThread(threading.Thread):
         agent = instance.job.agent
         rstats_job_path = instance.job.job.path
         job_name = instance.args.split()[0]
-        installed_name = '{} on {}'.format(job_nam, agent.address)
+        installed_name = '{} on {}'.format(job_name, agent.address)
         installed_job = Installed_Job.objects.get(pk=installed_name)
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
             print('[default]', file=rstats_filter)
@@ -669,8 +666,7 @@ class ClientThread(threading.Thread):
         self.playbook_builder.write_hosts(agent.address)
         remote_path = ('/opt/openbach-jobs/{0}/{0}{1}'
                 '_rstats_filter.conf.locked').format(job_name, instance.id)
-        with self.playbook_builder.playbook_file('rstats') as playbook,
-        self.playbook_builder.extra_vars_file() as extra_vars:
+        with self.playbook_builder.playbook_file('rstats') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_push_file(
                     rstats_filter.name, remote_path, playbook)
             self.playbook_builder.build_start(

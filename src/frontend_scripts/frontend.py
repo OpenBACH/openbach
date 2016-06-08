@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
@@ -17,7 +17,7 @@ except ImportError:
     import json
 
 
-_URL = "http://localhost:8000/{}/{}/"
+_URL = "http://localhost:8000/{}/{}"
 
 
 def _post_message(entry_point, verb, **kwargs):
@@ -70,7 +70,7 @@ def get_job_help(job_name):
 
 def install_jobs(jobs_name, agents_ip):
     return _post_message('jobs', 'install',
-            names=job_names, addresses=agents_ip)
+            names=jobs_name, addresses=agents_ip)
 
 
 def list_agents(update=None):
@@ -177,3 +177,4 @@ def update_job_stat_policy(agent_ip, job_name, accept_stats, deny_stats,
         action = partial(action, date=date)
 
     return action('jobs', 'stat_policy')
+

@@ -26,14 +26,15 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 
-import sys.path
+import sys
 sys.path.insert(0, '/opt/rstats/')
 import rstats_api as rstats
 
 
+
 PID_FOLDER = '/var/run/openbach'
 RSTAT_REGISTER_STAT = partial(
-        rstat.register_stat,
+        rstats.register_stat,
         '/opt/openbach-agent/openbach-agent_filter.conf',
         'openbach-agent')
 
@@ -72,19 +73,20 @@ def signal_term_handler(signal, frame):
     scheduler.remove_all_jobs()
     with JobManager() as all_jobs:
         for name, job in all_jobs.items():
-            for instance in job['set_id']:
-                scheduler.add_job(stop_job, 'date', args=(name, instance))
+            for instance_id in job['set_id']:
+                scheduler.add_job(stop_job, 'date', args=(name, instance_id))
 
     while scheduler.get_jobs():
         time.sleep(0.5)
     scheduler.shutdown()
-    shutil.rmtree(PID_FOLDER, ignore_errors=True)
+    for root, _, filename in os.walk(PID_FOLDER):
+        os.remove(os.path.join(root, filename))
     exit(0)
 
 
 def launch_job(job_name, instance_id, command, args):
     proc = subprocess.Popen(
-            [command, args],
+            command.split() + args.split(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL)
     with open('{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id), 'w') as f:
@@ -93,10 +95,14 @@ def launch_job(job_name, instance_id, command, args):
     
 def stop_job(job_name, instance_id):
     pid_filename = '{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id)
-    with open(pid_filename) as f:
-        pid = int(f.read())
+    try:
+        with open(pid_filename) as f:
+            pid = int(f.read())
+    except FileNotFoundError:
+        return
 
-    subprocess.run('pkill -TERM -P {0}; kill -TERM {0}'.format(pid), shell=True)
+    p = subprocess.Popen('pkill -TERM -P {0}; kill -TERM {0}'.format(pid), shell=True)
+    p.wait()
     os.remove(pid_filename)
 
     
@@ -135,7 +141,7 @@ def status_job(job_name, instance_id):
     rstats.send_stat(connection, stat_name, timestamp, 'status', status)
     
 
-def stop_watch(job_id)
+def stop_watch(job_id):
     try:
         JobManager().scheduler.remove_job(job_id)
     except JobLookupError:
@@ -148,9 +154,12 @@ def ls_jobs():
     # Récupération des jobs disponibles
     with JobManager() as jobs:
         count = len(jobs)
+        # TODO send_stat(..., **kwargs)
+        # job_names = {'nb': count}
+        # job_names.update({'job{}'.format(i): job for i, job in enumerate(jobs, 1)})
         values = [count] + list(jobs)
         header = ['job{}'.format(i) for i in range(count)]
-        header[0] = 'nb'
+        header.insert(0, 'nb')
     
     # Construction du nom de la stat
     stat_name = "jobs_list"
@@ -162,6 +171,8 @@ def ls_jobs():
         
     # Envoie de la stat à Rstats
     rstats.send_stat(connection, 'jobs_list', timestamp, header, values)
+    # TODO send_stat(..., **kwargs)
+    # rstats.send_stat(connection, 'jobs_list', timestamp, **job_names)
         
 
 class BadRequest(ValueError):
@@ -220,7 +231,7 @@ class JobConfiguration:
 
 class ClientThread(threading.Thread):
     REQUIREMENTS = {
-            'ls_job': (0, ''),
+            'ls_jobs': (0, ''),
             'add': (1, 'You should provide the job name'),
             'del': (1, 'You should provide the job name'),
             'status':
@@ -244,7 +255,7 @@ class ClientThread(threading.Thread):
         self.socket = client_socket
         self.path = path
         
-    def start_job(self, name, instance, date_type, date_value, args):
+    def start_job(self, name, instance_id, date_type, date_value, args):
         with JobManager(name) as job:
             command = job['command']
 
@@ -255,13 +266,14 @@ class ClientThread(threading.Thread):
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'date', run_date=date,
-                        args=(name, instance, command, arguments), id=name+instance)
+                        args=(name, instance_id, command, arguments),
+                        id=name+instance_id)
             except ConflictingIdError:
                 raise BadRequest('KO A job {} is already programmed'.format(name))
 
             with JobManager(name) as job:
                 if job['persistent']:
-                    job['set_id'].add(instance)
+                    job['set_id'].add(instance_id)
 
         elif date_type == 'interval':
             with JobManager(name) as job:
@@ -274,14 +286,15 @@ class ClientThread(threading.Thread):
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'interval', seconds=date_value,
-                        args=(name, instance, command, arguments), id=name+instance)
+                        args=(name, instance_id, command, arguments),
+                        id=name+instance_id)
             except ConflictingIdError:
                 raise BadRequest(
                         'KO An instance {} with the id {} '
-                        'is already programmed'.format(name, instance))
+                        'is already programmed'.format(name, instance_id))
 
             with JobManager(name) as job:
-                job['set_id'].add(instance)
+                job['set_id'].add(instance_id)
 
     def parse(self, request):
         try:
@@ -366,15 +379,15 @@ class ClientThread(threading.Thread):
                 if job_name not in jobs:
                     raise BadRequest('KO No job {} is installed'.format(job_name))
 
-            instance = args[1]
+            instance_id = args[1]
             # On vérifie si il n'est pas déjà demarré
             # (seulement dans le cas 'start')
             if request == 'start':
                 with JobManager(job_name) as job:
-                    if instance in job['set_id']:
+                    if instance_id in job['set_id']:
                         raise BadRequest(
                                 'KO Instance {} with id {} is '
-                                'already started'.format(job_name, instance)) 
+                                'already started'.format(job_name, instance_id)) 
 
             # On récupère la date ou l'interval
             if args[2] == 'date':
@@ -437,7 +450,7 @@ class ClientThread(threading.Thread):
         return request, args
 
     def execute_request(self, request): 
-        request, *extra_args = self.parse(request)
+        request, extra_args = self.parse(request)
         scheduler = JobManager().scheduler
 
         if request == 'ls_jobs':
@@ -459,35 +472,38 @@ class ClientThread(threading.Thread):
             job_name, = extra_args
             # On vérifie si le job n'est pas en train de tourner
             with JobManager(job_name) as job:
-                for instance in job['set_id']:
-                    scheduler.add_job(stop_job, 'date', args=(job_name, instance))
+                for instance_id in job['set_id']:
+                    scheduler.add_job(stop_job, 'date', args=(job_name,
+                                                              instance_id))
 
             # TODO Vérifier que l'appli a bien été désinstallé ?
             with JobManager() as jobs:
                 del jobs[job_name]
 
         elif request == 'start':
-            job, instance, date, value, *args = extra_args
-            self.start_job(job, instance, date, value, args)
+            job, instance_id, date, value, *args = extra_args
+            self.start_job(job, instance_id, date, value, args)
 
         elif request == 'stop':
-            job_name, instance, _, value = extra_args
+            job_name, instance_id, _, value = extra_args
             timestamp = time.time()
             date = None if value < timestamp else datetime.fromtimestamp(value)
-            scheduler.add_job(stop_job, 'date', run_date=date, args=(job_name, instance))
+            scheduler.add_job(stop_job, 'date', run_date=date, args=(job_name,
+                                                                     instance_id))
             try:
                 scheduler.remove_job(job_name + instance_id)
             except JobLookupError:
                 # On vérifie si il n'est pas déjà stoppé
                 with JobManager(job_name) as job:
-                    if instance not in job['set_id']:
-                        raise BadRequest('OK job {} with id {} is already stopped'.format(job_name, instance))
+                    if instance_id not in job['set_id']:
+                        raise BadRequest('OK job {} with id {} is already '
+                                         'stopped'.format(job_name, instance_id))
 
             with JobManager(job_name) as job:
-                job['set_id'].remove(instance)
+                job['set_id'].remove(instance_id)
 
         elif request == 'status':
-            job_name, instance, date_type, date_value = extra_args
+            job_name, instance_id, date_type, date_value = extra_args
             timestamp = time.time()
 
             # Récupérer le status actuel
@@ -496,19 +512,19 @@ class ClientThread(threading.Thread):
                 try:
                     scheduler.add_job(
                             status_job, 'date', run_date=date,
-                            args=(job_name, instance),
-                            id='{}{}_status'.format(job_name, instance))
+                            args=(job_name, instance_id),
+                            id='{}{}_status'.format(job_name, instance_id))
                 except ConflictingIdError:
                     raise BadRequest('KO A watch on instance {} with '
                             'id {} is already programmed'
-                            .format(job_name, instance))
+                            .format(job_name, instance_id))
             # Programmer de regarder le status régulièrement
             elif date_type == 'interval':
                 try:
                     scheduler.add_job(
                             status_job, 'interval', seconds=date_value,
                             args=(job_name, instance_id),
-                            id='{}{}_status'.format(job_name, instance))
+                            id='{}{}_status'.format(job_name, instance_id))
                 except ConflictingIdError:
                     raise BadRequest('KO A watch on instance {} with '
                             'id {} is already programmed'
@@ -516,26 +532,26 @@ class ClientThread(threading.Thread):
             # Déprogrammer
             elif date_type == 'stop':
                 date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
-                status_job = '{}{}_status'.format(job_name, instance)
+                status_job_id = '{}{}_status'.format(job_name, instance_id)
 
                 # TODO get_job doesn't raise JobLookupError when the job
                 # isn't found. We have to found a function that does it
                 # [Mathias] maybe like that:
-                if scheduler.get_job(status_job) is None:
+                if scheduler.get_job(status_job_id) is None:
                     raise BadRequest('KO No watch on the status '
                             'of the instance {} '
                             'with the id {} was programmed'
-                            .format(job_name, instance))
+                            .format(job_name, instance_id))
                 scheduler.add_job(
-                        stop_watch, 'date', args=(status_job,), run_date=date)
+                        stop_watch, 'date', args=(status_job_id,), run_date=date)
 
         elif request == 'restart':
-            job_name, instance, date, value, *args = extra_args
+            job_name, instance_id, date, value, *args = extra_args
             # Stoppe le job si il est lancé
             with JobManager(job_name) as job:
-                if instance in job['set_id']:
+                if instance_id in job['set_id']:
                     scheduler.add_job(
-                            stop_job, 'date', args=(job_name, instance))
+                            stop_job, 'date', args=(job_name, instance_id))
 
             try:
                 scheduler.remove_job(job_name + instance_id)
@@ -543,10 +559,10 @@ class ClientThread(threading.Thread):
                 pass
 
             with JobManager(job_name) as job:
-                job['set_id'].remove(instance)
+                job['set_id'].remove(instance_id)
 
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
-            self.start_job(job_name, instance, date, value, args)
+            self.start_job(job_name, instance_id, date, value, args)
 
     def run(self):
         request = self.socket.recv(2048)
@@ -555,11 +571,12 @@ class ClientThread(threading.Thread):
         except BadRequest as e:
             syslog.syslog(syslog.LOG_ERR, e.reason)
             self.socket.send(e.reason.encode())
-        except Exception:
-            syslog.syslog(syslog.LOG_ERR, 'Can\'t decode request')
-            self.socket.send(b'KO Can\'t decode request')
+        except Exception as e:
+            msg = 'Error on request: {} {}'.format(e.__class__.__name__, e)
+            syslog.syslog(syslog.LOG_ERR, msg)
+            self.socket.send('KO {}'.format(msg).encode())
         else:
-            self.socket.send('OK')
+            self.socket.send(b'OK')
         finally:
             self.socket.close()
 

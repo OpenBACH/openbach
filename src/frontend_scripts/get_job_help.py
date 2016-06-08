@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Author: Adrien THIBAUD / <adrien.thibaud@toulouse.viveris.com>
 
@@ -15,8 +15,11 @@ def pretty_print(job_name):
     print(response)
 
     infos = response.json()
-    print('Job name:', infos['job_name'])
-    print(infos['help'])
+    if 'help' in infos:
+        print('Job name:', infos['job_name'])
+        print(infos['help'])
+    else:
+        print(infos)
 
 
 if __name__ == "__main__":

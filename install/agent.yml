@@ -12,13 +12,13 @@
         - add_agent
 
     - name: Add an Agent
-      shell: python /opt/openbach/frontend_scripts/add_agent.py {{ item.ip }} {{ collector_ip }} {{ agent_username }} {{ agent_password }} {{item.name}}
+      shell: python /opt/openbach/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ agent_username }} {{ agent_password }} {{item.name}}
       with_items: '{{agents}}'
       tags:
         - add_agent
 
     - name: Del an Agent
-      shell: python /opt/openbach/frontend_scripts/del_agent.py {{ item.ip }}
+      shell: python /opt/openbach/frontend_scripts/uninstall_agent.py {{ item.ip }}
       with_items: '{{agents}}'
       tags:
         - del_agent

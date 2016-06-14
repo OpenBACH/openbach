@@ -231,7 +231,7 @@ class JobConfiguration:
 
 class ClientThread(threading.Thread):
     REQUIREMENTS = {
-            'list_jobs_agent': (0, ''),
+            'status_jobs_agent': (0, ''),
             'add_job_agent': (1, 'You should provide the job name'),
             'del_job_agent': (1, 'You should provide the job name'),
             'status_job_instance_agent':
@@ -453,10 +453,10 @@ class ClientThread(threading.Thread):
         request, extra_args = self.parse(request)
         scheduler = JobManager().scheduler
 
-        if request == 'list_jobs_agent':
+        if request == 'status_jobs_agent':
             scheduler.add_job(ls_jobs, 'date')
 
-        if request == 'add_job_instance_agent':
+        if request == 'add_job_agent':
             job_name, command, required, optional, persistent = extra_args
             # TODO Vérifier que l'appli a bien été installé ?
             with JobManager() as jobs:
@@ -468,7 +468,7 @@ class ClientThread(threading.Thread):
                         'set_id': set(),
                 }
 
-        elif request == 'del_job_instance_agent':
+        elif request == 'del_job_agent':
             job_name, = extra_args
             # On vérifie si le job n'est pas en train de tourner
             with JobManager(job_name) as job:
@@ -566,6 +566,7 @@ class ClientThread(threading.Thread):
 
     def run(self):
         request = self.socket.recv(2048)
+        print(request.decode())
         try:
             self.execute_request(request.decode())
         except BadRequest as e:

@@ -38,6 +38,25 @@ then
     echo "You should provide the password of the Collector"
     exit
 fi
+read -p "Auditorium Ip Address : " auditorium_address
+if [ -z $auditorium_address ]
+then
+    echo "You should provide the IP address of the Auditorium"
+    exit
+fi
+read -p "SSH Auditorium Username : " auditorium_username
+if [ -z $auditorium_username ]
+then
+    echo "You should provide the username of the Auditorium"
+    exit
+fi
+read -s -p "SSH Auditorium Password : ? " auditorium_password
+echo
+if [ -z $auditorium_password ]
+then
+    echo "You should provide the password of the Auditorium"
+    exit
+fi
 
 
 list_local_ip=`hostname -I`
@@ -55,6 +74,8 @@ echo -e "[Controller]\n$controller_address\n" > /tmp/openbach_hosts
 echo "controller_ip: $controller_address" > configs/ips
 echo -e "[Collector]\n$collector_address" >> /tmp/openbach_hosts
 echo "collector_ip: $collector_address" >> configs/ips
+echo -e "[Auditorium]\n$auditorium_address" >> /tmp/openbach_hosts
+echo "auditorium_ip: $auditorium_address" >> configs/ips
 
 
 echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
@@ -67,6 +88,11 @@ echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $collector_password" >> /tmp/openbach_extra_vars
 sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/collector.yml --tags uninstall $skip_tag_collector
+
+echo "ansible_ssh_user: $auditorium_username" > /tmp/openbach_extra_vars
+echo "ansible_ssh_pass: $auditorium_password" >> /tmp/openbach_extra_vars
+echo "ansible_sudo_pass: $auditorium_password" >> /tmp/openbach_extra_vars
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/auditorium.yml --tags uninstall
 
 rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars
 

@@ -151,7 +151,7 @@ class PlaybookBuilder():
     
     def build_list_jobs_agent(self, playbook_file):
         print('    - name: Get the list of the installed jobs', file=playbook_file)
-        print('      shell: /opt/openbach-agent/openbach-baton list_jobs_agent', file=playbook_file)
+        print('      shell: /opt/openbach-agent/openbach-baton status_jobs_agent', file=playbook_file)
         return True
     
     def build_enable_log(self, syslogseverity, syslogseverity_local, job_path,

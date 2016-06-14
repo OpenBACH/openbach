@@ -12,14 +12,14 @@
     - name: Check host name availability
       shell: ssh-keygen -f /etc/ssh/ssh_known_hosts -F {{ item }}
       with_items:
-        - '{{ controller_ip }}'
+        - '{{ collector_ip }}'
       register: ssh_known_host_results
       ignore_errors: yes
       tags:
         - install
         - uninstall
-        
-    - name: Scan Controller public key
+      
+    - name: Scan Collector public key
       shell: ssh-keyscan -H -T 10 {{ item.item }} >> /etc/ssh/ssh_known_hosts
       with_items: '{{ssh_known_host_results.results}}'
       when: item.stdout == ""
@@ -27,8 +27,8 @@
         - install
         - uninstall
 
-- hosts: Controller
+- hosts: Auditorium
   roles:
-    - controller
+    - auditorium
   become: yes
-
+  

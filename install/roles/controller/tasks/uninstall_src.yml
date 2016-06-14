@@ -1,5 +1,11 @@
 ---
 
+- name: Stop openbach-conductor
+  service: name=openbach-conductor state=stopped
+
+- name: Remove openbach-conductor service
+  file: path=/etc/init.d/openbach-conductor state=absent
+
 - name: Stop openbach-backend
   service: name=openbach-backend state=stopped
 
@@ -13,5 +19,5 @@
   apt: pkg=python-pip state=absent
 
 - name: Delete the sources
-  file: path=/opt/openbach state=absent
+  file: path=/opt/openbach-controller state=absent
 

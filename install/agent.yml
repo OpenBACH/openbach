@@ -1,7 +1,6 @@
 ---
 
 - hosts: Controller
-
   tasks:
     - name: Add the list of global variables
       copy: src=../configs/{{ item }} dest=/tmp/openbach_{{ item }}

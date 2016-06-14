@@ -1,0 +1,35 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: http2_server.cfg
+  
+  tasks:
+  - name: Check is nghttp is installed
+    shell: which nghttp
+    register: nghttp_check_deb
+    failed_when: nghttp_check_deb.rc > 1 
+    changed_when: nghttp_check_deb.rc == 1
+
+  - name: Remove nghttp2
+    shell: dpkg -r nghttp2
+    become: yes
+    when: nghttp_check_deb.rc != 1
+      
+  - name: Refresh dynamic linker
+    shell: ldconfig
+    become: yes
+    when: nghttp_check_deb.rc != 1
+    
+  - name: Remove HTTP2 Server repository
+    file: path=/opt/openbach-jobs/http2_server state=absent
+    become: yes
+
+  - name: Remove HTTP2 Server configuration file
+    file: path= /opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
+    
+  - include: '{{ path_src }}/del_job.yml'
+

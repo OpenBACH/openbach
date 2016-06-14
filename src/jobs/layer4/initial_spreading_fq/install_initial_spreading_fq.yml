@@ -1,0 +1,26 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: initial_spreading_fq.cfg
+
+  tasks:
+  - name: Create Initial Spreading Fq repository
+    file: path=/opt/openbach-jobs/initial_spreading_fq state=directory mode=0755
+    become: yes
+
+  - name: Install Initial Spreading Fq
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/initial_spreading_fq/ mode={{ item.mode }}
+    with_items:
+      - { file: 'initial_spreading_fq.sh', mode: '0755' }
+      - { file: 'initial_spreading_fq.help', mode: '0644' }
+    become: yes
+      
+  - name: Inform Agent that Initial Spreading Fq is installed
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
+

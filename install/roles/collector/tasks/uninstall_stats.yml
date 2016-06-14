@@ -1,5 +1,14 @@
 ---
 
+- name: Stop collectstats
+  service: name=collectstats state=stopped
+
+- name: Remove collectstats service
+  file: path=/etc/init.d/collectstats state=absent
+
+- name: Uninstall collectstats
+  file: path=/opt/collectstats state=absent
+
 - name: Uninstall InfluxDB (64bits)
   shell: dpkg -P influxdb
  

@@ -2,7 +2,6 @@
 
 - hosts: Controller
   become: yes
-  
   tasks:
     - name: Copy the source of the job
       copy: src=../src/jobs/{{ job }}/ dest=/opt/openbach/jobs/{{ job }}

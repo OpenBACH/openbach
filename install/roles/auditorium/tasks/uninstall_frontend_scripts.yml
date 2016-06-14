@@ -1,0 +1,5 @@
+---
+
+- name: Uninstall frontend scripts
+  file: path=/opt/openbach-auditorium state=absent
+

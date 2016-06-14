@@ -1,0 +1,28 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Install Ping
+    apt: name=iputils-ping state=present
+    become: yes
+    
+  - name: Create Ping repository
+    file: path=/opt/openbach-jobs/ping state=directory mode=0755
+    become: yes
+  
+  - name: Install Ping Job
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ping/ mode={{ item.mode }}
+    with_items:
+      - { file: 'ping', mode: '0755' }
+      - { file: 'ping.help', mode: '0644' }
+    become: yes
+  
+  - name: Inform Agent that Ping Job is installed
+    copy: src=files/{{ job_name }}.cfg dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+    
+  - include: '{{ path_src }}/add_job.yml'
+  

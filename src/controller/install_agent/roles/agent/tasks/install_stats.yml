@@ -1,0 +1,20 @@
+---
+
+- name: Create Rstats log repository
+  file: path=/var/log/openbach state=directory mode=0755
+
+- name: Install Rstats
+  copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755
+  with_items:
+    - rstats.py
+    - rstats_api.py
+
+- name: Configure Rstats
+  template: src=../src_agent/rstats/rstats.cfg.j2 dest=/opt/rstats/rstats.cfg
+
+- name: Create Rstats Service
+  copy: src=../src_agent/rstats/rstats_service dest=/etc/init.d/rstats mode=0755
+
+- name: Start Rstats
+  service: name=rstats state=started
+

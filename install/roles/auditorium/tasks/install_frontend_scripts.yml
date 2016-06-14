@@ -1,0 +1,8 @@
+---
+
+- name: Create Auditorium repository
+  file: path=/opt/openbach-auditorium state=directory
+
+- name: Install frontend scripts
+  copy: src=../src/auditorium/frontend_scripts dest=/opt/openbach-auditorium/ mode=0755
+

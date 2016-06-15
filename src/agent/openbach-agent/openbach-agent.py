@@ -86,13 +86,12 @@ def signal_term_handler(signal, frame):
 
 def launch_job(job_name, instance_id, command, args):
     proc = subprocess.Popen(
-            command.split() + args.split(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
-    with open('{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id), 'w') as f:
-        print(proc.pid, file=f)
+            'PID=`{} {} > /dev/null 2>&1 & echo $!`; echo'
+            ' $PID > {}/{}{}.pid'.format(command, args, PID_FOLDER, job_name,
+                                         instance_id),
+            shell=True)
 
-    
+
 def stop_job(job_name, instance_id):
     pid_filename = '{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id)
     try:
@@ -105,7 +104,7 @@ def stop_job(job_name, instance_id):
     p.wait()
     os.remove(pid_filename)
 
-    
+
 def status_job(job_name, instance_id):
     # Construction du nom de la stat
     stat_name = job_name + instance_id
@@ -566,7 +565,6 @@ class ClientThread(threading.Thread):
 
     def run(self):
         request = self.socket.recv(2048)
-        print(request.decode())
         try:
             self.execute_request(request.decode())
         except BadRequest as e:

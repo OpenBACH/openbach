@@ -86,10 +86,11 @@ def signal_term_handler(signal, frame):
 
 def launch_job(job_name, instance_id, command, args):
     proc = subprocess.Popen(
-            'PID=`{} {} > /dev/null 2>&1 & echo $!`; echo'
-            ' $PID > {}/{}{}.pid'.format(command, args, PID_FOLDER, job_name,
-                                         instance_id),
-            shell=True)
+            command.split() + args.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+    with open('{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id), 'w') as f:
+        print(proc.pid, file=f)
 
 
 def stop_job(job_name, instance_id):
@@ -103,6 +104,9 @@ def stop_job(job_name, instance_id):
     p = subprocess.Popen('pkill -TERM -P {0}; kill -TERM {0}'.format(pid), shell=True)
     p.wait()
     os.remove(pid_filename)
+    # Collect status of process terminated by the kill command and allow it to
+    # leave zombie state
+    os.wait()
 
 
 def status_job(job_name, instance_id):

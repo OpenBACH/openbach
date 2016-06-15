@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
-from .models import Agent, Job, Installed_Job, Instance, Watch
+from .models import Agent, Job, Installed_Job, Job_Instance, Watch
 
 
 def check_post_data(f):
@@ -377,7 +377,7 @@ def start_job_instance(data):
                 'job_name': name,
         }, 404
 
-    instance = Instance(job=installed_job)
+    instance = Job_Instance(job=installed_job)
     instance.args = ' '.join(instance_args)
     try:
         instance.validate_args_len()  # Maybe use instance.set_arguments(instance_args) instead
@@ -416,7 +416,7 @@ def stop_job_instance(data):
         return {'msg': 'POST data malformed'}, 400
 
     
-    instances = Instance.objects.filter(pk__in=instance_ids)
+    instances = Job_Instance.objects.filter(pk__in=instance_ids)
     date = data.get('date', 'now')
 
     response = {'msg': 'OK', 'error': []}
@@ -443,10 +443,10 @@ def restart_job_instance(data):
         return {'msg': 'POST data malformed'}, 400
 
     try:
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
     except ObjectDoesNotExist:
         return {
-                'msg': 'This Instance isn\'t in the database',
+                'msg': 'This Job Instance isn\'t in the database',
                 'instance_id': instance_id,
         }, 404
 
@@ -518,7 +518,7 @@ def status_job_instance(data):
         return {'msg': 'POST data malformed'}, 400
 
     try:
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
     except ObjectDoesNotExist:
         # User didn't specify a valid instance, try to get it from
         # the agent ip and job name provided, if any
@@ -663,7 +663,7 @@ def update_job_log_severity(data):
                 'job_name': 'logs on {}'.format(agent_ip),
         }, 404
 
-    instance = Instance(job=logs_job)
+    instance = Job_Instance(job=logs_job)
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
         instance.validate_args_len()
@@ -725,7 +725,7 @@ def update_job_stat_policy(data):
                 'job_name': rstat_name,
         }, 404
 
-    instance = Instance(job=rstats_job)
+    instance = Job_Instance(job=rstats_job)
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
         instance.validate_args_len()

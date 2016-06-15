@@ -22,7 +22,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
-from openbach_django.models import Agent, Job, Installed_Job, Instance, Watch
+from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -361,7 +361,7 @@ class ClientThread(threading.Thread):
     def start_job_instance(self, watch_type, time_value, instance_id):
             date = time_value if watch_type == 'date' else None
             interval = time_value if watch_type == 'interval' else None
-            instance = Instance.objects.get(pk=instance_id)
+            instance = Job_Instance.objects.get(pk=instance_id)
             job = instance.job.job
             agent = instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
@@ -380,7 +380,7 @@ class ClientThread(threading.Thread):
                 .format(playbook.name, agent=agent))
 
     def stop_job_instance(self, date, instance_id):
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
         job = instance.job.job
         agent = instance.job.agent
         self.playbook_builder.write_hosts(agent.address)
@@ -400,7 +400,7 @@ class ClientThread(threading.Thread):
     def restart_job_instance(self, watch_type, time_value, instance_id):
             date = time_value if watch_type == 'date' else None
             interval = time_value if watch_type == 'interval' else None
-            instance = Instance.objects.get(pk=instance_id)
+            instance = Job_Instance.objects.get(pk=instance_id)
             job = instance.job.job
             agent = instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
@@ -588,7 +588,7 @@ class ClientThread(threading.Thread):
             raise BadRequest(error_msg)
 
     def update_instance(self, instance_id):
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
         url = self.UPDATE_INSTANCE_URL.format(
                 instance.job.job.name, instance.id, agent=instance.job.agent)
         result = requests.get(url).json()
@@ -612,7 +612,7 @@ class ClientThread(threading.Thread):
         instance.save()
 
     def update_job_log_severity(self, date, instance_id, severity, local_severity):
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         logs_job_path = instance.job.job.path
         job_name = instance.args.split()[0]
@@ -652,7 +652,7 @@ class ClientThread(threading.Thread):
             .format(playbook.name, agent=agent))
 
     def update_job_stat_policy(self, date, instance_id):
-        instance = Instance.objects.get(pk=instance_id)
+        instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         rstats_job_path = instance.job.job.path
         job_name = instance.args.split()[0]

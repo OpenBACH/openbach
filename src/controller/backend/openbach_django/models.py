@@ -64,7 +64,7 @@ class Installed_Job(models.Model):
         return self.name
 
 
-class Instance(models.Model):
+class Job_Instance(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     args = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=200, blank=True)
@@ -78,7 +78,7 @@ class Instance(models.Model):
         return min(args_count, self.job.job.nb_args)
 
     def __str__(self):
-        return 'Instance {} of {}'.format(self.id, self.job)
+        return 'Job Instance {} of {}'.format(self.id, self.job)
 
 
 class Watch(models.Model):
@@ -87,4 +87,4 @@ class Watch(models.Model):
     interval = models.IntegerField(blank=True)
 
     def __str__(self):
-        return 'Watch of Instance {0.instance_id} of {0.job}'.format(self)
+        return 'Watch of Job Instance {0.instance_id} of {0.job}'.format(self)

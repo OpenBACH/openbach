@@ -4,12 +4,12 @@
   become: yes
   tasks:
     - name: Copy the source of the job
-      copy: src=../src/jobs/{{ job }}/ dest=/opt/openbach/jobs/{{ job }}
+      copy: src=../src/jobs/{{ job }}/ dest=/opt/openbach-controller/jobs/{{ job }}
       tags:
         - add_job
 
     - name: Remove the source of the job
-      file: path=/opt/openbach/jobs/{{ job }} state=absent
+      file: path=/opt/openbach-controller/jobs/{{ job }} state=absent
       tags:
         - del_job
 

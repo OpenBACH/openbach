@@ -1,61 +1,95 @@
 #!/bin/bash
+ 
+function usage(){
+    printf "Utilisation of the script :\n"
+    printf "\t--ip-controller ip             : IP Address of the Controller (default: localhost)\n"
+    printf "\t--username-controller username : Username of the Controller (default: opensand)\n"
+    printf "\t--password-controller password : Password of the Controller (default: opensand)\n"
+    printf "\t--ip-collector ip              : IP Address of the Collector (default: ip-controller)\n"
+    printf "\t--username-collector username  : Username of the Collector (default: opensand)\n"
+    printf "\t--password-collector password  : Password of the Collector (default: opensand)\n"
+    printf "\t--ip-auditorium ip             : IP Address of the Auditorium (default: ip-controller)\n"
+    printf "\t--username-auditorium username : Username of the Auditorium (default: opensand)\n"
+    printf "\t--password-auditorium password : Password of the Auditorium (default: opensand)\n"
+    printf "\t-h                             : print this message.\n"
+}
 
-read -p "Controller Ip Address : " controller_address
-if [ -z $controller_address ]
+if [ $# -eq 0 ]
 then
-    echo "You should provide the IP address of the Controller"
-    exit
+    usage
+    exit 0
 fi
-read -p "SSH Controller Username : " controller_username
-if [ -z $controller_username ]
-then
-    echo "You should provide the username of the Controller"
-    exit
+
+#OPTS=$( getopt -o h -l ip-controller, username-controller, password-controller, ip-collector, username-collector, password-collector, ip-auditorium, username-auditorium, password-auditorium, : -- "$@" )
+#if [ $? != 0 ]
+#then
+#    exit 1
+#fi
+
+
+while true ; do
+    case "$1" in
+        -h) usage;
+            exit 0;;
+        --ip-controller)
+            controller_address=$2
+            shift 2;;
+        --username-controller)
+            controller_username=$2
+            shift 2;;
+        --password-controller)
+            controller_password=$2
+            shift 2;;
+        --ip-collector)
+            collector_address=$2
+            shift 2;;
+        --username-collector)
+            collector_username=$2
+            shift 2;;
+        --password-collector)
+            collector_password=$2
+            shift 2;;
+        --ip-auditorium)
+            auditorium_address=$2
+            shift 2;;
+        --username-auditorium)
+            auditorium_username=$2
+            shift 2;;
+        --password-auditorium)
+            auditorium_password=$2
+            shift 2;;
+        '') break;;
+        *) echo "option not found: $1"; shift;;
+    esac
+done
+
+
+if [ -z $controller_address ]; then
+    controller_address='127.0.0.1'
 fi
-read -s -p "SSH Controller Password : ? " controller_password
-echo
-if [ -z $controller_password ]
-then
-    echo "You should provide the password of the Controller"
-    exit
+if [ -z $controller_username ]; then
+    controller_username='opensand'
 fi
-read -p "Collector Ip Address : " collector_address
-if [ -z $collector_address ]
-then
-    echo "You should provide the IP address of the Collector"
-    exit
+if [ -z $controller_password ]; then
+    controller_password='opensand'
 fi
-read -p "SSH Collector Username : " collector_username
-if [ -z $collector_username ]
-then
-    echo "You should provide the username of the Collector"
-    exit
+if [ -z $collector_address ]; then
+    collector_address=$controller_address
 fi
-read -s -p "SSH Collector Password : ? " collector_password
-echo
-if [ -z $collector_password ]
-then
-    echo "You should provide the password of the Collector"
-    exit
+if [ -z $collector_username ]; then
+    collector_username=$controller_username
 fi
-read -p "Auditorium Ip Address : " auditorium_address
-if [ -z $auditorium_address ]
-then
-    echo "You should provide the IP address of the Auditorium"
-    exit
+if [ -z $collector_password ]; then
+    collector_password=$controller_password
 fi
-read -p "SSH Auditorium Username : " auditorium_username
-if [ -z $auditorium_username ]
-then
-    echo "You should provide the username of the Auditorium"
-    exit
+if [ -z $auditorium_address ]; then
+    auditorium_address=$controller_address
 fi
-read -s -p "SSH Auditorium Password : ? " auditorium_password
-echo
-if [ -z $auditorium_password ]
-then
-    echo "You should provide the password of the Auditorium"
-    exit
+if [ -z $auditorium_username ]; then
+    auditorium_username=$controller_username
+fi
+if [ -z $auditorium_password ]; then
+    auditorium_password=$controller_password
 fi
 
 
@@ -77,12 +111,10 @@ echo "collector_ip: $collector_address" >> configs/ips
 echo -e "[Auditorium]\n$auditorium_address" >> /tmp/openbach_hosts
 echo "auditorium_ip: $auditorium_address" >> configs/ips
 
-
 echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
 sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags install $skip_tag_controller
-
 
 echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars

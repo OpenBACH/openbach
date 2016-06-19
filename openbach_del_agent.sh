@@ -1,61 +1,83 @@
 #!/bin/bash
 
-read -p "Agent Ip Address : " agent_address
-if [ -z $agent_address ]
+function usage(){
+    printf "Utilisation of the script :\n"
+    printf "\tagent_address                  : IP Address of the Agent\n"
+    printf "\t-u username                    : Username of the Agent (default: opensand)\n"
+    printf "\t-p password                    : Password of the Agent (default: opensand)\n"
+    printf "\t--ip-auditorium ip             : IP Address of the Auditorium (default: localhost)\n"
+    printf "\t--username-auditorium username : Username of the Auditorium (default: opensand)\n"
+    printf "\t--password-auditorium password : Password of the Auditorium (default: opensand)\n"
+    printf "\t-h                             : print this message.\n"
+}
+
+if [ $# -eq 0 ]
 then
-    echo "You should provide at least one IP address"
-    exit
+    usage
+    exit 0
 fi
-echo "[Agents]" > configs/hosts_controller
-echo "agents:" > configs/ips
-while [ ! -z $agent_address ]
-do
-    echo "$agent_address" >> configs/hosts_controller
-    echo "  - $agent_address" >> configs/ips
-    read -p "Agent Ip Address : " agent_address
+
+if [ $1 = '-h' ]; then
+    usage
+    exit 0
+fi
+agent_address=$1
+
+while true ; do
+    case "$2" in
+        -h) usage;
+            exit 0;;
+        -u)
+            agent_username=$3
+            shift 2;;
+        -p)
+            agent_password=$3
+            shift 2;;
+        --ip-auditorium)
+            auditorium_address=$3
+            shift 2;;
+        --username-auditorium)
+            auditorium_username=$3
+            shift 2;;
+        --password-auditorium)
+            auditorium_password=$3
+            shift 2;;
+        '') break;;
+        *) echo "option not found: $1"; shift;;
+    esac
 done
-read -p "SSH Agents Username : " agent_username
-if [ -z $agent_username ]
-then
-    echo "You should provide the username of the Agents"
-    exit
+
+if [ -z $agent_username ]; then
+    agent_username='opensand'
 fi
-read -s -p "SSH Agents Password : ? " agent_password
-echo
-if [ -z $agent_password ]
-then
-    echo "You should provide the password of the Agents"
-    exit
+if [ -z $agent_password ]; then
+    agent_password='opensand'
 fi
-read -p "Controller Ip Address : " controller_address
-if [ -z $controller_address ]
-then
-    echo "You should provide the IP address of the Controller"
-    exit
+if [ -z $auditorium_address ]; then
+    auditorium_address='127.0.0.1'
 fi
-read -p "SSH Controller Username : " username
-if [ -z $username ]
-then
-    echo "You should provide the username of the Controller"
-    exit
+if [ -z $auditorium_username ]; then
+    auditorium_username='opensand'
 fi
-read -s -p "SSH Controller Password : ? " password
-echo
-if [ -z $password ]
-then
-    echo "You should provide the password of the Controller"
-    exit
+if [ -z $auditorium_password ]; then
+    auditorium_password='opensand'
 fi
-echo -e "[Controller]\n$controller_address\n" > configs/hosts
-echo "ansible_ssh_user: $username" > configs/extra_vars
-echo "ansible_ssh_pass: $password" >> configs/extra_vars
-echo "ansible_sudo_pass: $password" >> configs/extra_vars
+
+
+echo "[Agents]" > configs/hosts_auditorium
+echo "agents:" > configs/ips
+echo "$agent_address" >> configs/hosts_auditorium
+echo "  - $agent_address" >> configs/ips
+echo -e "[Auditorium]\n$auditorium_address\n" > configs/hosts
+echo "ansible_ssh_user: $auditorium_username" > configs/extra_vars
+echo "ansible_ssh_pass: $auditorium_password" >> configs/extra_vars
+echo "ansible_sudo_pass: $auditorium_password" >> configs/extra_vars
 echo "agent_username: $agent_username" >> configs/extra_vars
 echo "agent_password: $agent_password" >> configs/extra_vars
 
 
-ansible-playbook -i configs/hosts -e @configs/extra_vars -e @configs/ips install/agent.yml --tags del_agent
+sudo ansible-playbook -i configs/hosts -e @configs/extra_vars -e @configs/ips install/agent.yml --tags del_agent
 
 
-rm configs/hosts_controller configs/hosts configs/ips configs/extra_vars
+rm configs/hosts_auditorium configs/hosts configs/ips configs/extra_vars
 

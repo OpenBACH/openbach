@@ -134,7 +134,7 @@ def status_job(job_name, instance_id):
     # Connexion au service de collecte de l'agent
     connection = RSTAT_REGISTER_STAT()
     if not connection:
-        quit()  # [Mathias] quit()?? not return??
+        return
 
     # Envoie de la stat à Rstats
     rstats.send_stat(connection, stat_name, timestamp, 'status', status)

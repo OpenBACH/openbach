@@ -628,7 +628,7 @@ def list_job_instances(data):
                     'job_name': j.job.name,
                     'instances': [
                         _build_instance_infos(i, update)
-                        for i in j.instance_set.all()
+                        for i in j.job_instance_set.all()
                     ],
                 } for j in agent.installed_job_set.all()
             ],

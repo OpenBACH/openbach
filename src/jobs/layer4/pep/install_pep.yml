@@ -1,0 +1,54 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: pep.cfg
+
+  tasks:
+  - name: Create Pep repository
+    file: path=/opt/openbach-jobs/pep state=directory mode=0755
+    become: yes
+
+  - name: Install Pep Job
+    copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/pep/{{ item.name }} mode={{ item.mode }}
+    become: yes
+    with_items:
+      - { name: 'set_pep.sh', mode: '0755' }
+      - { name: 'unset_pep.sh', mode: '0755' }
+      - { name: 'pep.help', mode: '0644' }
+      - { name: 'pep_rstats_filter.conf', mode: '0644' }
+
+  - name: Install Pep requirements
+    apt: pkg={{ item }} state=present update_cache=false
+    with_items:
+      - libnetfilter-queue-dev
+    become: yes
+
+  - name: Copy Pep sources
+    copy: src=files/pepsal-transparent dest=/tmp/
+    become: yes
+
+  - name: Copy Pep sources (2)
+    copy: src=files/pepsal-transparent/configure dest=/tmp/pepsal-transparent/ mode=0755
+    become: yes
+
+  - name: Compile Pep (configure)
+    shell: ./configure chdir=/tmp/pepsal-transparent
+    become: yes
+
+  - name: Compile Pep (make)
+    shell: make chdir=/tmp/pepsal-transparent
+    become: yes
+
+  - name: Insall Pep
+    shell: make install chdir=/tmp/pepsal-transparent
+    become: yes
+
+  - name: Inform Agent that Pep is installed
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
+

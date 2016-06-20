@@ -1,0 +1,41 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: pep.cfg
+
+  tasks:
+  - name: Install Pep requirements
+    apt: pkg={{ item }} state=present update_cache=false
+    with_items:
+      - libnetfilter-queue-dev
+    become: yes
+
+  - name: Copy Pep sources
+    copy: src=files/pepsal-transparent dest=/tmp/
+    become: yes
+
+  - name: Compile Pep (configure)
+    shell: ./configure chdir=/tmp/pepsal-transparent
+    become: yes
+
+  - name: Compile Pep (make)
+    shell: make chdir=/tmp/pepsal-transparent
+    become: yes
+
+  - name: Uninstall Pep
+    shell: make uninstall chdir=/tmp/pepsal-transparent
+    become: yes
+    
+  - name: Uninstall Pep Job
+    file: path=/opt/openbach-jobs/pep state=absent
+    become: yes
+
+  - name: Inform Agent that Pep is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
+
+  - include: '{{ path_src }}/del_job.yml'
+

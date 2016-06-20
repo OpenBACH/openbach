@@ -38,6 +38,39 @@ RSTAT_REGISTER_STAT = partial(
         '/opt/openbach-agent/openbach-agent_filter.conf',
         'openbach-agent')
 
+class ArgsManager:
+    """Context manager around args of Job Instance """
+    __shared_state = {}  # Borg pattern
+
+    def __init__(self, job_name=None, instance_id=None, init=False):
+        self.__dict__ = self.__class__.__shared_state
+
+        if init:
+            self.args = {}
+            self.mutex = threading.Lock()
+        if job_name is None:
+            self._required_args = self.args
+        else:
+            try:
+                required_args = self.args[job_name]
+            except KeyError:
+                self.args[job_name] = {}
+                required_args = self.args[job_name]
+            if instance_id is None:
+                self._required_args = required_args
+            else:
+                try:
+                    self._required_args = required_args[instance_id]
+                except KeyError:
+                    required_args[instance_id] = {}
+                    self._required_args = required_args[instance_id]
+
+    def __enter__(self):
+        self.mutex.acquire()
+        return self._required_args
+
+    def __exit__(self, t, v, tb):
+        self.mutex.release()
 
 class JobManager:
     """Context manager around job scheduling"""
@@ -73,8 +106,14 @@ def signal_term_handler(signal, frame):
     scheduler.remove_all_jobs()
     with JobManager() as all_jobs:
         for name, job in all_jobs.items():
+            command_stop = job['command_stop']
             for instance_id in job['set_id']:
-                scheduler.add_job(stop_job, 'date', args=(name, instance_id))
+                with ArgsManager(name, instance_id) as args:
+                    arguments = args['args']
+                    del args
+                    scheduler.add_job(stop_job, 'date', args=(name, instance_id,
+                                                              command_stop,
+                                                              arguments))
 
     while scheduler.get_jobs():
         time.sleep(0.5)
@@ -92,7 +131,7 @@ def launch_job(job_name, instance_id, command, args):
             shell=True)
 
 
-def stop_job(job_name, instance_id):
+def stop_job(job_name, instance_id, command, args):
     pid_filename = '{}/{}{}.pid'.format(PID_FOLDER, job_name, instance_id)
     try:
         with open(pid_filename) as f:
@@ -103,6 +142,9 @@ def stop_job(job_name, instance_id):
     p = subprocess.Popen('pkill -TERM -P {0}; kill -TERM {0}'.format(pid), shell=True)
     p.wait()
     os.remove(pid_filename)
+    
+    if command:
+        subprocess.Popen('{} {}'.format(command, args), shell=True)
 
 
 def status_job(job_name, instance_id):
@@ -196,6 +238,7 @@ class JobConfiguration:
                     'section for job {}'.format(filename, job_name))
 
         self.command = self.parse(job, 'command', job_name)
+        self.command_stop = self.parse(job, 'command_stop', job_name)
         self.required = self.parse(job, 'required', job_name).split()
         self.optional = self.parse(job, 'optional', job_name, True)
         self.persistent = self.parse(job, 'persistent', job_name, True)
@@ -257,6 +300,7 @@ class ClientThread(threading.Thread):
     def start_job(self, name, instance_id, date_type, date_value, args):
         with JobManager(name) as job:
             command = job['command']
+            command_stop = job['command_stop']
 
         arguments = ' '.join(args)
         timestamp = time.time()
@@ -275,13 +319,28 @@ class ClientThread(threading.Thread):
                     job['set_id'].add(instance_id)
 
         elif date_type == 'interval':
+            date = ''
             with JobManager(name) as job:
                 if job['persistent']:
                     raise BadRequest(
                             'KO This job {} is persistent, you can\'t '
                             'start it with the "interval" option'
                             .format(name))
-
+            if command_stop:
+                with ArgsManager(name) as dict_args:
+                    for (instance_id, job_args) in dict_args:
+                        if job_args['type'] == 'interval':
+                            # Pour ce genre de job (non persistent avec une
+                            # command_stop), un seul interval est autorisé
+                            # Pour l'instant on renvoie un message d'erreur quand on
+                            # en demande un 2eme mais on pourrait très bien
+                            # remplacer l'un par l'autre à la place
+                            raise BadRequest('KO A job {} is already '
+                                             'programmed. It instance_id is {}.'
+                                             ' Please stop it before trying to '
+                                             'programme regulary this job '
+                                             'again'.format(job_name,
+                                                            instance_id))
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'interval', seconds=date_value,
@@ -294,6 +353,12 @@ class ClientThread(threading.Thread):
 
             with JobManager(name) as job:
                 job['set_id'].add(instance_id)
+        with ArgsManager(name) as args:
+            args[instance_id] = {
+                    'args': arguments,
+                    'type': date_type,
+                    'date': date,
+            }
 
     def parse(self, request):
         try:
@@ -328,6 +393,10 @@ class ClientThread(threading.Thread):
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
             conf = JobConfiguration(self.path, job_name)
             args.append(conf.command)
+            if conf.command_stop:
+                args.append(conf.command_stop)
+            else:
+                args.append('')
             args.append(conf.required)
             args.append(conf.optional)
             args.append(conf.persistent)
@@ -456,11 +525,12 @@ class ClientThread(threading.Thread):
             scheduler.add_job(ls_jobs, 'date')
 
         if request == 'add_job_agent':
-            job_name, command, required, optional, persistent = extra_args
+            job_name, command, command_stop, required, optional, persistent = extra_args
             # TODO Vérifier que l'appli a bien été installé ?
             with JobManager() as jobs:
                 jobs[job_name] = {
                         'command': command,
+                        'command_stop': command_stop,
                         'required': required,
                         'optional': optional,
                         'persistent': persistent,
@@ -471,9 +541,18 @@ class ClientThread(threading.Thread):
             job_name, = extra_args
             # On vérifie si le job n'est pas en train de tourner
             with JobManager(job_name) as job:
+                command_stop = job['command_stop']
                 for instance_id in job['set_id']:
+                    if command_stop:
+                        with ArgsManager(job_name, instance_id) as args:
+                            arguments = args['args']
+                            del args
+                    else:
+                        arguments = ''
                     scheduler.add_job(stop_job, 'date', args=(job_name,
-                                                              instance_id))
+                                                              instance_id,
+                                                              command_stop,
+                                                              arguments))
 
             # TODO Vérifier que l'appli a bien été désinstallé ?
             with JobManager() as jobs:
@@ -487,8 +566,18 @@ class ClientThread(threading.Thread):
             job_name, instance_id, _, value = extra_args
             timestamp = time.time()
             date = None if value < timestamp else datetime.fromtimestamp(value)
+            with JobManager(job_name) as job:
+                command_stop = job['command_stop']
+            if command_stop:
+                with ArgsManager(job_name, instance_id) as args:
+                    arguments = args['args']
+                    del args
+            else:
+                arguments = ''
             scheduler.add_job(stop_job, 'date', run_date=date, args=(job_name,
-                                                                     instance_id))
+                                                                     instance_id,
+                                                                     command_stop,
+                                                                     arguments))
             try:
                 scheduler.remove_job(job_name + instance_id)
             except JobLookupError:
@@ -549,8 +638,13 @@ class ClientThread(threading.Thread):
             # Stoppe le job si il est lancé
             with JobManager(job_name) as job:
                 if instance_id in job['set_id']:
+                    command_stop = job['command_stop']
+                    with ArgsManager(job_name, instance_id) as args:
+                        arguments = args['args']
+                        del args
                     scheduler.add_job(
-                            stop_job, 'date', args=(job_name, instance_id))
+                            stop_job, 'date', args=(job_name, instance_id,
+                                                    command_stop, arguments))
 
             try:
                 scheduler.remove_job(job_name + instance_id)
@@ -601,11 +695,15 @@ if __name__ == '__main__':
             # On ajoute le job a la liste des jobs disponibles
             jobs[job] = {
                     'command': conf.command,
+                    'command_stop': conf.command_stop,
                     'required': conf.required,
                     'optional': conf.optional,
                     'set_id': set(),
                     'persistent': conf.persistent,
             }
+
+    # On initialise l'ArgsManager
+    ArgsManager(init=True)
 
     # Ouverture de la socket d'ecoute
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

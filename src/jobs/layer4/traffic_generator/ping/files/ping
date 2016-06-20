@@ -11,6 +11,6 @@ dest=$1
 shift
 options=$@
 
-ping $dest $options
+ping $dest $options | logger -t $(basename $0) 
 [ "$?" != "0" ] &&  logger -t $(basename $0) "Error" || :
 

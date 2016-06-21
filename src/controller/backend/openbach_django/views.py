@@ -664,13 +664,15 @@ def update_job_log_severity(data):
         }, 404
 
     instance = Job_Instance(job=logs_job)
+    instance.args = ''
+    instance.status = "starting ..."
+    instance.update_status = timezone.now()
+    instance.save()
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
         instance.validate_args_len()
     except ValueError:
         return {'msg', 'Arguments given don\'t match with arguments needed'}, 400
-    instance.status = "starting ..."
-    instance.update_status = timezone.now()
     instance.save()
 
     result = conductor_execute(

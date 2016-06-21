@@ -1,0 +1,28 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: configure_opensand_collector.cfg
+
+  tasks:
+  - name: Uninstall Job
+    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
+    become: yes
+
+  - name: Delete Job configuration file
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
+
+  - name: Uninstall OpenSAND Manager
+    apt: name=opensand-manager state=absent purge=yes
+
+  - name: Uninstall OpenSAND Collector
+    environment: 
+     DEBIAN_FRONTEND : noninteractive
+    apt: name=opensand-collector state=absent purge=yes
+
+
+  - include: '{{ path_src }}/del_job.yml'
+

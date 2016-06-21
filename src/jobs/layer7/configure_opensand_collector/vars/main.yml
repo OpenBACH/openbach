@@ -1,0 +1,8 @@
+---
+
+job_name: configure_opensand_collector
+
+configuration:
+  - { question: 'opensand-collector/service/type', value: '_p15_opensand._tcp', vtype: 'select' }
+  - { question: 'opensand-collector/service/interface', value: 'eth2', vtype: 'select' }
+

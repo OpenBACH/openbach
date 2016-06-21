@@ -1,0 +1,33 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: configure_opensand_st1.cfg
+
+  tasks:
+  - name: Uninstall Job
+    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
+    become: yes
+
+  - name: Delete Job configuration file
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
+
+  - name: Uninstall OpenSAND
+    environment: 
+     DEBIAN_FRONTEND : noninteractive
+    apt: name={{ item }} state=absent purge=yes
+    with_items:
+      - libopensand-conf
+      - libopensand-gse-encap-plugin
+      - libopensand-output
+      - libopensand-plugin
+      - libopensand-rt
+      - opensand
+      - opensand-core-bin
+      - opensand-daemon
+
+  - include: '{{ path_src }}/del_job.yml'
+

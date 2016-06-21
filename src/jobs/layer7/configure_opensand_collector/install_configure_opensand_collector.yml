@@ -1,0 +1,41 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: configure_opensand_collector.cfg
+
+  tasks:
+  - name: Add OpenSAND repository
+    apt_repository: repo="deb http://packages.net4sat.org/opensand trusty stable" update_cache=yes
+  
+  - name: Install OpenSAND Collector
+    environment: 
+     DEBIAN_FRONTEND : noninteractive
+    apt: name=opensand-collector state=installed force=yes update_cache=no install_recommends=yes
+
+  - name: Install OpenSAND Manager
+    apt: name=opensand-manager state=installed force=yes update_cache=no install_recommends=yes
+
+  - name: Configure opensand
+    debconf: name=debconf question={{ item.question }} value={{ item.value }} vtype={{ item.vtype }}
+    with_items: "{{ configuration }}"
+    register: config
+    become: yes
+
+  - name: Restart the machine
+    shell: shutdown -r now 
+    when: config.changed
+    become: yes
+
+  - name: waiting for the machine to come back
+    local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=30 timeout=300
+    when: config.changed
+
+  - name: Install Job configuration file
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
+

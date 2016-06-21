@@ -1,0 +1,9 @@
+---
+
+job_name: configure_opensand_sat
+
+configuration:
+  - { question: 'opensand-daemon/service/type', value: '_p15_opensand._tcp', vtype: 'select' }
+  - { question: 'opensand-daemon/service/interface', value: 'eth2', vtype: 'select' }
+  - { question: 'opensand-daemon/network/emu_ipv4', value: '192.168.18.15/24', vtype: 'select' }
+

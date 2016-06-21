@@ -1,0 +1,14 @@
+---
+
+job_name: configure_opensand_gw
+
+configuration:
+  - { question: 'opensand-daemon/service/type', value: '_p15_opensand._tcp', vtype: 'select' }
+  - { question: 'opensand-daemon/service/interface', value: 'eth2', vtype: 'select' }
+  - { question: 'opensand-daemon/service/name', value: 'GW', vtype: 'select' }
+  - { question: 'opensand-daemon/service/st_instance', value: '0', vtype: 'select' }
+  - { question: 'opensand-daemon/network/emu_iface', value: 'eth0', vtype: 'select' }
+  - { question: 'opensand-daemon/network/emu_ipv4', value: '192.168.18.42/24', vtype: 'select' }
+  - { question: 'opensand-daemon/network/lan_ipv4', value: '192.168.42.1/24', vtype: 'select' }
+  - { question: 'opensand-daemon/network/lan_ipv6', value: '2001:660:6613:42::1/64', vtype: 'select' }
+

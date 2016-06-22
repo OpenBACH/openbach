@@ -12,7 +12,7 @@
     become: yes
 
   - name: Add OpenSAND repository
-    apt_repository: repo="deb http://packages.net4sat.org/opensand trusty {{repository_branch}}" update_cache=yes
+    apt_repository: repo="deb http://packages.net4sat.org/opensand trusty stable" update_cache=yes
     become: yes
 
   - name: Install OpenSAND daemon
@@ -27,6 +27,12 @@
     register: config
     become: yes
 
+  - name: Install Job configuration file
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
+
   - name: Restart the machine
     shell: shutdown -r now 
     when: config.changed
@@ -35,15 +41,4 @@
   - name: waiting for the machine to come back
     local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=30 timeout=300
     when: config.changed
-
-  - name: Install Job
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/{{  job_name }}/ mode=0644
-    with_items:
-    become: yes
-
-  - name: Install Job configuration file
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
 

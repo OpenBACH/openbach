@@ -10,7 +10,73 @@
   - name: Create HTTP2 Client repository
     file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
     become: yes
+ 
+  - name: Check is nghttp is installed
+    shell: which nghttp
+    register: nghttp_check_deb
+    failed_when: nghttp_check_deb.rc > 1 
+    changed_when: nghttp_check_deb.rc == 1
 
+  - name: Install nghttpd requirements
+    apt: pkg={{ item }} state=present update_cache=false
+    with_items:
+      - g++
+      - make
+      - binutils
+      - autoconf
+      - automake
+      - autotools-dev
+      - libtool
+      - pkg-config
+      - zlib1g-dev
+      - libcunit1-dev
+      - libssl-dev
+      - libxml2-dev
+      - libev-dev
+      - libevent-dev
+      - libjansson-dev
+      - libjemalloc-dev
+      - cython
+      - python3-dev
+      - python-setuptools
+      - checkinstall
+    become: yes
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Download nghttp2 sources
+    git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (autoreconf -i)
+    shell: autoreconf -i chdir=/tmp/nghttp2/
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (automake)
+    shell: automake chdir=/tmp/nghttp2/
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (autoconf)
+    shell: autoconf chdir=/tmp/nghttp2/
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (configure)
+    shell: ./configure chdir=/tmp/nghttp2/
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (make)
+    shell: make chdir=/tmp/nghttp2/
+    when: nghttp_check_deb.rc == 1
+    
+  - name: Install nghttp2 (checkinstall)
+    shell: checkinstall -y chdir=/tmp/nghttp2/
+    become: yes
+    when: nghttp_check_deb.rc == 1
+      
+  - name: Refresh dynamic linker
+    shell: ldconfig
+    become: yes
+    when: nghttp_check_deb.rc == 1
+ 
   - name: Install HTTP2 Client
     copy: src=files/{{ item }} dest=/opt/openbach-jobs/{{ job_name }}/ mode=0644
     with_items:

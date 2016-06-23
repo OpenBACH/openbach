@@ -20,7 +20,7 @@
     
 - name: Create OpenBACH repository
   file: path=/opt/openbach-controller state=directory mode=0755
-    
+  
 - name: Copy the SSH Key to OpenBACH repository
-  copy: src=/home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub dest=/opt/openbach-controller/ remote_src=True
+  copy: src={{ ansible_env.PWD }}/.ssh/id_rsa.pub dest=/opt/openbach-controller/ remote_src=True
 

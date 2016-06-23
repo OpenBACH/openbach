@@ -3,6 +3,7 @@ import json
 import socket
 from configparser import ConfigParser
 from functools import wraps
+from operator import attrgetter
 
 from django.utils import timezone
 from django.http import JsonResponse
@@ -225,7 +226,16 @@ def install_jobs(data):
     severity = data.get('severity', 4)
     local_severity = data.get('local_severity', 4)
     agents = Agent.objects.filter(pk__in=addresses)
+    no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+    
     jobs = Job.objects.filter(pk__in=names)
+    no_job = set(names) - set(map(attrgetter('name'), agents))
+    
+    if no_job or no_agent:
+        warning = 'At least one of the Agents or one of the Jobs is unknown to'
+        warning += ' the Controller'
+    else:
+        warning = False
 
     success = True
     for agent in agents:
@@ -246,9 +256,20 @@ def install_jobs(data):
                 success = False
 
     if success:
-        return {'msg': 'OK'}, 200
+        if warning:
+            result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
+                      list(no_agent), 'unknown Jobs': list(no_job)}, 200
+            print(result)
+            return result
+        else:
+            return {'msg': 'OK'}
     else:
-        return {'msg': 'At least one of the installation have failed'}, 404
+        if warning:
+            return {'msg': 'At least one of the installation have failed',
+                    'warning': warning, 'unknown Agents': list(no_agent),
+                    'unknown Jobs': list(no_job)}, 404
+        else:
+            return {'msg': 'At least one of the installation have failed'}, 404
 
 
 @check_post_data
@@ -451,7 +472,7 @@ def restart_job_instance(data):
         }, 404
 
     # TODO: keep it consistent with start_job_instance
-    if len(instance_args) != 0:
+    if not instance_args:
         instance.args = ' '.join(instance_args)
         try:
             instance.validate_args_len()

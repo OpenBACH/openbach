@@ -1,5 +1,6 @@
 ---
 
 version_kibana: 4.3.1
+version_grafana: 3.0.4-1464167696
 controller_archi: x64
 

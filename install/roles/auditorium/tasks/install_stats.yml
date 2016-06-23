@@ -1,14 +1,20 @@
 ---
 
-- name: Add the Package Cloud key
-  apt_key: url=https://packagecloud.io/gpg.key state=present
-  
-- name: Add the apt repository
-  apt_repository: repo="deb https://packagecloud.io/grafana/stable/debian/ wheezy main" update_cache=true
-  
-- name: Install Grafana
-  apt: pkg=grafana state=installed
-  
+- name: Check if Grafana is installed
+  shell: dpkg-query -W -f='${Version}\n' grafana | sed 's/^[0-9]\+://'
+  register: grafana_check_deb
+  ignore_errors: yes
+  changed_when: grafana_check_deb.stdout != '{{ version_grafana }}'
+
+- name: Download Grafana (64bits)
+  copy: src=../src/auditorium/grafana/grafana_{{ version_grafana }}_amd64.deb \
+    dest=/tmp/
+  when: grafana_check_deb.stdout != '{{ version_grafana }}'
+
+- name: Install Grafana (64bits)
+  shell: dpkg -i /tmp/grafana_{{ version_grafana }}_amd64.deb
+  when: grafana_check_deb.stdout != '{{ version_grafana }}'
+
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana/ mode=0640
 

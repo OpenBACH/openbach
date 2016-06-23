@@ -3,9 +3,9 @@
 - name: Create /opt directory
   file: path=/opt state=directory
 
-- name: Download and Uncompress Kibana
-  unarchive: src=https://download.elastic.co/kibana/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
-    dest=/opt/ creates=/opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }}/package.json copy=no
+- name: Uncompress Kibana
+  unarchive: src=../src/auditorium/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
+    dest=/opt/ creates=/opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }}/package.json copy=yes
     
 - name: Create Kibana repository
   file: src=/opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }} state=link dest=/opt/kibana

@@ -7,8 +7,8 @@
   changed_when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Download ElasticSearch
-  get_url: url=https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/deb/elasticsearch/{{ version_elasticsearch }}/elasticsearch-{{ version_elasticsearch }}.deb
-    dest=/tmp/ force=no
+  copy: src=../src/collector/elasticsearch/elasticsearch-{{ version_elasticsearch }}.deb
+    dest=/tmp/
   when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Install ElasticSearch
@@ -32,8 +32,8 @@
   changed_when: logstash_check_deb.stdout != '{{ version_logstash }}'
   
 - name: Download LogStash
-  get_url: url=https://download.elastic.co/logstash/logstash/packages/debian/logstash_{{ version_logstash }}_all.deb \
-    dest=/tmp/ force=no
+  copy: src=../src/collector/logstash/logstash_{{ version_logstash }}_all.deb \
+    dest=/tmp/
   when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Install LogStash

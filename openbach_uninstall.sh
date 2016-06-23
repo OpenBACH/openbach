@@ -6,11 +6,11 @@ function usage(){
     printf "\t--username-controller username : Username of the Controller (default: opensand)\n"
     printf "\t--password-controller password : Password of the Controller (default: opensand)\n"
     printf "\t--ip-collector ip              : IP Address of the Collector (default: ip-controller)\n"
-    printf "\t--username-collector username  : Username of the Collector (default: opensand)\n"
-    printf "\t--password-collector password  : Password of the Collector (default: opensand)\n"
+    printf "\t--username-collector username  : Username of the Collector (default: username-controller)\n"
+    printf "\t--password-collector password  : Password of the Collector (default: password-controller)\n"
     printf "\t--ip-auditorium ip             : IP Address of the Auditorium (default: ip-controller)\n"
-    printf "\t--username-auditorium username : Username of the Auditorium (default: opensand)\n"
-    printf "\t--password-auditorium password : Password of the Auditorium (default: opensand)\n"
+    printf "\t--username-auditorium username : Username of the Auditorium (default: username-controller)\n"
+    printf "\t--password-auditorium password : Password of the Auditorium (default: password-controller)\n"
     printf "\t-h                             : print this message.\n"
 }
 

@@ -22,8 +22,8 @@
   changed_when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
 
 - name: Download InfluxDB (64bits)
-  get_url: url=https://s3.amazonaws.com/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
-    dest=/tmp/ force=no
+  copy: src=../src/collector/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
+    dest=/tmp/
   when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
     
 - name: Install InfluxDB (64bits)

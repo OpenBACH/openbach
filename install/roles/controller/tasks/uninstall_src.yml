@@ -13,10 +13,10 @@
   file: path=/etc/init.d/openbach-backend state=absent
 
 - name: Uninstall Django
-  pip: name=django state=absent
+  pip: name=django state=absent executable=pip3
 
-- name: Uninstall python-pip
-  apt: pkg=python-pip state=absent
+- name: Uninstall python3-pip
+  apt: pkg=python3-pip state=absent
 
 - name: Delete the sources
   file: path=/opt/openbach-controller state=absent

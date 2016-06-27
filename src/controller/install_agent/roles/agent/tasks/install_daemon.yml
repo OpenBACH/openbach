@@ -30,6 +30,3 @@
 - name: Create the service
   template: src=../src_agent/openbach-agent/openbach-agent.j2 dest=/etc/init.d/openbach-agent mode=0755
 
-- name: Start the service
-  service: name=openbach-agent state=started
-

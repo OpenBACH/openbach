@@ -1,0 +1,5 @@
+---
+
+- name: Start the service
+  service: name=openbach-agent state=started
+

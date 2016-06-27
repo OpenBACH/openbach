@@ -16,6 +16,9 @@
 - include: install_ssh_key.yml
   tags:
     - install
+- include: start_daemon.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_synchro.yml

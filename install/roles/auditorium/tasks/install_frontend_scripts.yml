@@ -4,5 +4,29 @@
   file: path=/opt/openbach-auditorium state=directory
 
 - name: Install frontend scripts
-  copy: src=../src/auditorium/frontend_scripts dest=/opt/openbach-auditorium/ mode=0755
+  copy: src=../src/auditorium/frontend_scripts/{{ item }} dest=/opt/openbach-auditorium/ mode=0755
+  with_items:
+    - add_job.py
+    - del_job.py
+    - get_job_help.py
+    - install_agent.py
+    - install_jobs.py
+    - list_agents.py
+    - list_installed_jobs.py
+    - list_job_instances.py
+    - list_jobs.py
+    - push_file.py
+    - restart_job_instance.py
+    - start_job_instance.py
+    - status_agents.py
+    - status_job_instance.py
+    - status_jobs.py
+    - stop_job_instance.py
+    - uninstall_agent.py
+    - uninstall_jobs.py
+    - update_job_log_severity.py
+    - update_job_stat_policy.py
+
+- name: Install frontend scripts (2)
+  template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend.py
 

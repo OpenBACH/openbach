@@ -89,8 +89,10 @@ fi
 if [ -z $auditorium_password ]; then
     auditorium_password=$controller_password
 fi
-if [ -n $proxy ]; then
-    echo "proxy_env:\n  $proxy" > /tmp/openbach_extra_vars
+if [ -z $proxy ]; then
+    :
+else
+    echo -e "proxy_env:\n  $proxy" > /tmp/openbach_extra_vars
 fi
 
 

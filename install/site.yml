@@ -1,6 +1,0 @@
----
-
-- include: controller.yml
-- include: collector.yml
-- include: auditorium.yml
-

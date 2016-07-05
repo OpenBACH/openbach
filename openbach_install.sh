@@ -5,9 +5,11 @@ function usage(){
     printf "\t--ip-controller ip             : IP Address of the Controller (default: localhost)\n"
     printf "\t--username-controller username : Username of the Controller (default: opensand)\n"
     printf "\t--password-controller password : Password of the Controller (default: opensand)\n"
+    printf "\t--name-controller name         : Name of the Controller (default: Controller)\n"
     printf "\t--ip-collector ip              : IP Address of the Collector (default: ip-controller)\n"
     printf "\t--username-collector username  : Username of the Collector (default: username-controller)\n"
     printf "\t--password-collector password  : Password of the Collector (default: password-controller)\n"
+    printf "\t--name-collector name          : Name of the Collector (default: name-controller)\n"
     printf "\t--ip-auditorium ip             : IP Address of the Auditorium (default: ip-controller)\n"
     printf "\t--username-auditorium username : Username of the Auditorium (default: username-controller)\n"
     printf "\t--password-auditorium password : Password of the Auditorium (default: password-controller)\n"
@@ -35,6 +37,9 @@ while true ; do
         --password-controller)
             controller_password=$2
             shift 2;;
+        --name-controller)
+            controller_name=$2
+            shift 2;;
         --ip-collector)
             collector_address=$2
             shift 2;;
@@ -43,6 +48,9 @@ while true ; do
             shift 2;;
         --password-collector)
             collector_password=$2
+            shift 2;;
+        --name-collector)
+            collector_name=$2
             shift 2;;
         --ip-auditorium)
             auditorium_address=$2
@@ -71,6 +79,9 @@ fi
 if [ -z $controller_password ]; then
     controller_password='opensand'
 fi
+if [ -z $controller_name ]; then
+    controller_name='Controller'
+fi
 if [ -z $collector_address ]; then
     collector_address=$controller_address
 fi
@@ -79,6 +90,9 @@ if [ -z $collector_username ]; then
 fi
 if [ -z $collector_password ]; then
     collector_password=$controller_password
+fi
+if [ -z $collector_name ]; then
+    collector_name=$controller_name
 fi
 if [ -z $auditorium_address ]; then
     auditorium_address=$controller_address
@@ -92,7 +106,7 @@ fi
 if [ -z $proxy ]; then
     :
 else
-    echo -e "proxy_env:\n  $proxy" > /tmp/openbach_extra_vars
+    echo -e "proxy_env:\n  $proxy" > /tmp/openbach_extra_vars2
 fi
 
 
@@ -106,6 +120,12 @@ do
     fi
 done
 
+echo -e "agents:\n  - { 'ip': '$controller_address', 'username': '$controller_username', 'password': '$controller_password', 'name': '$controller_name' }" >> /tmp/openbach_extra_vars2
+if [ $controller_address != $collector_address ]
+then
+    echo "  - { 'ip': '$collector_address', 'username': '$collector_username', 'password': '$collector_password', 'name': '$collector_name' }" >> /tmp/openbach_extra_vars2
+fi
+
 
 echo -e "[Controller]\n$controller_address\n" > /tmp/openbach_hosts
 echo "controller_ip: $controller_address" > configs/ips
@@ -114,20 +134,20 @@ echo "collector_ip: $collector_address" >> configs/ips
 echo -e "[Auditorium]\n$auditorium_address" >> /tmp/openbach_hosts
 echo "auditorium_ip: $auditorium_address" >> configs/ips
 
-echo "ansible_ssh_user: $controller_username" >> /tmp/openbach_extra_vars
+echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags install $skip_tag_controller
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/controller.yml --tags install $skip_tag_controller
 
 echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $collector_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/collector.yml --tags install
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/collector.yml --tags install
 
 echo "ansible_ssh_user: $auditorium_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $auditorium_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $auditorium_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/auditorium.yml --tags install
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/auditorium.yml --tags install
 
-rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars
+rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars /tmp/openbach_extra_vars2
 

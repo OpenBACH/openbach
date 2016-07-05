@@ -16,6 +16,9 @@
 - include: add_services_to_boot.yml
   tags:
     - install
+- include: install_agent.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_stats.yml

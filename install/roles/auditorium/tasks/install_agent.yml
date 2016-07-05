@@ -1,0 +1,6 @@
+---
+
+- name: Install Agent on the Controller/Collector
+  shell: /opt/openbach-auditorium/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ item.username }} {{ item.password }} {{ item.name }}
+  with_items: "{{ agents }}"
+

@@ -20,6 +20,8 @@ def pretty_print(job_name):
         print(infos['help'])
     else:
         print(infos)
+    if 400 <= response.status_code < 600:
+        exit(1)
 
 
 if __name__ == "__main__":

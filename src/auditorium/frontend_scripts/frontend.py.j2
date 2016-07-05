@@ -32,11 +32,16 @@ def _post_message(entry_point, verb, **kwargs):
 
 
 def pretty_print(function):
+    """    
+    warning terminate the program on error form the server
+    """
     @wraps(function)
     def wrapper(*args, **kwargs):
         response = function(*args, **kwargs)
         print(response)
         pprint.pprint(response.json())
+        if 400 <= response.status_code < 600:
+        	exit(1)
     return wrapper
 
 

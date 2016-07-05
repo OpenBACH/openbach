@@ -19,6 +19,9 @@
 - include: start_daemon.yml
   tags:
     - install
+- include: add_services_to_boot.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_synchro.yml
@@ -34,6 +37,9 @@
   tags:
     - uninstall
 - include: uninstall_ssh_key.yml
+  tags:
+    - uninstall
+- include: del_services_to_boot.yml
   tags:
     - uninstall
 

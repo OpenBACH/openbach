@@ -1,0 +1,8 @@
+---
+
+- name: Delete openbach-agent to boot
+  shell: update-rc.d -f openbach-agent remove
+
+- name: Delete rstats to boot
+  shell: update-rc.d -f rstats remove
+

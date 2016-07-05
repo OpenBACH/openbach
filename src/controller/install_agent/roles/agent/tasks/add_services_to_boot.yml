@@ -1,0 +1,8 @@
+---
+
+- name: Add openbach-agent to boot
+  shell: update-rc.d openbach-agent defaults 80
+
+- name: Add rstats to boot
+  shell: update-rc.d rstats defaults 80
+

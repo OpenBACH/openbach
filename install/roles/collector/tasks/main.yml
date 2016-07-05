@@ -10,6 +10,9 @@
 - include: install_logs.yml
   tags:
     - install
+- include: add_services_to_boot.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_synchro.yml
@@ -19,6 +22,9 @@
   tags:
     - uninstall
 - include: uninstall_logs.yml
+  tags:
+    - uninstall
+- include: del_services_to_boot.yml
   tags:
     - uninstall
 

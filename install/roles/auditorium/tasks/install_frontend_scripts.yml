@@ -1,10 +1,10 @@
 ---
 
 - name: Create Auditorium repository
-  file: path=/opt/openbach-auditorium state=directory
+  file: path=/opt/openbach-auditorium/frontend_scripts/ state=directory
 
 - name: Install frontend scripts
-  copy: src=../src/auditorium/frontend_scripts/{{ item }} dest=/opt/openbach-auditorium/ mode=0755
+  copy: src=../src/auditorium/frontend_scripts/{{ item }} dest=/opt/openbach-auditorium/frontend_scripts/ mode=0755
   with_items:
     - add_job.py
     - del_job.py
@@ -28,5 +28,5 @@
     - update_job_stat_policy.py
 
 - name: Install frontend scripts (2)
-  template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend.py
+  template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py
 

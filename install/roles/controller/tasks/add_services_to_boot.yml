@@ -1,0 +1,8 @@
+---
+
+- name: Add openbach-conductor to boot
+  shell: update-rc.d openbach-conductor defaults 80
+
+- name: Add openbach-backend to boot
+  shell: update-rc.d openbach-backend defaults 80
+

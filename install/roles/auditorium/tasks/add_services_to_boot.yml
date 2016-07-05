@@ -1,0 +1,8 @@
+---
+
+- name: Add Kibana to boot
+  shell: update-rc.d kibana defaults 80
+
+- name: Add Grafana to boot
+  shell: update-rc.d grafana-server defaults 80
+

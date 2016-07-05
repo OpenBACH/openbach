@@ -1,0 +1,8 @@
+---
+
+- name: Delete openbach-conductor to boot
+  shell: update-rc.d -f openbach-conductor remove
+
+- name: Delete openbach-backend to boot
+  shell: update-rc.d -f openbach-conductor remove
+

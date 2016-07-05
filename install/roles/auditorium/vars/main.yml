@@ -3,4 +3,15 @@
 version_kibana: 4.3.1
 version_grafana: 3.0.4-1464167696
 controller_archi: x64
+jobs:
+  - { 'jobname': 'rstats_job', 'path': '/opt/openbach-controller/jobs/layer7/rstats_job' }
+  - { 'jobname': 'rsyslog_job', 'path': '/opt/openbach-controller/jobs/layer7/rsyslog_job' }
+  - { 'jobname': 'synchronization', 'path': '/opt/openbach-controller/jobs/layer7/synchronization' }
+  - { 'jobname': 'rate_monitoring', 'path': '/opt/openbach-controller/jobs/layer3/rate_monitoring' }
+  - { 'jobname': 'cwnd_monitoring', 'path': '/opt/openbach-controller/jobs/layer4/cwnd_monitoring' }
+  - { 'jobname': 'iperf', 'path': '/opt/openbach-controller/jobs/layer4/traffic_generator/iperf' }
+  - { 'jobname': 'ping', 'path': '/opt/openbach-controller/jobs/layer4/traffic_generator/ping' }
+  - { 'jobname': 'http2_server', 'path': '/opt/openbach-controller/jobs/layer7/traffic_generator/http2_server' }
+  - { 'jobname': 'http2_client', 'path': '/opt/openbach-controller/jobs/layer7/traffic_generator/http2_client' }
+  - { 'jobname': 'traffic_monitor_http2_client', 'path': '/opt/openbach-controller/jobs/layer7/traffic_monitor/http2_client' }
 

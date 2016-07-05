@@ -1,0 +1,8 @@
+---
+
+- name: Delete Kibana to boot
+  shell: update-rc.d -f kibana remove
+
+- name: Delete Grafana to boot
+  shell: update-rc.d -f grafana-server remove
+

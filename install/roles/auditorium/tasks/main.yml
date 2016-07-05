@@ -10,6 +10,12 @@
 - include: install_frontend_scripts.yml
   tags:
     - install
+- include: install_jobs.yml
+  tags:
+    - install
+- include: add_services_to_boot.yml
+  tags:
+    - install
 
 # Uninstall
 - include: uninstall_stats.yml
@@ -19,6 +25,9 @@
   tags:
     - uninstall
 - include: uninstall_frontend_scripts.yml
+  tags:
+    - uninstall
+- include: del_services_to_boot.yml
   tags:
     - uninstall
 

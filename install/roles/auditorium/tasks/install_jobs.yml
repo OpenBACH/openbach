@@ -1,0 +1,6 @@
+---
+
+- name: Add the Jobs to the backend
+  shell: /opt/openbach-auditorium/frontend_scripts/add_job.py "{{ item.jobname }}" "{{ item.path }}"
+  with_items: "{{ jobs }}"
+

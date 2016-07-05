@@ -11,6 +11,7 @@ function usage(){
     printf "\t--ip-auditorium ip             : IP Address of the Auditorium (default: ip-controller)\n"
     printf "\t--username-auditorium username : Username of the Auditorium (default: username-controller)\n"
     printf "\t--password-auditorium password : Password of the Auditorium (default: password-controller)\n"
+    printf "\t-p  proxy                      : Set the proxy to use (default: none)\n"
     printf "\t-h                             : print this message.\n"
 }
 
@@ -52,6 +53,9 @@ while true ; do
         --password-auditorium)
             auditorium_password=$2
             shift 2;;
+        -p)
+            proxy=$2
+            shift 2;;
         '') break;;
         *) echo "option not found: $1"; shift;;
     esac
@@ -85,6 +89,9 @@ fi
 if [ -z $auditorium_password ]; then
     auditorium_password=$controller_password
 fi
+if [ -n $proxy ]; then
+    echo "proxy_env:\n  $proxy" > /tmp/openbach_extra_vars
+fi
 
 
 list_local_ip=`hostname -I`
@@ -105,7 +112,7 @@ echo "collector_ip: $collector_address" >> configs/ips
 echo -e "[Auditorium]\n$auditorium_address" >> /tmp/openbach_hosts
 echo "auditorium_ip: $auditorium_address" >> configs/ips
 
-echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
+echo "ansible_ssh_user: $controller_username" >> /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
 sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags install $skip_tag_controller

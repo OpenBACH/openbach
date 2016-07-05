@@ -40,6 +40,7 @@ def conductor_execute(command):
 
 @check_post_data
 def install_agent(data):
+    list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
     try:
         agent_data = {key: data[key] for key in ('address', 'username', 'collector', 'name')}
         password = data['password']
@@ -65,6 +66,19 @@ def install_agent(data):
     agent.status = 'Available'
     agent.update_status = timezone.now()
     agent.save()
+    # Recuperer la liste des jobs a installer
+    list_jobs = []
+    with open(list_default_jobs) as f:
+        for line in f:
+            list_jobs.append(line.rstrip('\n'))
+    # Installer les jobs
+    results = internal_install_jobs([agent.address], list_jobs)
+    if results[1] != 200:
+        response['warning'] = 'At least one of the default Jobs installation have failed'
+    elif 'warning' in results:
+        response['warning'] = results['warning']
+        response['unknown Jobs'] = results['unknown Jobs']
+
     return response, 200
 
 
@@ -225,11 +239,16 @@ def install_jobs(data):
 
     severity = data.get('severity', 4)
     local_severity = data.get('local_severity', 4)
+
+    return internal_install_jobs(addresses, names, severity, local_severity)
+
+
+def internal_install_jobs(addresses, names, severity=4, local_severity=4):
     agents = Agent.objects.filter(pk__in=addresses)
     no_agent = set(addresses) - set(map(attrgetter('address'), agents))
     
     jobs = Job.objects.filter(pk__in=names)
-    no_job = set(names) - set(map(attrgetter('name'), agents))
+    no_job = set(names) - set(map(attrgetter('name'), jobs))
     
     if no_job or no_agent:
         warning = 'At least one of the Agents or one of the Jobs is unknown to'
@@ -259,7 +278,6 @@ def install_jobs(data):
         if warning:
             result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
                       list(no_agent), 'unknown Jobs': list(no_job)}, 200
-            print(result)
             return result
         else:
             return {'msg': 'OK'}

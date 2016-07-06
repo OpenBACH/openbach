@@ -349,6 +349,9 @@ def list_installed_jobs(data):
         return {'msg': 'POST data malformed'}, 400
 
     update = data.get('update', False)
+    verbosity = 0
+    if 'verbosity' in data:
+        verbosity = data['verbosity']
     try:
         agent = Agent.objects.get(pk=ip_address)
     except ObjectDoesNotExist:
@@ -373,12 +376,21 @@ def list_installed_jobs(data):
     except (KeyError, Installed_Job.DoesNotExist):
         response['installed_jobs'] = []
     else:
-        response['installed_jobs'] = [
-            {
+        response['installed_jobs'] = []
+        for job in installed_jobs:
+            job_infos = {
                 'name': job.job.name,
                 'update_status': job.update_status,
-            } for job in installed_jobs
-        ]
+            }
+            if verbosity > 0:
+                job_infos['severity'] = job.severity
+                job_infos['stats_default_policy'] = 'True' if \
+                    job.stats_default_policy else 'False'
+            if verbosity > 1:
+                job_infos['local_severity'] = job.local_severity
+                job_infos['accept_stats'] = job.accept_stats
+                job_infos['deny_stats'] = job.deny_stats
+            response['installed_jobs'].append(job_infos)
     finally:
         return response, 200
 

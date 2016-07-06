@@ -82,9 +82,11 @@ def list_agents(update=None):
     return _post_message('agents', 'list', update=bool(update))
 
 
-def list_installed_jobs(agent_ip, update=None):
-    return _post_message('jobs', 'list',
-            address=agent_ip, update=bool(update))
+def list_installed_jobs(agent_ip, verbosity=None, update=None):
+    action = partial(_post_message, address=agent_ip, update=bool(update))
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
+    return action('jobs', 'list')
 
 
 def list_job_instances(agents_ip, update=None):

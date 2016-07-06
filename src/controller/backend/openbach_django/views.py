@@ -127,7 +127,7 @@ def list_agents(data):
         {
             'address': agent.address,
             'status': agent.status,
-            'update_status': agent.update_status,
+            'update_status': agent.update_status.astimezone(timezone.get_current_timezone()),
             'name': agent.name,
         } for agent in agents]
 
@@ -380,12 +380,13 @@ def list_installed_jobs(data):
         for job in installed_jobs:
             job_infos = {
                 'name': job.job.name,
-                'update_status': job.update_status,
+                'update_status':
+                job.update_status.astimezone(timezone.get_current_timezone()),
             }
             if verbosity > 0:
                 job_infos['severity'] = job.severity
-                job_infos['stats_default_policy'] = 'True' if \
-                    job.stats_default_policy else 'False'
+                job_infos['stats_default_policy'] = \
+                    str(job.stats_default_policy)
             if verbosity > 1:
                 job_infos['local_severity'] = job.local_severity
                 job_infos['accept_stats'] = job.accept_stats
@@ -656,7 +657,7 @@ def _build_instance_infos(instance, update):
     instance_infos = {
             'id': instance.id,
             'arguments': instance.args,
-            'update_status': instance.update_status,
+            'update_status': instance.update_status.astimezone(timezone.get_current_timezone()),
             'status': instance.status,
     }
     if error_msg is not None:

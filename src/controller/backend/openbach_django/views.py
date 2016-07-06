@@ -280,7 +280,7 @@ def internal_install_jobs(addresses, names, severity=4, local_severity=4):
                       list(no_agent), 'unknown Jobs': list(no_job)}, 200
             return result
         else:
-            return {'msg': 'OK'}
+            return {'msg': 'OK'}, 200
     else:
         if warning:
             return {'msg': 'At least one of the installation have failed',

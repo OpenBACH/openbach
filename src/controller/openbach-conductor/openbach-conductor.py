@@ -233,7 +233,7 @@ class ClientThread(threading.Thread):
     }
 
     UPDATE_AGENT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
-    UPDATE_JOB_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+LIMIT+1'
+    UPDATE_JOB_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
     UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}{}"'
 
     def __init__(self, clientsocket):
@@ -567,6 +567,8 @@ class ClientThread(threading.Thread):
             if job_name not in jobs_list:
                 job.delete()
             else:
+                job.update_status = date
+                job.save()
                 jobs_list.remove(job_name)
 
         error_msg = 'KO 2'

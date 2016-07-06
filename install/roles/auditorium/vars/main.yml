@@ -11,7 +11,4 @@ jobs:
   - { 'jobname': 'cwnd_monitoring', 'path': '/opt/openbach-controller/jobs/layer4/cwnd_monitoring' }
   - { 'jobname': 'iperf', 'path': '/opt/openbach-controller/jobs/layer4/traffic_generator/iperf' }
   - { 'jobname': 'ping', 'path': '/opt/openbach-controller/jobs/layer4/traffic_generator/ping' }
-  - { 'jobname': 'http2_server', 'path': '/opt/openbach-controller/jobs/layer7/traffic_generator/http2_server' }
-  - { 'jobname': 'http2_client', 'path': '/opt/openbach-controller/jobs/layer7/traffic_generator/http2_client' }
-  - { 'jobname': 'traffic_monitor_http2_client', 'path': '/opt/openbach-controller/jobs/layer7/traffic_monitor/http2_client' }
 

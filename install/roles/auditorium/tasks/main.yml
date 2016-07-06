@@ -10,7 +10,7 @@
 - include: install_frontend_scripts.yml
   tags:
     - install
-- include: install_jobs.yml
+- include: add_jobs.yml
   tags:
     - install
 - include: add_services_to_boot.yml

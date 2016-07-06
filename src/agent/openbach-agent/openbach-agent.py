@@ -118,8 +118,9 @@ def signal_term_handler(signal, frame):
     while scheduler.get_jobs():
         time.sleep(0.5)
     scheduler.shutdown()
-    for root, _, filename in os.walk(PID_FOLDER):
-        os.remove(os.path.join(root, filename))
+    for root, _, filenames in os.walk(PID_FOLDER):
+        for filename in filenames:
+            os.remove(os.path.join(root, filename))
     exit(0)
 
 

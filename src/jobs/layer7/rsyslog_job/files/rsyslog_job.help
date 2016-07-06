@@ -1,4 +1,9 @@
 This Job is used by OpenBACH to modify the logs policy of a Job. It moves a configuration file pushed by the Controller in advanced to be the configuration file consider by Rsyslog then restart Rsyslog.
+The log severity used by OpenBACH goes from 0 to 3 and corresponds to the rsyslog severity :
+           0 -> 3 ERROR
+           1 -> 4 WARNING
+           2 -> 6 INFO
+           3 -> 7 DEBUG
 
 Required Arguments:
  job_name :  the name of the Job you want to change the logs policy

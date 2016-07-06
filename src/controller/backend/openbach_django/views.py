@@ -144,8 +144,17 @@ def add_job(data):
 
     config_prefix = os.path.join(job_path, 'files', job_name)
     config = ConfigParser()
-    config.read('{}.cfg'.format(config_prefix))
-    job = config[job_name]
+    config_file = '{}.cfg'.format(config_prefix)
+    try:
+        config.read_file(open(config_file))
+    except FileNotFoundError:
+        return {'msg': 'KO, the configuration file is not present',
+                'configuration file': config_file}, 404
+    try:
+        job = config[job_name]
+    except KeyError:
+        return {'msg': 'KO, the configuration file of the Job is not well '
+                'formed', 'configuration file': config_file}, 404
     job_args = job['required'].split()
     optional_args = job.getboolean('optional')
     try:

@@ -36,6 +36,7 @@
       - python3-dev
       - python-setuptools
       - checkinstall
+      - git
     become: yes
     when: nghttp_check_deb.rc == 1
     

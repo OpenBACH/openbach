@@ -189,6 +189,27 @@ def stop_watch(job_id):
     except JobLookupError:
         pass
 
+def schedule_job(job_name, job_instance_id, arguments, date_value):
+    timestamp = time.time()
+    with JobManager(job_name) as job:
+        command = job['command']
+        command_stop = job['command_stop']
+    date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+    try:
+        JobManager().scheduler.add_job(
+                launch_job, 'date', run_date=date,
+                args=(job_name, job_instance_id, command, arguments),
+                id=job_name+job_instance_id)
+    except ConflictingIdError:
+        raise BadRequest('KO A job {} is already programmed'.format(job_name))
+
+    with JobManager(job_name) as job:
+        if job['persistent']:
+            job['set_id'].add(job_instance_id)
+    return date
+
+
+
  
 def ls_jobs():
     timestamp = int(round(time.time() * 1000))
@@ -293,10 +314,11 @@ class ClientThread(threading.Thread):
                 'instance id, a watch type and its value'),
     }
 
-    def __init__(self, client_socket, path):
+    def __init__(self, client_socket, path_jobs, path_scheduled_instances_job):
         super().__init__()
         self.socket = client_socket
-        self.path = path
+        self.path_jobs = path_jobs
+        self.path_scheduled_instances_job = path_scheduled_instances_job
         
     def start_job(self, name, job_instance_id, date_type, date_value, args):
         with JobManager(name) as job:
@@ -304,20 +326,14 @@ class ClientThread(threading.Thread):
             command_stop = job['command_stop']
 
         arguments = ' '.join(args)
-        timestamp = time.time()
         if date_type == 'date':
-            date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
-            try:
-                JobManager().scheduler.add_job(
-                        launch_job, 'date', run_date=date,
-                        args=(name, job_instance_id, command, arguments),
-                        id=name+job_instance_id)
-            except ConflictingIdError:
-                raise BadRequest('KO A job {} is already programmed'.format(name))
-
-            with JobManager(name) as job:
-                if job['persistent']:
-                    job['set_id'].add(job_instance_id)
+            date = schedule_job(name, job_instance_id, arguments, date_value)
+            if date != None:
+                filename = '{}{}{}.prog'.format(self.path_scheduled_instances_job,
+                                                name, job_instance_id)
+                with open(filename, 'w') as job_prog:
+                    print('{}\n{}\n{}\n{}'.format(name, job_instance_id,
+                                                  date_value, arguments), file=job_prog)
 
         elif date_type == 'interval':
             date = ''
@@ -392,7 +408,7 @@ class ClientThread(threading.Thread):
                             'OK A job {} is already installed'
                             .format(job_name))
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
-            conf = JobConfiguration(self.path, job_name)
+            conf = JobConfiguration(self.path_jobs, job_name)
             args.append(conf.command)
             if conf.command_stop:
                 args.append(conf.command_stop)
@@ -683,12 +699,12 @@ if __name__ == '__main__':
     syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
 
     # On ajoute tous les jobs déjà présent
-    path = '/opt/openbach-agent/jobs/'
+    path_jobs = '/opt/openbach-agent/jobs/'
     with JobManager(init=True) as jobs:
-        for job in list_jobs_in_dir(path):
+        for job in list_jobs_in_dir(path_jobs):
             # On vérifie que ce fichier de conf contient tout ce qu'il faut
             try:
-                conf = JobConfiguration(path, job)
+                conf = JobConfiguration(path_jobs, job)
             except BadRequest as e:
                 syslog.syslog(syslog.LOG_ERR, e.reason)
                 continue
@@ -705,6 +721,20 @@ if __name__ == '__main__':
 
     # On initialise l'ArgsManager
     ArgsManager(init=True)
+    
+    # On programme les instances de job deja programmee
+    path_scheduled_instances_job = '/opt/openbach-agent/job_instances/'
+    for root, _, filenames in os.walk(path_scheduled_instances_job):
+        for filename in filenames:
+            with open(root + filename, 'r') as f:
+                job_name = f.readline().rstrip('\n')
+                job_instance_id = f.readline().rstrip('\n')
+                date_value = float(f.readline().rstrip('\n'))
+                arguments = f.readline().rstrip('\n')
+            date = schedule_job(job_name, job_instance_id, arguments, date_value)
+            if date == None:
+                os.remove(os.path.join(root, filename))
+                
 
     # Ouverture de la socket d'ecoute
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -714,5 +744,5 @@ if __name__ == '__main__':
 
     while True:
         client_socket, _ = tcp_socket.accept()
-        ClientThread(client_socket, path).start()
+        ClientThread(client_socket, path_jobs, path_scheduled_instances_job).start()
 

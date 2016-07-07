@@ -308,6 +308,7 @@ class ClientThread(threading.Thread):
             'ansible-playbook -i /tmp/openbach_hosts -e '
             '@/tmp/openbach_agents -e '
             '@/opt/openbach-controller/configs/ips -e '
+            'collector_ip={agent.collector} -e '
             '@/tmp/openbach_extra_vars -e @/opt/openbach-controller/configs'
             '/all -e ansible_ssh_user={agent.username} -e '
             'ansible_sudo_pass={agent.password} -e '

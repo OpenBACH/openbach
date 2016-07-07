@@ -17,7 +17,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 case "$1" in
 start)
     printf "%-50s" "Starting $NAME..."
-    mkdir $PIDFOLDER
+    mkdir $PIDFOLDER > /dev/null 2>&1
     cd $DAEMON_PATH
     PID=`$DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
     if [ -z $PID ]; then

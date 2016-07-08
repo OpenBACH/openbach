@@ -692,7 +692,7 @@ class ClientThread(threading.Thread):
 
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGHUP, signal_term_handler)
+    signal.signal(signal.SIGTERM, signal_term_handler)
 
     # TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
     # Configure logger

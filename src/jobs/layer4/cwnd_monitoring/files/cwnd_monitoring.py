@@ -16,14 +16,13 @@ import rstats_api as rstats
 
 
 def signal_term_handler(signal, frame):
-    cmd = "PID=`cat /var/run/cwnd_monitoring.pid`; kill -HUP $PID; rm "
+    cmd = "PID=`cat /var/run/cwnd_monitoring.pid`; kill -TERM $PID; rm "
     cmd += "/var/run/cwnd_monitoring.pid"
     os.system(cmd)
     cmd = "rmmod tcp_probe_new_fix > /dev/null 2>&1"
     os.system(cmd)
     sys.exit(0)
                  
-signal.signal(signal.SIGHUP, signal_term_handler)
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 

@@ -45,7 +45,7 @@ stop)
     printf "%-50s" "Stopping $NAME"
     if [ -f $PIDFILE ]; then
         PID=`cat $PIDFILE`
-        kill -HUP $PID
+        kill -TERM $PID
         printf "%s\n" "Ok"
         rm -f $PIDFILE
     else

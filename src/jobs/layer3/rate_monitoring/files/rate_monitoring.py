@@ -23,7 +23,6 @@ def signal_term_handler(signal, frame):
     chain.delete_rule(rule)
     sys.exit(0)
               
-signal.signal(signal.SIGHUP, signal_term_handler)
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 

@@ -734,6 +734,12 @@ if __name__ == '__main__':
             date = schedule_job(job_name, job_instance_id, arguments, date_value)
             if date == None:
                 os.remove(os.path.join(root, filename))
+    with ArgsManager(job_name) as args:
+        args[job_instance_id] = {
+                'args': arguments,
+                'type': 'date',
+                'date': date,
+        }
                 
 
     # Ouverture de la socket d'ecoute

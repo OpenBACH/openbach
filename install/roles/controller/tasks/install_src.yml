@@ -42,6 +42,12 @@
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
 
+- name: Download uWSGI
+  copy: src=../src/controller/uwsgi dest=/tmp/
+
+- name: Install uWSGI
+  pip: name=uwsgi executable=pip3 version={{ uwsgi_version }} extra_args='--download-cache /tmp/uwsgi/'
+
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
 

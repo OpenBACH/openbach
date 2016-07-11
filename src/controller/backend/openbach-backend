@@ -5,8 +5,8 @@
 
 DAEMON_PATH="/opt/openbach-controller/backend/"
 
-DAEMON=./manage.py
-DAEMONOPTS="runserver 0.0.0.0:8000"
+DAEMON=uwsgi
+DAEMONOPTS="--http :8000 --module backend.wsgi"
 
 NAME=openbach-backend
 DESC="My daemon description"

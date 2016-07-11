@@ -218,23 +218,25 @@ def stop_watch(job_id):
     except JobLookupError:
         pass
 
-def schedule_job(job_name, job_instance_id, arguments, date_value):
+def schedule_job(job_name, job_instance_id, arguments, date_value,
+                 reschedule=False):
     timestamp = time.time()
     with JobManager(job_name) as job:
         command = job['command']
         command_stop = job['command_stop']
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
-    try:
-        JobManager().scheduler.add_job(
-                launch_job, 'date', run_date=date,
-                args=(job_name, job_instance_id, command, arguments),
-                id=job_name+job_instance_id)
-    except ConflictingIdError:
-        raise BadRequest('KO A job {} is already programmed'.format(job_name))
+    if not reschedule or date != None:
+        try:
+            JobManager().scheduler.add_job(
+                    launch_job, 'date', run_date=date,
+                    args=(job_name, job_instance_id, command, arguments),
+                    id=job_name+job_instance_id)
+        except ConflictingIdError:
+            raise BadRequest('KO A job {} is already programmed'.format(job_name))
 
-    with JobManager(job_name) as job:
-        if job['persistent']:
-            job['set_id'].add(job_instance_id)
+        with JobManager(job_name) as job:
+            if job['persistent']:
+                job['set_id'].add(job_instance_id)
     return date
 
 
@@ -760,15 +762,16 @@ if __name__ == '__main__':
                 job_instance_id = f.readline().rstrip('\n')
                 date_value = float(f.readline().rstrip('\n'))
                 arguments = f.readline().rstrip('\n')
-            date = schedule_job(job_name, job_instance_id, arguments, date_value)
+            date = schedule_job(job_name, job_instance_id, arguments,
+                                date_value, reschedule=True)
             if date == None:
                 os.remove(os.path.join(root, filename))
-    with ArgsManager(job_name) as args:
-        args[job_instance_id] = {
-                'args': arguments,
-                'type': 'date',
-                'date': date,
-        }
+            with ArgsManager(job_name) as args:
+                args[job_instance_id] = {
+                        'args': arguments,
+                        'type': 'date',
+                        'date': date,
+                }
                 
 
     # Ouverture de la socket d'ecoute

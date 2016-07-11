@@ -51,6 +51,9 @@
 - name: Create openbach-agent jobs repository
   file: path=/opt/openbach-agent/jobs state=directory mode=0755
   
+- name: Create openbach-agent job_instances repository
+  file: path=/opt/openbach-agent/job_instances state=directory mode=0755
+  
 - name: Install the daemon
   copy: src=../src_agent/openbach-agent/{{ item.name }} dest=/opt/openbach-agent/ mode={{ item.mode }}
   with_items:

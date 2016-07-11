@@ -34,4 +34,3 @@
 ---
 
 django_version: 1.9.7
-uwsgi_version: 2.0.13.1

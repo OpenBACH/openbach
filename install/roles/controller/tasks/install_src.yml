@@ -42,12 +42,6 @@
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
 
-- name: Download uWSGI
-  copy: src=../src/controller/uwsgi dest=/tmp/
-
-- name: Install uWSGI
-  pip: name=uwsgi executable=pip3 version={{ uwsgi_version }} extra_args='--download-cache /tmp/uwsgi/'
-
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
 
@@ -55,7 +49,7 @@
   copy: src=../src/controller/backend/{{ item.name }} dest=/opt/openbach-controller/backend/ mode={{ item.mode }}
   with_items:
     - { name: 'backend', mode: '0755' }
-    - { name: 'manage.py', mode: '0755' }
+    - { name: 'openbach-backend.py', mode: '0755' }
     - { name: 'openbach_django', mode: '0755' }
 
 - name: Install the openbach-conductor
@@ -82,13 +76,13 @@
   replace: dest=/opt/openbach-controller/openbach-conductor/openbach-conductor.py regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
 
 - name: Initialize the database
-  shell: /opt/openbach-controller/backend/manage.py {{ item }}
+  shell: /opt/openbach-controller/backend/openbach-backend.py {{ item }}
   with_items:
     - makemigrations
     - migrate
 
 - name: Create a default superuser on the database
-  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/manage.py shell
+  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/openbach-backend.py shell
   ignore_errors: yes
 
 - name: Create openbach-conductor service

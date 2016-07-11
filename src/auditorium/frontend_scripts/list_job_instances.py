@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
@@ -31,9 +34,6 @@
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import argparse
 from frontend import list_job_instances, pretty_print

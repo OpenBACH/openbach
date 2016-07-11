@@ -1,3 +1,4 @@
+#!/bin/bash
 # 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
@@ -30,9 +31,6 @@
 #   @brief    This script is used by the OpenBACH conductor (Controller) to give its orders to the Agent
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
-
-
-#!/bin/bash
 
 if [ -z "$1" ]
 then

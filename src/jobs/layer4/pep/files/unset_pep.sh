@@ -1,3 +1,4 @@
+#!/bin/bash
 # 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
@@ -26,13 +27,10 @@
 #   
 #   
 #   
-#   @file     set_pep.sh
+#   @file     unset_pep.sh
 #   @brief    Sources of the Job pep
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
-
-#!/bin/bash
-# unset PEP for the ST
 
 # On récupère les arguments
 if [ -z $1 ]

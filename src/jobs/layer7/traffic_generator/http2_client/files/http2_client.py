@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
@@ -32,8 +35,6 @@
 """
 
 
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 """
 Created on Thu Nov  5 15:33:30 2015
 

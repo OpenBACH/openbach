@@ -97,7 +97,9 @@ class Job_Instance(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     args = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=200, blank=True)
+    start_date = models.DateTimeField(blank=True)
     update_status = models.DateTimeField(blank=True)
+    periodic = models.BooleanField()
 
     def validate_args_len(self):
         args_count = len(self.args.split())

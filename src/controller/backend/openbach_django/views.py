@@ -38,6 +38,7 @@ import socket
 from configparser import ConfigParser
 from functools import wraps
 from operator import attrgetter
+from datetime import datetime
 
 from django.utils import timezone
 from django.http import JsonResponse
@@ -483,12 +484,22 @@ def start_job_instance(data):
 
     instance.status = "starting ..."
     instance.update_status = timezone.now()
-    instance.save()
 
     if 'interval' in data:
-        cmd = 'start_job_instance interval {} {}'.format(data['interval'], instance.id)
+        interval = data['interval']
+        instance.start_date = timezone.now()
+        instance.periodic = True
+        instance.save()
+        cmd = 'start_job_instance interval {} {}'.format(interval, instance.id)
     else:
-        cmd = 'start_job_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+        date = data.get('date', 'now')
+        if date == 'now':
+            instance.start_date = timezone.now()
+        else:
+            instance.start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+        instance.periodic = False
+        instance.save()
+        cmd = 'start_job_instance date {} {}'.format(date, instance.id)
 
     result = conductor_execute(cmd)
     response = {'msg': result}
@@ -555,12 +566,22 @@ def restart_job_instance(data):
                     'msg': 'Arguments given don\'t match with arguments needed',
             }, 400
 
-        instance.save()
 
     if 'interval' in data:
-        cmd = 'restart_job_instance interval {} {}'.format(data['interval'], instance.id)
+        interval = data['interval']
+        instance.start_date = timezone.now()
+        instance.periodic = True
+        instance.save()
+        cmd = 'restart_job_instance interval {} {}'.format(interval, instance.id)
     else:
-        cmd = 'restart_job_instance date {} {}'.format(data.get('date', 'now'), instance.id)
+        date = data.get('date', 'now')
+        if date == 'now':
+            instance.start_date = timezone.now()
+        else:
+            instance.start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+        instance.periodic = False
+        instance.save()
+        cmd = 'restart_job_instance date {} {}'.format(date, instance.id)
 
     result = conductor_execute(cmd)
     response = {'msg': result}
@@ -762,6 +783,7 @@ def update_job_log_severity(data):
     instance.args = ''
     instance.status = "starting ..."
     instance.update_status = timezone.now()
+    instance.periodic = False
     instance.save()
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
@@ -830,6 +852,7 @@ def update_job_stat_policy(data):
         return {'msg': 'Arguments given don\'t match with arguments needed'}, 400
     instance.status = "starting ..."
     instance.update_status = timezone.now()
+    instance.periodic = False
     instance.save()
 
     result = conductor_execute(

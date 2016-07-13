@@ -40,12 +40,12 @@ from django.contrib.auth import hashers
 
 
 class Agent(models.Model):
-    name = models.CharField(max_length=200, blank=True, unique=True)
+    name = models.CharField(max_length=200, null=True, blank=True, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
-    status = models.CharField(max_length=200, blank=True)
-    update_status = models.DateTimeField(blank=True)
+    status = models.CharField(max_length=200, null=True, blank=True)
+    update_status = models.DateTimeField(null=True, blank=True)
     reachable = models.BooleanField()
-    update_reachable = models.DateTimeField(blank=True)
+    update_reachable = models.DateTimeField(null=True, blank=True)
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)
     collector = models.GenericIPAddressField()
@@ -67,7 +67,7 @@ class Job(models.Model):
     path = models.FilePathField(
             path="/opt/openbach/jobs", recursive=True,
             allow_folders=True, allow_files=False)
-    help = models.TextField(blank=True)
+    help = models.TextField(null=True, blank=True)
     nb_args = models.IntegerField()
     optional_args = models.BooleanField()
     
@@ -79,7 +79,7 @@ class Installed_Job(models.Model):
     name = models.CharField(max_length=200, primary_key=True)
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
-    update_status = models.DateTimeField(blank=True)
+    update_status = models.DateTimeField(null=True, blank=True)
     severity = models.IntegerField()
     local_severity = models.IntegerField()
     stats_default_policy = models.BooleanField()
@@ -95,11 +95,13 @@ class Installed_Job(models.Model):
 
 class Job_Instance(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
-    args = models.CharField(max_length=200, blank=True)
-    status = models.CharField(max_length=200, blank=True)
-    start_date = models.DateTimeField(blank=True)
-    update_status = models.DateTimeField(blank=True)
+    args = models.CharField(max_length=200, null=True, blank=True)
+    status = models.CharField(max_length=200)
+    update_status = models.DateTimeField()
+    start_date = models.DateTimeField()
+    stop_date = models.DateTimeField(null=True, blank=True)
     periodic = models.BooleanField()
+    is_stopped = models.BooleanField(default=False)
 
     def validate_args_len(self):
         args_count = len(self.args.split())
@@ -115,7 +117,8 @@ class Job_Instance(models.Model):
 class Watch(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     instance_id = models.IntegerField(primary_key=True)
-    interval = models.IntegerField(blank=True)
+    interval = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return 'Watch of Job Instance {0.instance_id} of {0.job}'.format(self)
+

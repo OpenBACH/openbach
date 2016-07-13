@@ -38,7 +38,7 @@ import socket
 from configparser import ConfigParser
 from functools import wraps
 from operator import attrgetter
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 from django.http import JsonResponse
@@ -496,7 +496,8 @@ def start_job_instance(data):
         if date == 'now':
             instance.start_date = timezone.now()
         else:
-            instance.start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+            start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+            instance.start_date = start_date
         instance.periodic = False
         instance.save()
         cmd = 'start_job_instance date {} {}'.format(date, instance.id)
@@ -524,12 +525,20 @@ def stop_job_instance(data):
     
     instances = Job_Instance.objects.filter(pk__in=instance_ids)
     date = data.get('date', 'now')
+    if date == 'now':
+        stop_date = timezone.now()
+    else:
+        stop_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
 
     response = {'msg': 'OK', 'error': []}
     for instance in instances:
+        instance.stop_date = stop_date
+        instance.save()
         result = conductor_execute('stop_job_instance {} {}'.format(date, instance.id))
         if result == 'OK':
-            instance.delete()
+            if stop_date <= timezone.now():
+                instance.is_stopped = True
+                instance.save()
         else:
             response['msg'] = 'Something went wrong'
             response['error'].append({'msg': result, 'instance': instance.id})
@@ -578,7 +587,8 @@ def restart_job_instance(data):
         if date == 'now':
             instance.start_date = timezone.now()
         else:
-            instance.start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+            start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+            instance.start_date = start_date
         instance.periodic = False
         instance.save()
         cmd = 'restart_job_instance date {} {}'.format(date, instance.id)
@@ -701,7 +711,7 @@ def status_job_instance(data):
         return response, 404
 
 
-def _build_instance_infos(instance, update):
+def _build_instance_infos(instance, update, verbosity):
     """Helper function to simplify `list_job_instances`"""
     error_msg = None
     if update:
@@ -711,10 +721,18 @@ def _build_instance_infos(instance, update):
         instance.refresh_from_db()
     instance_infos = {
             'id': instance.id,
-            'arguments': instance.args,
-            'update_status': instance.update_status.astimezone(timezone.get_current_timezone()),
-            'status': instance.status,
+            'arguments': instance.args
     }
+    if verbosity > 0:
+        instance_infos['update_status'] = instance.update_status.astimezone(timezone.get_current_timezone())
+        instance_infos['status'] = instance.status
+    if verbosity > 1:
+        instance_infos['start_date'] = instance.start_date.astimezone(timezone.get_current_timezone())
+    if verbosity > 2:
+        try:
+            instance_infos['stop_date'] = instance.stop_date.astimezone(timezone.get_current_timezone())
+        except AttributeError:
+            instance_infos['stop_date'] = 'Not programmed yet'
     if error_msg is not None:
         instance_infos['error'] = error_msg
     return instance_infos
@@ -728,6 +746,9 @@ def list_job_instances(data):
         return {'msg': 'POST data malformed'}, 400
 
     update = data.get('update', False)
+    verbosity = 0
+    if 'verbosity' in data:
+        verbosity = data['verbosity'] if data['verbosity'] else 0
 
     # TODO: see prefetch_related or select_related to avoid
     # hitting the DB once more for each agent in the next loop
@@ -736,20 +757,20 @@ def list_job_instances(data):
     else:
         agents = Agent.objects.filter(pk__in=agents_ip)
 
-    response = {'instances': [
-        {
-            'address': agent.address,
-            'installed_job': [
-                {
-                    'job_name': j.job.name,
-                    'instances': [
-                        _build_instance_infos(i, update)
-                        for i in j.job_instance_set.all()
-                    ],
-                } for j in agent.installed_job_set.all()
-            ],
-        } for agent in agents
-    ]}
+    response = { 'instances': [] }
+    for agent in agents:
+        job_instances_for_agent = { 'address': agent.address, 'installed_jobs':
+                                  []}
+        for job in agent.installed_job_set.all():
+            job_instances_for_job = { 'job_name': job.name, 'instances': [] }
+            for job_instance in job.job_instance_set.filter(is_stopped=False):
+                job_instances_for_job['instances'].append(_build_instance_infos(job_instance,
+                                                                                update,
+                                                                                verbosity))
+            if job_instances_for_job['instances']:
+                job_instances_for_agent['installed_jobs'].append(job_instances_for_job)
+        if job_instances_for_agent['installed_jobs']:
+            response['instances'].append(job_instances_for_agent)
     return response, 200
 
 

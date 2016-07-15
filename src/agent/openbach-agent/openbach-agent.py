@@ -277,6 +277,50 @@ def schedule_job_instance_stop(job_name, job_instance_id, date_value,
     return date
 
 
+def schedule_watch(job_name, job_instance, date_type, date_value):
+    timestamp = time.time()
+    date = True
+    if date_type == 'date':
+        date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+        try:
+            JobManager().scheduler.add_job(
+                    status_job, 'date', run_date=date,
+                    args=(job_name, job_instance_id),
+                    id='{}{}_status'.format(job_name, job_instance_id))
+        except ConflictingIdError:
+            raise BadRequest('KO A watch on instance {} with '
+                    'id {} is already programmed'
+                    .format(job_name, job_instance_id))
+    # Programmer de regarder le status régulièrement
+    elif date_type == 'interval':
+        try:
+            JobManager().scheduler.add_job(
+                    status_job, 'interval', seconds=date_value,
+                    args=(job_name, job_instance_id),
+                    id='{}{}_status'.format(job_name, job_instance_id))
+        except ConflictingIdError:
+            raise BadRequest('KO A watch on instance {} with '
+                    'id {} is already programmed'
+                    .format(job_name, job_instance_id))
+    # Déprogrammer
+    elif date_type == 'stop':
+        date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+        status_job_id = '{}{}_status'.format(job_name, job_instance_id)
+
+        # TODO get_job doesn't raise JobLookupError when the job
+        # isn't found. We have to found a function that does it
+        # [Mathias] maybe like that:
+        if JobManager().scheduler.get_job(status_job_id) is None:
+            raise BadRequest('KO No watch on the status '
+                    'of the instance {} '
+                    'with the id {} was programmed'
+                    .format(job_name, job_instance_id))
+        JobManager().scheduler.add_job(
+                stop_watch, 'date', args=(status_job_id,),
+                run_date=date, id='stop_watch_{}'.format(status_job_id))
+    return date
+
+
 def ls_jobs():
     timestamp = int(round(time.time() * 1000))
 
@@ -653,54 +697,24 @@ class ClientThread(threading.Thread):
                 filename = '{}{}{}.stop'.format(self.path_scheduled_instances_job,
                                                 job_name, job_instance_id)
                 with open(filename, 'w') as job_instance_stop:
-                    print('{}\n{}\n{}'.format(job_name, job_instance_id,
-                                              value),
+                    print('{}\n{}\n{}'.format(job_name, job_instance_id, value),
                           file=job_instance_stop)
-
 
         elif request == 'status_job_instance_agent':
             job_name, job_instance_id, date_type, date_value = extra_args
-            timestamp = time.time()
-
             # Récupérer le status actuel
-            if date_type == 'date':
-                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
-                try:
-                    scheduler.add_job(
-                            status_job, 'date', run_date=date,
-                            args=(job_name, job_instance_id),
-                            id='{}{}_status'.format(job_name, job_instance_id))
-                except ConflictingIdError:
-                    raise BadRequest('KO A watch on instance {} with '
-                            'id {} is already programmed'
-                            .format(job_name, job_instance_id))
-            # Programmer de regarder le status régulièrement
-            elif date_type == 'interval':
-                try:
-                    scheduler.add_job(
-                            status_job, 'interval', seconds=date_value,
-                            args=(job_name, job_instance_id),
-                            id='{}{}_status'.format(job_name, job_instance_id))
-                except ConflictingIdError:
-                    raise BadRequest('KO A watch on instance {} with '
-                            'id {} is already programmed'
-                            .format(job_name, job_instance_id))
-            # Déprogrammer
-            elif date_type == 'stop':
-                date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
-                status_job_id = '{}{}_status'.format(job_name, job_instance_id)
-
-                # TODO get_job doesn't raise JobLookupError when the job
-                # isn't found. We have to found a function that does it
-                # [Mathias] maybe like that:
-                if scheduler.get_job(status_job_id) is None:
-                    raise BadRequest('KO No watch on the status '
-                            'of the instance {} '
-                            'with the id {} was programmed'
-                            .format(job_name, job_instance_id))
-                scheduler.add_job(
-                        stop_watch, 'date', args=(status_job_id,),
-                        run_date=date, id='stop_watch_{}'.format(status_job_id))
+            date = schedule_watch(job_name, job_instance_id, date_type,
+                                  date_value)
+            if date_type == 'stop':
+                filename = '{}{}{}.status_stop'.format(self.path_scheduled_instances_job,
+                                                       job_name, job_instance_id)
+            else:
+                filename = '{}{}{}.status'.format(self.path_scheduled_instances_job,
+                                                  job_name, job_instance_id)
+            with open(filename, 'w') as job_instance_status:
+                print('{}\n{}\n{}\n{}'.format(job_name, job_instance_id,
+                                              date_type, date_value),
+                      file=job_instance_status)
 
         elif request == 'restart_job_instance_agent':
             job_name, job_instance_id, date, value, *args = extra_args
@@ -780,28 +794,63 @@ if __name__ == '__main__':
     for root, _, filenames in os.walk(path_scheduled_instances_job):
         for filename in sorted(filenames):
             with open(root + filename, 'r') as f:
-                try:
-                    job_name = f.readline().rstrip('\n')
-                    job_instance_id = f.readline().rstrip('\n')
-                    date_value = float(f.readline().rstrip('\n'))
-                    arguments = f.readline().rstrip('\n')
-                except ValueError:
-                    print('Error with the reading of {}{}'.format(root,
-                                                                  filename))
-                    continue
-            date = None
-            if filename.endswith('.start'):
-                date = schedule_job_instance(job_name, job_instance_id, arguments,
-                                    date_value, reschedule=True)
-                with ArgsManager(job_name) as args:
-                    args[job_instance_id] = {
-                            'args': arguments,
-                            'type': 'date',
-                            'date': date,
-                    }
-            elif filename.endswith('.stop'):
-                date = schedule_job_instance_stop(job_name, job_instance_id,
-                                    date_value, reschedule=True)
+                if filename.endswith('.start'):
+                    try:
+                        job_name = f.readline().rstrip('\n')
+                        job_instance_id = f.readline().rstrip('\n')
+                        date_value = float(f.readline().rstrip('\n'))
+                        arguments = f.readline().rstrip('\n')
+                    except ValueError:
+                        print('Error with the reading of {}{}'.format(root,
+                                                                      filename))
+                        continue
+                    date = schedule_job_instance(job_name, job_instance_id, arguments,
+                                        date_value, reschedule=True)
+                    with ArgsManager(job_name) as args:
+                        args[job_instance_id] = {
+                                'args': arguments,
+                                'type': 'date',
+                                'date': date,
+                        }
+                elif filename.endswith('.stop'):
+                    try:
+                        job_name = f.readline().rstrip('\n')
+                        job_instance_id = f.readline().rstrip('\n')
+                        date_value = float(f.readline().rstrip('\n'))
+                    except ValueError:
+                        print('Error with the reading of {}{}'.format(root,
+                                                                      filename))
+                        continue
+                    date = schedule_job_instance_stop(job_name, job_instance_id,
+                                                      date_value, reschedule=True)
+                elif filename.endswith('.status'):
+                    try:
+                        job_name = f.readline().rstrip('\n')
+                        job_instance_id = f.readline().rstrip('\n')
+                        date_type = f.readline().rstrip('\n')
+                        date_value = float(f.readline().rstrip('\n'))
+                    except ValueError:
+                        print('Error with the reading of {}{}'.format(root,
+                                                                      filename))
+                        continue
+                    date = schedule_watch(job_name, job_instance_id, date_type,
+                                          date_value)
+                elif filename.endswith('.status_stop'):
+                    try:
+                        job_name = f.readline().rstrip('\n')
+                        job_instance_id = f.readline().rstrip('\n')
+                        date_type = f.readline().rstrip('\n')
+                        date_value = float(f.readline().rstrip('\n'))
+                    except ValueError:
+                        print('Error with the reading of {}{}'.format(root,
+                                                                      filename))
+                        continue
+                    date = schedule_watch(job_name, job_instance_id, date_type,
+                                          date_value)
+                    if date == None:
+                        os.remove(os.path.join(root, filename[:len(filename)-5]))
+                else:
+                    date = None
             if date == None:
                 os.remove(os.path.join(root, filename))
 

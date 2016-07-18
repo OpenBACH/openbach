@@ -1,0 +1,33 @@
+---
+
+general:
+  name:            ping
+  description: >
+      This Job principaly launch the ping command.
+      It sends syslog in case of error.
+  job_version:     0.1
+  keywords:        [ping, rate, rtt, round]
+  persistent:      true
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/ping/ping'
+    command_stop:
+
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        destination_ip
+      type:        'ip'
+      description: 'the destination ip of the ping'
+  optionnal:
+    - name:        other
+      description: 'All the options that the command ping takes'
+
+available_statistics:
+

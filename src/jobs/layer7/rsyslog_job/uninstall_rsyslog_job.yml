@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: rsyslog_job.cfg
+    - job_conf: rsyslog_job.yml
 
   tasks:
   - name: Uninstall Rsyslog_job

@@ -43,7 +43,7 @@
     become: yes
     
   - name: Informe Agent that Ping is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_name }}.cfg state=absent
+    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
     become: yes
     
   - include: '{{ path_src }}/del_job.yml'

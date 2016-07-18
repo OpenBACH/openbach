@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: http2_client.cfg
+    - job_conf: http2_client.yml
   
   tasks:
   - name: Delete HTTP2 Client repository

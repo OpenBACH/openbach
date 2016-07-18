@@ -1,0 +1,42 @@
+---
+
+general:
+  name:            tcp_buffer
+  description: >
+      This Job set up the Tcp buffer
+  job_version:     0.1
+  keywords:        [tcp, buffer]
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/tcp_buffer/tcp_buffer.sh'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        name
+      type:        'str'
+      description: >
+          The name of the tcp buffer to set
+    - name:        min_size
+      type:        'int'
+      description: >
+          The minial size of the buffer
+    - name:        size
+      type:        'int'
+      description: >
+          The size of the buffer
+    - name:        max_size
+      type:        'int'
+      description: >
+          The maximum size of the buffer
+  optionnal:
+          
+available_statistics:
+

@@ -42,7 +42,7 @@ import syslog
 import signal
 import shutil
 import subprocess
-from configparser import ConfigParser
+import yaml
 from functools import partial
 from datetime import datetime
 
@@ -126,7 +126,7 @@ class JobManager:
 def list_jobs_in_dir(dirname):
     for filename in os.listdir(dirname):
         name, ext = os.path.splitext(filename)
-        if ext == '.cfg':
+        if ext == '.yml':
             yield name
 
 
@@ -356,24 +356,33 @@ class BadRequest(ValueError):
 
 class JobConfiguration:
     def __init__(self, conf_path, job_name):
-        filename = '{}.cfg'.format(job_name)
+        filename = '{}.yml'.format(job_name)
         conf_file = os.path.join(conf_path, filename)
 
-        config = ConfigParser()
-        config.read(conf_file)
+        try:
+            with open(conf_file, 'r') as stream:
+                try:
+                    content = yaml.load(stream)
+                except yaml.YAMLError:
+                    raise BadRequest(
+                            'KO Conf file {} not well formed'.format(filename))
+        except FileNotFoundError:
+            raise BadRequest(
+                    'KO Conf file {} does not exist'.format(filename))
 
         try:
-            job = config[job_name]
+            self.command = content['os']['linux']['command']
+            self.command_stop = content['os']['linux']['command_stop']
+            self.required = []
+            for arg in content['arguments']['default']:
+                self.required.append(arg['name'])
+            self.optional = True if type(content['arguments']['optionnal']) == list else False
+            self.persistent = content['general']['persistent']
         except KeyError:
             raise BadRequest(
                     'KO Conf file {} does not contain a '
                     'section for job {}'.format(filename, job_name))
 
-        self.command = self.parse(job, 'command', job_name)
-        self.command_stop = self.parse(job, 'command_stop', job_name)
-        self.required = self.parse(job, 'required', job_name).split()
-        self.optional = self.parse(job, 'optional', job_name, True)
-        self.persistent = self.parse(job, 'persistent', job_name, True)
 
     @staticmethod
     def parse(job, option, name, boolean=False):

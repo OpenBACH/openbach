@@ -1,0 +1,46 @@
+---
+
+general:
+  name:            initial_windows
+  description: >
+      This Job set up the initial windows
+  job_version:     0.1
+  keywords:        []
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/initial_windows/initial_windows.sh'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        network
+      type:        'str'
+      description: >
+          The destination network
+    - name:        gw
+      type:        'ip'
+      description: >
+          The next hop of the route
+    - name:        interface
+      type:        'str'
+      description: >
+          Interface where to set the initial windows
+    - name:        initcwnd
+      type:        'int'
+      description: >
+          Initial congestion window
+    - name:        initrwnd
+      type:        'int'
+      description: >
+          Initial congestion receipt window
+  optionnal:
+
+available_statistics:
+

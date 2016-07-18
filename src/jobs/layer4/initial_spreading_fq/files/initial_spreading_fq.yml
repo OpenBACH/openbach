@@ -1,0 +1,42 @@
+---
+
+general:
+  name:            initial_spreading_fq
+  description: >
+      This Job set up the initial spreading fq
+  job_version:     0.1
+  keywords:        [initial, spreading, fq, pacing]
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/initial_spreading_fq/initial_spreading_fq.sh'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        rate
+      type:        'int'
+      description: >
+          Tcp initial spreading minimal rate
+    - name:        disable_pacing
+      type:        'int'
+      description: >
+          0 to enable pacing, 1 to disable it
+    - name:        interface
+      type:        'str'
+      description: >
+          The interface where the initial spreading fq is set
+  optionnal:
+    - name:        other_interfaces
+      type:        'str'
+      description: >
+          The other interfaces where the initial spreading fq is set
+          
+available_statistics:
+

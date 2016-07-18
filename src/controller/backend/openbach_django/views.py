@@ -35,7 +35,7 @@
 import os.path
 import json
 import socket
-from configparser import ConfigParser
+import yaml
 from functools import wraps
 from operator import attrgetter
 from datetime import datetime, timedelta
@@ -178,20 +178,25 @@ def add_job(data):
         return {'msg': 'POST data malformed'}, 400
 
     config_prefix = os.path.join(job_path, 'files', job_name)
-    config = ConfigParser()
-    config_file = '{}.cfg'.format(config_prefix)
+    config_file = '{}.yml'.format(config_prefix)
     try:
-        config.read_file(open(config_file))
+        with open(config_file, 'r') as stream:
+            try:
+                content = yaml.load(stream)
+            except yaml.YAMLError:
+                return {'msg': 'KO, the configuration file of the Job is not well '
+                        'formed', 'configuration file': config_file}, 404
     except FileNotFoundError:
         return {'msg': 'KO, the configuration file is not present',
                 'configuration file': config_file}, 404
     try:
-        job = config[job_name]
+        job_args = []
+        for arg in content['arguments']['default']:
+            job_args.append(arg['name'])
+        optional_args = True if type(content['arguments']['optionnal']) == list else False
     except KeyError:
         return {'msg': 'KO, the configuration file of the Job is not well '
                 'formed', 'configuration file': config_file}, 404
-    job_args = job['required'].split()
-    optional_args = job.getboolean('optional')
     try:
         with open('{}.help'.format(config_prefix)) as f:
             help = f.read()

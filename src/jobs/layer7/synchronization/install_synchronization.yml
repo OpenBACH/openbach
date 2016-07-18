@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: synchronization.cfg
+    - job_conf: synchronization.yml
 
   tasks:
   - name: Create Synchronization repository

@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: cwnd_monitoring.cfg
+    - job_conf: cwnd_monitoring.yml
 
   tasks:
   - name: Create Cwnd Monitoring repository

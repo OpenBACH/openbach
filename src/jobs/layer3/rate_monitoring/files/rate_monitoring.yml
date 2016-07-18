@@ -1,0 +1,42 @@
+---
+
+general:
+  name:            rate_monitoring
+  description: >
+      This Job mesure the rate
+  job_version:     0.1
+  keywords:        [rate, monitoring, iptables]
+  persistent:      True
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       'python /opt/openbach-jobs/rate_monitoring/rate_monitoring.py'
+    command_stop:
+
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        interval
+      type:        'int'
+      description: >
+          The interval the rat is mesured
+    - name:        chain
+      type:        'str'
+      description: >
+          Specify the rate to monitor
+  optionnal:
+    - name:        other
+      type:        'str'
+      description: >
+          The argument chain can be multiple arguments
+
+available_statistics:
+  - name:          rate_monitoring
+    description: >
+        The mesured rate
+    frequency:     'configurable'
+

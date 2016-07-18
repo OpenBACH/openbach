@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: tcp_buffer.cfg
+    - job_conf: tcp_buffer.yml
 
   tasks:
   - name: Create Tcp Buffer repository

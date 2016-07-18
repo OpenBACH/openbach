@@ -1,0 +1,34 @@
+---
+
+general:
+  name:            iperf
+  description: >
+      This Job only launch the iperf command
+  job_version:     0.1
+  keywords:        [iperf]
+  persistent:      True
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       'iperf'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        type
+      type:        'str'
+      description: >
+          The type of the iperf (-s for server, -c for client)
+  optionnal:
+    - name:        other
+      type:        'str'
+      description: >
+          All the options of the iperf command are accepted
+
+available_statistics:
+

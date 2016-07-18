@@ -1,0 +1,35 @@
+---
+
+general:
+  name:            http2_server
+  description: >
+      This Job will start an HTTP2 server in order to generate traffic.
+      It only launchs the nghttpd command.
+  job_version:     0.1
+  keywords:        [http2, server]
+  persistent:      True
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       'cd /opt/openbach-jobs/http2_server; nghttpd'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  default:
+    - name:        port
+      type:        'int'
+      description: >
+          Port where the server is available
+  optionnal:
+    - name:        other
+      type:        'str'
+      description: >
+          All the options of nghttpd are available
+
+available_statistics:
+

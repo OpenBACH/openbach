@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: iperf.cfg
+    - job_conf: iperf.yml
 
   tasks:
   - name: Inform Agent that Iperf is uninstalled

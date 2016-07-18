@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: pep.cfg
+    - job_conf: pep.yml
 
   tasks:
   - name: Create Pep repository

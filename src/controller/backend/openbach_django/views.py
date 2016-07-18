@@ -810,6 +810,12 @@ def update_job_log_severity(data):
     instance.status = "starting ..."
     instance.update_status = timezone.now()
     instance.periodic = False
+    date = data.get('date', 'now')
+    if date == 'now':
+        instance.start_date = timezone.now()
+    else:
+        start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+        instance.start_date = start_date
     instance.save()
     instance.args = '{} {}'.format(job_name, instance.id)
     try:
@@ -821,7 +827,7 @@ def update_job_log_severity(data):
     result = conductor_execute(
             'update_job_log_severity {} {} {} {}'
             .format(
-                data.get('date', 'now'),
+                date,
                 instance.id, severity,
                 data.get('local_severity', installed_job.local_severity)))
     response = {'msg' : result}
@@ -879,11 +885,17 @@ def update_job_stat_policy(data):
     instance.status = "starting ..."
     instance.update_status = timezone.now()
     instance.periodic = False
+    date = data.get('date', 'now')
+    if date == 'now':
+        instance.start_date = timezone.now()
+    else:
+        start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+        instance.start_date = start_date
     instance.save()
 
     result = conductor_execute(
             'update_job_stat_policy {} {}'
-            .format(data.get('date', 'now'), instance.id))
+            .format(date, instance.id))
     response = {'msg' : result}
     if result == 'KO':
         instance.delete()

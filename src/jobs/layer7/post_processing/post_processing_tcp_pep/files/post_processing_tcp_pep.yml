@@ -24,7 +24,7 @@ arguments:
       type:        'ip'
       description: >
           IP of the collector
-  optionnal:
+  optional:
     - name:        port
       type:        'int'
       description:

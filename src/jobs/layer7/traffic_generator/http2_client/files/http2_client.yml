@@ -25,7 +25,7 @@ arguments:
       type:        'ip'
       description: >
           The IP address of the server 
-  optionnal:
+  optional:
     - name:        lambd
       type:        'int'
       description: >

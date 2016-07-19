@@ -198,7 +198,7 @@ def add_job(data):
         job_args = []
         for arg in content['arguments']['default']:
             job_args.append(arg['name'])
-        optional_args = True if type(content['arguments']['optionnal']) == list else False
+        optional_args = True if type(content['arguments']['optional']) == list else False
     except KeyError:
         return {'msg': 'KO, the configuration file of the Job is not well '
                 'formed', 'configuration file': config_file}, 404

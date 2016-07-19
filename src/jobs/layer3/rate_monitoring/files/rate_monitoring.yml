@@ -28,7 +28,7 @@ arguments:
       type:        'str'
       description: >
           Specify the rate to monitor
-  optionnal:
+  optional:
     - name:        other
       type:        'str'
       description: >

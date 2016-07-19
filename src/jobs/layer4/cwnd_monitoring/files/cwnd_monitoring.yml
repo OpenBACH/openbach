@@ -24,7 +24,7 @@ arguments:
       type:        'int'
       description: >
           The TCP port the Job will monitor the congestion window
-  optionnal:
+  optional:
     - name:        interval
       type:        'int'
       description: >

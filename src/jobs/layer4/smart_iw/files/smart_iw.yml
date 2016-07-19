@@ -28,7 +28,7 @@ arguments:
       type:        'int'
       description: >
           0 to enable pacing, 1 to disable it
-  optionnal:
+  optional:
 
 available_statistics:
 

@@ -25,7 +25,7 @@ arguments:
     - name:        destination_ip
       type:        'ip'
       description: 'the destination ip of the ping'
-  optionnal:
+  optional:
     - name:        other
       description: 'All the options that the command ping takes'
 

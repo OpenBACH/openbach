@@ -24,7 +24,7 @@ arguments:
       type:        'str'
       description: >
           The type of the iperf (-s for server, -c for client)
-  optionnal:
+  optional:
     - name:        other
       type:        'str'
       description: >

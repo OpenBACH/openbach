@@ -40,7 +40,7 @@ arguments:
       type:        'int'
       description: >
           Initial congestion receipt window
-  optionnal:
+  optional:
 
 available_statistics:
 

@@ -36,7 +36,7 @@ arguments:
       type:        'int'
       description: >
           The maximum size of the buffer
-  optionnal:
+  optional:
           
 available_statistics:
 

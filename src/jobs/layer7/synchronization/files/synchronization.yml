@@ -24,7 +24,7 @@ arguments:
       type:        'ip'
       description: >
           The ip address with who you want to synchronize
-  optionnal:
+  optional:
 
 available_statistics:
 

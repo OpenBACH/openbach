@@ -30,7 +30,7 @@ arguments:
       type:        'int'
       description: >
           The id of the current instance
-  optionnal:
+  optional:
     - name:        disable_code
       type:        'int'
       description: >

@@ -24,7 +24,7 @@ arguments:
       type:        'str'
       description: >
           The network of the satellite link
-  optionnal:
+  optional:
     - name:        pep_port
       type:        'int'
       description: >

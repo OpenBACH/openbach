@@ -25,7 +25,7 @@ arguments:
       type:        'int'
       description: >
           Port where the server is available
-  optionnal:
+  optional:
     - name:        other
       type:        'str'
       description: >

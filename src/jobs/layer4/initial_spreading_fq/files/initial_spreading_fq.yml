@@ -32,7 +32,7 @@ arguments:
       type:        'str'
       description: >
           The interface where the initial spreading fq is set
-  optionnal:
+  optional:
     - name:        other_interfaces
       type:        'str'
       description: >

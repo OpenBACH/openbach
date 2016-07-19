@@ -38,7 +38,7 @@ import socket
 import yaml
 from functools import wraps
 from operator import attrgetter
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.utils import timezone
 from django.http import JsonResponse
@@ -46,6 +46,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
 from .models import Agent, Job, Installed_Job, Job_Instance, Watch
+from .models import Job_Keyword, Available_Statistic
 
 
 def check_post_data(f):
@@ -190,6 +191,10 @@ def add_job(data):
         return {'msg': 'KO, the configuration file is not present',
                 'configuration file': config_file}, 404
     try:
+        job_version = content['general']['job_version']
+        keywords = content['general']['keywords']
+        available_statistics = content['available_statistics']
+        description = content['general']['description']
         job_args = []
         for arg in content['arguments']['default']:
             job_args.append(arg['name'])
@@ -203,13 +208,38 @@ def add_job(data):
     except OSError:
         help = ''
 
-    Job(
+    job = Job(
         name=job_name,
         path=job_path,
         nb_args=len(job_args),
         optional_args=optional_args,
-        help=help
-    ).save()
+        help=help,
+        job_version=job_version,
+        description=description
+    )
+    job.save()
+
+    for keyword in keywords:
+        job_keyword = Job_Keyword(
+            name=keyword
+        )
+        job_keyword.save()
+        job.keywords.add(job_keyword)
+
+    if type(available_statistics) == list:
+        for available_statistic in available_statistics:
+            Available_Statistic(
+                name=available_statistic['name'],
+                job=job,
+                description=available_statistic['description'],
+                frequency=available_statistic['frequency']
+            ).save()
+    elif available_statistics == None:
+        pass
+    else:
+        job.delete()
+        return {'msg': 'KO, the configuration file of the Job is not well '
+                'formed', 'configuration file': config_file}, 404
 
     return {'msg': 'OK'}, 200
 

@@ -62,15 +62,35 @@ class Agent(models.Model):
         return self.address
 
 
+class Job_Keyword(models.Model):
+    name = models.CharField(max_length=200, primary_key=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Job(models.Model):
     name = models.CharField(max_length=200, primary_key=True)
     path = models.FilePathField(
-            path="/opt/openbach/jobs", recursive=True,
+            path="/opt/openbach-controller/jobs", recursive=True,
             allow_folders=True, allow_files=False)
     help = models.TextField(null=True, blank=True)
     nb_args = models.IntegerField()
     optional_args = models.BooleanField()
-    
+    job_version = models.CharField(max_length=200, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    keywords = models.ManyToManyField(Job_Keyword)
+
+    def __str__(self):
+        return self.name
+
+
+class Available_Statistic(models.Model):
+    name = models.CharField(max_length=200, primary_key=True)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    description = models.TextField(null=True, blank=True)
+    frequency = models.TextField(null=True, blank=True)
+
     def __str__(self):
         return self.name
 

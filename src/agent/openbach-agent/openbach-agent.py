@@ -183,8 +183,7 @@ def stop_job(job_name, job_instance_id, command, args):
     try:
         with JobManager(job_name) as job:
             if job_instance_id in job['set_id']:
-                with JobManager(job_name) as job:
-                    job['set_id'].remove(job_instance_id)
+                job['set_id'].remove(job_instance_id)
     except KeyError:
         pass
 

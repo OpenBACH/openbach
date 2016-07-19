@@ -42,6 +42,9 @@
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
 
+- name: Install python3-yaml
+  apt: pkg=python3-yaml state=installed update_cache=false
+
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
 

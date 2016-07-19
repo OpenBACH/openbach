@@ -180,10 +180,13 @@ def stop_job(job_name, job_instance_id, command, args):
         if command:
             subprocess.Popen('{} {}'.format(command, args), shell=True)
 
-    with JobManager(job_name) as job:
-        if job_instance_id in job['set_id']:
-            with JobManager(job_name) as job:
-                job['set_id'].remove(job_instance_id)
+    try:
+        with JobManager(job_name) as job:
+            if job_instance_id in job['set_id']:
+                with JobManager(job_name) as job:
+                    job['set_id'].remove(job_instance_id)
+    except KeyError:
+        pass
 
 
 
@@ -232,10 +235,13 @@ def stop_watch(job_id):
 def schedule_job_instance(job_name, job_instance_id, arguments, date_value,
                           reschedule=False):
     timestamp = time.time()
-    with JobManager(job_name) as job:
-        command = job['command']
-        command_stop = job['command_stop']
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
+    try:
+        with JobManager(job_name) as job:
+            command = job['command']
+            command_stop = job['command_stop']
+    except KeyError:
+        return date, False
     if not reschedule or date != None:
         try:
             JobManager().scheduler.add_job(
@@ -250,7 +256,7 @@ def schedule_job_instance(job_name, job_instance_id, arguments, date_value,
             # persistents
             if job['persistent']:
                 job['set_id'].add(job_instance_id)
-    return date
+    return date, True
 
 
 def schedule_job_instance_stop(job_name, job_instance_id, date_value,
@@ -446,7 +452,7 @@ class ClientThread(threading.Thread):
 
         arguments = ' '.join(args)
         if date_type == 'date':
-            date = schedule_job_instance(name, job_instance_id, arguments, date_value)
+            date, _ = schedule_job_instance(name, job_instance_id, arguments, date_value)
             if date != None:
                 filename = '{}{}{}.start'.format(self.path_scheduled_instances_job,
                                                  name, job_instance_id)
@@ -813,14 +819,15 @@ if __name__ == '__main__':
                         print('Error with the reading of {}{}'.format(root,
                                                                       filename))
                         continue
-                    date = schedule_job_instance(job_name, job_instance_id, arguments,
+                    date, result = schedule_job_instance(job_name, job_instance_id, arguments,
                                         date_value, reschedule=True)
-                    with ArgsManager(job_name) as args:
-                        args[job_instance_id] = {
-                                'args': arguments,
-                                'type': 'date',
-                                'date': date,
-                        }
+                    if result:
+                        with ArgsManager(job_name) as args:
+                            args[job_instance_id] = {
+                                    'args': arguments,
+                                    'type': 'date',
+                                    'date': date,
+                            }
                 elif filename.endswith('.stop'):
                     try:
                         job_name = f.readline().rstrip('\n')

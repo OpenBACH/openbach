@@ -46,7 +46,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
 from .models import Agent, Job, Installed_Job, Job_Instance, Watch
-from .models import Job_Keyword, Available_Statistic
+from .models import Job_Keyword, Available_Statistic, Argument, Optional_Argument
 
 
 def check_post_data(f):
@@ -195,9 +195,14 @@ def add_job(data):
         keywords = content['general']['keywords']
         available_statistics = content['available_statistics']
         description = content['general']['description']
+        required_args = []
         job_args = []
         for arg in content['arguments']['default']:
+            required_args.append(arg)
             job_args.append(arg['name'])
+        optionnal_args = []
+        for arg in content['arguments']['optional']:
+            optionnal_args.append(arg)
         optional_args = True if type(content['arguments']['optional']) == list else False
     except KeyError:
         return {'msg': 'KO, the configuration file of the Job is not well '
@@ -207,6 +212,14 @@ def add_job(data):
             help = f.read()
     except OSError:
         help = ''
+
+    deleted = False
+    try:
+        job = Job.objects.get(pk=job_name)
+        job.delete()
+        deleted = True
+    except ObjectDoesNotExist:
+        pass
 
     job = Job(
         name=job_name,
@@ -227,19 +240,64 @@ def add_job(data):
         job.keywords.add(job_keyword)
 
     if type(available_statistics) == list:
-        for available_statistic in available_statistics:
-            Available_Statistic(
-                name=available_statistic['name'],
-                job=job,
-                description=available_statistic['description'],
-                frequency=available_statistic['frequency']
-            ).save()
+        try:
+            for available_statistic in available_statistics:
+                Available_Statistic(
+                    name=available_statistic['name'],
+                    job=job,
+                    description=available_statistic['description'],
+                    frequency=available_statistic['frequency']
+                ).save()
+        except IntegrityError:
+            job.delete()
+            if deleted:
+                return {'msg': 'KO, the configuration file of the Job is not well '
+                        'formed', 'configuration file': config_file, 'warning':
+                        'Old Job has been deleted'}, 409
+            else:
+                return {'msg': 'KO, the configuration file of the Job is not well '
+                        'formed', 'configuration file': config_file}, 409
     elif available_statistics == None:
         pass
     else:
         job.delete()
-        return {'msg': 'KO, the configuration file of the Job is not well '
-                'formed', 'configuration file': config_file}, 404
+        if deleted:
+            return {'msg': 'KO, the configuration file of the Job is not well '
+                    'formed', 'configuration file': config_file, 'warning':
+                    'Old Job has been deleted'}, 409
+        else:
+            return {'msg': 'KO, the configuration file of the Job is not well '
+                    'formed', 'configuration file': config_file}, 409
+
+    for required_arg in required_args:
+        try:
+            Argument(
+                name=required_arg['name'],
+                description=required_arg['description'],
+                type=required_arg['type'],
+                job=job
+            ).save()
+        except IntegrityError:
+            job.delete()
+            if deleted:
+                return {'msg': 'KO, the configuration file of the Job is not well '
+                        'formed', 'configuration file': config_file, 'warning':
+                        'Old Job has been deleted'}, 409
+            else:
+                return {'msg': 'KO, the configuration file of the Job is not well '
+                        'formed', 'configuration file': config_file}, 409
+
+    for optional_arg in optionnal_args:
+        try:
+            Optional_Argument(
+                name=optional_arg['name'],
+                description=optional_arg['description'],
+                job=job
+            ).save()
+        except IntegrityError:
+            job.delete()
+            return {'msg': 'KO, the configuration file of the Job is not well '
+                    'formed', 'configuration file': config_file}, 409
 
     return {'msg': 'OK'}, 200
 

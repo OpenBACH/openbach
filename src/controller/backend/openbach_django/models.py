@@ -86,10 +86,56 @@ class Job(models.Model):
 
 
 class Available_Statistic(models.Model):
-    name = models.CharField(max_length=200, primary_key=True)
+    name = models.CharField(max_length=200)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
     frequency = models.TextField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('name', 'job')
+
+    def __str__(self):
+        return self.name
+
+
+class Argument(models.Model):
+    INTEGER = 'int'
+    BOOL = 'bool'
+    STRING = 'str'
+    FLOAT = 'float'
+    IP = 'ip'
+    NONE = 'none'
+    TYPE_CHOICES = (
+        (INTEGER, 'Integer'),
+        (BOOL, 'Bool'),
+        (STRING, 'String'),
+        (FLOAT, 'Float'),
+        (IP, 'IP'),
+        (NONE, 'None'),
+    )
+    type = models.CharField(
+        max_length=5,
+        choices=TYPE_CHOICES,
+        default=NONE,
+    )
+    name = models.CharField(max_length=200)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    description = models.TextField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('name', 'job')
+
+    def __str__(self):
+        return self.name
+
+
+class Optional_Argument(models.Model):
+    name = models.CharField(max_length=200)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    description = models.TextField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('name', 'job')
 
     def __str__(self):
         return self.name

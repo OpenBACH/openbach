@@ -1,3 +1,8 @@
+/*
+ * Generate DLL_PUBLIC macro to apply symbols visibility
+ * into libraries bases on the compiler used.
+ */
+
 #ifndef __LIB_EXPORT_H__
 #define __LIB_EXPORT_H__
 

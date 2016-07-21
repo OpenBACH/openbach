@@ -1,3 +1,10 @@
+/*
+ * Wrapper around syslog interface.
+ *
+ * Maps to actual syslog call on *nix; sends messages to
+ * EventLog on Windows.
+ */
+
 #ifndef _LOGGER_H__
 #define _LOGGER_H__
 
@@ -48,19 +55,38 @@ namespace logging {
 		LOGGING_PERROR = 1 << 5,
 	};
 
+  /*
+   * Create/Connects to a new journal entry
+   */
 	void DLL_PUBLIC open(const std::string& ident, int, FacilityType);
+
+  /*
+   * Close the currently connected journal
+   */
 	void DLL_PUBLIC close();
+
+  /*
+   * Write a new message into the currently connected journal if
+   * its type matches with the current mask.
+   */
 	void DLL_PUBLIC message(const std::string& msg, MessageType type, FacilityType facility = FacilityType::LOGGING_KERN);
+
+  /*
+   * Changes the mask associated to the current journal so other kind
+   * of messages are filtered/allowed.
+   */
 	int DLL_PUBLIC set_log_mask_to(MessageType type);
 	int DLL_PUBLIC set_log_mask_up_to(MessageType type);
 }
 
+/*
+ * C interface whose calls matches the C++ functions in the logging namespace
+ *
+ * Used by Python ctypes module for bindings.
+ */
 extern "C" DLL_PUBLIC void logging_open(char* ident, int option, int facility);
-
 extern "C" DLL_PUBLIC void logging_close();
-
 extern "C" DLL_PUBLIC void logging_message(char* msg, int priority, int facility);
-
 extern "C" DLL_PUBLIC int logging_set_log_mask(int mask);
 
 #endif /* _LOGGER_H__ */

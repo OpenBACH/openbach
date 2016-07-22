@@ -9,6 +9,6 @@ Optionnal Arguments:
 Statistics: it doesn't produce any statistic
 
 Example:
-  - Ping 172.20.0.83 : "172.20.0.83"
-  - Ping 172.20.0.83 with packets of size 100 bytes : "172.20.0.83 -s 100"
+  - Ping 172.20.0.83 : -a "destination_ip 172.20.0.83"
+  - Ping 172.20.0.83 with packets of size 100 bytes : -a "destination_ip 172.20.0.83" "packetsize 100"
 

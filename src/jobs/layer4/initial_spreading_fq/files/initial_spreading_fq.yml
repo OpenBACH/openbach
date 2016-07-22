@@ -19,7 +19,7 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        rate
       type:        'int'
       description: >
@@ -35,6 +35,7 @@ arguments:
   optional:
     - name:        other_interfaces
       type:        'str'
+      flag:        ''
       description: >
           The other interfaces where the initial spreading fq is set
           

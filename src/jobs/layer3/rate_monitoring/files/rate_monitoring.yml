@@ -12,27 +12,62 @@ os:
     requirements:  'Ubuntu 14.04/16.04'
     command:       'python /opt/openbach-jobs/rate_monitoring/rate_monitoring.py'
     command_stop:
-
   windows:
     requirements:  'Windows 2010'
     command:       '...'
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        interval
       type:        'int'
       description: >
-          The interval the rat is mesured
+          The interval the rate is mesured
     - name:        chain
       type:        'str'
       description: >
-          Specify the rate to monitor
+          The chain (in iptables) to monitor
   optional:
-    - name:        other
+    - name:        jump
       type:        'str'
+      flag:        '-j'
       description: >
-          The argument chain can be multiple arguments
+          This specifies the target of the rule
+    - name:        source
+      type:        'ip'
+      flag:        '-s'
+      description: >
+          The source to monitor
+    - name:        destination
+      type:        'ip'
+      flag:        '-d'
+      description: >
+          The destination to monitor
+    - name:        protocol
+      type:        'str'
+      flag:        '-p'
+      description: >
+          The protocol to monitor
+    - name:        in_interface
+      type:        'str'
+      flag:        '-i'
+      description: >
+          The incomming interface of the packets to monitor
+    - name:        out_interface
+      type:        'str'
+      flag:        '-o'
+      description: >
+          The outgoing interface of the packets to monitor
+    - name:        destination_port
+      type:        'int'
+      flag:        '--dport'
+      description: >
+          The destination port to monitor
+    - name:        source_port
+      type:        'int'
+      flag:        '--sport'
+      description: >
+          The source port to monitor
 
 available_statistics:
   - name:          rate_monitoring

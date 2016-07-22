@@ -21,7 +21,7 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        job_name
       type:        'str'
       description: >
@@ -33,6 +33,7 @@ arguments:
   optional:
     - name:        disable_code
       type:        'int'
+      flag:        ''
       description: >
           1 to disable sending logs to the Collector
           2 to disable local registery of logs

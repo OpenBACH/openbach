@@ -20,7 +20,7 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        server_address
       type:        'ip'
       description: >
@@ -28,18 +28,22 @@ arguments:
   optional:
     - name:        lambd
       type:        'int'
+      flag:        ''
       description: >
           Exponential law lambda (default=1.0)
     - name:        sim_t
       type:        'int'
+      flag:        ''
       description: >
           Simulation time in seconds (default=60)
     - name:        n_req
       type:        'int'
+      flag:        ''
       description: >
           Number of connections (default=0)
     - name:        page
       type:        'int'
+      flag:        ''
       description: >
           Page number (default=1)
 

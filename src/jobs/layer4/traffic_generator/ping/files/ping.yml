@@ -21,13 +21,41 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        destination_ip
       type:        'ip'
-      description: 'the destination ip of the ping'
+      description: >
+          The destination ip of the ping
   optional:
-    - name:        other
-      description: 'All the options that the command ping takes'
+    - name:        count
+      type:        'int'
+      flag:        '-c'
+      description: >
+          Stop after sending count ECHO_REQUEST packets.
+    - name:        interval
+      type:        'int'
+      flag:        '-i'
+      description: >
+          Wait interval seconds between sending each packet.
+    - name:        interface
+      type:        'str'
+      flag:        '-I'
+      description: >
+          interface is either an address, or an interface name.
+          If interface is an address, it sets source address to specified interface address.
+          If interface in an interface name, it sets source interface to specified interface.
+    - name:        packetsize
+      type:        'int'
+      flag:        '-s'
+      description: >
+          Specifies the number of data bytes to be sent.
+          The default is 56, which translates into 64 ICMP data bytes when combined with
+          the 8 bytes of ICMP header data.
+    - name:        ttl
+      type:        'int'
+      flag:        '-t'
+      description: >
+          Set the IP Time to Live.
 
 available_statistics:
 

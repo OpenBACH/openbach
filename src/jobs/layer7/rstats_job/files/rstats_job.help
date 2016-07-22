@@ -7,5 +7,5 @@ Required Arguments:
 Statistics: it doesn't produce any statistic
 
 Example:
-  - Change the policy of the Job 'rate_monitoring' (currently the instance_id is 5) : "rate_monitoring 5"
+  - Change the policy of the Job 'rate_monitoring' (currently the instance_id is 5) : -a "job_name rate_monitoring" "instance_id 5"
 

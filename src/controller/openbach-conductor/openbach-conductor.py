@@ -51,7 +51,9 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
-from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch
+from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
+from openbach_django.models import Available_Statistic, Required_Job_Argument, Optional_Job_Argument
+from openbach_django.models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -388,18 +390,33 @@ class ClientThread(threading.Thread):
             '{job.path}/uninstall_{job.name}.yml'
             .format(path_src=self.path_src, agent=agent, job=job))
 
-    def start_job_instance(self, watch_type, time_value, instance_id):
-            date = time_value if watch_type == 'date' else None
-            interval = time_value if watch_type == 'interval' else None
+    def start_job_instance(self, date_type, time_value, instance_id):
+            date = time_value if date_type == 'date' else None
+            interval = time_value if date_type == 'interval' else None
             instance = Job_Instance.objects.get(pk=instance_id)
             job = instance.job.job
             agent = instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
+            args = ''
+            for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
+                for job_argument_value in argument.job_argument_value_set.all():
+                    if args == '':
+                        args = '{}'.format(job_argument_value.value)
+                    else:
+                        args = '{} {}'.format(args, job_argument_value.value)
+            for optional_argument in instance.optional_job_argument_instance_set.all():
+                if args == '':
+                    args = '{}'.format(optional_argument.argument.flag)
+                else:
+                    args = '{} {}'.format(args, optional_argument.argument.flag)
+                if optional_argument.argument.type != Optional_Job_Argument.NONE:
+                    for job_argument_value in optional_argument.job_argument_value_set.all():
+                        args = '{} {}'.format(args, job_argument_value.value)
             with self.playbook_builder.playbook_file(
                     'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
                 self.playbook_builder.build_start(
                         job.name, instance.id,
-                        instance.args, date, interval,
+                        args, date, interval,
                         playbook, extra_vars)
             self.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -427,9 +444,9 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
 
-    def restart_job_instance(self, watch_type, time_value, instance_id):
-            date = time_value if watch_type == 'date' else None
-            interval = time_value if watch_type == 'interval' else None
+    def restart_job_instance(self, date_type, time_value, instance_id):
+            date = time_value if date_type == 'date' else None
+            interval = time_value if date_type == 'interval' else None
             instance = Job_Instance.objects.get(pk=instance_id)
             job = instance.job.job
             agent = instance.job.agent

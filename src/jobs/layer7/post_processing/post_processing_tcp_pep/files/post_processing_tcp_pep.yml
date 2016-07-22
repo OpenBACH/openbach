@@ -19,15 +19,47 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        collector_ip
       type:        'ip'
       description: >
-          IP of the collector
+          IP address of the Collector
   optional:
     - name:        port
       type:        'int'
-      description:
+      flag:        '-p'
+      description: >
+          Port of the Collector
+    - name:        begin
+      type:        'int'
+      flag:        '-b'
+      description: >
+          Timestamp of the begin to look in ms
+    - name:        end
+      type:        'int'
+      flag:        '-e'
+      description: >
+          Timestamp of the end to look in ms
+    - name:        simu_name
+      type:        'str'
+      flag:        '-s'
+      description: >
+          Name of the simulation
+    - name:        database_name
+      type:        'str'
+      flag:        '-d'
+      description: >
+          Name of the database
+    - name:        username
+      type:        'str'
+      flag:        '-u'
+      description: >
+          Name of the user
+    - name:        password
+      type:        'str'
+      flag:        '-pa'
+      description: >
+          Password of the user
 
 available_statistics:
 

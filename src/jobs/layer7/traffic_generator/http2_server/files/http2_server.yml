@@ -20,16 +20,17 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        port
       type:        'int'
       description: >
           Port where the server is available
   optional:
-    - name:        other
-      type:        'str'
+    - name:        no_tls
+      type:        'None'
+      flag:        '--no-tls'
       description: >
-          All the options of nghttpd are available
+          Disable SSL/TLS.
 
 available_statistics:
 

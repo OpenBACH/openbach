@@ -19,16 +19,33 @@ os:
     command_stop:
 
 arguments:
-  default:
-    - name:        type
+  required:
+    - name:        mode
       type:        'str'
       description: >
-          The type of the iperf (-s for server, -c for client)
+          To start the iperf in server mode, use '-s'
+          To start the iperf in client mode, use '-c *server_ip*'
   optional:
-    - name:        other
-      type:        'str'
+    - name:        interval
+      type:        'int'
+      flag:        '-i'
       description: >
-          All the options of the iperf command are accepted
+          Pause *interval* seconds between periodic bandwidth reports
+    - name:        length
+      type:        'int'
+      flag:        '-l'
+      description: >
+          Set length read/write buffer to n (default 8 KB)
+    - name:        port
+      type:        'int'
+      flag:        '-p'
+      description: >
+          Set server port to listen on/connect to to n (default 5001)
+    - name:        udp
+      type:        'None'
+      flag:        '-u'
+      description: >
+          Use UDP rather than TCP
 
 available_statistics:
 

@@ -19,7 +19,7 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        sat_network
       type:        'str'
       description: >
@@ -27,6 +27,7 @@ arguments:
   optional:
     - name:        pep_port
       type:        'int'
+      flag:        ''
       description: >
           The port to use
 

@@ -45,8 +45,10 @@ from django.http import JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
-from .models import Agent, Job, Installed_Job, Job_Instance, Watch
-from .models import Job_Keyword, Available_Statistic, Argument, Optional_Argument
+from .models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
+from .models import Available_Statistic, Required_Job_Argument, Optional_Job_Argument
+from .models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
+from .models import Job_Argument_Value
 
 
 def check_post_data(f):
@@ -196,14 +198,11 @@ def add_job(data):
         available_statistics = content['available_statistics']
         description = content['general']['description']
         required_args = []
-        job_args = []
-        for arg in content['arguments']['default']:
+        for arg in content['arguments']['required']:
             required_args.append(arg)
-            job_args.append(arg['name'])
-        optionnal_args = []
+        optional_args = []
         for arg in content['arguments']['optional']:
-            optionnal_args.append(arg)
-        optional_args = True if type(content['arguments']['optional']) == list else False
+            optional_args.append(arg)
     except KeyError:
         return {'msg': 'KO, the configuration file of the Job is not well '
                 'formed', 'configuration file': config_file}, 404
@@ -224,8 +223,6 @@ def add_job(data):
     job = Job(
         name=job_name,
         path=job_path,
-        nb_args=len(job_args),
-        optional_args=optional_args,
         help=help,
         job_version=job_version,
         description=description
@@ -269,14 +266,17 @@ def add_job(data):
             return {'msg': 'KO, the configuration file of the Job is not well '
                     'formed', 'configuration file': config_file}, 409
 
+    rank = 0
     for required_arg in required_args:
         try:
-            Argument(
+            Required_Job_Argument(
                 name=required_arg['name'],
                 description=required_arg['description'],
                 type=required_arg['type'],
+                rank=rank,
                 job=job
             ).save()
+            rank += 1
         except IntegrityError:
             job.delete()
             if deleted:
@@ -287,10 +287,12 @@ def add_job(data):
                 return {'msg': 'KO, the configuration file of the Job is not well '
                         'formed', 'configuration file': config_file}, 409
 
-    for optional_arg in optionnal_args:
+    for optional_arg in optional_args:
         try:
-            Optional_Argument(
+            Optional_Job_Argument(
                 name=optional_arg['name'],
+                flag=optional_arg['flag'],
+                type=optional_arg['type'],
                 description=optional_arg['description'],
                 job=job
             ).save()
@@ -567,14 +569,6 @@ def start_job_instance(data):
         }, 404
 
     instance = Job_Instance(job=installed_job)
-    instance.args = ' '.join(instance_args)
-    try:
-        instance.validate_args_len()  # Maybe use instance.set_arguments(instance_args) instead
-    except ValueError:
-        return {
-                'msg': 'Arguments given don\'t match with arguments needed',
-        }, 400
-
     instance.status = "starting ..."
     instance.update_status = timezone.now()
 
@@ -594,6 +588,39 @@ def start_job_instance(data):
         instance.periodic = False
         instance.save()
         cmd = 'start_job_instance date {} {}'.format(date, instance.id)
+
+    for arg_name, arg_values in instance_args.items():
+        try:
+            argument_instance = Required_Job_Argument_Instance(
+                argument=instance.job.job.required_job_argument_set.filter(name=arg_name)[0],
+                job_instance=instance
+            )
+            argument_instance.save()
+        except IndexError:
+            try:
+                argument_instance = Optional_Job_Argument_Instance(
+                    argument=instance.job.job.optional_job_argument_set.filter(name=arg_name)[0],
+                    job_instance=instance
+                )
+                argument_instance.save()
+            except IndexError:
+                return {
+                        'msg': 'Argument \'{}\' don\'t match with arguments needed'
+                               ' or optional'.format(arg_name),
+                }, 400
+        for arg_value in arg_values:
+            Job_Argument_Value(
+                value=arg_value,
+                argument_instance=argument_instance
+            ).save()
+
+    try:
+        # TODO Check the type too
+        instance.validate_args_len()
+    except ValueError:
+        return {
+                'msg': 'Arguments given don\'t match with arguments needed',
+        }, 400
 
     result = conductor_execute(cmd)
     response = {'msg': result}

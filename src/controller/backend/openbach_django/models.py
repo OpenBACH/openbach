@@ -75,8 +75,6 @@ class Job(models.Model):
             path="/opt/openbach-controller/jobs", recursive=True,
             allow_folders=True, allow_files=False)
     help = models.TextField(null=True, blank=True)
-    nb_args = models.IntegerField()
-    optional_args = models.BooleanField()
     job_version = models.CharField(max_length=200, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     keywords = models.ManyToManyField(Job_Keyword)
@@ -98,7 +96,7 @@ class Available_Statistic(models.Model):
         return self.name
 
 
-class Argument(models.Model):
+class Job_Argument(models.Model):
     INTEGER = 'int'
     BOOL = 'bool'
     STRING = 'str'
@@ -119,26 +117,29 @@ class Argument(models.Model):
         default=NONE,
     )
     name = models.CharField(max_length=200)
-    job = models.ForeignKey(Job, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
 
     class Meta:
-        unique_together = ('name', 'job')
+        abstract = True
 
     def __str__(self):
         return self.name
 
 
-class Optional_Argument(models.Model):
-    name = models.CharField(max_length=200)
+class Required_Job_Argument(Job_Argument):
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
-    description = models.TextField(null=True, blank=True)
+    rank = models.IntegerField()
 
     class Meta:
-        unique_together = ('name', 'job')
+        unique_together = (('name', 'job'), ('rank', 'job'))
 
-    def __str__(self):
-        return self.name
+
+class Optional_Job_Argument(Job_Argument):
+    flag = models.CharField(max_length=200)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (('name', 'job'),('flag', 'job'))
 
 
 class Installed_Job(models.Model):
@@ -161,7 +162,6 @@ class Installed_Job(models.Model):
 
 class Job_Instance(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
-    args = models.CharField(max_length=200, null=True, blank=True)
     status = models.CharField(max_length=200)
     update_status = models.DateTimeField()
     start_date = models.DateTimeField()
@@ -170,14 +170,53 @@ class Job_Instance(models.Model):
     is_stopped = models.BooleanField(default=False)
 
     def validate_args_len(self):
-        args_count = len(self.args.split())
-        if args_count < self.job.job.nb_args:
+        args_count = self.required_job_argument_instance_set.count()
+        if args_count < self.job.job.required_job_argument_set.count():
             raise ValueError('not enough arguments')
-
-        return min(args_count, self.job.job.nb_args)
+        return min(args_count, self.job.job.required_job_argument_set.count())
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
+
+
+class Job_Argument_Instance(models.Model):
+    pass
+
+
+class Required_Job_Argument_Instance(Job_Argument_Instance):
+    argument = models.ForeignKey(Required_Job_Argument, on_delete=models.CASCADE)
+    job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
+
+    def __str__(self):
+        values = ''
+        for job_argument_value in self.job_argument_value_set.all():
+            if values == '':
+                values = '\"{}\"'.format(job_argument_value)
+            else:
+                values = '{},\"{}\"'.format(values, job_argument_value)
+        return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
+
+
+class Optional_Job_Argument_Instance(Job_Argument_Instance):
+    argument = models.ForeignKey(Optional_Job_Argument, on_delete=models.CASCADE)
+    job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
+
+    def __str__(self):
+        values = ''
+        for job_argument_value in self.job_argument_value_set.all():
+            if values == '':
+                values = '\"{}\"'.format(job_argument_value)
+            else:
+                values = '{},\"{}\"'.format(values, job_argument_value)
+        return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
+
+
+class Job_Argument_Value(models.Model):
+    value = models.CharField(max_length=200)
+    argument_instance = models.ForeignKey(Job_Argument_Instance, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.value
 
 
 class Watch(models.Model):

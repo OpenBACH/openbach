@@ -9,6 +9,6 @@ Optionnal Arguments:
 Statistics: it doesn't produce any statistic
 
 Example:
-  - Launch an iperf server : "-s"
-  - Lannch an iperf client that will connect with the server in 172.20.0.83 : "-c 172.20.0.83" 
+  - Launch an iperf server : -a "mode -s"
+  - Lannch an iperf client that will connect with the server in 172.20.0.83 : -a "mode -c 172.20.0.83" 
 

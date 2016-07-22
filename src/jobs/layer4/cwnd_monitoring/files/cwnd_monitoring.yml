@@ -19,7 +19,7 @@ os:
     command_stop:
 
 arguments:
-  default:
+  required:
     - name:        port
       type:        'int'
       description: >
@@ -27,12 +27,14 @@ arguments:
   optional:
     - name:        interval
       type:        'int'
+      flag:        '-i'
       description: >
           There are a lot of TCP segment in a connexion.
           In order to not overload the computer, only 1 packet every *interval*
           packet is consider (default=10)
     - name:        path
       type:        'str'
+      flag:        '-p'
       description: >
           Path to a temporary results file (default=/tcp/tcpprobe.out)
 

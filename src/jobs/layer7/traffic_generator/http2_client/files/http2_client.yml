@@ -47,5 +47,5 @@ arguments:
       description: >
           Page number (default=1)
 
-available_statistics:
+statistics:
 

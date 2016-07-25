@@ -69,7 +69,7 @@ arguments:
       description: >
           The source port to monitor
 
-available_statistics:
+statistics:
   - name:          rate_monitoring
     description: >
         The mesured rate

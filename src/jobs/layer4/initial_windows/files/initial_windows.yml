@@ -42,5 +42,5 @@ arguments:
           Initial congestion receipt window
   optional:
 
-available_statistics:
+statistics:
 

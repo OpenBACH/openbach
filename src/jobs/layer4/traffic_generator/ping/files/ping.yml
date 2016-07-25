@@ -57,5 +57,5 @@ arguments:
       description: >
           Set the IP Time to Live.
 
-available_statistics:
+statistics:
 

@@ -32,5 +32,5 @@ arguments:
           The id of the current instance
   optional:
 
-available_statistics:
+statistics:
 

@@ -32,5 +32,5 @@ arguments:
       description: >
           Disable SSL/TLS.
 
-available_statistics:
+statistics:
 

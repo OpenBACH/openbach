@@ -26,5 +26,5 @@ arguments:
           The ip address with who you want to synchronize
   optional:
 
-available_statistics:
+statistics:
 

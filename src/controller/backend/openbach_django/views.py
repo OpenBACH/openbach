@@ -46,7 +46,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
 from .models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
-from .models import Available_Statistic, Required_Job_Argument, Optional_Job_Argument
+from .models import Statistic, Required_Job_Argument, Optional_Job_Argument
 from .models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
 from .models import Job_Argument_Value
 
@@ -195,7 +195,7 @@ def add_job(data):
     try:
         job_version = content['general']['job_version']
         keywords = content['general']['keywords']
-        available_statistics = content['available_statistics']
+        statistics = content['statistics']
         description = content['general']['description']
         required_args = []
         for arg in content['arguments']['required']:
@@ -237,14 +237,14 @@ def add_job(data):
         job_keyword.save()
         job.keywords.add(job_keyword)
 
-    if type(available_statistics) == list:
+    if type(statistics) == list:
         try:
-            for available_statistic in available_statistics:
-                Available_Statistic(
-                    name=available_statistic['name'],
+            for statistic in statistics:
+                Statistic(
+                    name=statistic['name'],
                     job=job,
-                    description=available_statistic['description'],
-                    frequency=available_statistic['frequency']
+                    description=statistic['description'],
+                    frequency=statistic['frequency']
                 ).save()
         except IntegrityError:
             job.delete()
@@ -255,7 +255,7 @@ def add_job(data):
             else:
                 return {'msg': 'KO, the configuration file of the Job is not well '
                         'formed', 'configuration file': config_file}, 409
-    elif available_statistics == None:
+    elif statistics == None:
         pass
     else:
         job.delete()

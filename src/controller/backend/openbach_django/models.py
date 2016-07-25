@@ -84,7 +84,7 @@ class Job(models.Model):
         return self.name
 
 
-class Available_Statistic(models.Model):
+class Statistic(models.Model):
     name = models.CharField(max_length=200)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)

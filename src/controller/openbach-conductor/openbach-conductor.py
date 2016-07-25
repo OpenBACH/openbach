@@ -51,9 +51,8 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
-from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
-from openbach_django.models import Available_Statistic, Required_Job_Argument, Optional_Job_Argument
-from openbach_django.models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
+from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch
+from openbach_django.models import Optional_Job_Argument, Optional_Job_Argument_Instance
 from openbach_django.models import Job_Argument_Value
 from django.core.exceptions import ObjectDoesNotExist
 

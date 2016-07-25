@@ -31,5 +31,5 @@ arguments:
       description: >
           The port to use
 
-available_statistics:
+statistics:
 

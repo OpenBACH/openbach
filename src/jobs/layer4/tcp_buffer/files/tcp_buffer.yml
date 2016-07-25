@@ -38,5 +38,5 @@ arguments:
           The maximum size of the buffer
   optional:
           
-available_statistics:
+statistics:
 

@@ -47,5 +47,5 @@ arguments:
       description: >
           Use UDP rather than TCP
 
-available_statistics:
+statistics:
 

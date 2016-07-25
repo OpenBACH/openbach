@@ -30,5 +30,5 @@ arguments:
           0 to enable pacing, 1 to disable it
   optional:
 
-available_statistics:
+statistics:
 

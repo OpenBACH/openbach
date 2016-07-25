@@ -38,7 +38,7 @@ arguments:
       description: >
           Path to a temporary results file (default=/tcp/tcpprobe.out)
 
-available_statistics:
+statistics:
   - name:          cwnd_monitoring.*port*
     description: >
         The congestion windows mesured

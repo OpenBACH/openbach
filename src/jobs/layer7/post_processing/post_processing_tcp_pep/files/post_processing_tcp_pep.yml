@@ -61,5 +61,5 @@ arguments:
       description: >
           Password of the user
 
-available_statistics:
+statistics:
 

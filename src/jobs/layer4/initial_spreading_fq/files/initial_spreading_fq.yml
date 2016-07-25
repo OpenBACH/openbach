@@ -39,5 +39,5 @@ arguments:
       description: >
           The other interfaces where the initial spreading fq is set
           
-available_statistics:
+statistics:
 

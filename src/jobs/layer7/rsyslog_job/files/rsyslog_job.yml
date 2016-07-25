@@ -40,5 +40,5 @@ arguments:
           3 to disable both
           0 to disable none of them
 
-available_statistics:
+statistics:
 

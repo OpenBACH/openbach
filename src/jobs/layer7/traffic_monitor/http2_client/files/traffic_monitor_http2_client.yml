@@ -52,7 +52,7 @@ arguments:
       description: >
           Page number (default=1)
 
-available_statistics:
+statistics:
   - name:          *simu_name*
     description: >
         Time to load the page

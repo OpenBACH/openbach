@@ -379,7 +379,7 @@ class JobConfiguration:
             self.command = content['os']['linux']['command']
             self.command_stop = content['os']['linux']['command_stop']
             self.required = []
-            for arg in content['arguments']['default']:
+            for arg in content['arguments']['required']:
                 self.required.append(arg['name'])
             self.optional = True if type(content['arguments']['optional']) == list else False
             self.persistent = content['general']['persistent']

@@ -37,6 +37,7 @@
 
 from django.db import models
 from django.contrib.auth import hashers
+import ipaddress
 
 
 class Agent(models.Model):
@@ -102,7 +103,7 @@ class Job_Argument(models.Model):
     STRING = 'str'
     FLOAT = 'float'
     IP = 'ip'
-    NONE = 'none'
+    NONE = 'None'
     TYPE_CHOICES = (
         (INTEGER, 'Integer'),
         (BOOL, 'Bool'),
@@ -169,11 +170,15 @@ class Job_Instance(models.Model):
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
 
-    def validate_args_len(self):
-        args_count = self.required_job_argument_instance_set.count()
-        if args_count < self.job.job.required_job_argument_set.count():
-            raise ValueError('not enough arguments')
-        return min(args_count, self.job.job.required_job_argument_set.count())
+    def check_args(self):
+        nb_required_args = self.job.job.required_job_argument_set.count()
+        nb_required_job_argument_instances = self.required_job_argument_instance_set.count()
+        if nb_required_job_argument_instances != nb_required_args:
+            raise ValueError('Not enough arguments')
+        for required_job_argument_instance in self.required_job_argument_instance_set.all():
+            required_job_argument_instance.check_values()
+        for optional_job_argument_instance in self.optional_job_argument_instance_set.all():
+            optional_job_argument_instance.check_values()
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
@@ -186,6 +191,10 @@ class Job_Argument_Instance(models.Model):
 class Required_Job_Argument_Instance(Job_Argument_Instance):
     argument = models.ForeignKey(Required_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
+
+    def check_values(self):
+        for value in self.job_argument_value_set.all():
+            value.check_type()
 
     def __str__(self):
         values = ''
@@ -201,6 +210,10 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
     argument = models.ForeignKey(Optional_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
+    def check_values(self):
+        for value in self.job_argument_value_set.all():
+            value.check_type()
+
     def __str__(self):
         values = ''
         for job_argument_value in self.job_argument_value_set.all():
@@ -214,6 +227,41 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
 class Job_Argument_Value(models.Model):
     value = models.CharField(max_length=200)
     argument_instance = models.ForeignKey(Job_Argument_Instance, on_delete=models.CASCADE)
+
+    def check_type(self):
+        type = self.argument_instance.argument.type
+        if type == 'int':
+            try:
+                int(self.value)
+            except ValueError:
+                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(self.value, type))
+        elif type == 'bool':
+            accepted_bool = ['True', 'true', 'TRUE', 'T', 't', 'False', 'false',
+                             'FALSE', 'F', 'f']
+            if self.value not in accepted_bool:
+                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(self.value, type))
+        elif type == 'str':
+            pass
+        elif type == 'float':
+            try:
+                float(self.value)
+            except ValueError:
+                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(self.value, type))
+        elif type == 'ip':
+            try:
+                ipaddress.ip_address(self.value)
+            except ValueError:
+                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(self.value, type))
+        elif type =='None':
+            raise ValueError('When the type is \'{}\', it should not have value'
+                             .format(type))
+        else:
+            raise ValueError('Job_Argument_Value \'{}\' has not a known type:'
+                             ' \'{}\''.format(self.value, type))
 
     def __str__(self):
         return self.value

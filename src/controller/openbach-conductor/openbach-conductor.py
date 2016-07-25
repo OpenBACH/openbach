@@ -54,6 +54,7 @@ from django.utils import timezone
 from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
 from openbach_django.models import Available_Statistic, Required_Job_Argument, Optional_Job_Argument
 from openbach_django.models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
+from openbach_django.models import Job_Argument_Value
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -390,41 +391,45 @@ class ClientThread(threading.Thread):
             '{job.path}/uninstall_{job.name}.yml'
             .format(path_src=self.path_src, agent=agent, job=job))
 
-    def start_job_instance(self, date_type, time_value, instance_id):
-            date = time_value if date_type == 'date' else None
-            interval = time_value if date_type == 'interval' else None
-            instance = Job_Instance.objects.get(pk=instance_id)
-            job = instance.job.job
-            agent = instance.job.agent
-            self.playbook_builder.write_hosts(agent.address)
-            args = ''
-            for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
-                for job_argument_value in argument.job_argument_value_set.all():
-                    if args == '':
-                        args = '{}'.format(job_argument_value.value)
-                    else:
-                        args = '{} {}'.format(args, job_argument_value.value)
-            for optional_argument in instance.optional_job_argument_instance_set.all():
+    def formate_args(self, instance):
+        args = ''
+        for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
+            for job_argument_value in argument.job_argument_value_set.all():
                 if args == '':
-                    args = '{}'.format(optional_argument.argument.flag)
+                    args = '{}'.format(job_argument_value.value)
                 else:
-                    args = '{} {}'.format(args, optional_argument.argument.flag)
-                if optional_argument.argument.type != Optional_Job_Argument.NONE:
-                    for job_argument_value in optional_argument.job_argument_value_set.all():
-                        args = '{} {}'.format(args, job_argument_value.value)
-            with self.playbook_builder.playbook_file(
-                    'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-                self.playbook_builder.build_start(
-                        job.name, instance.id,
-                        args, date, interval,
-                        playbook, extra_vars)
-            self.launch_playbook(
-                'ansible-playbook -i /tmp/openbach_hosts -e '
-                '@/tmp/openbach_extra_vars -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
-                .format(playbook.name, agent=agent))
+                    args = '{} {}'.format(args, job_argument_value.value)
+        for optional_argument in instance.optional_job_argument_instance_set.all():
+            if args == '':
+                args = '{}'.format(optional_argument.argument.flag)
+            else:
+                args = '{} {}'.format(args, optional_argument.argument.flag)
+            if optional_argument.argument.type != Optional_Job_Argument.NONE:
+                for job_argument_value in optional_argument.job_argument_value_set.all():
+                    args = '{} {}'.format(args, job_argument_value.value)
+        return args
+ 
+    def start_job_instance(self, date_type, time_value, instance_id):
+        date = time_value if date_type == 'date' else None
+        interval = time_value if date_type == 'interval' else None
+        instance = Job_Instance.objects.get(pk=instance_id)
+        job = instance.job.job
+        agent = instance.job.agent
+        self.playbook_builder.write_hosts(agent.address)
+        args = self.formate_args(instance)
+        with self.playbook_builder.playbook_file(
+                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            self.playbook_builder.build_start(
+                    job.name, instance.id,
+                    args, date, interval,
+                    playbook, extra_vars)
+        self.launch_playbook(
+            'ansible-playbook -i /tmp/openbach_hosts -e '
+            '@/tmp/openbach_extra_vars -e '
+            'ansible_ssh_user={agent.username} -e '
+            'ansible_sudo_pass={agent.password} -e '
+            'ansible_ssh_pass={agent.password} {}'
+            .format(playbook.name, agent=agent))
 
     def stop_job_instance(self, date, instance_id):
         instance = Job_Instance.objects.get(pk=instance_id)
@@ -445,25 +450,26 @@ class ClientThread(threading.Thread):
             .format(playbook.name, agent=agent))
 
     def restart_job_instance(self, date_type, time_value, instance_id):
-            date = time_value if date_type == 'date' else None
-            interval = time_value if date_type == 'interval' else None
-            instance = Job_Instance.objects.get(pk=instance_id)
-            job = instance.job.job
-            agent = instance.job.agent
-            self.playbook_builder.write_hosts(agent.address)
-            with self.playbook_builder.playbook_file(
-                    'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-                self.playbook_builder.build_restart(
-                        job.name, instance.id,
-                        instance.args, date, interval,
-                        playbook, extra_vars)
-            self.launch_playbook(
-                'ansible-playbook -i /tmp/openbach_hosts -e '
-                '@/tmp/openbach_extra_vars -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
-                .format(playbook.name, agent=agent))
+        date = time_value if date_type == 'date' else None
+        interval = time_value if date_type == 'interval' else None
+        instance = Job_Instance.objects.get(pk=instance_id)
+        job = instance.job.job
+        agent = instance.job.agent
+        self.playbook_builder.write_hosts(agent.address)
+        args = self.formate_args(instance)
+        with self.playbook_builder.playbook_file(
+                'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            self.playbook_builder.build_restart(
+                    job.name, instance.id,
+                    args, date, interval,
+                    playbook, extra_vars)
+        self.launch_playbook(
+            'ansible-playbook -i /tmp/openbach_hosts -e '
+            '@/tmp/openbach_extra_vars -e '
+            'ansible_ssh_user={agent.username} -e '
+            'ansible_sudo_pass={agent.password} -e '
+            'ansible_ssh_pass={agent.password} {}'
+            .format(playbook.name, agent=agent))
 
     def status_job_instance(self, watch_type, time_value, instance_id):
         date = time_value if watch_type == 'date' else None
@@ -664,7 +670,7 @@ class ClientThread(threading.Thread):
         instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         logs_job_path = instance.job.job.path
-        job_name = instance.args.split()[0]
+        job_name = instance.required_job_argument_instance_set.filter(argument__name='job_name')[0].job_argument_value_set.all()[0]
         syslogseverity = convert_severity(int(severity))
         syslogseverity_local = convert_severity(int(local_severity))
         disable = 0
@@ -682,14 +688,22 @@ class ClientThread(threading.Thread):
             print('job:', job_name, file=extra_vars)
             print('instance_id:', instance.id, file=extra_vars)
 
-            instance.args = '{} {}'.format(instance.args, disable)
-            instance.save()
+            argument_instance = Optional_Job_Argument_Instance(
+                argument=instance.job.job.optional_job_argument_set.filter(name='disable_code')[0],
+                job_instance=instance
+            )
+            argument_instance.save()
+            Job_Argument_Value(
+                value=disable,
+                argument_instance=argument_instance
+            ).save()
 
+            args = self.formate_args(instance)
             self.playbook_builder.build_enable_log(
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
             self.playbook_builder.build_start(
-                    'rsyslog_job', instance_id, instance.args,
+                    'rsyslog_job', instance_id, args,
                     date, None, playbook, extra_vars)
         self.launch_playbook(
             'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -704,7 +718,7 @@ class ClientThread(threading.Thread):
         instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         rstats_job_path = instance.job.job.path
-        job_name = instance.args.split()[0]
+        job_name = instance.required_job_argument_instance_set.filter(argument__name='job_name')[0].job_argument_value_set.all()[0]
         installed_name = '{} on {}'.format(job_name, agent.address)
         installed_job = Installed_Job.objects.get(pk=installed_name)
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
@@ -723,8 +737,9 @@ class ClientThread(threading.Thread):
         with self.playbook_builder.playbook_file('rstats') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_push_file(
                     rstats_filter.name, remote_path, playbook)
+            args = self.formate_args(instance)
             self.playbook_builder.build_start(
-                    'rstats_job', instance_id, instance.args,
+                    'rstats_job', instance_id, args,
                     date, None, playbook, extra_vars)
         self.launch_playbook(
             'ansible-playbook -i /tmp/openbach_hosts -e '

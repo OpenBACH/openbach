@@ -201,8 +201,9 @@ def add_job(data):
         for arg in content['arguments']['required']:
             required_args.append(arg)
         optional_args = []
-        for arg in content['arguments']['optional']:
-            optional_args.append(arg)
+        if content['arguments']['optional'] != None:
+            for arg in content['arguments']['optional']:
+                optional_args.append(arg)
     except KeyError:
         return {'msg': 'KO, the configuration file of the Job is not well '
                 'formed', 'configuration file': config_file}, 404
@@ -550,25 +551,8 @@ def push_file(data):
     return response_data, 404
 
 
-@check_post_data
-def start_job_instance(data):
-    try:
-        agent_ip = data['agent_ip']
-        job_name = data['job_name']
-        instance_args = data['instance_args']
-    except KeyError:
-        return {'msg': 'POST data malformed'}, 400
-
-    name = '{} on {}'.format(job_name, agent_ip)
-    try:
-        installed_job = Installed_Job.objects.get(pk=name)
-    except ObjectDoesNotExist:
-        return {
-                'msg': 'This Installed_Job isn\'t in the database',
-                'job_name': name,
-        }, 404
-
-    instance = Job_Instance(job=installed_job)
+def fill_and_launch_job_instance(instance, data, instance_args, restart=False,
+                                 launch=True):
     instance.status = "starting ..."
     instance.update_status = timezone.now()
 
@@ -588,6 +572,11 @@ def start_job_instance(data):
         instance.periodic = False
         instance.save()
         cmd = 'start_job_instance date {} {}'.format(date, instance.id)
+
+    if restart:
+        cmd = 're{}'.format(cmd)
+        instance.required_job_argument_instance_set.all().delete()
+        instance.optional_job_argument_instance_set.all().delete()
 
     for arg_name, arg_values in instance_args.items():
         try:
@@ -615,24 +604,51 @@ def start_job_instance(data):
             ).save()
 
     try:
-        # TODO Check the type too
-        instance.validate_args_len()
-    except ValueError:
+        instance.check_args()
+    except ValueError as e:
         return {
                 'msg': 'Arguments given don\'t match with arguments needed',
+                'error': e.args[0],
         }, 400
 
-    result = conductor_execute(cmd)
-    response = {'msg': result}
-    if result == 'OK':
-        instance.status = "Started"
-        instance.update_status = timezone.now()
-        instance.save()
-        response['instance_id'] = instance.id
-        return response, 200
+    if launch:
+        result = conductor_execute(cmd)
+        response = {'msg': result}
+        if result == 'OK':
+            instance.status = "Started"
+            instance.update_status = timezone.now()
+            instance.save()
+            if not restart:
+                response['instance_id'] = instance.id
+            return response, 200
+        else:
+            instance.delete()
+            return response, 404
     else:
-        instance.delete()
-        return response, 404
+        return date
+
+
+@check_post_data
+def start_job_instance(data):
+    try:
+        agent_ip = data['agent_ip']
+        job_name = data['job_name']
+        instance_args = data['instance_args']
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    name = '{} on {}'.format(job_name, agent_ip)
+    try:
+        installed_job = Installed_Job.objects.get(pk=name)
+    except ObjectDoesNotExist:
+        return {
+                'msg': 'This Installed_Job isn\'t in the database',
+                'job_name': name,
+        }, 404
+
+    instance = Job_Instance(job=installed_job)
+
+    return fill_and_launch_job_instance(instance, data, instance_args)
 
 
 @check_post_data
@@ -685,41 +701,17 @@ def restart_job_instance(data):
                 'instance_id': instance_id,
         }, 404
 
-    # TODO: keep it consistent with start_job_instance
+    return fill_and_launch_job_instance(instance, data, instance_args,
+                                        restart=True)
+
     if not instance_args:
-        instance.args = ' '.join(instance_args)
         try:
-            instance.validate_args_len()
-        except ValueError:
+            instance.check_args()
+        except ValueError as e:
             return {
                     'msg': 'Arguments given don\'t match with arguments needed',
+                    'error': e.args[0],
             }, 400
-
-
-    if 'interval' in data:
-        interval = data['interval']
-        instance.start_date = timezone.now()
-        instance.periodic = True
-        instance.save()
-        cmd = 'restart_job_instance interval {} {}'.format(interval, instance.id)
-    else:
-        date = data.get('date', 'now')
-        if date == 'now':
-            instance.start_date = timezone.now()
-        else:
-            start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
-            instance.start_date = start_date
-        instance.periodic = False
-        instance.save()
-        cmd = 'restart_job_instance date {} {}'.format(date, instance.id)
-
-    result = conductor_execute(cmd)
-    response = {'msg': result}
-    if result == 'OK':
-        return response, 200
-    else:
-        # TODO delete or keep the instance in the database ?
-        return response, 404
 
 
 @check_post_data
@@ -841,8 +833,18 @@ def _build_instance_infos(instance, update, verbosity):
         instance.refresh_from_db()
     instance_infos = {
             'id': instance.id,
-            'arguments': instance.args
+            'arguments': {}
     }
+    for required_job_argument in instance.required_job_argument_instance_set.all():
+        for value in required_job_argument.job_argument_value_set.all():
+            if required_job_argument.argument.name not in instance_infos['arguments']:
+                instance_infos['arguments'][required_job_argument.argument.name] = []
+            instance_infos['arguments'][required_job_argument.argument.name].append(value.value)
+    for optional_job_argument in instance.optional_job_argument_instance_set.all():
+        for value in optional_job_argument.job_argument_value_set.all():
+            if optional_job_argument.argument.name not in instance_infos['arguments']:
+                instance_infos['arguments'][optional_job_argument.argument.name] = []
+            instance_infos['arguments'][optional_job_argument.argument.name].append(value.value)
     if verbosity > 0:
         instance_infos['update_status'] = instance.update_status.astimezone(timezone.get_current_timezone())
         instance_infos['status'] = instance.status
@@ -916,28 +918,25 @@ def update_job_log_severity(data):
         logs_job = Installed_Job.objects.get(pk='rsyslog_job on {}'.format(agent_ip))
     except ObjectDoesNotExist:
         return {
-                'msg': 'The Logs Job isn\'t in the database',
+                'msg': 'The Installed_Job rsyslog isn\'t in the database',
                 'job_name': 'logs on {}'.format(agent_ip),
         }, 404
 
     instance = Job_Instance(job=logs_job)
-    instance.args = ''
     instance.status = "starting ..."
     instance.update_status = timezone.now()
-    instance.periodic = False
+
     date = data.get('date', 'now')
     if date == 'now':
         instance.start_date = timezone.now()
     else:
         start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
         instance.start_date = start_date
+    instance.periodic = False
     instance.save()
-    instance.args = '{} {}'.format(job_name, instance.id)
-    try:
-        instance.validate_args_len()
-    except ValueError:
-        return {'msg', 'Arguments given don\'t match with arguments needed'}, 400
-    instance.save()
+ 
+    instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
+    date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
 
     result = conductor_execute(
             'update_job_log_severity {} {} {} {}'
@@ -987,26 +986,25 @@ def update_job_stat_policy(data):
         rstats_job = Installed_Job.objects.get(pk=rstat_name)
     except ObjectDoesNotExist:
         return {
-                'msg': 'The Rstats Job isn\'t in the database',
+                'msg': 'The Installed_Job rstats isn\'t in the database',
                 'job_name': rstat_name,
         }, 404
 
     instance = Job_Instance(job=rstats_job)
-    instance.args = '{} {}'.format(job_name, instance.id)
-    try:
-        instance.validate_args_len()
-    except ValueError:
-        return {'msg': 'Arguments given don\'t match with arguments needed'}, 400
     instance.status = "starting ..."
     instance.update_status = timezone.now()
-    instance.periodic = False
+
     date = data.get('date', 'now')
     if date == 'now':
         instance.start_date = timezone.now()
     else:
         start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
         instance.start_date = start_date
+    instance.periodic = False
     instance.save()
+ 
+    instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
+    date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
 
     result = conductor_execute(
             'update_job_stat_policy {} {}'

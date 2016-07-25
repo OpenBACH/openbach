@@ -340,15 +340,45 @@ def list_jobs_url(request):
         return method(request)
 
 
-# Should be called only by list_jobs_url => method already verified
-def list_jobs(request):
+@check_post_data
+def list_jobs(data):
     '''
     list all the Jobs available on the benchmark
     '''
+    verbosity = 0
+    if 'verbosity' in data:
+        verbosity = data['verbosity']
     response = {
-        'jobs': [job.name for job in Job.objects.all()],
+        'jobs': []
     }
-    return JsonResponse(data=response, status=200)
+    for job in Job.objects.all():
+        job_info = {
+            'name': job.name
+        }
+        if verbosity > 0:
+            job_info['statistics'] = [ stat.name for stat in
+                                      job.statistic_set.all()]
+        response['jobs'].append(job_info)
+    return response, 200
+
+
+@check_post_data
+def get_job_stats(data):
+    try:
+        job_name = data['name']
+    except KeyError:
+        return {'msg': 'POST data malformed'}, 400
+
+    try:
+        job = Job.objects.get(pk=job_name)
+    except ObjectDoesNotExist:
+        return {
+                'msg': 'This Job isn\'t in the database',
+                'job_name': job_name,
+        }, 404
+
+    return {'job_name': job_name, 'statistics': [ stat.name for stat in
+                                                 job.statistic_set.all()]}, 200
 
 
 @check_post_data

@@ -154,8 +154,7 @@ class Rstats:
                 'Time{{0}}{}'.format(time),
         ]
         formatted_stats = ['{}{{0}}"{}"'.format(k, v) for k, v in stats.items()]
-        #stats_to_send = '{} {} {}'.format(stat_name, time, ' '.join(formatted_stats).format(' '))
-        stats_to_send = stat_name + ' ' + time + ' ' + ' '.join(formatted_stats).format(' ')
+        stats_to_send = '{} {} {}'.format(stat_name, time, ' '.join(formatted_stats).format(' '))
         logs = ', '.join(formatted_header_log).format(': ') + ', ' + ', '.join(formatted_stats).format(': ')
         self._logger.info(logs)
 

@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument('job_name', help='Name of the Job')
     parser.add_argument('-s', '--status', help='Start a watch of the status with this interval')
     parser.add_argument('-a', '--argument', type=parse, nargs='+',
-                        metavar='NAME[,VALUE[,VALUE...]]')
+                        metavar='NAME[ VALUE[ VALUE...]]')
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')

@@ -48,6 +48,10 @@ class DateMetavarHelper:
 
 
 if __name__ == "__main__":
+    def parse(value):
+        name, *values = shlex.split(value, posix=True)
+        return name, values
+
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Restart Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,15 +60,13 @@ if __name__ == "__main__":
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
             nargs=2, help='Date of the execution')
     group.add_argument('-i', '--interval', help='Interval of the execution')
-    subparsers = parser.add_subparsers()
-    subparser = subparsers.add_parser('arguments',
-            help='Arguments of the Instance', prefix_chars='¤')
-    subparser.add_argument('arguments', nargs='+')
+    parser.add_argument('-a', '--argument', type=parse, nargs='+',
+                        metavar='NAME[ VALUE[ VALUE...]]')
     
     # get args
     args = parser.parse_args()
     instance_id = args.instance_id
-    arguments = getattr(args, 'arguments', [])
+    arguments = dict(args.argument)
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
 

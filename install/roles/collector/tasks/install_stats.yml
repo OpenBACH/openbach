@@ -33,20 +33,8 @@
 
 ---
 
-- name: Create Collectstats repository
-  file: path=/opt/collectstats state=directory
-
-- name: Install Collectstats
-  copy: src=../src/collector/collectstats/collectstats.py dest=/opt/collectstats/ mode=0755
-
-- name: Configure Collectstats
-  template: src=../src/collector/collectstats/collectstats.cfg.j2 dest=/opt/collectstats/collectstats.cfg
-
-- name: Create Collectstats Service
-  copy: src=../src/collector/collectstats/collectstats_service dest=/etc/init.d/collectstats mode=0755
-
-- name: Start Collectstats
-  service: name=collectstats state=started
+- name: Install logstash-output-influxdb
+  shell: bin/plugin install logstash-output-influxdb chdir=/opt/logstash
 
 - name: Check if InfluxDB is installed
   shell: dpkg-query -W -f='${Version}\n' influxdb | sed 's/^[0-9]\+://'

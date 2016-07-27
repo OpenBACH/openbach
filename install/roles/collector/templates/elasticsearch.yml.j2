@@ -94,7 +94,7 @@
 # Require explicit names when deleting indices:
 #
 # action.destructive_requires_name: true
-cluster.name: {{ cluster_name }}
+cluster.name: {{ elasticsearch_cluster_name }}
 node.name: "collector"
 network.host: {{ ansible_default_ipv4.address }}
 http.port: {{ elasticsearch_port }}

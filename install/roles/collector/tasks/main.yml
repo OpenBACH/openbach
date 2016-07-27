@@ -37,10 +37,10 @@
 - include: install_synchro.yml
   tags:
     - install
-- include: install_stats.yml
+- include: install_logs.yml
   tags:
     - install
-- include: install_logs.yml
+- include: install_stats.yml
   tags:
     - install
 - include: add_services_to_boot.yml

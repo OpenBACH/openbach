@@ -39,6 +39,3 @@
 - name: Delete ElasticSearch to boot
   shell: update-rc.d -f elasticsearch remove
 
-- name: Delete Collectstats to boot
-  shell: update-rc.d -f collectstats remove
-

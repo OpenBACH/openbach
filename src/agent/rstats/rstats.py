@@ -45,6 +45,8 @@ from collections import namedtuple
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
+BOOLEAN_TRUE = frozenset({'t', 'T', 'true', 'True', 'TRUE'})
+BOOLEAN_FALSE = frozenset({'f', 'F', 'false', 'False', 'FALSE'})
 
 class BadRequest(ValueError):
     def __init__(self, reason):
@@ -98,11 +100,17 @@ class Rstats:
         self._confpath = confpath
         self.reload_conf()
 
-    def _is_denied(self, stat_name):
+    def _is_broadcast_denied(self, stat_name):
         for rule in self._rules:
             if rule.name == stat_name:
-                return rule.status == RstatsRule.DENY
-        return self._default_status == RstatsRule.DENY
+                return rule.broadcast == RstatsRule.DENY
+        return self._default_broadcast == RstatsRule.DENY
+
+    def _is_storage_denied(self, stat_name):
+        for rule in self._rules:
+            if rule.name == stat_name:
+                return rule.storage == RstatsRule.DENY
+        return self._default_storage == RstatsRule.DENY
 
     def _send_tcp(self, data):
         try:
@@ -120,12 +128,8 @@ class Rstats:
         # Envoyer les donnees
         s.send(data.encode())
 
-        # Traiter la reponse
-        r = s.recv(9999).decode()
+        # Fermer la socket
         s.close()
-        if r != 'OK':
-            raise BadRequest(
-                    'Server notifies an error: {}'.format(r))
 
     def _send_udp(self, data):
         try:
@@ -142,7 +146,11 @@ class Rstats:
 
     def send_stat(self, stat_name, stats):
         self._mutex.acquire()
-        local = self._is_denied(stat_name)
+        flag = 0
+        if not self._is_storage_denied(stat_name):
+            flag += 1
+        if not self._is_broadcast_denied(stat_name):
+            flag += 2
         if self.prefix:
             stat_name = '{}.{}'.format(self.prefix, stat_name)
 
@@ -154,11 +162,25 @@ class Rstats:
                 'Time{{0}}{}'.format(time),
         ]
         formatted_stats = ['{}{{0}}"{}"'.format(k, v) for k, v in stats.items()]
-        stats_to_send = '{} {} {}'.format(stat_name, time, ' '.join(formatted_stats).format(' '))
         logs = ', '.join(formatted_header_log).format(': ') + ', ' + ', '.join(formatted_stats).format(': ')
         self._logger.info(logs)
 
-        if not local:
+        if flag != 0:
+            stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(stat_name, time, flag)
+            for k, v in stats.items():
+                try:
+                    float(v)
+                    stats_to_send = '{}, "{}": {}'.format(stats_to_send, k, v)
+                except ValueError:
+                    # TODO: Gerer les vrais booleens dans influxdb (voir avec la
+                    #       conf de logstash aussi)
+                    if v in BOOLEAN_TRUE:
+                        stats_to_send = '{}, "{}": "true"'.format(stats_to_send, k)
+                    elif v in BOOLEAN_FALSE:
+                        stats_to_send = '{}, "{}": "false"'.format(stats_to_send, k)
+                    else:
+                        stats_to_send = '{}, "{}": "{}"'.format(stats_to_send, k, v)
+            stats_to_send = '{}{}{}'.format('{', stats_to_send, '}')
             try:
                 send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
             except KeyError:
@@ -170,19 +192,23 @@ class Rstats:
         self._mutex.acquire()
         self._logger.info('Load new configuration:')
 
-        self._default_status = RstatsRule.ACCEPT
+        self._default_storage = RstatsRule.ACCEPT
+        self._default_broadcast = RstatsRule.ACCEPT
         self._rules = []
         try:
             # Read file lines
             config = ConfigParser()
             config.read(self._confpath)
             for name in config.sections():
-                value = config[name].getboolean('enabled')
-                status = RstatsRule.ACCEPT if value else RstatsRule.DENY
+                value = config[name].getboolean('storage')
+                storage = RstatsRule.ACCEPT if value else RstatsRule.DENY
+                value = config[name].getboolean('broadcast')
+                broadcast = RstatsRule.ACCEPT if value else RstatsRule.DENY
                 if name == 'default':
-                    self._default_status = status
+                    self._default_storage = storage
+                    self._default_broadcast = broadcast
                 else:
-                    self._rules.append(RstatsRule(name, status))
+                    self._rules.append(RstatsRule(name, storage, broadcast))
         except Exception:
             pass
 
@@ -200,18 +226,22 @@ class Conf:
     def __init__(self, conf_path='config.ini'):
         config = ConfigParser()
         config.read(conf_path)
-        self.host = config.get('collectstats', 'host')
-        self.port = config.get('collectstats', 'port')
-        self.mode = config.get('collectstats', 'mode')
+        self.host = config.get('logstash', 'host')
+        self.port = config.get('logstash', 'port')
+        self.mode = config.get('logstash', 'mode')
         self.prefix = config.get('agent', 'prefix')
 
 
-class RstatsRule(namedtuple('RstatsRule', 'name status')):
+class RstatsRule(namedtuple('RstatsRule', 'name storage broadcast')):
     ACCEPT = True
     DENY = False
 
     def __str__(self):
-        return '{} {}'.format('ACCEPT' if self.status else 'DENY', self.name)
+        return 'storage: {}, broadcast: {} for {}'.format('ACCEPT' if
+                                                          self.storage else
+                                                          'DENY', 'ACCEPT' if
+                                                          self.broadcast else
+                                                          'DENY', self.name)
 
 
 class ClientThread(threading.Thread):
@@ -263,13 +293,13 @@ class ClientThread(threading.Thread):
         data_received[0] = request_type
         return data_received
 
-    def create_stat(self, path, job, *prefix):
+    def create_stat(self, confpath, job, *prefix):
         id = StatsManager().increment_id()
         prefix = None if not prefix else prefix[0]
 
         # creer le rstatsclient
         stats_client = Rstats(
-                confpath=path,
+                confpath=confpath,
                 job_name=job,
                 prefix=prefix,
                 id=id,

@@ -1,6 +1,6 @@
-[collectstats]
+[logstash]
 host: {{ collector_ip }}
-port: {{ collectstats_port }}
-mode: tcp
+port: {{ logstash_stats_port }}
+mode: udp
 [agent]
 prefix: {{ agent_name }}

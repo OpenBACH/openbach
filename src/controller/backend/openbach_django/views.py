@@ -48,7 +48,7 @@ from django.db import IntegrityError
 from .models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
 from .models import Statistic, Required_Job_Argument, Optional_Job_Argument
 from .models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
-from .models import Job_Argument_Value
+from .models import Job_Argument_Value, Statistic_Instance
 
 
 def check_post_data(f):
@@ -324,22 +324,6 @@ def del_job(data):
     return {'msg': 'OK'}, 200
 
 
-def list_jobs_url(request):
-    dispatch = {
-        'GET': list_jobs,
-        'POST': list_installed_jobs,
-    }
-
-    try:
-        method = dispatch[request.method]
-    except KeyError:
-        list_methods = ' or '.join(dispatch.keys())
-        response = {'msg': 'Only {} methods are accepted'.format(list_methods)}
-        return JsonResponse(data=response, status=405)
-    else:
-        return method(request)
-
-
 @check_post_data
 def list_jobs(data):
     '''
@@ -369,6 +353,9 @@ def get_job_stats(data):
     except KeyError:
         return {'msg': 'POST data malformed'}, 400
 
+    verbosity = 0
+    if 'verbosity' in data:
+        verbosity = data['verbosity']
     try:
         job = Job.objects.get(pk=job_name)
     except ObjectDoesNotExist:
@@ -377,8 +364,16 @@ def get_job_stats(data):
                 'job_name': job_name,
         }, 404
 
-    return {'job_name': job_name, 'statistics': [ stat.name for stat in
-                                                 job.statistic_set.all()]}, 200
+    result = {'job_name': job_name , 'statistics': [] }
+    for stat in job.statistic_set.all():
+        statistic = { 'name': stat.name }
+        if verbosity > 0:
+            statistic['description'] = stat.description
+        if verbosity > 1:
+            statistic['frequency'] = stat.frequency
+        result['statistics'].append(statistic)
+
+    return result, 200
 
 
 @check_post_data
@@ -434,10 +429,7 @@ def internal_install_jobs(addresses, names, severity=4, local_severity=4):
                 installed_job = Installed_Job(
                         agent=agent, job=job,
                         severity=severity,
-                        local_severity=local_severity,
-                        stats_default_policy=True,
-                        accept_stats="",
-                        deny_stats="")
+                        local_severity=local_severity)
                 installed_job.set_name()
                 installed_job.update_status = timezone.now()
                 installed_job.save()
@@ -546,12 +538,22 @@ def list_installed_jobs(data):
             }
             if verbosity > 0:
                 job_infos['severity'] = job.severity
-                job_infos['stats_default_policy'] = \
-                    str(job.stats_default_policy)
+                job_infos['default_stat_policy'] = { 'storage':
+                                                    job.default_stat_storage,
+                                                    'broadcast':
+                                                    job.default_stat_broadcast }
             if verbosity > 1:
                 job_infos['local_severity'] = job.local_severity
-                job_infos['accept_stats'] = job.accept_stats
-                job_infos['deny_stats'] = job.deny_stats
+                for statistic_instance in job.statistic_instance_set.all():
+                    if 'statistic_instances' not in job_infos:
+                        job_infos['statistic_instances'] = []
+                    job_infos['statistic_instances'].append({ 'name':
+                                                             statistic_instance.stat.name,
+                                                             'storage':
+                                                             statistic_instance.storage,
+                                                             'broadcast':
+                                                             statistic_instance.broadcast
+                                                             })
             response['installed_jobs'].append(job_infos)
     finally:
         return response, 200
@@ -927,7 +929,7 @@ def list_job_instances(data):
 
 
 @check_post_data
-def update_job_log_severity(data):
+def set_job_log_severity(data):
     try:
         agent_ip = data['address']
         job_name = data['job_name']
@@ -969,7 +971,7 @@ def update_job_log_severity(data):
     date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
 
     result = conductor_execute(
-            'update_job_log_severity {} {} {} {}'
+            'set_job_log_severity {} {} {} {}'
             .format(
                 date,
                 instance.id, severity,
@@ -985,12 +987,10 @@ def update_job_log_severity(data):
 
 
 @check_post_data
-def update_job_stat_policy(data):
+def set_job_stat_policy(data):
     try:
         agent_ip = data['address']
         job_name = data['job_name']
-        accept_stats = data['accept_stats']
-        deny_stats = data['deny_stats']
     except KeyError:
         return {'msg': 'POST data malformed'}, 404
 
@@ -1003,12 +1003,33 @@ def update_job_stat_policy(data):
                 'job_name': name,
         }, 404
 
-    old_default_policy = installed_job.stats_default_policy
-    old_accept_stats = installed_job.accept_stats
-    old_deny_stats = installed_job.deny_stats
-    installed_job.stats_default_policy = bool(data.get('default_policy', True))
-    installed_job.accept_stats = ' '.join(accept_stats)
-    installed_job.deny_stats = ' '.join(deny_stats)
+    stat_name = data.get('stat_name', None)
+    storage = data.get('storage', None)
+    broadcast = data.get('broadcast', None)
+    if stat_name != None:
+        statistic = installed_job.job.statistic_set.filter(name=stat_name)[0]
+        stat = Statistic_Instance.objects.filter(stat=statistic,
+                                                 job=installed_job)
+        if not stat:
+            stat = Statistic_Instance(stat=statistic, job=installed_job)
+        else:
+            stat = stat[0]
+        if storage == None and broadcast == None:
+            try:
+                stat.delete()
+            except AssertionError:
+                pass
+        else:
+            if broadcast != None:
+                stat.broadcast = broadcast
+            if storage != None:
+                stat.storage = storage
+            stat.save()
+    else:
+        if broadcast != None:
+            installed_job.broadcast = broadcast
+        if storage != None:
+            installed_job.storage = storage
     installed_job.save()
 
     rstat_name = 'rstats_job on {}'.format(agent_ip)
@@ -1037,14 +1058,11 @@ def update_job_stat_policy(data):
     date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
 
     result = conductor_execute(
-            'update_job_stat_policy {} {}'
+            'set_job_stat_policy {} {}'
             .format(date, instance.id))
     response = {'msg' : result}
     if result == 'KO':
         instance.delete()
-        installed_job.stats_default_policy = old_default_policy
-        installed_job.accept_stats = old_accept_stats
-        installed_job.deny_stats = old_deny_stats
         installed_job.save()
         return response, 404
     instance.status = "Started"

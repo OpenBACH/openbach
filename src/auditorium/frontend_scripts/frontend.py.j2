@@ -98,6 +98,13 @@ def del_job(job_name):
     return _post_message('jobs', 'del', name=job_name)
 
 
+def get_job_stats(job_name, verbosity=None):
+    action = partial(_post_message, name=job_name)
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
+    return action('jobs', 'stats')
+
+
 def get_job_help(job_name):
     return _post_message('jobs', 'help', name=job_name)
 
@@ -115,16 +122,21 @@ def list_installed_jobs(agent_ip, verbosity=None, update=None):
     action = partial(_post_message, address=agent_ip, update=bool(update))
     if verbosity is not None:
         action = partial(action, verbosity=verbosity)
+    return action('jobs', 'installed_list')
+
+
+def list_job_instances(agents_ip, update=None, verbosity=None):
+    action = partial(_post_message, addresses=agents_ip, update=bool(update))
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
+    return action('instances', 'list')
+
+
+def list_jobs(verbosity=None):
+    action = partial(_post_message)
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
     return action('jobs', 'list')
-
-
-def list_job_instances(agents_ip, update=None):
-    return _post_message('instances', 'list',
-            addresses=agents_ip, update=bool(update))
-
-
-def list_jobs():
-    return requests.get(_URL.format('jobs', 'list'))
 
 
 def push_file(local_path, remote_path, agent_ip):
@@ -192,8 +204,8 @@ def uninstall_jobs(jobs_name, agents_ip):
             addresses=agents_ip, names=jobs_name)
 
 
-def update_job_log_severity(agent_ip, job_name, severity, local_severity=None,
-                            date=None):
+def set_job_log_severity(agent_ip, job_name, severity, local_severity=None,
+                         date=None):
     action = partial(_post_message, address=agent_ip,
             job_name=job_name, severity=severity)
     if local_severity is not None:
@@ -204,11 +216,14 @@ def update_job_log_severity(agent_ip, job_name, severity, local_severity=None,
     return action('jobs', 'log_severity')
 
 
-def update_job_stat_policy(agent_ip, job_name, accept_stats, deny_stats,
-                           default_policy=True, date=None):
+def set_job_stat_policy(agent_ip, job_name, stat_name='default', storage=None,
+                        broadcast=None, date=None):
     action = partial(_post_message, address=agent_ip,
-            job_name=job_name, accept_stats=accept_stats,
-            deny_stats=deny_stats, default_policy=default_policy)
+            job_name=job_name, stat_name=stat_name)
+    if storage is not None:
+        action = partial(action, storage=storage)
+    if broadcast is not None:
+        action = partial(action, broadcast=broadcast)
     if date is not None:
         action = partial(action, date=date)
 

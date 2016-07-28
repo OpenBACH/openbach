@@ -231,11 +231,11 @@ class ClientThread(threading.Thread):
             'restart_job_instance': (4, 'the id of the instance'),
             'status_job_instance': (4, 'the id of the instance'),
             'stop_job_instance': (3, 'the id of the instance'),
-            'update_job_stat_policy': (3, 'the id of the instance'),
+            'set_job_stat_policy': (3, 'the id of the instance'),
             'status_agents': (2, 'at least one ip address of an agent'),
             'status_jobs': (2, 'at least one ip address of an agent'),
             'update_instance': (2, 'the id of the instance'),
-            'update_job_log_severity':
+            'set_job_log_severity':
                 (5, 'the instance id of the log jobs, the log '
                 'severity and the local log severity to set'),
             'push_file':
@@ -256,7 +256,7 @@ class ClientThread(threading.Thread):
     }
 
     ONLY_DATE_REQUESTS = {
-            'stop_job_instance', 'update_job_log_severity', 'update_job_stat_policy',
+            'stop_job_instance', 'set_job_log_severity', 'set_job_stat_policy',
     }
 
     DATE_INTERVAL_REQUESTS = {
@@ -635,7 +635,6 @@ class ClientThread(threading.Thread):
             installed_job.update_status = date
             installed_job.severity = 4
             installed_job.local_severity = 4
-            installed_job.stats_default_policy = True
             installed_job.save()
 
         if error_msg != 'KO 2':
@@ -665,7 +664,7 @@ class ClientThread(threading.Thread):
         instance.status = status
         instance.save()
 
-    def update_job_log_severity(self, date, instance_id, severity, local_severity):
+    def set_job_log_severity(self, date, instance_id, severity, local_severity):
         instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         logs_job_path = instance.job.job.path
@@ -713,7 +712,7 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
 
-    def update_job_stat_policy(self, date, instance_id):
+    def set_job_stat_policy(self, date, instance_id):
         instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         rstats_job_path = instance.job.job.path
@@ -722,14 +721,14 @@ class ClientThread(threading.Thread):
         installed_job = Installed_Job.objects.get(pk=installed_name)
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
             print('[default]', file=rstats_filter)
-            print('enabled =', installed_job.stats_default_policy,
+            print('storage =', installed_job.default_stat_storage,
                     file=rstats_filter)
-            for stats in installed_job.accept_stats.split():
-                print('[{}]'.format(stats), file=rstats_filter)
-                print('enabled = True', file=rstats_filter)
-            for stats in installed_job.deny_stats.split():
-                print('[{}]'.format(stats), file=rstats_filter)
-                print('enabled = False', file=rstats_filter)
+            print('broadcast =', installed_job.default_stat_broadcast,
+                    file=rstats_filter)
+            for stat in installed_job.statistic_instance_set.all():
+                print('[{}]'.format(stat.stat.name), file=rstats_filter)
+                print('storage =', stat.storage, file=rstats_filter)
+                print('broadcast =', stat.broadcast, file=rstats_filter)
         self.playbook_builder.write_hosts(agent.address)
         remote_path = ('/opt/openbach-jobs/{0}/{0}{1}'
                 '_rstats_filter.conf.locked').format(job_name, instance.id)

@@ -150,15 +150,27 @@ class Installed_Job(models.Model):
     update_status = models.DateTimeField(null=True, blank=True)
     severity = models.IntegerField()
     local_severity = models.IntegerField()
-    stats_default_policy = models.BooleanField()
-    accept_stats = models.CharField(max_length=200)
-    deny_stats = models.CharField(max_length=200)
+    default_stat_storage = models.BooleanField(default=True)
+    default_stat_broadcast = models.BooleanField(default=False)
 
     def set_name(self):
         self.name = '{0.job} on {0.agent}'.format(self)
 
     def __str__(self):
         return self.name
+
+
+class Statistic_Instance(models.Model):
+    stat = models.ForeignKey(Statistic, on_delete=models.CASCADE)
+    job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
+    storage = models.BooleanField(default=True)
+    broadcast = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('stat', 'job')
+
+    def __str__(self):
+        return self.stat.name
 
 
 class Job_Instance(models.Model):

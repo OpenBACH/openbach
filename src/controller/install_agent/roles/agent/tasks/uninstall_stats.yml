@@ -34,7 +34,7 @@
 ---
 
 - name: Remove Rstats log repository
-  file: path=/var/log/openbach state=absent
+  file: path=/var/openbach_stats state=absent
 
 - name: Stop Rstats
   service: name=rstats state=stopped

@@ -26,22 +26,16 @@
 #   
 #   
 #   
-#   @file     install_logs.yml
-#   @brief    Tasks that install the Collect-Agent for the logs
+#   @file     uninstall_logs.yml
+#   @brief    Tasks that uninstall the Collect-Agent for the logs
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Create Rsyslog log repository
-  file: path=/var/log/openbach state=directory mode=0755
+- name: Remove Rsyslog log repository
+  file: path=/var/log/openbach state=absent
 
-- name: Add Openbach logrotate file
-  copy: src=openbach_logrotate.conf dest=/etc/logrotate.d/
+- name: Remove Openbach logrotate file
+  file: path=/etc/logrotate.d/openbach_logrotate.conf state=absent
 
-- name: Install Rsyslog
-  apt: pkg=rsyslog state=installed update_cache=false
-
-- name: Start Rsyslog
-  service: name=rsyslog state=started
- 

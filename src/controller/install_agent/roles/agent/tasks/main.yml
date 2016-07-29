@@ -63,6 +63,9 @@
 - include: uninstall_stats.yml
   tags:
     - uninstall
+- include: uninstall_logs.yml
+  tags:
+    - uninstall
 - include: uninstall_daemon.yml
   tags:
     - uninstall

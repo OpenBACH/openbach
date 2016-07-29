@@ -39,6 +39,7 @@ import logging
 import socket
 import shlex
 import os.path
+import time
 from configparser import ConfigParser
 from collections import namedtuple
 
@@ -78,7 +79,7 @@ class StatsManager:
 
 
 class Rstats:
-    def __init__(self, logpath='/var/log/openbach/', confpath='', conf=None,
+    def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
                  prefix=None, id=None, job_name=None):
         self._mutex = threading.Lock()
         self.conf = conf
@@ -89,7 +90,8 @@ class Rstats:
         self._logger = logging.getLogger(logger_name)
         self._logger.setLevel(logging.INFO)
 
-        logfile = os.path.join(logpath, '{}.log'.format(self.job_name))
+        date = time.strftime("%Y-%m-%dT%H%M%S")
+        logfile = os.path.join(logpath, '{0}/{0}_{1}.stats'.format(self.job_name, date))
         try:
             fhd = logging.FileHandler(logfile, mode='a')
             fhd.setFormatter(logging.Formatter('{asctime} | {levelname} | {message}', style='{'))

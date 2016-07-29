@@ -44,6 +44,10 @@
     file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
     become: yes
  
+  - name: Create HTTP2 Client stats repository
+    file: path=/var/openbach_stats/{{ job_name }} state=directory mode=0755
+    become: yes
+ 
   - name: Check is nghttp is installed
     shell: which nghttp
     register: nghttp_check_deb

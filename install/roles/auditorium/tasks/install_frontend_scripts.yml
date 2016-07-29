@@ -42,6 +42,7 @@
     - add_job.py
     - del_job.py
     - get_job_help.py
+    - get_job_stats.py
     - install_agent.py
     - install_jobs.py
     - list_agents.py
@@ -50,6 +51,8 @@
     - list_jobs.py
     - push_file.py
     - restart_job_instance.py
+    - set_job_log_severity.py
+    - set_job_stat_policy.py
     - start_job_instance.py
     - status_agents.py
     - status_job_instance.py
@@ -57,8 +60,6 @@
     - stop_job_instance.py
     - uninstall_agent.py
     - uninstall_jobs.py
-    - update_job_log_severity.py
-    - update_job_stat_policy.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

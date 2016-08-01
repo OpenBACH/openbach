@@ -198,8 +198,10 @@ def add_job(data):
         statistics = content['statistics']
         description = content['general']['description']
         required_args = []
-        for arg in content['arguments']['required']:
-            required_args.append(arg)
+        args = content['arguments']['required']
+        if type(args) == list:
+            for arg in args:
+                required_args.append(arg)
         optional_args = []
         if content['arguments']['optional'] != None:
             for arg in content['arguments']['optional']:

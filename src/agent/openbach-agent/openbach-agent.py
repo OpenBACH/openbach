@@ -282,7 +282,7 @@ def schedule_job_instance_stop(job_name, job_instance_id, date_value,
     return date
 
 
-def schedule_watch(job_name, job_instance, date_type, date_value):
+def schedule_watch(job_name, job_instance_id, date_type, date_value):
     timestamp = time.time()
     date = True
     if date_type == 'date':

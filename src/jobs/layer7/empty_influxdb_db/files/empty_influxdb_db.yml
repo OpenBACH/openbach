@@ -1,0 +1,47 @@
+---
+
+general:
+  name:            empty_influxdb_db
+  description: >
+      This Job is used by OpenBACH to empty the statistics database of the
+      Collector (InfluxDB).
+  job_version:     0.1
+  keywords:        [database, db, empty, collector, influxdb]
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/empty_influxdb_db/empty_influxdb_db.py'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  required:
+  optional:
+    - name:        port
+      type:        'int'
+      flag:        '-p'
+      description: >
+          Port of InfluxDB
+    - name:        database
+      type:        'str'
+      flag:        '-d'
+      description: >
+          Name of the database
+    - name:        username
+      type:        'str'
+      flag:        '-u'
+      description: >
+          Name of the user
+    - name:        password
+      type:        'str'
+      flag:        '-pa'
+      description: >
+          Password of the user
+
+statistics:
+

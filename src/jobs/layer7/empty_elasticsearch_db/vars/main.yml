@@ -26,18 +26,12 @@
 #   
 #   
 #   
-#   @file     install_agent.yml
-#   @brief    Tasks that install an Agent on the Controller and the Collector
+#   @file     main.yml
+#   @brief    File that containts all the variable needed for the playbooks
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Install Agent on the Controller/Collector
-  shell: /opt/openbach-auditorium/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ item.username }} {{ item.password }} {{ item.name }}
-  with_items: "{{ agents }}"
-
-- name: Install Collector admin Jobs
-  shell: /opt/openbach-auditorium/frontend_scripts/install_jobs.py -a {{ collector_ip }} -j {{ item }}
-  with_items: "{{ collector_jobs }}"
+job_name: empty_elasticsearch_db
 

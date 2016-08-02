@@ -96,5 +96,5 @@
 # action.destructive_requires_name: true
 cluster.name: {{ elasticsearch_cluster_name }}
 node.name: "collector"
-network.host: {{ ansible_default_ipv4.address }}
+network.host: 0.0.0.0
 http.port: {{ elasticsearch_port }}

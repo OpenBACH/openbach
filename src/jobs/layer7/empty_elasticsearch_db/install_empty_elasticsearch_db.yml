@@ -26,18 +26,34 @@
 #   
 #   
 #   
-#   @file     install_agent.yml
-#   @brief    Tasks that install an Agent on the Controller and the Collector
+#   @file     install_empty_elasticsearch_db.yml
+#   @brief    Playbook that install the Job empty_elasticsearch_db
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Install Agent on the Controller/Collector
-  shell: /opt/openbach-auditorium/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ item.username }} {{ item.password }} {{ item.name }}
-  with_items: "{{ agents }}"
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: empty_elasticsearch_db.yml
 
-- name: Install Collector admin Jobs
-  shell: /opt/openbach-auditorium/frontend_scripts/install_jobs.py -a {{ collector_ip }} -j {{ item }}
-  with_items: "{{ collector_jobs }}"
+  tasks:
+  - name: Create the Job repository
+    file: path=/opt/openbach-jobs/empty_elasticsearch_db/ state=directory
+    become: yes
+
+  - name: Install the Job
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/empty_elasticsearch_db/ mode={{ item.mode }}
+    with_items:
+      - { file: 'empty_elasticsearch_db.py', mode: '0755' }
+      - { file: 'empty_elasticsearch_db.help', mode: '0644' }
+    become: yes
+    
+  - name: Inform Agent that the Job is installed
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
 

@@ -1,0 +1,32 @@
+---
+
+general:
+  name:            empty_elasticsearch_db
+  description: >
+      This Job is used by OpenBACH to empty the logs database of the
+      Collector (Elasticsearch).
+  job_version:     0.1
+  keywords:        [database, db, empty, elasticsearch, collector]
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/empty_elasticsearch_db/empty_elasticsearch_db.py'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  required:
+  optional:
+    - name:        port
+      type:        'int'
+      flag:        '-p'
+      description: >
+          Port of Elasticsearch
+
+statistics:
+

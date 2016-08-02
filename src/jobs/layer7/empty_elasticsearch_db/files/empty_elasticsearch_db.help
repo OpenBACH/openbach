@@ -1,0 +1,9 @@
+This Job is used by OpenBACH to empty the logs database of the Collector (Elasticsearch).
+
+Required Arguments:
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Empty elasticsearch (on port 9200): -a "port 9200"
+

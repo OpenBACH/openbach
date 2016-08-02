@@ -26,18 +26,27 @@
 #   
 #   
 #   
-#   @file     install_agent.yml
-#   @brief    Tasks that install an Agent on the Controller and the Collector
+#   @file     uninstall_empty_indluxdb_db.yml
+#   @brief    Playbook that uninstall the Job empty_influxdb_db
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Install Agent on the Controller/Collector
-  shell: /opt/openbach-auditorium/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ item.username }} {{ item.password }} {{ item.name }}
-  with_items: "{{ agents }}"
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: empty_influxdb_db.yml
 
-- name: Install Collector admin Jobs
-  shell: /opt/openbach-auditorium/frontend_scripts/install_jobs.py -a {{ collector_ip }} -j {{ item }}
-  with_items: "{{ collector_jobs }}"
+  tasks:
+  - name: Uninstall the Job
+    file: path=/opt/openbach-jobs/empty_influxdb_db state=absent
+    become: yes
+
+  - name: Inform Agent that the Job is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
+    become: yes
+
+  - include: '{{ path_src }}/del_job.yml'
 

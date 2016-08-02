@@ -1,0 +1,9 @@
+This Job is used by OpenBACH to empty the statistics database of the Collector (InfluxDB).
+
+Required Arguments:
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Empty all the database 'openbach' (username: 'openbach', password: 'openbach') : -a "database openbach" "username openbach" "password openbach"
+

@@ -84,7 +84,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     agent_ip = args.agent_ip
     job_name = args.job_name
-    arguments = dict(args.argument)
+    if type(args.argument) == list:
+        arguments = dict(args.argument)
+    else:
+        arguments = {}
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
     status = args.status

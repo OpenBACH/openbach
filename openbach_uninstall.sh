@@ -48,12 +48,6 @@ function usage(){
     printf "\t-h                             : print this message.\n"
 }
 
-if [ $# -eq 0 ]
-then
-    usage
-    exit 0
-fi
-
 
 while true ; do
     case "$1" in
@@ -139,11 +133,6 @@ echo "collector_ip: $collector_address" >> configs/ips
 echo -e "[Auditorium]\n$auditorium_address" >> /tmp/openbach_hosts
 echo "auditorium_ip: $auditorium_address" >> configs/ips
 
-echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
-echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
-echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags uninstall
-
 echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $collector_password" >> /tmp/openbach_extra_vars
@@ -153,6 +142,11 @@ echo "ansible_ssh_user: $auditorium_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $auditorium_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $auditorium_password" >> /tmp/openbach_extra_vars
 sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/auditorium.yml --tags uninstall
+
+echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
+echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
+echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
+sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars install/controller.yml --tags uninstall
 
 
 rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars

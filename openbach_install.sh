@@ -51,12 +51,6 @@ function usage(){
     printf "\t-h                             : print this message.\n"
 }
 
-if [ $# -eq 0 ]
-then
-    usage
-    exit 0
-fi
-
 
 while true ; do
     case "$1" in

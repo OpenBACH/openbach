@@ -39,9 +39,13 @@ import socket
 import shlex
 import threading
 import subprocess
+import yaml
 import getpass
 import requests
+import json
+from operator import attrgetter
 from datetime import datetime
+from django.core.serializers.json import DjangoJSONEncoder
 from contextlib import contextmanager
 
 import sys
@@ -51,10 +55,11 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
-from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch
-from openbach_django.models import Optional_Job_Argument, Optional_Job_Argument_Instance
-from openbach_django.models import Job_Argument_Value
 from django.core.exceptions import ObjectDoesNotExist
+from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
+from openbach_django.models import Statistic, Required_Job_Argument, Optional_Job_Argument
+from openbach_django.models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
+from openbach_django.models import Job_Argument_Value, Statistic_Instance
 
 
 _SEVERITY_MAPPING = {
@@ -212,56 +217,62 @@ class PlaybookBuilder():
 
 class BadRequest(Exception):
     """Custom exception raised when parsing of a request failed"""
-    def __init__(self, reason):
+    def __init__(self, reason, returncode=400, infos=None):
         super().__init__(reason)
         self.reason = reason
+        self.returncode = returncode
+        if infos:
+            self.infos = infos
+        else:
+            self.infos = {}
 
 
 class ClientThread(threading.Thread):
-    REQUESTS_CHECKER = {
-            'install_agent': (2, 'the ip address of the agent'),
-            'uninstall_agent': (2, 'the ip address of the agent'),
-            'update_agent': (2, 'the ip address of the agent'),
-            'update_jobs': (2, 'the ip address of the agent'),
-            'install_job':
-                (3, 'the ip address of the agent and the name of the job'),
-            'uninstall_job':
-                (3, 'the ip address of the agent and the name of the job'),
-            'start_job_instance': (4, 'the id of the instance'),
-            'restart_job_instance': (4, 'the id of the instance'),
-            'status_job_instance': (4, 'the id of the instance'),
-            'stop_job_instance': (3, 'the id of the instance'),
-            'set_job_stat_policy': (3, 'the id of the instance'),
-            'status_agents': (2, 'at least one ip address of an agent'),
-            'status_jobs': (2, 'at least one ip address of an agent'),
-            'update_instance': (2, 'the id of the instance'),
-            'set_job_log_severity':
-                (5, 'the instance id of the log jobs, the log '
-                'severity and the local log severity to set'),
-            'push_file':
-                (4, 'the local path of the file you want to send, '
-                'the remote path where you want to put the file and '
-                'the ip address of the agent'),
-    }
+    #REQUESTS_CHECKER = {
+    #        'install_agent': (6, 'the ip address, the username, the password, '
+    #                          'the name of the agent and the collector ip address'),
+    #        'uninstall_agent': (2, 'the ip address of the agent'),
+    #        'update_agent': (2, 'the ip address of the agent'),
+    #        'update_jobs': (2, 'the ip address of the agent'),
+    #        'install_job':
+    #            (3, 'the ip address of the agent and the name of the job'),
+    #        'uninstall_job':
+    #            (3, 'the ip address of the agent and the name of the job'),
+    #        'start_job_instance': (4, 'the id of the instance'),
+    #        'restart_job_instance': (4, 'the id of the instance'),
+    #        'status_job_instance': (4, 'the id of the instance'),
+    #        'stop_job_instance': (3, 'the id of the instance'),
+    #        'set_job_stat_policy': (3, 'the id of the instance'),
+    #        'status_agents': (2, 'at least one ip address of an agent'),
+    #        'status_jobs': (2, 'at least one ip address of an agent'),
+    #        'update_instance': (2, 'the id of the instance'),
+    #        'set_job_log_severity':
+    #            (5, 'the instance id of the log jobs, the log '
+    #            'severity and the local log severity to set'),
+    #        'push_file':
+    #            (4, 'the local path of the file you want to send, '
+    #            'the remote path where you want to put the file and '
+    #            'the ip address of the agent'),
+    #}
 
-    NO_UPPER_LENGTH_CHECK = {
-            'status_agents', 'status_jobs'
-    }
+    #NO_UPPER_LENGTH_CHECK = {
+    #        'status_agents', 'status_jobs'
+    #}
 
-    NO_DATE_REQUESTS = {
-            'install_agent', 'uninstall_agent', 'install_job',
-            'uninstall_job', 'status_agents', 'update_agent',
-            'status_jobs', 'update_jobs', 'update_instance',
-            'push_file',
-    }
+    #NO_DATE_REQUESTS = {
+    #        'install_agent', 'uninstall_agent', 'install_job',
+    #        'uninstall_job', 'status_agents', 'update_agent',
+    #        'status_jobs', 'update_jobs', 'update_instance',
+    #        'push_file',
+    #}
 
-    ONLY_DATE_REQUESTS = {
-            'stop_job_instance', 'set_job_log_severity', 'set_job_stat_policy',
-    }
+    #ONLY_DATE_REQUESTS = {
+    #        'stop_job_instance', 'set_job_log_severity', 'set_job_stat_policy',
+    #}
 
-    DATE_INTERVAL_REQUESTS = {
-            'start_job_instance', 'restart_job_instance', 'status_job_instance',
-    }
+    #DATE_INTERVAL_REQUESTS = {
+    #        'start_job_instance', 'restart_job_instance', 'status_job_instance',
+    #}
 
     UPDATE_AGENT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
     UPDATE_JOB_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
@@ -277,59 +288,72 @@ class ClientThread(threading.Thread):
         p = subprocess.Popen(cmd_ansible, shell=True)
         p.wait()
         if p.returncode:
-            raise BadRequest('KO')
+            raise BadRequest('Ansible playbook execution failed')
 
-    def check_date_interval(self, data_recv):
-        try:
-            request_type, *date_params = data_recv
-        except ValueError:
-            raise BadRequest('KO Message not formed well. '
-                             'You should provide a request')
+    #def check_date_interval(self, data_recv):
+    #    try:
+    #        request_type, *date_params = data_recv
+    #    except ValueError:
+    #        raise BadRequest('KO Message not formed well. '
+    #                         'You should provide a request')
 
-        for length, commands in enumerate((
-                self.NO_DATE_REQUESTS,
-                self.ONLY_DATE_REQUESTS,
-                self.DATE_INTERVAL_REQUESTS)):
-            if request_type in commands:
-                if len(date_params) >= length:
-                    return
-                raise BadRequest('KO Message not formed well. '
-                        'Expected {} date parameters to execute the order'
-                        ' but got {}.'.format(length, len(date_params)))
+    #    for length, commands in enumerate((
+    #            self.NO_DATE_REQUESTS,
+    #            self.ONLY_DATE_REQUESTS,
+    #            self.DATE_INTERVAL_REQUESTS)):
+    #        if request_type in commands:
+    #            if len(date_params) >= length:
+    #                return
+    #            raise BadRequest('KO Message not formed well. '
+    #                    'Expected {} date parameters to execute the order'
+    #                    ' but got {}.'.format(length, len(date_params)))
 
-        raise BadRequest('KO Message not formed well. Request not knwown.')
+    #    raise BadRequest('KO Message not formed well. Request not knwown.')
 
     def parse_and_check(self, message):
-        data_received = shlex.split(message)
-        self.check_date_interval(data_received)
+        # Check are done in the backend (views.py)
+        data_received = json.loads(message)
+        #data_received = shlex.split(message)
+        #self.check_date_interval(data_received)
 
-        request_type = data_received[0]
-        try:
-            length, error_message = self.REQUESTS_CHECKER[request_type]
-        except KeyError:
-            raise BadRequest('KO Request type not defined')
+        request_type = data_received['command']
+        del data_received['command']
+        #try:
+        #    length, error_message = self.REQUESTS_CHECKER[request_type]
+        #except KeyError:
+        #    raise BadRequest('KO Request type not defined')
 
-        actual_length = len(data_received)
-        if actual_length < length:
-            raise BadRequest('KO Message not formed well. You should '
-                    'provide {}'.format(error_message))
+        #actual_length = len(data_received)
+        #if actual_length < length:
+        #    raise BadRequest('KO Message not formed well. You should '
+        #            'provide {}'.format(error_message))
 
-        if (actual_length > length and
-                request_type not in self.NO_UPPER_LENGTH_CHECK):
-            raise BadRequest(
-                    'KO Message not formed well. Too much arguments given')
+        #if (actual_length > length and
+        #        request_type not in self.NO_UPPER_LENGTH_CHECK):
+        #    raise BadRequest(
+        #            'KO Message not formed well. Too much arguments given')
 
-        return data_received
+        return request_type, data_received
 
     def execute_request(self, data):
-        request, *args = self.parse_and_check(data)
+        request, args = self.parse_and_check(data)
 
         # From this point on, request should contain the
         # name of one of the following method: call it
-        getattr(self, request)(*args)
+        return getattr(self, request)(**args)
 
-    def install_agent(self, agent_id):
-        agent = Agent.objects.get(pk=agent_id)
+    def install_agent(self, address, collector, username, password, name):
+        agent = Agent(name=name, address=address, collector=collector,
+                      username=username)
+        agent.set_password(password)
+        agent.reachable = True
+        agent.update_reachable = timezone.now()
+        agent.status = 'Installing ...' 
+        agent.update_status = timezone.now()
+        try:
+            agent.save()
+        except IntegrityError:
+            raise BadRequest('Name of the Agent already used')
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
         with self.playbook_builder.extra_vars_file() as extra_vars:
@@ -346,9 +370,33 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password}'
             ' /opt/openbach-controller/install_agent/agent.yml --tags install'
             .format(agent=agent))
+        agent.status = 'Available'
+        agent.update_status = timezone.now()
+        agent.save()
+        result = { 'msg': 'OK' }
+        # Recuperer la liste des jobs a installer
+        list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
+        list_jobs = []
+        with open(list_default_jobs) as f:
+            for line in f:
+                list_jobs.append(line.rstrip('\n'))
+        # Installer les jobs
+        list_jobs_failed = []
+        for job in list_jobs:
+            try:
+                self.install_job(agent.address, job)
+            except BadRequest:
+                list_jobs_failed.append(job)
+        if list_jobs_failed != []:
+            result['warning'] = 'Some Jobs couldn’t be installed {}'.format(' '.join(list_jobs_failed))
+        return result, 200
 
-    def uninstall_agent(self, agent_id):
-        agent = Agent.objects.get(pk=agent_id)
+    def uninstall_agent(self, address):
+        try:
+            agent = Agent.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent is not in the database', 404,
+                             infos={'address': address})
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
         with self.playbook_builder.extra_vars_file() as extra_vars:
@@ -363,142 +411,65 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password}'
             ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
             .format(agent=agent))
+        result = { 'msg': 'OK' }
+        return result, 200
 
-    def install_job(self, agent_id, job_id):
-        agent = Agent.objects.get(pk=agent_id)
-        job = Job.objects.get(pk=job_id)
-        self.playbook_builder.write_hosts(agent.address)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            'path_src={path_src} -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} '
-            '{job.path}/install_{job.name}.yml'
-            .format(path_src=self.path_src, agent=agent, job=job))
 
-    def uninstall_job(self, agent_id, job_id):
-        agent = Agent.objects.get(pk=agent_id)
-        job = Job.objects.get(pk=job_id)
-        self.playbook_builder.write_hosts(agent.address)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            'path_src={path_src} -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} '
-            '{job.path}/uninstall_{job.name}.yml'
-            .format(path_src=self.path_src, agent=agent, job=job))
+    def list_agents(self, update=False):
+        agents = Agent.objects.all()
+        response = {}
+        if update:
+            for agent in agents:
+                if agent.reachable and agent.update_status < agent.update_reachable:
+                    try:
+                        self.update_agent(agent)
+                    except BadRequest as e:
+                        response.setdefault('errors', []).append({
+                            'agent_ip': agent.address,
+                            'error': result[3:],
+                        })
+                    else:
+                        agent.refresh_from_db()
 
-    def formate_args(self, instance):
-        args = ''
-        for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
-            for job_argument_value in argument.job_argument_value_set.all():
-                if args == '':
-                    args = '{}'.format(job_argument_value.value)
-                else:
-                    args = '{} {}'.format(args, job_argument_value.value)
-        for optional_argument in instance.optional_job_argument_instance_set.all():
-            if args == '':
-                args = '{}'.format(optional_argument.argument.flag)
-            else:
-                args = '{} {}'.format(args, optional_argument.argument.flag)
-            if optional_argument.argument.type != Optional_Job_Argument.NONE:
-                for job_argument_value in optional_argument.job_argument_value_set.all():
-                    args = '{} {}'.format(args, job_argument_value.value)
-        return args
- 
-    def start_job_instance(self, date_type, time_value, instance_id):
-        date = time_value if date_type == 'date' else None
-        interval = time_value if date_type == 'interval' else None
-        instance = Job_Instance.objects.get(pk=instance_id)
-        job = instance.job.job
-        agent = instance.job.agent
-        self.playbook_builder.write_hosts(agent.address)
-        args = self.formate_args(instance)
-        with self.playbook_builder.playbook_file(
-                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-            self.playbook_builder.build_start(
-                    job.name, instance.id,
-                    args, date, interval,
-                    playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
+        response['agents'] = [
+            {
+                'address': agent.address,
+                'status': agent.status,
+                'update_status': agent.update_status.astimezone(timezone.get_current_timezone()),
+                'name': agent.name,
+            } for agent in agents]
 
-    def stop_job_instance(self, date, instance_id):
-        instance = Job_Instance.objects.get(pk=instance_id)
-        job = instance.job.job
-        agent = instance.job.agent
-        self.playbook_builder.write_hosts(agent.address)
-        with self.playbook_builder.playbook_file(
-                'stop_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-            self.playbook_builder.build_stop(
-                    job.name, instance.id, date,
-                    playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
+        return response, 200
 
-    def restart_job_instance(self, date_type, time_value, instance_id):
-        date = time_value if date_type == 'date' else None
-        interval = time_value if date_type == 'interval' else None
-        instance = Job_Instance.objects.get(pk=instance_id)
-        job = instance.job.job
-        agent = instance.job.agent
-        self.playbook_builder.write_hosts(agent.address)
-        args = self.formate_args(instance)
-        with self.playbook_builder.playbook_file(
-                'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-            self.playbook_builder.build_restart(
-                    job.name, instance.id,
-                    args, date, interval,
-                    playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
 
-    def status_job_instance(self, watch_type, time_value, instance_id):
-        date = time_value if watch_type == 'date' else None
-        interval = time_value if watch_type == 'interval' else None
-        stop = time_value if watch_type == 'stop' else None
-        watch = Watch.objects.get(pk=instance_id)
-        job = watch.job.job
-        agent = watch.job.agent
-        self.playbook_builder.write_hosts(agent.address)
-        with self.playbook_builder.playbook_file(
-                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-            self.playbook_builder.build_status(
-                    job.name, instance_id,
-                    date, interval, stop,
-                    playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
+    def update_agent(self, agent):
+        url = self.UPDATE_AGENT_URL.format(agent=agent)
+        result = requests.get(url).json()
+        try:
+            columns = result['results'][0]['series'][0]['columns']
+            values = result['results'][0]['series'][0]['values'][0]
+        except KeyError:
+            raise BadRequest('Required Stats doesn\'t exist in the Database')
 
-    def status_agents(self, *agents_ips):
-        error_msg = ''
-        for agent_ip in agents_ips:
+        for column, value in zip(columns, values):
+            if column == 'time':
+                date = datetime.fromtimestamp(value/1000,
+                        timezone.get_current_timezone())
+            elif column == 'last':
+                status = value
+        if date > agent.update_status:
+            agent.update_status = date
+            agent.status = status
+            agent.save()
+
+
+    def status_agents(self, addresses):
+        unknown_agents = []
+        for agent_ip in addresses:
             try:
                 agent = Agent.objects.get(pk=agent_ip)
             except ObjectDoesNotExist:
-                error_msg += agent_ip + ' '
+                unknown_agents.append(agent_ip)
                 continue
             self.playbook_builder.write_hosts(agent.address)
             try:
@@ -544,54 +515,366 @@ class ClientThread(threading.Thread):
                     .format(playbook.name, agent=agent))
             except BadRequest:
                 pass
-        if error_msg:
-            raise BadRequest(error_msg)
+        if unknown_agents:
+            raise BadRequest('At least one of the Agents isn\'t in the '
+                             'database', 404, {'unknown_agents':
+                                               unknown_agents})
+        return { 'msg': 'OK' }, 200
 
-    def update_agent(self, agent_id):
-        agent = Agent.objects.get(pk=agent_id)
-        url = self.UPDATE_AGENT_URL.format(agent=agent)
-        result = requests.get(url).json()
+
+    def add_job(self, name, path):
+        config_prefix = os.path.join(path, 'files', name)
+        config_file = '{}.yml'.format(config_prefix)
         try:
-            columns = result['results'][0]['series'][0]['columns']
-            values = result['results'][0]['series'][0]['values'][0]
+            with open(config_file, 'r') as stream:
+                try:
+                    content = yaml.load(stream)
+                except yaml.YAMLError:
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file})
+        except FileNotFoundError:
+            raise BadRequest('The configuration file is not present', 404,
+                             {'configuration file': config_file})
+        try:
+            job_version = content['general']['job_version']
+            keywords = content['general']['keywords']
+            statistics = content['statistics']
+            description = content['general']['description']
+            required_args = []
+            args = content['arguments']['required']
+            if type(args) == list:
+                for arg in args:
+                    required_args.append(arg)
+            optional_args = []
+            if content['arguments']['optional'] != None:
+                for arg in content['arguments']['optional']:
+                    optional_args.append(arg)
         except KeyError:
-            raise BadRequest('KO Required Stats doesn\'t exist in the Database')
-
-        for column, value in zip(columns, values):
-            if column == 'time':
-                date = datetime.fromtimestamp(value/1000,
-                        timezone.get_current_timezone())
-            elif column == 'last':
-                status = value
-        if date > agent.update_status:
-            agent.update_status = date
-            agent.status = status
-            agent.save()
-            raise BadRequest('OK Status Updated')
-        raise BadRequest('OK Status Not Updated')
-
-    def status_jobs(self, *agents_ips):
-        error_msg = ''
-        for agent_ip in agents_ips:
+            raise BadRequest('The configuration file of the Job is not well '
+                             'formed', 409, {'configuration file': config_file})
+        try:
+            with open('{}.help'.format(config_prefix)) as f:
+                help = f.read()
+        except OSError:
+            help = ''
+    
+        deleted = False
+        try:
+            job = Job.objects.get(pk=name)
+            job.delete()
+            deleted = True
+        except ObjectDoesNotExist:
+            pass
+    
+        job = Job(
+            name=name,
+            path=path,
+            help=help,
+            job_version=job_version,
+            description=description
+        )
+        job.save()
+    
+        for keyword in keywords:
+            job_keyword = Job_Keyword(
+                name=keyword
+            )
+            job_keyword.save()
+            job.keywords.add(job_keyword)
+    
+        if type(statistics) == list:
             try:
-                agent = Agent.objects.get(pk=agent_ip)
-            except ObjectDoesNotExist:
-                error_msg += agent_ip + ' '
-                continue
+                for statistic in statistics:
+                    Statistic(
+                        name=statistic['name'],
+                        job=job,
+                        description=statistic['description'],
+                        frequency=statistic['frequency']
+                    ).save()
+            except IntegrityError:
+                job.delete()
+                if deleted:
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file,
+                                                          'warning': 'Old Job has'
+                                                          ' been deleted'})
+                else:
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file})
+        elif statistics == None:
+            pass
+        else:
+            job.delete()
+            if deleted:
+                raise BadRequest('The configuration file of the Job is not '
+                                 'well formed', 409, {'configuration file':
+                                                      config_file, 'warning':
+                                                      'Old Job has been '
+                                                      'deleted'})
+            else:
+                raise BadRequest('The configuration file of the Job is not well'
+                                 ' formed', 409, {'configuration file':
+                                                  config_file})
 
-            self.playbook_builder.write_hosts(agent.address)
-            with self.playbook_builder.playbook_file('status_jobs') as playbook:
-                self.playbook_builder.build_list_jobs_agent(playbook) 
+        rank = 0
+        for required_arg in required_args:
             try:
-                self.launch_playbook(
-                    'ansible-playbook -i /tmp/openbach_hosts -e '
-                    'ansible_ssh_user={agent.username} -e '
-                    'ansible_ssh_pass={agent.password} {}'
-                    .format(playbook.name, agent=agent))
-            except BadRequest:
-                pass
-        if error_msg:
-            raise BadRequest(error_msg)
+                Required_Job_Argument(
+                    name=required_arg['name'],
+                    description=required_arg['description'],
+                    type=required_arg['type'],
+                    rank=rank,
+                    job=job
+                ).save()
+                rank += 1
+            except IntegrityError:
+                job.delete()
+                if deleted:
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file, 'warning':
+                                                          'Old Job has been '
+                                                          'deleted'})
+                else:
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file})
+    
+        for optional_arg in optional_args:
+            try:
+                Optional_Job_Argument(
+                    name=optional_arg['name'],
+                    flag=optional_arg['flag'],
+                    type=optional_arg['type'],
+                    description=optional_arg['description'],
+                    job=job
+                ).save()
+            except IntegrityError:
+                job.delete()
+                raise BadRequest('The configuration file of the Job is not well'
+                                 ' formed', 409, {'configuration file':
+                                                  config_file})
+
+        return {'msg': 'OK'}, 200
+
+
+    def del_job(self, name):
+        try:
+            job = Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404, {
+                'job_name': name })
+        job.delete()
+        return {'msg': 'OK'}, 200
+
+
+    def list_jobs(self, verbosity=0):
+        response = {
+            'jobs': []
+        }
+        for job in Job.objects.all():
+            job_info = {
+                'name': job.name
+            }
+            if verbosity > 0:
+                job_info['statistics'] = [ stat.name for stat in
+                                          job.statistic_set.all()]
+            response['jobs'].append(job_info)
+        return response, 200
+
+
+    def get_job_stats(self, name, verbosity=0):
+        try:
+            job = Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             {'job_name': name})
+
+        result = {'job_name': name , 'statistics': [] }
+        for stat in job.statistic_set.all():
+            statistic = { 'name': stat.name }
+            if verbosity > 0:
+                statistic['description'] = stat.description
+            if verbosity > 1:
+                statistic['frequency'] = stat.frequency
+            result['statistics'].append(statistic)
+
+        return result, 200
+
+
+    def get_job_help(self, name):
+        try:
+            job = Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             {'job_name': name})
+
+        return {'job_name': name, 'help': job.help}, 200
+
+
+    def install_jobs(self, addresses, names, severity=4, local_severity=4):
+        agents = Agent.objects.filter(pk__in=addresses)
+        no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+
+        jobs = Job.objects.filter(pk__in=names)
+        no_job = set(names) - set(map(attrgetter('name'), jobs))
+
+        if no_job or no_agent:
+            warning = 'At least one of the Agents or one of the Jobs is unknown'
+            warning += ' to the Controller'
+        else:
+            warning = False
+
+        success = True
+        for agent in agents:
+            for job in jobs:
+                self.playbook_builder.write_hosts(agent.address)
+                try:
+                    self.launch_playbook(
+                        'ansible-playbook -i /tmp/openbach_hosts -e '
+                        'path_src={path_src} -e '
+                        'ansible_ssh_user={agent.username} -e '
+                        'ansible_sudo_pass={agent.password} -e '
+                        'ansible_ssh_pass={agent.password} '
+                        '{job.path}/install_{job.name}.yml'
+                        .format(path_src=self.path_src, agent=agent, job=job))
+                    installed_job = Installed_Job(
+                            agent=agent, job=job,
+                            severity=severity,
+                            local_severity=local_severity)
+                    installed_job.set_name()
+                    installed_job.update_status = timezone.now()
+                    installed_job.save()
+                except BadRequest:
+                    sucess = False
+
+        if success:
+            if warning:
+                result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
+                          list(no_agent), 'unknown Jobs': list(no_job)}, 200
+                return result
+            else:
+                return {'msg': 'OK'}, 200
+        else:
+            if warning:
+                return {'error': 'At least one of the installation have failed',
+                        'warning': warning, 'unknown Agents': list(no_agent),
+                        'unknown Jobs': list(no_job)}, 404
+            else:
+                return {'error': 'At least one of the installation have failed'}, 404
+
+
+    def uninstall_jobs(self, addresses, names):
+        agents = Agent.objects.filter(pk__in=addresses)
+        no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+
+        jobs = Job.objects.filter(pk__in=names)
+        no_job = set(names) - set(map(attrgetter('name'), jobs))
+
+        if no_job or no_agent:
+            warning = 'At least one of the Agents or one of the Jobs is unknown to'
+            warning += ' the Controller'
+        else:
+            warning = False
+
+        success = True
+        jobs_not_installed = []
+        for agent in agents:
+            for job in jobs:
+                installed_job_name = '{} on {}'.format(job, agent)
+                try:
+                    installed_job = Installed_Job.objects.get(pk=installed_job_name)
+                except ObjectDoesNotExist:
+                    jobs_not_installed.append(installed_job_name)
+                    continue
+                self.playbook_builder.write_hosts(agent.address)
+                try:
+                    self.launch_playbook(
+                        'ansible-playbook -i /tmp/openbach_hosts -e '
+                        'path_src={path_src} -e '
+                        'ansible_ssh_user={agent.username} -e '
+                        'ansible_sudo_pass={agent.password} -e '
+                        'ansible_ssh_pass={agent.password} '
+                        '{job.path}/uninstall_{job.name}.yml'
+                        .format(path_src=self.path_src, agent=agent, job=job))
+                    installed_job.delete()
+                except BadRequest:
+                    sucess = False
+
+        if success:
+            if warning:
+                result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
+                          list(no_agent), 'unknown Jobs': list(no_job)}, 200
+            else:
+                result = {'msg': 'OK'}, 200
+            if jobs_not_installed:
+                result[0]['msg'] = 'OK but some Jobs were not installed'
+                result[0]['jobs_not_installed'] = job_not_installed
+        else:
+            if warning:
+                result = {'error': 'At least one of the uninstallation have failed',
+                          'warning': warning, 'unknown Agents': list(no_agent),
+                          'unknown Jobs': list(no_job)}, 404
+            else:
+                result = {'error': 'At least one of the uninstallation have failed'}, 404
+        return result
+
+
+    def list_installed_jobs(self, address, update=False, verbosity=0):
+        try:
+            agent = Agent.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent isn\'t in the database', 404,
+                             {'address': address})
+
+        response = {'agent': agent.address}
+        if update:
+            try:
+                result = self.update_jobs(agent.address)
+            except BadRequest as e:
+                error = { 'error': e.reason }
+                response.update(error)
+                response.update(e.infos)
+
+        try:
+            installed_jobs = agent.installed_job_set.all()
+        except (KeyError, Installed_Job.DoesNotExist):
+            response['installed_jobs'] = []
+        else:
+            response['installed_jobs'] = []
+            for job in installed_jobs:
+                job_infos = {
+                    'name': job.job.name,
+                    'update_status':
+                    job.update_status.astimezone(timezone.get_current_timezone()),
+                }
+                if verbosity > 0:
+                    job_infos['severity'] = job.severity
+                    job_infos['default_stat_policy'] = { 'storage':
+                                                        job.default_stat_storage,
+                                                        'broadcast':
+                                                        job.default_stat_broadcast }
+                if verbosity > 1:
+                    job_infos['local_severity'] = job.local_severity
+                    for statistic_instance in job.statistic_instance_set.all():
+                        if 'statistic_instances' not in job_infos:
+                            job_infos['statistic_instances'] = []
+                        job_infos['statistic_instances'].append({ 'name':
+                                                                 statistic_instance.stat.name,
+                                                                 'storage':
+                                                                 statistic_instance.storage,
+                                                                 'broadcast':
+                                                                 statistic_instance.broadcast
+                                                                 })
+                response['installed_jobs'].append(job_infos)
+        finally:
+            if not response['errors']:
+                del response['errors']
+            return response, 200
+
 
     def update_jobs(self, agent_id):
         agent = Agent.objects.get(pk=agent_id)
@@ -602,9 +885,9 @@ class ClientThread(threading.Thread):
             values = result['results'][0]['series'][0]['values'][0]
         except KeyError:
             try:
-                raise BadRequest('KO 1 {}'.format(result['results'][0]['error']))
+                raise BadRequest('{}'.format(result['results'][0]['error']))
             except KeyError:
-                raise BadRequest('KO No data available')
+                raise BadRequest('No data available', 404)
 
         jobs_list = []
         for column, value in zip(columns, values):
@@ -623,12 +906,14 @@ class ClientThread(threading.Thread):
                 job.save()
                 jobs_list.remove(job_name)
 
-        error_msg = 'KO 2'
+        error = False
+        unknown_jobs = []
         for job_name in jobs_list:
             try:
                 job = Job.objects.get(pk=job_name)
             except ObjectDoesNotExist:
-                error_msg = '{} {}'.format(error_msg, job_name)
+                unknown_jobs.append(job_name)
+                error = True
                 continue
             installed_job = Installed_Job(agent=agent, job=job)
             installed_job.set_name()
@@ -637,8 +922,354 @@ class ClientThread(threading.Thread):
             installed_job.local_severity = 4
             installed_job.save()
 
-        if error_msg != 'KO 2':
-            raise BadRequest(error_msg)
+        if error:
+            raise BadRequest('These Jobs aren\'t in the Job list of the '
+                             'Controller', 404, {'unknown_jobs': unknown_jobs})
+
+
+    def status_jobs(self, addresses):
+        error = False
+        unknown_agents = []
+        for agent_ip in addresses:
+            try:
+                agent = Agent.objects.get(pk=agent_ip)
+            except ObjectDoesNotExist:
+                unknown_agents.append(agent_ip)
+                error = True
+                continue
+
+            self.playbook_builder.write_hosts(agent.address)
+            with self.playbook_builder.playbook_file('status_jobs') as playbook:
+                self.playbook_builder.build_list_jobs_agent(playbook) 
+            try:
+                self.launch_playbook(
+                    'ansible-playbook -i /tmp/openbach_hosts -e '
+                    'ansible_ssh_user={agent.username} -e '
+                    'ansible_ssh_pass={agent.password} {}'
+                    .format(playbook.name, agent=agent))
+            except BadRequest:
+                pass
+        if error:
+            raise BadRequest('At least one of the Agents isn\'t in the '
+                             'database', 404, {'addresses': unknown_agents})
+        return { 'msg': 'OK' }, 200
+
+
+    def push_file(self, local_path, remote_path, agent_ip):
+        try:
+            agent = Agent.objects.get(pk=agent_ip)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent isn\'t in the database', 404,
+                             {'address': agent_ip})
+
+        agent = Agent.objects.get(pk=agent_ip)
+        self.playbook_builder.write_hosts(agent.address)
+        with self.playbook_builder.playbook_file('push_file') as playbook:
+            self.playbook_builder.build_push_file(
+                    local_path, remote_path, playbook)
+        self.launch_playbook(
+            'ansible-playbook -i /tmp/openbach_hosts -e '
+            'ansible_ssh_user={agent.username} -e '
+            'ansible_sudo_pass={agent.password} -e '
+            'ansible_ssh_pass={agent.password} {}'
+            .format(playbook.name, agent=agent))
+        return { 'msg': 'OK' }, 200
+
+
+    @staticmethod
+    def format_args(instance):
+        args = ''
+        for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
+            for job_argument_value in argument.job_argument_value_set.all():
+                if args == '':
+                    args = '{}'.format(job_argument_value.value)
+                else:
+                    args = '{} {}'.format(args, job_argument_value.value)
+        for optional_argument in instance.optional_job_argument_instance_set.all():
+            if args == '':
+                args = '{}'.format(optional_argument.argument.flag)
+            else:
+                args = '{} {}'.format(args, optional_argument.argument.flag)
+            if optional_argument.argument.type != Optional_Job_Argument.NONE:
+                for job_argument_value in optional_argument.job_argument_value_set.all():
+                    args = '{} {}'.format(args, job_argument_value.value)
+        return args
+
+
+    @staticmethod
+    def fill_and_check_args(instance, instance_args):
+        for arg_name, arg_values in instance_args.items():
+            try:
+                argument_instance = Required_Job_Argument_Instance(
+                    argument=instance.job.job.required_job_argument_set.filter(name=arg_name)[0],
+                    job_instance=instance
+                )
+                argument_instance.save()
+            except IndexError:
+                try:
+                    argument_instance = Optional_Job_Argument_Instance(
+                        argument=instance.job.job.optional_job_argument_set.filter(name=arg_name)[0],
+                        job_instance=instance
+                    )
+                    argument_instance.save()
+                except IndexError:
+                    raise BadRequest('Argument \'{}\' don\'t match with'
+                                     ' arguments needed or '
+                                     'optional'.format(arg_name), 400)
+            for arg_value in arg_values:
+                Job_Argument_Value(
+                    value=arg_value,
+                    argument_instance=argument_instance
+                ).save()
+
+        try:
+            instance.check_args()
+        except ValueError as e:
+            raise BadRequest(e.args[0], 400)
+
+
+    @staticmethod
+    def fill_job_instance(instance, instance_args, date=None, interval=None,
+                          restart=False):
+        instance.status = "starting ..."
+        instance.update_status = timezone.now()
+
+        if interval:
+            instance.start_date = timezone.now()
+            instance.periodic = True
+            instance.save()
+        else:
+            if not date:
+                instance.start_date = timezone.now()
+                date = 'now'
+            else:
+                start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+                instance.start_date = start_date
+            instance.periodic = False
+            instance.save()
+
+        if restart:
+            instance.required_job_argument_instance_set.all().delete()
+            instance.optional_job_argument_instance_set.all().delete()
+
+        ClientThread.fill_and_check_args(instance, instance_args)
+        return date
+
+
+    def start_job_instance(self, agent_ip, job_name, instance_args, date=None,
+                           interval=None):
+        try:
+            agent = Agent.objects.get(pk=agent_ip)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent isn\'t in the database', 404,
+                             {'address': agent_ip})
+        try:
+            job = Job.objects.get(pk=job_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             {'job_name': job_name})
+        name = '{} on {}'.format(job_name, agent_ip)
+        try:
+            installed_job = Installed_Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Installed_Job isn\'t in the database', 404,
+                             {'job_name': name})
+
+        instance = Job_Instance(job=installed_job)
+        date = self.fill_job_instance(instance, instance_args, date, interval)
+        self.playbook_builder.write_hosts(agent.address)
+        args = self.format_args(instance)
+        with self.playbook_builder.playbook_file(
+                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            self.playbook_builder.build_start(
+                    job.name, instance.id,
+                    args, date, interval,
+                    playbook, extra_vars)
+        try:
+            self.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(playbook.name, agent=agent))
+        except BadRequest:
+            instance.delete()
+            raise
+        instance.status = "Started"
+        instance.update_status = timezone.now()
+        instance.save()
+        return { 'msg': 'OK', 'instance_id': instance.id }, 200
+
+
+    def stop_job_instance(self, instance_ids, date=None):
+        instances = Job_Instance.objects.filter(pk__in=instance_ids)
+        warnings = []
+
+        no_job_instance = set(instance_ids) - set(map(attrgetter('id'), instances))
+        if no_job_instance:
+            warnings.append({'msg': 'At least one of the Job_Instances is '
+                             'unknown to the Controller', 'unknown_job_instance':
+                             list(no_job_instance)})
+
+        if not date:
+            date = 'now'
+            stop_date = timezone.now()
+        else:
+            stop_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+
+        already_stopped = {'msg': 'Those Job_Instances are already stopped',
+                           'job_instance_ids': []}
+        for instance in instances:
+            if instance.is_stopped:
+                already_stopped['job_instance_ids'].append(instance.id)
+                continue
+            instance.stop_date = stop_date
+            instance.save()
+            job = instance.job.job
+            agent = instance.job.agent
+            self.playbook_builder.write_hosts(agent.address)
+            with self.playbook_builder.playbook_file(
+                    'stop_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+                self.playbook_builder.build_stop(
+                        job.name, instance.id, date,
+                        playbook, extra_vars)
+            try:
+                self.launch_playbook(
+                    'ansible-playbook -i /tmp/openbach_hosts -e '
+                    '@/tmp/openbach_extra_vars -e '
+                    'ansible_ssh_user={agent.username} -e '
+                    'ansible_sudo_pass={agent.password} -e '
+                    'ansible_ssh_pass={agent.password} {}'
+                    .format(playbook.name, agent=agent))
+            except BadRequest as e:
+                warnings.append({'msg': e.reason, 'job_instance_id':
+                                 instance.id})
+            else:
+                if stop_date <= timezone.now():
+                    instance.is_stopped = True
+                    instance.save()
+
+        if already_stopped['job_instance_ids']:
+            warnings.append(already_stopped)
+        response = {'msg': 'OK'}
+        if warnings:
+            response.update({'warning': warnings})
+        return response, 200
+
+
+    def restart_job_instance(self, instance_id, instance_args, date=None,
+                             interval=None):
+        try:
+            instance = Job_Instance.objects.get(pk=instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job Instance isn\'t in the database', 404,
+                             {'instance_id': instance_id})
+
+        date = self.fill_job_instance(instance, instance_args, date, interval,
+                                      True)
+        job = instance.job.job
+        agent = instance.job.agent
+        self.playbook_builder.write_hosts(agent.address)
+        args = self.format_args(instance)
+        with self.playbook_builder.playbook_file(
+                'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            self.playbook_builder.build_restart(
+                    job.name, instance.id,
+                    args, date, interval,
+                    playbook, extra_vars)
+        try:
+            self.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(playbook.name, agent=agent))
+        except BadRequest:
+            instance.delete()
+            raise
+        instance.is_stopped = False
+        instance.status = "Restarted"
+        instance.update_status = timezone.now()
+        instance.save()
+        return { 'msg': 'OK' }, 200
+
+
+    def status_job_instance(self, instance_id, agent_ip=None, job_name=None,
+                            date=None, interval=None, stop=None):
+        try:
+            instance = Job_Instance.objects.get(pk=instance_id)
+        except ObjectDoesNotExist:
+            # User didn't specify a valid instance, try to get it from
+            # the agent ip and job name provided, if any
+            if not agent_ip or not job_name:
+                raise BadRequest('POST data malformed', 400)
+
+            try:
+                agent = Agent.objects.get(pk=agent_ip)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Agent isn\'t in the database', 404,
+                                 {'address': agent_ip})
+
+            try:
+                job = Job.objects.get(pk=job_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Job isn\'t in the database', 404,
+                                 {'job_name': job_name})
+
+            name = '{} on {}'.format(job.name, agent.address)
+            try:
+                installed_job = Installed_Job.objects.get(pk=name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Installed_Job isn\'t in the database',
+                                 404, {'job_name': name})
+        else:
+            installed_job = instance.job
+
+        try:
+            watch = Watch.objects.get(pk=instance_id)
+            if not interval and not stop:
+                raise BadRequest('A Watch already exists in the database', 400)
+        except ObjectDoesNotExist:
+            watch = Watch(job=installed_job, instance_id=instance_id)
+
+        should_delete_watch = True
+        if interval:
+            should_delete_watch = False
+            watch.interval = interval
+        elif stop:
+            pass
+        else:
+            if not date:
+                date = 'now'
+        watch.save()
+
+        job = watch.job.job
+        agent = watch.job.agent
+        self.playbook_builder.write_hosts(agent.address)
+        with self.playbook_builder.playbook_file(
+                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            self.playbook_builder.build_status(
+                    job.name, instance_id,
+                    date, interval, stop,
+                    playbook, extra_vars)
+        try:
+            self.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(playbook.name, agent=agent))
+        except BadRequest:
+            watch.delete()
+            raise
+
+        if should_delete_watch:
+            watch.delete()
+        return { 'msg': 'OK' }, 200
+
 
     def update_instance(self, instance_id):
         instance = Job_Instance.objects.get(pk=instance_id)
@@ -663,6 +1294,7 @@ class ClientThread(threading.Thread):
         instance.update_status = date
         instance.status = status
         instance.save()
+
 
     def set_job_log_severity(self, date, instance_id, severity, local_severity):
         instance = Job_Instance.objects.get(pk=instance_id)
@@ -696,7 +1328,7 @@ class ClientThread(threading.Thread):
                 argument_instance=argument_instance
             ).save()
 
-            args = self.formate_args(instance)
+            args = self.format_args(instance)
             self.playbook_builder.build_enable_log(
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
@@ -711,6 +1343,7 @@ class ClientThread(threading.Thread):
             'ansible_sudo_pass={agent.password} -e '
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
+
 
     def set_job_stat_policy(self, date, instance_id):
         instance = Job_Instance.objects.get(pk=instance_id)
@@ -735,7 +1368,7 @@ class ClientThread(threading.Thread):
         with self.playbook_builder.playbook_file('rstats') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_push_file(
                     rstats_filter.name, remote_path, playbook)
-            args = self.formate_args(instance)
+            args = self.format_args(instance)
             self.playbook_builder.build_start(
                     'rstats_job', instance_id, args,
                     date, None, playbook, extra_vars)
@@ -748,30 +1381,21 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
 
-    def push_file(self, local_path, remote_path, agent_id):
-        agent = Agent.objects.get(pk=agent_id)
-        self.playbook_builder.write_hosts(agent.address)
-        with self.playbook_builder.playbook_file('push_file') as playbook:
-            self.playbook_builder.build_push_file(
-                    local_path, remote_path, playbook)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
 
     def run(self):
         request = self.clientsocket.recv(2048)
         try:
-            self.execute_request(request.decode())
+            result, returncode = self.execute_request(request.decode())
         except BadRequest as e:
-            self.clientsocket.send(e.reason.encode())
+            result = { 'error': e.reason, 'returncode': e.returncode }
+            if e.infos:
+                result.update(e.infos)
         except UnicodeError:
-            self.clientsocket.send(b'KO Undecypherable request')
+            result = { 'error': 'KO Undecypherable request', 'returncode': 400 }
         else:
-            self.clientsocket.send(b'OK')
+            result['returncode'] = returncode
         finally:
+            self.clientsocket.send(json.dumps(result, cls=DjangoJSONEncoder).encode())
             self.clientsocket.close()
 
 

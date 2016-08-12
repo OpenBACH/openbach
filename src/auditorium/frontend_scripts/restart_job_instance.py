@@ -35,6 +35,7 @@
 
 
 import argparse
+import shlex
 from frontend import restart_job_instance, date_to_timestamp, pretty_print
 
 

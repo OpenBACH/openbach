@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Stop Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('instance_ids', nargs='+', help='Id of the instance')
+    parser.add_argument('instance_ids', nargs='+', type=int, help='Id of the instance')
     parser.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
     

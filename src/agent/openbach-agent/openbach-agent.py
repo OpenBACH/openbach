@@ -188,7 +188,6 @@ def stop_job(job_name, job_instance_id, command, args):
         pass
 
 
-
 def status_job(job_name, job_instance_id):
     # Construction du nom de la stat
     stat_name = job_name + job_instance_id
@@ -735,24 +734,21 @@ class ClientThread(threading.Thread):
         elif request == 'restart_job_instance_agent':
             job_name, job_instance_id, date, value, *args = extra_args
             # Stoppe le job si il est lancé
+            need_stop = False
             with JobManager(job_name) as job:
                 if job_instance_id in job['set_id']:
+                    need_stop = True
                     command_stop = job['command_stop']
-                    with ArgsManager(job_name, job_instance_id) as args:
-                        arguments = args['args']
-                        del args
-                    scheduler.add_job(
-                            stop_job, 'date', args=(job_name, job_instance_id,
-                                                    command_stop, arguments),
-                            id='{}{}_stop'.format(job_name, job_instance_id))
+                    with ArgsManager(job_name, job_instance_id) as a:
+                        arguments = a['args']
+                        del a
+            if need_stop:
+                stop_job(job_name, job_instance_id, command_stop, arguments)
 
             try:
                 scheduler.remove_job(job_name + job_instance_id)
             except JobLookupError:
                 pass
-
-            with JobManager(job_name) as job:
-                job['set_id'].remove(job_instance_id)
 
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
             self.start_job_instance(job_name, job_instance_id, date, value, args)

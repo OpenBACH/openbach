@@ -4,7 +4,7 @@
 #include <cstring>
 
 #include "rstats.h"
-#include "logger.h"
+#include "syslog.h"
 #include "asio.hpp"
 
 
@@ -30,9 +30,7 @@ std::string rstats_messager(const std::string& message) {
   sock.open(asio::ip::udp::v4());
   sock.send_to(asio::buffer(message), endpoint, 0, error);
   if (error) {
-    logging::message(
-        "Error: Connexion to rstats refused, maybe rstats service isn't started",
-        logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "Error: Connexion to rstats refused, maybe rstats service isn't started");
     throw asio::system_error(error);
   }
 
@@ -41,9 +39,7 @@ std::string rstats_messager(const std::string& message) {
   char data[2048];
   sock.receive(asio::buffer(data), 0, error);  // TODO: See http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_udp_client.cpp and implement a timeout
   if (error && error != asio::error::message_size) {
-    logging::message(
-        "Error: Connexion to rstats was closed, could not get an answer",
-        logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "Error: Connexion to rstats was closed, could not get an answer");
     throw asio::system_error(error);
   }
 
@@ -70,9 +66,7 @@ unsigned int register_stat(
   try {
     result = rstats_messager(command.str());
   } catch (std::exception& e) {
-    std::string msg = "Failed to register to rstats service: ";
-    msg += e.what();
-    logging::message(msg, logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "Failed to register to rstats service: %s", e.what());
     return 0;
   }
   std::stringstream parser(result);
@@ -84,25 +78,19 @@ unsigned int register_stat(
     unsigned int id;
     parser >> id;
     if (!id) {
-      logging::message("ERROR: Return message isn't well formed", logging::MessageType::LOGGING_ERR);
-      std::string msg = "\t";
-      msg += result;
-      logging::message(msg, logging::MessageType::LOGGING_ERR);
+      syslog(LOG_ERR, "ERROR: Return message isn't well formed");
+      syslog(LOG_ERR, "\t%s", result.c_str());
     } else {
-      std::stringstream msg;
-      msg << "NOTICE: Connexion ID is " << id;
-      logging::message(msg.str(), logging::MessageType::LOGGING_NOTICE);
+      syslog(LOG_NOTICE, "NOTICE: Connexion ID is %d", id);
     }
     return id;
   } else if (startswith == "KO") {
-    logging::message("ERROR: Something went wrong", logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "ERROR: Something went wrong");
   } else {
-    logging::message("ERROR: Return message isn't well formed", logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "ERROR: Return message isn't well formed");
   }
 
-  std::string msg = "\t";
-  msg += result;
-  logging::message(msg, logging::MessageType::LOGGING_ERR);
+  syslog(LOG_ERR, "\t%s", result.c_str());
   return 0;
 }
 
@@ -129,7 +117,7 @@ std::string send_stat(
   } catch (std::exception& e) {
     std::string msg = "Failed to send statistic to rstats: ";
     msg += e.what();
-    logging::message(msg, logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -156,7 +144,7 @@ std::string send_prepared_stat(
   } catch (std::exception& e) {
     std::string msg = "Failed to send statistic to rstats: ";
     msg += e.what();
-    logging::message(msg, logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -176,7 +164,7 @@ std::string reload_stat(unsigned int id) {
   } catch (std::exception& e) {
     std::string msg = "Failed to reload statistic: ";
     msg += e.what();
-    logging::message(msg, logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -191,7 +179,7 @@ std::string reload_all_stats() {
   } catch (std::exception& e) {
     std::string msg = "Failed to reload statistics: ";
     msg += e.what();
-    logging::message(msg, logging::MessageType::LOGGING_ERR);
+    syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }

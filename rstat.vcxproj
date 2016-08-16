@@ -150,8 +150,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\lib_export.h" />
-    <ClInclude Include="src\logger.h" />
     <ClInclude Include="src\rstats.h" />
+    <ClInclude Include="src\syslog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,16 +1,17 @@
-﻿La génération a démarré 20/07/2016 13:04:01.
-     1>Projet "C:\Users\mettinger\Documents\Git\bdtm_openbach_rstat_sdk\syslog.vcxproj" sur le nœud 2 (Build cible(s)).
+﻿La génération a démarré 16/08/2016 16:52:16.
+     1>Projet "C:\Users\mettinger\Documents\Git\bdtm_openbach_rstat_sdk\syslog.vcxproj" sur le nœud 2 (Rebuild cible(s)).
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D GENERATE_LIB /D _WINDLL /D _MBCS /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"build\temp\\" /Fd"build\temp\vc110.pdb" /Gd /TP /errorReport:prompt src\logger.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D _CRT_SECURE_NO_WARNINGS /D GENERATE_LIB /D _WINDLL /D _MBCS /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"build\temp\\" /Fd"build\temp\vc110.pdb" /Gd /TP /errorReport:prompt src\logger.cpp
          logger.cpp
+     1>src\logger.cpp(340): warning C4267: 'argument' : conversion de 'size_t' en 'int', perte possible de données
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"build\syslog_wrapper.dll" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"build\syslog_wrapper.pdb" /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"build\syslog_wrapper.lib" /MACHINE:X64 /DLL build\temp\logger.obj
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"build\syslog_wrapper.dll" /NOLOGO Ws2_32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"build\syslog_wrapper.pdb" /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"build\syslog_wrapper.lib" /MACHINE:X64 /DLL build\temp\logger.obj
             Création de la bibliothèque build\syslog_wrapper.lib et de l'objet build\syslog_wrapper.exp
          Génération de code en cours
          Fin de la génération du code
          syslog.vcxproj -> C:\Users\mettinger\Documents\Git\bdtm_openbach_rstat_sdk\build\syslog_wrapper.dll
-     1>Génération du projet "C:\Users\mettinger\Documents\Git\bdtm_openbach_rstat_sdk\syslog.vcxproj" terminée (Build cible(s)).
+     1>Génération du projet "C:\Users\mettinger\Documents\Git\bdtm_openbach_rstat_sdk\syslog.vcxproj" terminée (Rebuild cible(s)).
 
 La génération a réussi.
 
-Temps écoulé 00:00:01.29
+Temps écoulé 00:00:00.75

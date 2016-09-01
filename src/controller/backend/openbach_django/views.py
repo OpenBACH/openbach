@@ -66,7 +66,7 @@ class GenericView(base.View):
         if request.POST:
             return JsonResponse(
                 status=405,
-                data={'error': 'Methode not allowed'})
+                data={'error': 'Methode not allowed, use JSON instead'})
 
         data = request.body.decode()
         if data:

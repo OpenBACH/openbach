@@ -62,10 +62,14 @@ class GenericView(base.View):
         """Wraps every response from the various calls into a
         JSON response.
         """
-        data = request.body.decode()
+
         if request.POST:
-            request.JSON = request.POST
-        elif data:
+            return JsonResponse(
+                status=405,
+                data={'error': 'Methode not allowed'})
+
+        data = request.body.decode()
+        if data:
             try:
                 request.JSON = json.loads(data)
             except ValueError:
@@ -649,13 +653,9 @@ class JobsView(BaseJobView):
             # Execute (un)installation of several jobs
             try:
                 names = request.JSON['names']
-            except KeyError:
-                names = request.POST.getlist('name')
-
-            try:
                 addresses = request.JSON['addresses']
-            except KeyError:
-                addresses = request.POST.getlist('address')
+            except KeyError as e:
+                return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
             try:
                 function = getattr(self, '_action_' + action)
@@ -1101,7 +1101,7 @@ class InstancesView(BaseInstanceView):
             try:
                 ids = request.JSON['instance_ids']
             except KeyError:
-                ids = request.POST.getlist('instance_id')
+                return {'msg': 'POST data malformed: missing instance_ids'}, 400
             return function(ids)
 
         return function()
@@ -1112,13 +1112,9 @@ class InstancesView(BaseInstanceView):
         try:
             agent_ip = self.request.JSON['agent_ip']
             job_name = self.request.JSON['job_name']
+            instance_args = self.request.JSON['instance_args']
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            instance_args = self.request.JSON['instance_args']
-        except KeyError:
-            instance_args = self.request.POST.getlist('instance_arg')
 
         name = '{} on {}'.format(job_name, agent_ip)
         try:
@@ -1173,8 +1169,7 @@ class InstanceView(BaseInstanceView):
         try:
             instance_args = self.request.JSON['instance_args']
         except KeyError:
-            # Try to get them from a multivalue POST attribute
-            instance_args = self.request.POST.getlist('instance_arg')
+            return {'msg': 'POST data malformed: missing instance_args'}, 400
 
         try:
             instance = Job_Instance.objects.get(pk=id)

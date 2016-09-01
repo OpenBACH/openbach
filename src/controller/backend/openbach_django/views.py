@@ -218,7 +218,7 @@ class GenericView(base.View):
         print(
             self.__class__.__name__,
             self.request.GET,
-            self.request.POST,
+            self.request.JSON,
             self.request.body,
             self.args,
             self.kwargs)
@@ -1186,39 +1186,8 @@ class InstanceView(BaseInstanceView):
 
         return self._job_instance_launcher(instance, instance_args, restart=True)
 
-    def _action_status(self, id):
+    def _action_watch(self, id):
         """start a status watch for the given job instance"""
-        # try:
-        #     agent_ip = self.request.JSON['agent_ip']
-        #     job_name = self.request.JSON['job_name']
-        # except KeyError as e:
-        #     return {'msg': 'POST data malformed: missing {}'.format(e)}, 400
-
-        # try:
-        #     agent = Agent.objects.get(pk=agent_ip)
-        # except ObjectDoesNotExist:
-        #     return {
-        #         'msg': 'This agent isn\'t in the database',
-        #         'address': agent_ip,
-        #     }, 404
-
-        # try:
-        #     job = Job.objects.get(pk=job_name)
-        # except ObjectDoesNotExist:
-        #     return {
-        #         'msg': 'This job isn\'t in the database',
-        #         'job_name': job_name,
-        #     }, 404
-
-        # name = '{} on {}'.format(job.name, agent.address)
-        # try:
-        #     installed_job = Installed_Job.objects.get(pk=name)
-        # except ObjectDoesNotExist:
-        #     return {
-        #         'msg': 'This Installed_Job isn\'t in the database',
-        #         'job_name': name,
-        #     }, 404
-
 
         try:
             instance = Job_Instance.objects.get(pk=id)
@@ -1234,12 +1203,12 @@ class ScenariosView(GenericView):
     def get(self, request):
         """list all scenarios"""
 
-        self._debug()
+        return self._debug()
 
     def post(self, request):
         """create a new scenario"""
 
-        self._debug()
+        return self._debug()
 
 
 class ScenarioView(GenericView):
@@ -1248,17 +1217,17 @@ class ScenarioView(GenericView):
     def get(self, request, name):
         """compute status of a scenario"""
 
-        self._debug()
+        return self._debug()
 
     def put(self, request, name):
         """modify a scenario"""
 
-        self._debug()
+        return self._debug()
 
     def delete(self, request, name):
         """remove a scenario from the database"""
 
-        self._debug()
+        return self._debug()
 
 
 def push_file(request):
@@ -1286,8 +1255,9 @@ def push_file(request):
             f.write(chunk)
 
     result = GenericView._conductor_execute(
-            'push_file {} {} {}'.format(uploaded_file.name, remote_path, address))
+            'push_file {} {} {}'.format(path, remote_path, address))
     response_data = {'msg': result}
+    os.remove(path)
     if result == 'OK':
         return JsonResponse(status=200, data=response_data)
     return JsonResponse(status=500, data=response_data)

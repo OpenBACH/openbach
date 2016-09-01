@@ -201,8 +201,6 @@ def status_agents(agents_ip):
 def watch_job_instance(instance_id, date=None, interval=None, stop=None):
     action = _request_message
     action = partial(_post_message, instance_id=instance_id)
-    # if agent_ip is not None and job_name is not None:
-    #     action = partial(action, agent_ip=agent_ip, job_name=job_name)
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:

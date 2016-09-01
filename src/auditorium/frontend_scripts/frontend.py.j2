@@ -38,6 +38,7 @@
 import requests
 import datetime
 import pprint
+from urllib.parse import urlencode
 from functools import partial, wraps
 
 try:
@@ -46,18 +47,22 @@ except ImportError:
     import json
 
 
-_URL = "http://{{ controller_ip }}:8000/{}/{}"
+_URL = "http://{{ controller_ip }}:8000/{}/"
 
 
-def _post_message(entry_point, verb, **kwargs):
+def _request_message(entry_point, verb, **kwargs):
     """Helper function to format a request and send it to
     the right URL.
     """
 
-    url = _URL.format(entry_point, verb)
+    url = _URL.format(entry_point)
+    verb = verb.upper()
 
-    # Why json.dumps here? Why not let requests encode the whole dict?
-    return requests.post(url, data={'data': json.dumps(kwargs)})
+    if verb == 'GET':
+        return requests.get(url, params=kwargs)
+    else:
+        body = json.dumps(kwargs)
+        return requests.request(verb, url, data=body)
 
 
 def pretty_print(function):
@@ -80,103 +85,124 @@ def date_to_timestamp(date, fmt='%Y-%m-%d %H:%M:%S.%f'):
 
 
 def install_agent(agent_ip, collector_ip, username, password, name):
-    return _post_message('agents', 'add',
-            address=agent_ip, username=username,
-            password=password, collector=collector_ip,
-            name=name)
+    return _request_message('agent/{}'.format(agent_ip), 'PUT',
+                            username=username, password=password,
+                            collector=collector_ip, name=name)
+    # or alternatively
+    # return _request_message('agent', 'POST', address=agent_ip,
+    #                         username=username, password=password,
+    #                         collector=collector_ip, name=name)
 
 
 def add_job(job_name, path):
-    return _post_message('jobs', 'add', name=job_name, path=path)
+    return _request_message('job/{}'.format(job_name), 'PUT', path=path)
+    # or alteratively
+    # return _request_message('job', 'POST', name=job_name, path=path)
 
 
 def uninstall_agent(agent_ip):
-    return _post_message('agents', 'del', address=agent_ip)
+    return _request_message('agent/{}'.format(agent_ip), 'DELETE')
 
 
 def del_job(job_name):
-    return _post_message('jobs', 'del', name=job_name)
+    return _request_message('job/{}'.format(job_name), 'DELETE')
 
 
 def get_job_stats(job_name, verbosity=None):
-    action = partial(_post_message, name=job_name)
+    action = _request_message
     if verbosity is not None:
         action = partial(action, verbosity=verbosity)
-    return action('jobs', 'stats')
+    return action('job/{}'.format(job_name), 'GET', type='stats')
 
 
 def get_job_help(job_name):
-    return _post_message('jobs', 'help', name=job_name)
+    return _request_message('job/{}'.format(job_name), 'GET', type='help')
 
 
 def install_jobs(jobs_name, agents_ip):
-    return _post_message('jobs', 'install',
-            names=jobs_name, addresses=agents_ip)
+    return _request_message(
+            'job', 'POST', action='install',
+            names=jobs_names, addresses=agents_ip)
 
 
 def list_agents(update=None):
-    return _post_message('agents', 'list', update=bool(update))
-
-
-def list_installed_jobs(agent_ip, verbosity=None, update=None):
-    action = partial(_post_message, address=agent_ip, update=bool(update))
-    if verbosity is not None:
-        action = partial(action, verbosity=verbosity)
-    return action('jobs', 'installed_list')
-
-
-def list_job_instances(agents_ip, update=None, verbosity=None):
-    action = partial(_post_message, addresses=agents_ip, update=bool(update))
-    if verbosity is not None:
-        action = partial(action, verbosity=verbosity)
-    return action('instances', 'list')
+    return _request_message('agent', GET, update=bool(update))
 
 
 def list_jobs(verbosity=None):
-    action = partial(_post_message)
+    action = _request_message
     if verbosity is not None:
         action = partial(action, verbosity=verbosity)
-    return action('jobs', 'list')
+    return action('job', 'GET')
+
+
+def list_installed_jobs(agent_ip, verbosity=None, update=None):
+    action = _request_message
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
+    return action('job', 'GET', installed_on=agent_ip, update=bool(update))
+
+
+def list_job_instances(agents_ip, update=None, verbosity=None):
+    query_string = [('address', ip) for ip in agents_ip]
+    query_string.append(('update', bool(update)))
+    if verbosity is not None:
+        query_string.append(('verbosity', verbosity))
+    return requests.get(_URL.format('instance'), params=urlencode(query_string).encode())
+
+
+def status_job_instance(instance_id, verbosity=None):
+    action = _request_message
+    if verbosity is not None:
+        action = partial(action, verbosity=verbosity)
+
+    return action('instance/{}'.format(instance_id), 'GET')
 
 
 def push_file(local_path, remote_path, agent_ip):
-    return _post_message('file', 'push',
-            local_path=local_path, remote_path=remote_path,
-            agent_ip=agent_ip)
+    with open(local_path) as file_to_send:
+        return requests.post(
+                _URL.format('file'),
+                data={'path': remote_path, 'agent_ip': agent_ip},
+                files={'file': file_to_send})
 
 
 def restart_job_instance(instance_id, arguments=None, date=None, interval=None):
-    action = partial(_post_message, instance_id=instance_id,
-            instance_args={} if arguments is None else arguments)
+    action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
         action = partial(action, date=date)
 
-    return action('instances', 'restart')
-
-
-def start_job_instance(agent_ip, job_name, arguments=None, date=None,
-                   interval=None):
-    action = partial(_post_message, agent_ip=agent_ip, job_name=job_name,
+    return action(
+            'instance/{}'.format(instance_id),
+            'POST', action='restart',
             instance_args={} if arguments is None else arguments)
+
+
+def start_job_instance(agent_ip, job_name, arguments=None, date=None, interval=None):
+    action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
         action = partial(action, date=date)
 
-    return action('instances', 'start')
+    return action(
+            'instance', 'POST', action='start',
+            agent_ip=agent_ip, job_name=job_name,
+            instance_args={} if arguments is None else arguments)
 
 
 def status_agents(agents_ip):
-    return _post_message('agents', 'status', addresses=agents_ip)
+    query_string = [('address', ip) for ip in agents_ip]
+    return requests.get(_URL.format('status/agent'), params=urlencode(query_string).encode())
 
 
-def status_job_instance(instance_id, date=None, interval=None, stop=None, agent_ip=None,
-                    job_name=None):
+def watch_job_instance(instance_id, date=None, interval=None, stop=None):
+    action = _request_message
     action = partial(_post_message, instance_id=instance_id)
-    if agent_ip is not None and job_name is not None:
-        action = partial(action, agent_ip=agent_ip, job_name=job_name)
+    # if agent_ip is not None and job_name is not None:
+    #     action = partial(action, agent_ip=agent_ip, job_name=job_name)
     if interval is not None:
         action = partial(action, interval=interval)
     if date is not None:
@@ -184,42 +210,46 @@ def status_job_instance(instance_id, date=None, interval=None, stop=None, agent_
     if stop is not None:
         action = partial(action, stop=stop)
 
-    return action('instances', 'status')
+    return action('instance/{}'.format(instance_id), 'POST', action='watch')
 
 
 def status_jobs(agents_ip):
-    return _post_message('jobs', 'status', addresses=agents_ip)
+    query_string = [('address', ip) for ip in agents_ip]
+    return requests.get(_URL.format('status/job'), params=urlencode(query_string).encode())
 
 
 def stop_job_instance(instance_ids, date=None):
-    action = partial(_post_message, instance_ids=instance_ids)
+    action = _request_message
     if date is not None:
         action = partial(action, date=date)
 
-    return action('instances', 'stop')
+    return action('instance', 'POST', action='stop', instance_ids=instance_ids)
 
 
 def uninstall_jobs(jobs_name, agents_ip):
-    return _post_message('jobs', 'uninstall',
-            addresses=agents_ip, names=jobs_name)
+    return _request_message(
+            'job', 'POST', action='uninstall',
+            names=jobs_name, addresses=agents_ip)
 
 
-def set_job_log_severity(agent_ip, job_name, severity, local_severity=None,
-                         date=None):
-    action = partial(_post_message, address=agent_ip,
-            job_name=job_name, severity=severity)
+def set_job_log_severity(
+        agent_ip, job_name, severity,
+        local_severity=None, date=None):
+    action = _request_message
     if local_severity is not None:
         action = partial(action, local_severity=local_severity)
     if date is not None:
         action = partial(action, date=date)
 
-    return action('jobs', 'log_severity')
+    return action(
+            'job/{}'.format(job_name), 'POST',
+            action='log_severity', addresses=[agent_ip])
 
 
-def set_job_stat_policy(agent_ip, job_name, stat_name='default', storage=None,
-                        broadcast=None, date=None):
-    action = partial(_post_message, address=agent_ip,
-            job_name=job_name, stat_name=stat_name)
+def set_job_stat_policy(
+        agent_ip, job_name, stat_name='default',
+        storage=None, broadcast=None, date=None):
+    action = _request_message
     if storage is not None:
         action = partial(action, storage=storage)
     if broadcast is not None:
@@ -227,5 +257,8 @@ def set_job_stat_policy(agent_ip, job_name, stat_name='default', storage=None,
     if date is not None:
         action = partial(action, date=date)
 
-    return action('jobs', 'stat_policy')
+    return action(
+            'job/{}'.format(job_name), 'POST',
+            action='stat_policy',
+            stat_name=stat_name, addresses=[agent_ip])
 

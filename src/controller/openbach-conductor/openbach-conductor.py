@@ -830,7 +830,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Agent isn\'t in the database', 404,
                              {'address': address})
 
-        response = {'agent': agent.address}
+        response = {'agent': agent.address, 'errors': []}
         if update:
             try:
                 result = self.update_jobs(agent.address)
@@ -1031,7 +1031,7 @@ class ClientThread(threading.Thread):
     @staticmethod
     def fill_job_instance(instance, instance_args, date=None, interval=None,
                           restart=False):
-        instance.status = "starting ..."
+        instance.status = "Starting ..."
         instance.update_status = timezone.now()
 
         if interval:
@@ -1271,9 +1271,10 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK' }, 200
 
 
-    def update_instance(self, instance_id):
+    @staticmethod
+    def update_instance(instance_id):
         instance = Job_Instance.objects.get(pk=instance_id)
-        url = self.UPDATE_INSTANCE_URL.format(
+        url = ClientThread.UPDATE_INSTANCE_URL.format(
                 instance.job.job.name, instance.id, agent=instance.job.agent)
         result = requests.get(url).json()
         try:
@@ -1281,9 +1282,9 @@ class ClientThread(threading.Thread):
             values = result['results'][0]['series'][0]['values'][0]
         except KeyError:
             try:
-                raise BadRequest('KO {}'.format(result['results'][0]['error']))
+                raise BadRequest(result['results'][0]['error'])
             except KeyError:
-                raise BadRequest('KO No data available')
+                raise BadRequest('No data available')
 
         for column, value in zip(columns, values):
             if column == 'time':
@@ -1296,12 +1297,102 @@ class ClientThread(threading.Thread):
         instance.save()
 
 
-    def set_job_log_severity(self, date, instance_id, severity, local_severity):
-        instance = Job_Instance.objects.get(pk=instance_id)
+    @staticmethod
+    def _build_instance_infos(instance, update, verbosity):
+        """Helper function to simplify `list_job_instances`"""
+        error_msg = None
+        if update:
+            try:
+                ClientThread.update_instance(instance.id)
+            except BadRequest as e:
+                error_msg = e.reason
+            instance.refresh_from_db()
+        instance_infos = {
+                'id': instance.id,
+                'arguments': {}
+        }
+        for required_job_argument in instance.required_job_argument_instance_set.all():
+            for value in required_job_argument.job_argument_value_set.all():
+                if required_job_argument.argument.name not in instance_infos['arguments']:
+                    instance_infos['arguments'][required_job_argument.argument.name] = []
+                instance_infos['arguments'][required_job_argument.argument.name].append(value.value)
+        for optional_job_argument in instance.optional_job_argument_instance_set.all():
+            for value in optional_job_argument.job_argument_value_set.all():
+                if optional_job_argument.argument.name not in instance_infos['arguments']:
+                    instance_infos['arguments'][optional_job_argument.argument.name] = []
+                instance_infos['arguments'][optional_job_argument.argument.name].append(value.value)
+        if verbosity > 0:
+            instance_infos['update_status'] = instance.update_status.astimezone(timezone.get_current_timezone())
+            instance_infos['status'] = instance.status
+        if verbosity > 1:
+            instance_infos['start_date'] = instance.start_date.astimezone(timezone.get_current_timezone())
+        if verbosity > 2:
+            try:
+                instance_infos['stop_date'] = instance.stop_date.astimezone(timezone.get_current_timezone())
+            except AttributeError:
+                instance_infos['stop_date'] = 'Not programmed yet'
+        if error_msg is not None:
+            instance_infos['error'] = error_msg
+        return instance_infos
+
+
+    def list_job_instances(self, addresses, update=False, verbosity=0):
+        # TODO: see prefetch_related or select_related to avoid
+        # hitting the DB once more for each agent in the next loop
+        if not addresses:
+            agents = Agent.objects.all()
+        else:
+            agents = Agent.objects.filter(pk__in=addresses)
+
+        response = { 'instances': [] }
+        for agent in agents:
+            job_instances_for_agent = { 'address': agent.address, 'installed_jobs':
+                                      []}
+            for job in agent.installed_job_set.all():
+                job_instances_for_job = { 'job_name': job.name, 'instances': [] }
+                for job_instance in job.job_instance_set.filter(is_stopped=False):
+                    job_instances_for_job['instances'].append(self._build_instance_infos(job_instance,
+                                                                                    update,
+                                                                                    verbosity))
+                if job_instances_for_job['instances']:
+                    job_instances_for_agent['installed_jobs'].append(job_instances_for_job)
+            if job_instances_for_agent['installed_jobs']:
+                response['instances'].append(job_instances_for_agent)
+        return response, 200
+
+
+    def set_job_log_severity(self, address, job_name, severity, date=None,
+                             local_severity=None):
+        name = '{} on {}'.format(job_name, address)
+        try:
+            installed_job = Installed_Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Installed_Job isn\'t in the database', 404,
+                             infos={'job_name': name})
+
+        try:
+            logs_job = Installed_Job.objects.get(pk='rsyslog_job on '
+                                                 '{}'.format(address))
+        except ObjectDoesNotExist:
+            raise BadRequest('The Installed_Job rsyslog isn\'t in the database',
+                             404, infos={'job_name': 'rsyslog_job on '
+                                         '{}'.format(address)})
+
+        instance = Job_Instance(job=logs_job)
+        instance.status = "Starting ..."
+        instance.update_status = timezone.now()
+        instance.start_date = timezone.now()
+        instance.periodic = False
+        instance.save()
+
+        instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
+        date = self.fill_job_instance(instance, instance_args, date)
+
         agent = instance.job.agent
         logs_job_path = instance.job.job.path
-        job_name = instance.required_job_argument_instance_set.filter(argument__name='job_name')[0].job_argument_value_set.all()[0]
         syslogseverity = convert_severity(int(severity))
+        if not local_severity:
+            local_severity = installed_job.local_severity
         syslogseverity_local = convert_severity(int(local_severity))
         disable = 0
         self.playbook_builder.write_hosts(agent.address)
@@ -1333,23 +1424,83 @@ class ClientThread(threading.Thread):
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
             self.playbook_builder.build_start(
-                    'rsyslog_job', instance_id, args,
+                    'rsyslog_job', instance.id, args,
                     date, None, playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            '@/opt/openbach-controller/configs/all -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
+        try:
+            self.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                '@/opt/openbach-controller/configs/all -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(playbook.name, agent=agent))
+        except BadRequest as e:
+            instance.delete()
+            return e.reason, 404
+
+        instance.status = "Started"
+        instance.update_status = timezone.now()
+        instance.save()
+        result = { 'msg': 'OK' }
+        return result, 200
 
 
-    def set_job_stat_policy(self, date, instance_id):
+    def set_job_stat_policy(self, address, job_name, stat_name=None,
+                            storage=None, broadcast=None, date=None):
+        name = '{} on {}'.format(job_name, address)
+        try:
+            installed_job = Installed_Job.objects.get(pk=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Installed_Job isn\'t in the database', 404,
+                             infos={'job_name': name})
+
+        if stat_name != None:
+            statistic = installed_job.job.statistic_set.filter(name=stat_name)[0]
+            stat = Statistic_Instance.objects.filter(stat=statistic,
+                                                     job=installed_job)
+            if not stat:
+                stat = Statistic_Instance(stat=statistic, job=installed_job)
+            else:
+                stat = stat[0]
+            if storage == None and broadcast == None:
+                try:
+                    stat.delete()
+                except AssertionError:
+                    pass
+            else:
+                if broadcast != None:
+                    stat.broadcast = broadcast
+                if storage != None:
+                    stat.storage = storage
+                stat.save()
+        else:
+            if broadcast != None:
+                installed_job.broadcast = broadcast
+            if storage != None:
+                installed_job.storage = storage
+        installed_job.save()
+
+        rstat_name = 'rstats_job on {}'.format(address)
+        try:
+            rstats_job = Installed_Job.objects.get(pk=rstat_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('The Installed_Job rstats isn\'t in the database',
+                             404, infos={'job_name': rstat_name})
+
+        instance = Job_Instance(job=rstats_job)
+        instance.status = "Starting ..."
+        instance.update_status = timezone.now()
+        instance.start_date = timezone.now()
+        instance.periodic = False
+        instance.save()
+ 
+        instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
+        date = self.fill_job_instance(instance, data, instance_args, launch=False)
+
         instance = Job_Instance.objects.get(pk=instance_id)
         agent = instance.job.agent
         rstats_job_path = instance.job.job.path
-        job_name = instance.required_job_argument_instance_set.filter(argument__name='job_name')[0].job_argument_value_set.all()[0]
         installed_name = '{} on {}'.format(job_name, agent.address)
         installed_job = Installed_Job.objects.get(pk=installed_name)
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
@@ -1372,15 +1523,24 @@ class ClientThread(threading.Thread):
             self.playbook_builder.build_start(
                     'rstats_job', instance_id, args,
                     date, None, playbook, extra_vars)
-        self.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/tmp/openbach_extra_vars -e '
-            '@/opt/openbach-controller/configs/all -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
-            .format(playbook.name, agent=agent))
-
+        try:
+            self.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/tmp/openbach_extra_vars -e '
+                '@/opt/openbach-controller/configs/all -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(playbook.name, agent=agent))
+        except BadRequest as e:
+            instance.delete()
+            installed_job.save()
+            return e.reason, 404
+        instance.status = "Started"
+        instance.update_status = timezone.now()
+        instance.save()
+        result = { 'msg': 'OK' }
+        return result, 200
 
     def run(self):
         request = self.clientsocket.recv(2048)

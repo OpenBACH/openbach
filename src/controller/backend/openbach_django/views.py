@@ -35,14 +35,8 @@
 import json
 import socket
 from functools import wraps
-from datetime import datetime
 
-from django.utils import timezone
 from django.http import JsonResponse
-from django.core.exceptions import ObjectDoesNotExist
-
-from .models import Agent, Installed_Job, Job_Instance
-from .models import Statistic_Instance
 
 
 def check_post_data(f):
@@ -291,43 +285,6 @@ def status_job_instance(data):
     return conductor_execute(data)
 
 
-def _build_instance_infos(instance, update, verbosity):
-    """Helper function to simplify `list_job_instances`"""
-    error_msg = None
-    if update:
-        result = conductor_execute('update_instance {}'.format(instance.id))
-        if result.startswith('KO'):
-            error_msg = result[3:]
-        instance.refresh_from_db()
-    instance_infos = {
-            'id': instance.id,
-            'arguments': {}
-    }
-    for required_job_argument in instance.required_job_argument_instance_set.all():
-        for value in required_job_argument.job_argument_value_set.all():
-            if required_job_argument.argument.name not in instance_infos['arguments']:
-                instance_infos['arguments'][required_job_argument.argument.name] = []
-            instance_infos['arguments'][required_job_argument.argument.name].append(value.value)
-    for optional_job_argument in instance.optional_job_argument_instance_set.all():
-        for value in optional_job_argument.job_argument_value_set.all():
-            if optional_job_argument.argument.name not in instance_infos['arguments']:
-                instance_infos['arguments'][optional_job_argument.argument.name] = []
-            instance_infos['arguments'][optional_job_argument.argument.name].append(value.value)
-    if verbosity > 0:
-        instance_infos['update_status'] = instance.update_status.astimezone(timezone.get_current_timezone())
-        instance_infos['status'] = instance.status
-    if verbosity > 1:
-        instance_infos['start_date'] = instance.start_date.astimezone(timezone.get_current_timezone())
-    if verbosity > 2:
-        try:
-            instance_infos['stop_date'] = instance.stop_date.astimezone(timezone.get_current_timezone())
-        except AttributeError:
-            instance_infos['stop_date'] = 'Not programmed yet'
-    if error_msg is not None:
-        instance_infos['error'] = error_msg
-    return instance_infos
-
-
 @check_post_data
 def list_job_instances(data):
     try:
@@ -335,33 +292,9 @@ def list_job_instances(data):
     except KeyError:
         return {'msg': 'POST data malformed'}, 400
 
-    update = data.get('update', False)
-    verbosity = 0
-    if 'verbosity' in data:
-        verbosity = data['verbosity'] if data['verbosity'] else 0
+    data['command'] = 'list_job_instances'
 
-    # TODO: see prefetch_related or select_related to avoid
-    # hitting the DB once more for each agent in the next loop
-    if not agents_ip:
-        agents = Agent.objects.all()
-    else:
-        agents = Agent.objects.filter(pk__in=agents_ip)
-
-    response = { 'instances': [] }
-    for agent in agents:
-        job_instances_for_agent = { 'address': agent.address, 'installed_jobs':
-                                  []}
-        for job in agent.installed_job_set.all():
-            job_instances_for_job = { 'job_name': job.name, 'instances': [] }
-            for job_instance in job.job_instance_set.filter(is_stopped=False):
-                job_instances_for_job['instances'].append(_build_instance_infos(job_instance,
-                                                                                update,
-                                                                                verbosity))
-            if job_instances_for_job['instances']:
-                job_instances_for_agent['installed_jobs'].append(job_instances_for_job)
-        if job_instances_for_agent['installed_jobs']:
-            response['instances'].append(job_instances_for_agent)
-    return response, 200
+    return conductor_execute(data)
 
 
 @check_post_data
@@ -373,53 +306,9 @@ def set_job_log_severity(data):
     except KeyError:
         return {'msg': 'POST data malformed'}, 400
 
-    name = '{} on {}'.format(job_name, agent_ip)
-    try:
-        installed_job = Installed_Job.objects.get(pk=name)
-    except ObjectDoesNotExist:
-        return {
-                'msg': 'This Installed_Job isn\'t in the database',
-                 'job_name': name,
-        }, 404
+    data['command'] = 'set_job_log_severity'
 
-    try:
-        logs_job = Installed_Job.objects.get(pk='rsyslog_job on {}'.format(agent_ip))
-    except ObjectDoesNotExist:
-        return {
-                'msg': 'The Installed_Job rsyslog isn\'t in the database',
-                'job_name': 'logs on {}'.format(agent_ip),
-        }, 404
-
-    instance = Job_Instance(job=logs_job)
-    instance.status = "starting ..."
-    instance.update_status = timezone.now()
-
-    date = data.get('date', 'now')
-    if date == 'now':
-        instance.start_date = timezone.now()
-    else:
-        start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
-        instance.start_date = start_date
-    instance.periodic = False
-    instance.save()
- 
-    instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
-    date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
-
-    result = conductor_execute(
-            'set_job_log_severity {} {} {} {}'
-            .format(
-                date,
-                instance.id, severity,
-                data.get('local_severity', installed_job.local_severity)))
-    response = {'msg' : result}
-    if result == 'KO':
-        instance.delete()
-        return response, 404
-    instance.status = "Started"
-    instance.update_status = timezone.now()
-    instance.save()
-    return response, 200
+    return conductor_execute(data)
 
 
 @check_post_data
@@ -430,79 +319,7 @@ def set_job_stat_policy(data):
     except KeyError:
         return {'msg': 'POST data malformed'}, 404
 
-    name = '{} on {}'.format(job_name, agent_ip)
-    try:
-        installed_job = Installed_Job.objects.get(pk=name)
-    except ObjectDoesNotExist:
-        return {
-                'msg': 'This Installed_Job isn\'t in the database',
-                'job_name': name,
-        }, 404
+    data['command'] = 'set_job_stat_policy'
 
-    stat_name = data.get('stat_name', None)
-    storage = data.get('storage', None)
-    broadcast = data.get('broadcast', None)
-    if stat_name != None:
-        statistic = installed_job.job.statistic_set.filter(name=stat_name)[0]
-        stat = Statistic_Instance.objects.filter(stat=statistic,
-                                                 job=installed_job)
-        if not stat:
-            stat = Statistic_Instance(stat=statistic, job=installed_job)
-        else:
-            stat = stat[0]
-        if storage == None and broadcast == None:
-            try:
-                stat.delete()
-            except AssertionError:
-                pass
-        else:
-            if broadcast != None:
-                stat.broadcast = broadcast
-            if storage != None:
-                stat.storage = storage
-            stat.save()
-    else:
-        if broadcast != None:
-            installed_job.broadcast = broadcast
-        if storage != None:
-            installed_job.storage = storage
-    installed_job.save()
-
-    rstat_name = 'rstats_job on {}'.format(agent_ip)
-    try:
-        rstats_job = Installed_Job.objects.get(pk=rstat_name)
-    except ObjectDoesNotExist:
-        return {
-                'msg': 'The Installed_Job rstats isn\'t in the database',
-                'job_name': rstat_name,
-        }, 404
-
-    instance = Job_Instance(job=rstats_job)
-    instance.status = "starting ..."
-    instance.update_status = timezone.now()
-
-    date = data.get('date', 'now')
-    if date == 'now':
-        instance.start_date = timezone.now()
-    else:
-        start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
-        instance.start_date = start_date
-    instance.periodic = False
-    instance.save()
- 
-    instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
-    date = fill_and_launch_job_instance(instance, data, instance_args, launch=False)
-
-    result = conductor_execute(
-            'set_job_stat_policy {} {}'
-            .format(date, instance.id))
-    response = {'msg' : result}
-    if result == 'KO':
-        instance.delete()
-        installed_job.save()
-        return response, 404
-    instance.status = "Started"
-    instance.update_status = timezone.now()
-    instance.save()
-    return response, 200
+    return conductor_execute(data)
 

@@ -41,7 +41,7 @@ import ipaddress
 
 
 class Agent(models.Model):
-    name = models.CharField(max_length=200, null=True, blank=True, unique=True)
+    name = models.CharField(max_length=20, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=200, null=True, blank=True)
     update_status = models.DateTimeField(null=True, blank=True)
@@ -286,4 +286,13 @@ class Watch(models.Model):
 
     def __str__(self):
         return 'Watch of Job Instance {0.instance_id} of {0.job}'.format(self)
+
+
+class Scenario(models.Model):
+    name = models.CharField(max_length=20, primary_key=True)
+    description = models.CharField(max_length=200, null=True, blank=True)
+    scenario = models.TextField()
+
+    def __str__(self):
+        return self.name
 

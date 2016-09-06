@@ -277,3 +277,23 @@ def set_job_stat_policy(
             action='stat_policy',
             stat_name=stat_name, addresses=[agent_ip])
 
+
+def create_scenario(scenario_json):
+    return _request_message('scenario', 'POST', scenario_json=scenario_json)
+
+
+def del_scenario(scenario_name):
+    return _request_message('scenario/{}'.format(scenario_name), 'DELETE')
+
+
+def modify_scenario(scenario_name, scenario_json):
+    return _request_message('scenario/{}'.format(scenario_name), 'PUT', scenario_json=scenario_json)
+
+
+def get_scenario(scenario_name):
+    return _request_message('scenario/{}'.format(scenario_name), 'GET')
+
+
+def list_scenarios(verbosity=0):
+    return _request_message('scenario', 'GET', verbosity=verbosity)
+

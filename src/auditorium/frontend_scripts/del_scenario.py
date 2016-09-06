@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,31 +28,25 @@
    
    
    
-   @file     list_installed_jobs.py
-   @brief    Call the openbach-function list_installed_jobs
+   @file     del_scenario.py
+   @brief    Call the openbach-function del_scenario
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import list_installed_jobs, pretty_print
+from frontend import del_scenario, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - List installed jobs',
+    parser = argparse.ArgumentParser(description='OpenBach - Delete a Scenario',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', help='IP Address of the Agent')
-    parser.add_argument('-u', '--update', action='store_true',
-        help='Use only the last status present on the collector')
-    parser.add_argument("-v", "--verbosity", action="count",
-        help="Increase output verbosity")
+    parser.add_argument('name', help='Name of the scenario') 
 
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip
-    update = args.update
-    verbosity = args.verbosity
+    name = args.name
 
-    pretty_print(list_installed_jobs)(agent_ip, verbosity, update)
+    pretty_print(del_scenario)(name)
 

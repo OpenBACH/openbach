@@ -56,10 +56,13 @@ application = get_wsgi_application()
 
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
-from openbach_django.models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
-from openbach_django.models import Statistic, Required_Job_Argument, Optional_Job_Argument
-from openbach_django.models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
+from openbach_django.models import Agent, Job, Installed_Job, Job_Instance
+from openbach_django.models import Watch, Job_Keyword, Statistic
+from openbach_django.models import Required_Job_Argument, Optional_Job_Argument
+from openbach_django.models import Required_Job_Argument_Instance
+from openbach_django.models import Optional_Job_Argument_Instance
 from openbach_django.models import Job_Argument_Value, Statistic_Instance
+from openbach_django.models import Scenario
 
 
 _SEVERITY_MAPPING = {
@@ -1448,6 +1451,91 @@ class ClientThread(threading.Thread):
         instance.save()
         result = { 'msg': 'OK' }
         return result, 200
+
+
+    def create_scenario(self, scenario_json):
+        try:
+            name = scenario_json['name']
+        except KeyError:
+            raise BadRequest('Your Scenario should have a name')
+        try:
+            description = scenario_json['description']
+        except KeyError:
+            description = None
+        scenario = json.dumps(scenario_json)
+
+        try:
+            Scenario(name=name, description=description, scenario=scenario).save()
+        except IntegrityError:
+            raise BadRequest('This name of Scenario \'{}\' is already'
+                             ' used'.format(name), 409)
+
+        return { 'msg': 'OK', 'scenario_name': name }, 200
+
+
+    def del_scenario(self, scenario_name):
+        try:
+            scenario = Scenario.objects.get(pk=scenario_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario is not in the database', 404,
+                             infos={'scenario_name': scenario_name})
+
+        scenario.delete()
+
+        return { 'msg': 'OK' }, 200
+
+
+    def modify_scenario(self, scenario_json, scenario_name):
+        try:
+            name = scenario_json['name']
+        except KeyError:
+            raise BadRequest('Your Scenario should have a name')
+        if name != scenario_name:
+            raise BadRequest('The name in the Scenario \'{}\' doesn\'t '
+                             'correspond with the name of the route '
+                             '\'{}\''.format(name, scenario_name))
+        try:
+            scenario = Scenario.objects.get(pk=scenario_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario is not in the database', 404,
+                             infos={'scenario_name': scenario_name})
+        try:
+            description = scenario_json['description']
+        except KeyError:
+            description = None
+        scenario_str = json.dumps(scenario_json)
+
+        scenario.description = description
+        scenario.scenario = scenario_str
+        scenario.save()
+
+        return { 'msg': 'OK', 'scenario_name': name }, 200
+
+
+    def get_scenario(self, scenario_name):
+        try:
+            scenario = Scenario.objects.get(pk=scenario_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario is not in the database', 404,
+                             infos={'scenario_name': scenario_name})
+
+        return json.loads(scenario.scenario), 200
+
+
+    def list_scenarios(self, verbosity=0):
+        scenarios = Scenario.objects.all()
+        response = { 'scenarios': [] }
+        for scenario in scenarios:
+            if verbosity == 0:
+                response['scenarios'].append(scenario.name)
+            elif verbosity == 1:
+                response['scenarios'].append({ 'name': scenario.name,
+                                               'description':
+                                               scenario.description })
+            else:
+                response['scenarios'].append(json.loads(scenario.scenario))
+
+        return response, 200
 
 
     def run(self):

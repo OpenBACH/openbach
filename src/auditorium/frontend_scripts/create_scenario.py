@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,31 +28,28 @@
    
    
    
-   @file     list_installed_jobs.py
-   @brief    Call the openbach-function list_installed_jobs
+   @file     create_scenario.py
+   @brief    Call the openbach-function create_scenario
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import list_installed_jobs, pretty_print
+import json
+from frontend import create_scenario, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - List installed jobs',
+    parser = argparse.ArgumentParser(description='OpenBach - Create a Scenario',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agent_ip', help='IP Address of the Agent')
-    parser.add_argument('-u', '--update', action='store_true',
-        help='Use only the last status present on the collector')
-    parser.add_argument("-v", "--verbosity", action="count",
-        help="Increase output verbosity")
+    parser.add_argument('path', help='Path of the scenario') 
 
     # get args
     args = parser.parse_args()
-    agent_ip = args.agent_ip
-    update = args.update
-    verbosity = args.verbosity
+    path = args.path
+    with open(path, 'r') as f:
+        scenario_json = json.loads(f.read())
 
-    pretty_print(list_installed_jobs)(agent_ip, verbosity, update)
+    pretty_print(create_scenario)(scenario_json)
 

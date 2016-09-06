@@ -453,7 +453,11 @@ class JobInstancesView(BaseJobInstanceView):
     def get(self, request):
         """list all job instances"""
 
-        verbosity = int(request.GET.get('verbosity', 0))
+        try:
+            verbosity = int(request.GET.get('verbosity', 0))
+        except ValueError:
+            return {'msg': 'Query string malformed: \'verbosity\' should be an'
+                    ' int' }, 400
         update = 'update' in request.GET
 
         data = { 'addresses': request.GET.getlist('address'), 'update':
@@ -515,7 +519,11 @@ class JobInstanceView(BaseJobInstanceView):
     def get(self, request, id):
         """compute status of a job instance"""
 
-        verbosity = int(request.GET.get('verbosity', 0))
+        try:
+            verbosity = int(request.GET.get('verbosity', 0))
+        except ValueError:
+            return {'msg': 'Query string malformed: \'verbosity\' should be an'
+                    ' int' }, 400
         update = 'update' in request.GET
 
         data = { 'command': 'status_job_instance', 'instance_id': id,
@@ -575,13 +583,27 @@ class ScenariosView(GenericView):
     def get(self, request):
         """list all scenarios"""
 
-        return self._debug()
+        try:
+            verbosity = int(request.GET.get('verbosity', 0))
+        except ValueError:
+            return {'msg': 'Query string malformed: \'verbosity\' should be an'
+                    ' int' }, 400
+
+        data = { 'command': 'list_scenarios', 'verbosity': verbosity }
+
+        return self.conductor_execute(data)
 
 
     def post(self, request):
         """create a new scenario"""
 
-        return self._debug()
+        if 'scenario_json' not in request.JSON:
+            return {'msg': 'Missing parameter \'scenario_json\''}, 400
+
+        data = request.JSON
+        data['command'] = 'create_scenario'
+
+        return self.conductor_execute(data)
 
 
 class ScenarioView(GenericView):
@@ -590,19 +612,30 @@ class ScenarioView(GenericView):
     def get(self, request, name):
         """compute status of a scenario"""
 
-        return self._debug()
+        data = { 'command': 'get_scenario', 'scenario_name': name }
+
+        return self.conductor_execute(data)
 
 
     def put(self, request, name):
         """modify a scenario"""
 
-        return self._debug()
+        if 'scenario_json' not in request.JSON:
+            return {'msg': 'Missing parameter \'scenario_json\''}, 400
+
+        data = request.JSON
+        data['command'] = 'modify_scenario'
+        data['scenario_name'] = name
+
+        return self.conductor_execute(data)
 
 
     def delete(self, request, name):
         """remove a scenario from the database"""
 
-        return self._debug()
+        data = { 'command': 'del_scenario', 'scenario_name': name }
+
+        return self.conductor_execute(data)
 
 
 def push_file(request):

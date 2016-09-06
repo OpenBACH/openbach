@@ -34,7 +34,7 @@
 ---
 
 - name: Create Rstats log repository
-  file: path=/var/openbach_stats state=directory mode=0755
+  file: path=/var/openbach_stats/openbach-agent state=directory mode=0755
 
 - name: Install Rstats
   copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755

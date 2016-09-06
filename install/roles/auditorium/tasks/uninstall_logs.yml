@@ -37,7 +37,7 @@
   service: name=kibana state=stopped
 
 - name: Remove Kibana Service
-  file: path=etc/init.d/kibana state=absent
+  file: path=/etc/init.d/kibana state=absent
   
 - name: Uninstall Kibana
   file: path={{ item }} state=absent

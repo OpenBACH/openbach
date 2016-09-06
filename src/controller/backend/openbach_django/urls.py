@@ -41,21 +41,33 @@ from . import views
 
 app_name = 'openbach_django'
 urlpatterns = [
-    url(r'^status/agent/?$', views.StatusView.as_view(status_type='status_agents'), name='status_agents'),
-    url(r'^status/job/?$', views.StatusView.as_view(status_type='status_jobs'), name='status_jobs'),
+    url(r'^agent/status/?$',
+        views.StatusView.as_view(status_type='status_agents'),
+        name='status_agents'),
+    url(r'^job/status/?$', views.StatusView.as_view(status_type='status_jobs'),
+        name='status_jobs'),
 
     url(r'^agent/?$', views.AgentsView.as_view(), name='agents_view'),
-    url(r'^agent/(?P<address>[^/]+)/?$', views.AgentView.as_view(), name='agent_view'),
+    url(r'^agent/(?P<address>[^/]+)/?$', views.AgentView.as_view(),
+        name='agent_view'),
 
     url(r'^job/?$', views.JobsView.as_view(), name='jobs_view'),
     url(r'^job/(?P<name>[^/]+)/?$', views.JobView.as_view(), name='job_view'),
 
+    url(r'^job_instance/?$', views.JobInstancesView.as_view(),
+        name='job_instances_view'),
+    url(r'^job_instance/(?P<id>\d+)/?$', views.JobInstanceView.as_view(),
+        name='job_instance_view'),
+
     url(r'^file/?$', views.push_file, name='push_file'),
 
-    url(r'^instance/?$', views.InstancesView.as_view(), name='instances_view'),
-    url(r'^instance/(?P<id>\d+)/?$', views.InstanceView.as_view(), name='instance_view'),
-
     url(r'^scenario/?$', views.ScenariosView.as_view(), name='scenarios_view'),
-    url(r'^scenario/(?P<name>[^/]+)/?$', views.ScenarioView.as_view(), name='scenario_view'),
+    url(r'^scenario/(?P<name>[^/]+)/?$', views.ScenarioView.as_view(),
+        name='scenario_view'),
+
+#    url(r'^scenario_instance/?$', views.ScenarioInstancesView.as_view(),
+#        name='scenario_instances_view'),
+#    url(r'^scenario_instance/(?P<name>[^/]+)/?$',
+#        views.ScenarioInstanceView.as_view(), name='scenario_instance_view'),
 ]
 

@@ -28,8 +28,8 @@
 
 
 
-   @file     status_job_instance.py
-   @brief    Call the openbach-function status_job_instance
+   @file     watch_job_instance.py
+   @brief    Call the openbach-function watch_job_instance
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 

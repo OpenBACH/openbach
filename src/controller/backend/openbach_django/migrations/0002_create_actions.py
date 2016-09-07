@@ -27,8 +27,8 @@
    
    
    
-   @file     0002_create_actions.py
-   @brief    File that will create the action ine the DB durint the
+   @file     0002_create_openbach_functions.py
+   @brief    File that will create the openbach_function ine the DB durint the
              initialization
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
@@ -39,218 +39,226 @@ from __future__ import unicode_literals
 from django.db import migrations
 
 
-def create_actions(apps, schema_editor):
-    Action = apps.get_model("openbach_django", "Action")
-    Action_Argument = apps.get_model("openbach_django", "Action_Argument")
+def create_openbach_functions(apps, schema_editor):
+    Openbach_Function = apps.get_model("openbach_django", "Openbach_Function")
+    Openbach_Function_Argument = apps.get_model("openbach_django",
+                                                "Openbach_Function_Argument")
 
     # install_agent
-    install_agent = Action(name='install_agent')
+    install_agent = Openbach_Function(name='install_agent')
     install_agent.save()
-    Action_Argument(name='address', description='Address of the new Agent',
-                    type='ip', action=install_agent).save()
-    Action_Argument(name='collector', description='Address of the associated'
-                    ' Collector',
-                    type='ip', action=install_agent).save()
-    Action_Argument(name='username', description='Username of the new Agent',
-                    type='str', action=install_agent).save()
-    Action_Argument(name='password', description='Password of the new Agent',
-                    type='str', action=install_agent).save()
-    Action_Argument(name='name', description='Name of the new Agent',
-                    type='str', action=install_agent).save()
+    Openbach_Function_Argument(name='address', description='Address of the new'
+                               ' Agent', type='ip',
+                               openbach_function=install_agent).save()
+    Openbach_Function_Argument(name='collector', description='Address of the '
+                               'associated Collector', type='ip',
+                               openbach_function=install_agent).save()
+    Openbach_Function_Argument(name='username', description='Username of the'
+                               ' new Agent', type='str',
+                               openbach_function=install_agent).save()
+    Openbach_Function_Argument(name='password', description='Password of the'
+                               ' new Agent', type='str',
+                               openbach_function=install_agent).save()
+    Openbach_Function_Argument(name='name', description='Name of the new Agent',
+                               type='str',
+                               openbach_function=install_agent).save()
 
     # uninstall_agent
-    uninstall_agent = Action(name='uninstall_agent')
+    uninstall_agent = Openbach_Function(name='uninstall_agent')
     uninstall_agent.save()
-    Action_Argument(name='address', description='Address of the new Agent',
-                    type='ip', action=uninstall_agent).save()
+    Openbach_Function_Argument(name='address', description='Address of the new'
+                               ' Agent', type='ip',
+                               openbach_function=uninstall_agent).save()
 
     # list_agents
-    list_agents = Action(name='list_agents')
+    list_agents = Openbach_Function(name='list_agents')
     list_agents.save()
-    Action_Argument(name='update', description='', type='bool',
-                    action=list_agents).save()
+    Openbach_Function_Argument(name='update', description='', type='bool',
+                               openbach_function=list_agents).save()
 
     # status_agents
-    status_agents = Action(name='status_agents')
+    status_agents = Openbach_Function(name='status_agents')
     status_agents.save()
-    Action_Argument(name='addresses', description='', type='list',
-                    action=status_agents).save()
+    Openbach_Function_Argument(name='addresses', description='', type='list',
+                               openbach_function=status_agents).save()
 
     # add_job
-    add_job = Action(name='add_job')
+    add_job = Openbach_Function(name='add_job')
     add_job.save()
-    Action_Argument(name='name', description='', type='str',
-                    action=add_job).save()
-    Action_Argument(name='path', description='', type='str',
-                    action=add_job).save()
+    Openbach_Function_Argument(name='name', description='', type='str',
+                               openbach_function=add_job).save()
+    Openbach_Function_Argument(name='path', description='', type='str',
+                               openbach_function=add_job).save()
 
     # del_job
-    del_job = Action(name='del_job')
+    del_job = Openbach_Function(name='del_job')
     del_job.save()
-    Action_Argument(name='name', description='', type='str',
-                    action=del_job).save()
+    Openbach_Function_Argument(name='name', description='', type='str',
+                    openbach_function=del_job).save()
 
     # list_jobs
-    list_jobs = Action(name='list_jobs')
+    list_jobs = Openbach_Function(name='list_jobs')
     list_jobs.save()
-    Action_Argument(name='verbosity', description='', type='int',
-                    action=list_jobs).save()
+    Openbach_Function_Argument(name='verbosity', description='', type='int',
+                               openbach_function=list_jobs).save()
 
     # get_job_stats
-    get_job_stats = Action(name='get_job_stats')
+    get_job_stats = Openbach_Function(name='get_job_stats')
     get_job_stats.save()
-    Action_Argument(name='name', description='', type='str',
-                    action=get_job_stats).save()
-    Action_Argument(name='verbosity', description='', type='int',
-                    action=get_job_stats).save()
+    Openbach_Function_Argument(name='name', description='', type='str',
+                               openbach_function=get_job_stats).save()
+    Openbach_Function_Argument(name='verbosity', description='', type='int',
+                               openbach_function=get_job_stats).save()
 
     # get_job_help
-    get_job_help = Action(name='get_job_help')
+    get_job_help = Openbach_Function(name='get_job_help')
     get_job_help.save()
-    Action_Argument(name='name', description='', type='str',
-                    action=get_job_help).save()
+    Openbach_Function_Argument(name='name', description='', type='str',
+                               openbach_function=get_job_help).save()
 
     # install_jobs
-    install_jobs = Action(name='install_jobs')
+    install_jobs = Openbach_Function(name='install_jobs')
     install_jobs.save()
-    Action_Argument(name='addresses', description='', type='list',
-                    action=install_jobs).save()
-    Action_Argument(name='names', description='', type='list',
-                    action=install_jobs).save()
-    Action_Argument(name='severity', description='', type='int',
-                    action=install_jobs).save()
-    Action_Argument(name='local_severity', description='', type='int',
-                    action=install_jobs).save()
+    Openbach_Function_Argument(name='addresses', description='', type='list',
+                               openbach_function=install_jobs).save()
+    Openbach_Function_Argument(name='names', description='', type='list',
+                               openbach_function=install_jobs).save()
+    Openbach_Function_Argument(name='severity', description='', type='int',
+                               openbach_function=install_jobs).save()
+    Openbach_Function_Argument(name='local_severity', description='',
+                               type='int',
+                               openbach_function=install_jobs).save()
 
     # install_jobs
-    uninstall_jobs = Action(name='uninstall_jobs')
+    uninstall_jobs = Openbach_Function(name='uninstall_jobs')
     uninstall_jobs.save()
-    Action_Argument(name='addresses', description='', type='list',
-                    action=uninstall_jobs).save()
-    Action_Argument(name='names', description='', type='list',
-                    action=uninstall_jobs).save()
+    Openbach_Function_Argument(name='addresses', description='', type='list',
+                               openbach_function=uninstall_jobs).save()
+    Openbach_Function_Argument(name='names', description='', type='list',
+                               openbach_function=uninstall_jobs).save()
 
     # list_installed_jobs
-    list_installed_jobs = Action(name='list_installed_jobs')
+    list_installed_jobs = Openbach_Function(name='list_installed_jobs')
     list_installed_jobs.save()
-    Action_Argument(name='address', description='', type='ip',
-                    action=list_installed_jobs).save()
-    Action_Argument(name='update', description='', type='bool',
-                    action=list_installed_jobs).save()
-    Action_Argument(name='verbosity', description='', type='int',
-                    action=list_installed_jobs).save()
+    Openbach_Function_Argument(name='address', description='', type='ip',
+                               openbach_function=list_installed_jobs).save()
+    Openbach_Function_Argument(name='update', description='', type='bool',
+                               openbach_function=list_installed_jobs).save()
+    Openbach_Function_Argument(name='verbosity', description='', type='int',
+                               openbach_function=list_installed_jobs).save()
 
     # status_jobs
-    status_jobs = Action(name='status_jobs')
+    status_jobs = Openbach_Function(name='status_jobs')
     status_jobs.save()
-    Action_Argument(name='addresses', description='', type='list',
-                    action=status_jobs).save()
+    Openbach_Function_Argument(name='addresses', description='', type='list',
+                               openbach_function=status_jobs).save()
 
     # push_file
-    push_file = Action(name='push_file')
+    push_file = Openbach_Function(name='push_file')
     push_file.save()
-    Action_Argument(name='local_path', description='', type='str',
-                    action=push_file).save()
-    Action_Argument(name='remote_path', description='', type='str',
-                    action=push_file).save()
-    Action_Argument(name='agent_ip', description='', type='ip',
-                    action=push_file).save()
+    Openbach_Function_Argument(name='local_path', description='', type='str',
+                               openbach_function=push_file).save()
+    Openbach_Function_Argument(name='remote_path', description='', type='str',
+                               openbach_function=push_file).save()
+    Openbach_Function_Argument(name='agent_ip', description='', type='ip',
+                               openbach_function=push_file).save()
 
     # start_job_instance
-    start_job_instance = Action(name='start_job_instance')
+    start_job_instance = Openbach_Function(name='start_job_instance')
     start_job_instance.save()
-    Action_Argument(name='agent_ip', description='', type='ip',
-                    action=start_job_instance).save()
-    Action_Argument(name='job_name', description='', type='str',
-                    action=start_job_instance).save()
-    Action_Argument(name='instance_args', description='', type='str',
-                    action=start_job_instance).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=start_job_instance).save()
-    Action_Argument(name='interval', description='', type='int',
-                    action=start_job_instance).save()
+    Openbach_Function_Argument(name='agent_ip', description='', type='ip',
+                               openbach_function=start_job_instance).save()
+    Openbach_Function_Argument(name='job_name', description='', type='str',
+                               openbach_function=start_job_instance).save()
+    Openbach_Function_Argument(name='instance_args', description='', type='str',
+                               openbach_function=start_job_instance).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=start_job_instance).save()
+    Openbach_Function_Argument(name='interval', description='', type='int',
+                               openbach_function=start_job_instance).save()
 
     # stop_job_instance
-    stop_job_instance = Action(name='stop_job_instance')
+    stop_job_instance = Openbach_Function(name='stop_job_instance')
     stop_job_instance.save()
-    Action_Argument(name='instance_ids', description='', type='list',
-                    action=stop_job_instance).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=stop_job_instance).save()
+    Openbach_Function_Argument(name='instance_ids', description='', type='list',
+                               openbach_function=stop_job_instance).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=stop_job_instance).save()
 
     # restart_job_instance
-    restart_job_instance = Action(name='restart_job_instance')
+    restart_job_instance = Openbach_Function(name='restart_job_instance')
     restart_job_instance.save()
-    Action_Argument(name='instance_id', description='', type='int',
-                    action=restart_job_instance).save()
-    Action_Argument(name='instance_args', description='', type='str',
-                    action=restart_job_instance).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=restart_job_instance).save()
-    Action_Argument(name='interval', description='', type='int',
-                    action=restart_job_instance).save()
+    Openbach_Function_Argument(name='instance_id', description='', type='int',
+                               openbach_function=restart_job_instance).save()
+    Openbach_Function_Argument(name='instance_args', description='', type='str',
+                               openbach_function=restart_job_instance).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=restart_job_instance).save()
+    Openbach_Function_Argument(name='interval', description='', type='int',
+                               openbach_function=restart_job_instance).save()
 
     # watch_job_instance
-    watch_job_instance = Action(name='watch_job_instance')
+    watch_job_instance = Openbach_Function(name='watch_job_instance')
     watch_job_instance.save()
-    Action_Argument(name='instance_id', description='', type='int',
-                    action=watch_job_instance).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=watch_job_instance).save()
-    Action_Argument(name='interval', description='', type='int',
-                    action=watch_job_instance).save()
-    Action_Argument(name='stop', description='', type='str',
-                    action=watch_job_instance).save()
+    Openbach_Function_Argument(name='instance_id', description='', type='int',
+                               openbach_function=watch_job_instance).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=watch_job_instance).save()
+    Openbach_Function_Argument(name='interval', description='', type='int',
+                               openbach_function=watch_job_instance).save()
+    Openbach_Function_Argument(name='stop', description='', type='str',
+                               openbach_function=watch_job_instance).save()
 
     # status_job_instance
-    status_job_instance = Action(name='status_job_instance')
+    status_job_instance = Openbach_Function(name='status_job_instance')
     status_job_instance.save()
-    Action_Argument(name='instance_id', description='', type='int',
-                    action=status_job_instance).save()
-    Action_Argument(name='verbosity', description='', type='int',
-                    action=status_job_instance).save()
-    Action_Argument(name='update', description='', type='bool',
-                    action=status_job_instance).save()
+    Openbach_Function_Argument(name='instance_id', description='', type='int',
+                               openbach_function=status_job_instance).save()
+    Openbach_Function_Argument(name='verbosity', description='', type='int',
+                               openbach_function=status_job_instance).save()
+    Openbach_Function_Argument(name='update', description='', type='bool',
+                               openbach_function=status_job_instance).save()
 
     # list_job_instances
-    list_job_instances = Action(name='list_job_instances')
+    list_job_instances = Openbach_Function(name='list_job_instances')
     list_job_instances.save()
-    Action_Argument(name='addresses', description='', type='list',
-                    action=list_job_instances).save()
-    Action_Argument(name='update', description='', type='bool',
-                    action=list_job_instances).save()
-    Action_Argument(name='verbosity', description='', type='int',
-                    action=list_job_instances).save()
+    Openbach_Function_Argument(name='addresses', description='', type='list',
+                               openbach_function=list_job_instances).save()
+    Openbach_Function_Argument(name='update', description='', type='bool',
+                               openbach_function=list_job_instances).save()
+    Openbach_Function_Argument(name='verbosity', description='', type='int',
+                               openbach_function=list_job_instances).save()
 
     # set_job_log_severity
-    set_job_log_severity = Action(name='set_job_log_severity')
+    set_job_log_severity = Openbach_Function(name='set_job_log_severity')
     set_job_log_severity.save()
-    Action_Argument(name='address', description='', type='ip',
-                    action=set_job_log_severity).save()
-    Action_Argument(name='job_name', description='', type='str',
-                    action=set_job_log_severity).save()
-    Action_Argument(name='severity', description='', type='int',
-                    action=set_job_log_severity).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=set_job_log_severity).save()
-    Action_Argument(name='local_severity', description='', type='int',
-                    action=set_job_log_severity).save()
+    Openbach_Function_Argument(name='address', description='', type='ip',
+                               openbach_function=set_job_log_severity).save()
+    Openbach_Function_Argument(name='job_name', description='', type='str',
+                               openbach_function=set_job_log_severity).save()
+    Openbach_Function_Argument(name='severity', description='', type='int',
+                               openbach_function=set_job_log_severity).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=set_job_log_severity).save()
+    Openbach_Function_Argument(name='local_severity', description='',
+                               type='int',
+                               openbach_function=set_job_log_severity).save()
 
     # set_job_stat_policy
-    set_job_stat_policy = Action(name='set_job_stat_policy')
+    set_job_stat_policy = Openbach_Function(name='set_job_stat_policy')
     set_job_stat_policy.save()
-    Action_Argument(name='address', description='', type='ip',
-                    action=set_job_stat_policy).save()
-    Action_Argument(name='job_name', description='', type='str',
-                    action=set_job_stat_policy).save()
-    Action_Argument(name='stat_name', description='', type='str',
-                    action=set_job_stat_policy).save()
-    Action_Argument(name='storage', description='', type='bool',
-                    action=set_job_stat_policy).save()
-    Action_Argument(name='broadcast', description='', type='bool',
-                    action=set_job_stat_policy).save()
-    Action_Argument(name='date', description='', type='str',
-                    action=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='address', description='', type='ip',
+                               openbach_function=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='job_name', description='', type='str',
+                               openbach_function=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='stat_name', description='', type='str',
+                               openbach_function=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='storage', description='', type='bool',
+                               openbach_function=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='broadcast', description='', type='bool',
+                               openbach_function=set_job_stat_policy).save()
+    Openbach_Function_Argument(name='date', description='', type='str',
+                               openbach_function=set_job_stat_policy).save()
 
 
 class Migration(migrations.Migration):
@@ -260,6 +268,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(create_actions),
+        migrations.RunPython(create_openbach_functions),
     ]
 

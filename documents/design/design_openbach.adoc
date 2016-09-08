@@ -1,0 +1,655 @@
+:sectnums:
+:sectnumlevels: 3
+
+= OpenBACH design
+:toc:
+:imagesdir: images
+:doctype: book
+:source-highlighter: coderayz
+:listing-caption: Listing
+// Uncomment next line to set page size (default is Letter)
+:pdf-page-size: A4
+
+== Context of OpenBACH
+The objective of this study is to design and implement a benchmark for performing tests and collect different metrologies
+to allow the evaluation of next proposed transport protocols and mechanisms on a terrestrial, satellite and hybrid network.
+It is important to implement an adequate measurement environment to provide an appropriate evaluation framework.
+
+The transport benchmark would be able to quickly benefit different actors for the development of satellite network
+and telecom technologies, but also the actors of terrestrial networks, which would allow to extend the number of potential users.
+
+This benchmark must propose to integrate existing metrology tools, or exceptionally developed according to specific
+needs. It must be easily operated and at the same time deliver a maximum of useful information for the understanding,
+the validation and the design of existing or under development transport mechanisms. The benchmark shall also be capable
+of analyzing the deployment of protocols and the options supported on clients or remote servers. In addition, different
+visualizations tools and statistical analysis shall be proposed. Moreover, tools allowing to configure the network must
+be implemented in order to facilitate the implementation of exhaustive testing, reproducible or even automated. Traffic
+injection or traffic generation will also be deployed within the benchmark.
+
+The test bed will be developed in an open source logic similar to the one used for OpenSAND. The components will eventually
+be interfaced and / or integrate OpenSAND, in a logic that will be jointly defined by CNES, Thales Alenia Space, and Viveris
+Technologies at the end of the study.
+
+
+== Generic use case of OpenBACH
+
+The objective of this project is thus to create a benchmark allowing a user to perform a set of actions presented in
+<<img-generic_use_case>>. These actions are grouped in 4 different phases:
+{nbsp} +
+[#img-generic_use_case,reftext='Figure {counter:refnum}']
+.Generic use case of OpenBACH
+image::generic_use_case.png[align="center"]
+{nbsp} +
+
+*	*Phase 1*: Installation/deployment
+**	In this phase, a user would wish to perform and easy and straightforward installation/deployment of any tool and/or
+software that he needs in order to evaluate a network under test. That includes the installation of OpenBACH itself.
+
+*	*Phase 2*: Preparation of scenarios and launch tests
+**	In particular, the user would wish to configure all software/tool and entities under evaluation (including OS parameters,
+IP, TCP stack, etc), and
+**	Schedule and launch all the required tasks/software/tools for evaluating protocols, mechanisms in the network under test.
+That might include traffic generators, the launch of measures acquisition.
+
+*	*Phase 3*: Monitoring
+**	The user would wish to verify that the tests are correctly running by checking the status of all entities under test, tools,
+running software and/or tasks (via logs and status values), and
+**	Collect the measures that have been scheduled in the previous phase and visualize real-time results.
+
+*	*Phase 4*: Results analysis
+**	Once the tests are finished, the user may wish to perform post-processing actions according to the user needs. In this phase
+the user shall be able to perfom from simple actions such as shaping the obtained results (obtain averages/max/min) or more complex
+ actions such as computing new results from using different inputs measures.
+**	Finally, the user shall be able to visualize this new results and stock them (i.e. images, tables, etc) for creating reports
+of the study that has been carried out.
+
+OpenBACH is designed in order to be capable of fulfilling the needs of a user that wishes to perform any of the actions detailed above.
+
+
+
+== Functional design
+
+=== Terminology of OpenBACH
+
+=== Design components
+
+OpenBACH shall implement the components Controller, Collector, Auditorium and different Agents. Their roles are detailed next:
+
+*	A Controller shall centralize and deploy the configuration functionalities of OpenBACH as well as the jobs/scenarios to be
+launched.
+*	The Collector shall be able to collect all the statistics, data, logs/errors and other messages requested for supervising
+the benchmark in a centralized way.
+*	The Agents shall be deployed in the different end network entities (work stations, terminals, etc.), middle entities
+(server, proxy, etc.) that are supposed to be controlled by OpenBACH, or even in the same entities where the Controller
+and Collector are deployed. The Agents shall control (schedule/launch/stop) the jobs within a network entity according to
+the Controller commands, and collect the local stats/logs sent by these jobs. As we will see, an Agent might be placed next
+to the Collector and/or the Controller.
+* The Auditorium component shall centralize the different frontend interfaces for configuring and monitoring (logs and
+statistics) the benchmark.
+
+A basic functional scheme of OpenBACH is represented in <<img-basic_funct_design>>. From the Auditorium, a user shall be
+able to configure OpenBACH and request information of it (status of entities and components). The configuration is centralized
+at the Controller, which is in charge of deploying this configuration to the required Agents (the configuration might also
+include the deployment of new Agents and Jobs) and asking for status information. The Agents execute/schedule/stop the Jobs
+and relay the informations to be collected (statistics/logs/status) to the Collector, which centralizes all the data from
+all the available Agents/Jobs. Once the information is stocked in the Collector, the Controller is able to perform requests
+of data regarding the status of OpenBACH (in order to be sent to the Auditorium), and the Auditorium is able to make requests
+logs and statistics in order to allow the visualization in the user PC screen.
+
+[#img-basic_funct_design,reftext='Figure {counter:refnum}']
+.Basic overall design of OpenBACH components
+image::basic_funct_design.png[align="center"]
+{nbsp} +
+
+===	Functional definitions
+===	Functionality groups
+
+OpenBACH shall propose two main functionalities: the configuration of the benchmark (including the available jobs) and the
+collection of relevant data.
+
+These two types of functionalities are well identified by color in the architecture shown in <<img-funct_design>> :
+•	Configuration (purple boxes/arrows): includes configuration of jobs, scenarios, entities, scheduling of jobs/scenarios.
+•	Collection and display of statistics and logs/status (blue boxes/arrows) allowing to monitor the Network under Test.
+
+
+[[section-func_blocks, Functional blocks per component]]
+====	Functional blocks per component
+Below, we list the functional blocks per component as well as the types of data flows between them that OpenBACH shall
+implement. The functional architecture is shown in <<img-funct_design>>.
+
+[#img-funct_design,reftext='Figure {counter:refnum}']
+.Design of OpenBACH components
+image::funct_design.png[align="center"]
+{nbsp} +
+
+The Auditorium shall implement several frontends, one per type of display:
+
+*	Two frontends for the configuration of OpenBACH:
+**	Web interface-based: a user web interface allowing to configure and schedule the available Jobs/scenarios
+of OpenBACH
+**	Python scripts-based: allowing also to configure/schedule the available Jobs on each Agent from a Linux shell
+terminal. The access to this frontends demands advanced users rights.
+
+*	Two frontends (web interface-based) for displaying real-time data:
+
+**	A dashboard frontend for log messages allowing to get, filter and show the collected logs of the benchmark.
+**	A dashboard frontend for real-time statistics allowing to display the collected metrics.
+*	A frontend for plotting offline and post-processed data (web interface-based).
+
+The Controller shall implement:
+
+*	A backend: a web server allowing to listen for user interface requests (from frontend) regarding the deployment,
+ the configuration and the scheduling of OpenBACH (i.e. Agents, Jobs, Jobs instances, scenarios and scenarios instances),
+as well as requests regarding OpenBACH information and status from Agents. These requests are performed using the
+“openbach-functions”. The Backend might be able to process itself some of the “openbach-functions” regarding information
+of Agents/Jobs, other “openbach-functions” need an action from the Agent side (configure/launch a Job instance, send
+updated information/status, etc.). In the latter case, the Backend shall use a daemon called openbach-conductor (see below).
+*	A daemon (openbach-conductor): it is in charge of taking the demands of the Backend (under the form of “openbach-functions”),
+and communicate them to the Agent by means of Ansible (SSH).
+
+The Agent shall implement:
+
+*	A Control-Agent: It shall be able to configure and execute/schedule/stop different Job instances depending on the Controller
+commands (openbach-functions). It also shall be able to get status/information of the Agent itself and the available Jobs, as
+well as the Job instances status.
+*	A Collect-Agent: it shall allow to collect statistics/data and logs from the different running Job instances of the Agent and
+relay them to the Collector and locally store them. It also shall be able to send the status/information obtained by the
+Control-Agent.
+*	Job instances: One or several executions of a Job configured with a set of parameters. A job instance might be able to perform
+different tasks and/or to collect statistics to be sent. They might be started/stopped (e.g. start/stop a ping), activated/deactivated
+(e.g. iptables rules), etc. Different types of Jobs are differentiated within OpenBACH depending on the tasks that performs, such
+as administration tasks or telecom/network related tasks.
+
+The Collector shall implement:
+
+*	A stats collector daemon: it shall centralize the data/statistics collection received from the Agents and store them into data
+storages.
+*	A logs collector: it shall centralize the log messages collection received from the Agents and store them into data storages.
+
+
+
+=== OpenBACH-functions, Jobs and scenarios (and instances)
+
+The comprehension of these main terms is one of the keys to well understand the OpenBACH design described herein and in particular,
+the way to configure the benchmark.
+
+Besides the definition of each term (see Table 3 at the beginning of section 5), the purpose of this section is to explain the
+relationship between this terms.
+
+As it has been previously explained, the Jobs are the groups of tasks (under the form of scripts) that are deployed in the Agents.
+An execution of this script configured with a set of parameters is known as a Job instance (a process launched by the Agent in the
+same machine). The jobs instances are scheduled with in a scenario instance and by means of the openbach-functions (ofunc). However,
+not all openbach-functions aim at perfoming tasks regarding the job instances; some are related to the installation of Agents, Jobs, etc.
+
+From the controller point of view (<<img-dev_controller>>), the Controller owns the openbach-function (identified by a type and a name),
+different scenarios (identified by his name, and allowing to specify different variables) and a scheduler. The scenario owns a group of
+ordered openbach-functions (identified by a position id). This openbach-function might own "wait_for" elements, which are able to add
+execution dependencies to the openbach-function (i.e. the openbach-function will be launched only when a specific openbach-function
+instance has been launched or when a specific job instance has finished).
+
+The scenario instance is defined as a scenario with a date and an id, and it is composed of :
+
+* a group of scheduled openbach-functions instances, which are defined as the ordered openbach-function with all the required arguments
+and a date (equal to the date of the scenario plus the offset).
+* one/or more "while instances" allowing to implement the "wait_for" elements.  The while must keep sleeping while the out conditions allowing to execute
+a specific (or a group of) openbach-function instance is not fulfilled.
+
+The scheduler of the Controller is in charge of launching the scenario instance with all the openbach-function instances.
+
+[#img-dev_controller,reftext='Figure {counter:refnum}']
+.Relationship between scenario instances and openbach-functions in the Controller
+image::uml_dev_controller.png[align="center"]
+{nbsp} +
+
+From the Agent point of view (<<img-agent_dev>>), the controller owns also a scheduler, the Jobs that are installed in the Agent,
+defined by a job name and a description of the job. The scheduler is in charge of launching the Job instances, which are defined
+as the Jobs with a date of execution, an id and the arguments. Finally, each Job instance shall be associated to a scenario instance
+context represented by an id.
+
+[#img-agent_dev,reftext='Figure {counter:refnum}']
+.Organisation of Jobs ans Job instances in the Agent
+image::uml_agent_dev.png[align="center"]
+{nbsp} +
+
+The steps that shall be performed to schedule and launch the job instance by means of the scenario and the openbach-functions are
+described below and represented in <<img-chain_sce>>.
+
+[#img-chain_sce,reftext='Figure {counter:refnum}']
+.Steps to launch a Job instance via the scenario and the openbach-functions concepts
+image::chain_scenario.png[align="center"]
+{nbsp} +
+
+1.	(action 1) A user choses to launch a scenario instance from the web browser (web HMI) or the shell terminal (scripts).
+The request shall thus be sent via the configuration frontends (action 2). For that, the scenario shall be already created
+by the user and available in the backend data base.
+2.	(action 3-4) The configuration frontend shall send a request to the backend for launching the scenario instance (via HTTP).
+3.	(action 5-6) The backend shall transfer to the openbach-conductor the order of launching the openbach-function to start the scenario
+instance.
+4. (action 7) When the scenario instance is launched, the openbach-function instances that are defined within the scenario shall be
+launched/scheduled by the openbach-conductor. Some of them might imply performing tasks in the Agent, and others in the backend
+(e.g. install an Agent). In fact,the openbach-functions shall specify when to launch the job instance in the Agent with respect
+to a “reference starting time” of the scenario instance plus an increment delta/offset (∆)
+5.	(action 8-9) (if at least one of these functions specifies to perform a task in the Agent) The openbach-conductor shall send the order
+to the Agent via Ansible.
+6.	(action 10-11) The Agent shall schedule the job instance when it receives the order of scheduling the job instance from
+the Controller (openbach-conductor).
+7.	(actions 12) The launch of the Job instance is performed by the scheduler of the Control-Agent (when time = “reference
+starting time” + ∆, i.e. a “reference starting time” of the scenario instance plus an increment (∆) parameter).
+
+The “reference starting time” of a scenario instance is the time at which the scenario instance shall be launched in the backend.
+
+====	Functional definitions of a Scenario/Scenario instance
+The scenario instance is managed by the backend in the Controller and centralizes the status of all the job instances received
+from Agents through the Collector and the status of other openbach-functions (ofunc) (e.g. install job/agent). The states of a scenario instance are described below (see <<img-states_sce>>, where highlighted in black we detail the states in normal conditions and in blue those states that are used when external actions (stop/unschedule from user) or errors happen):
+
+*	*scheduling*: when a user decides to launch a scenario, the Controller starts scheduling locally some ofunc and deploying all
+the commands (via the openbach-functions)  to the different Agents.
+*	*scheduled*: when the Controller receives the ok status from all Agents involved in the scenario instance and he has been able
+to schedule its own ofunc. It means also that all jobs instance (job-i) have been correctly scheduled in the Agents.
+*	*scheduling error*: if one of the Agents has not been able to schedule a job instance or the Controller has not been able to
+schedule an ofunc, the backend will then unschedule all the job instances in all the Agents and the ofunc.
+*	*unscheduling*: this state is used when the scenario instance must be unscheduled, either because a scheduling error occurred
+or because once everything is scheduled (state “scheduded”), the user decides to unschedule the scenario instance.
+*	*unscheduling out of control*: when at least one of the job instances or openbach-function was not correctly unscheduled (e.g.
+because the agent does not respond; etc.). In that case, OpenBACH is not able to recover the control of the scenario instance and
+it activates a flag “out of control” and continues with the scenario instance until it is finished (all job instances finished).
+At this point, the user could manually restart the machines/agents or kill the desired job instances processes.
+*	*unscheduled*: if all job instances and ofunc where successfully unscheduled. The scenario instance is considered over and suppressed.
+*	*running*: a scenario instance is considered in this state when at least one of the job-i/ofunc is still running. It keeps
+running while all job-i/ofunc and the Agents send an ok/running status, or if the user decides to stop it, or if the end time
+is reached.
+*	*running error*: when one Agent or a job-i/ofunc send an error status. If the error is considered not critical, the scenario
+might keep running. If it is considered critical, the scenario instance should go to the “stopping” state.
+*	*stopping*: in this state, the backend tries to stop the scenario instance (and thus all job-i/ofunc running/scheduled).
+*	*stopping out of control*: similarly to the case of “unscheduling out of control”, this means that the backend was not able
+to stop everything. It then activates the flag ‘out of control” and comes back to the “run” state until the scenario instance
+is finished.
+*	*finished*: when the end time of the scenario instance is reached with the flag out of control not activated, meaning the
+scenario instance is correctly finished.
+*	*finished error*: when the end time of the scenario instance if reached with the flag out of control activated, meaning
+there has been a problem.
+
+[#img-states_sce,reftext='Figure {counter:refnum}']
+.Basic states diagram of scenario instance
+image::basic_states_scenario.png[align="center"]
+{nbsp} +
+
+[#img-states_sce,reftext='Figure {counter:refnum}']
+.States diagram of scenario instance
+image::states_scenario.png[align="center"]
+{nbsp} +
+
+====	Functional definitions of a Job/Job instance
+The job instance is managed by the Agent. The states of a Job instance (job-i) are described below (<<img-states_job>>):
+
+* *scheduling*: when the order from the Controller is received, the Agent schedules the job-i.
+* *scheduled*: when a job-i has been correctly scheduled in the Agent.
+* *scheduling error*: if the Agent have not been able to schedule the job instance, it should send a nok to the Controller.
+* *unscheduling*: this state is used when the job-i must be unscheduled because an order from the Controller is received to
+do so.
+* *unscheduling out of control*: when the job-i was not correctly unscheduled. In that case, OpenBACH is not able to recover
+the control of the job instance and it activates a flag “out of control” and goes back to the state “running” until it is
+finished. At this point, the user could manually restart the machines/agent or kill the job instances.
+* *unscheduled*: if the job instance was successfully unscheduled. The job-i is considered over and suppressed.
+* *execution*: when the launch time of the job-i is reached. Depending on the type of the job (persistent or not persistent),
+the next state is “run” or “finished”.
+* *running*: when a job is of the type persistent, it keeps running until a stop is scheduled, or if the end time is reached.
+* *execution error*: when a job-i has not been correctly executed.
+* *running error*: when the job-i gets an error exception. If the error is considered not critical, the job-i might keep
+running. It is considered critical, the job-i should go to the “stopping” state. The way to treat the errors is carried out
+by the job-I itself. Therefore, a correct treatment of the errors shall be performed when developing jobs.
+* *stopping*: in this state, either the job-i tries to stop itself or it is stopped by the Agent (e.g.: if a stop order is
+scheduled or reveived from the Controller)
+* *stopping out of control*: similarly to the case of “unscheduling out of control”, this means that the end or the job-i
+itself were not able to stop the job-i. It then activates the flag “out of control” and comes back to the “run” state until
+the job-i is finished.
+* *finished*: when the end time of the job-i is reached or it is stopped.
+
+[#img-states_sce,reftext='Figure {counter:refnum}']
+.Basic states diagram of job instance
+image::basic_states_job.png[align="center"]
+{nbsp} +
+
+[#img-states_job,reftext='Figure {counter:refnum}']
+.States diagram of a job instance
+image::states_job.png[align="center"]
+{nbsp} +
+
+=====	Job types
+NOTE: TBD (CNES/TAS/Viveris)
+
+The Jobs can be classified in different types depending on its purpose and types of actions that they aim at performing.
+
+First of all, it has been highlighted the need of separation between Jobs related to administration tasks (herein called
+admin), the Jobs related to the telecommunications domain which are the core of OpenBACH, and other job organised by project.
+
+The admin Jobs shall be separated among generic administration, OpenBACH administration and the acquisition of administration
+statistics, while the Telecommunication/networking Jobs shall be separated depending on the OSI layer they are related to.
+
+
+=== Material aspects: Entities
+
+The following section describes the deployment of OpenBACH in different entities. In particular, Figure 9 shows the architecture
+and the components of the proposed design. An example of network topology where OpenBACH could be deployed is available at
+the top-left corner of the figure. In such topology, the network entities are interconnected by means of heterogeneous physical
+links (satellite, terrestrial, LTE, WiFi, etc.).
+
+The scheme also shows the components of OpenBACH, the functions (and the associated functional blocks), the entities (servers,
+work stations, etc.) where the components are deployed, and a management network (recommended but optional) allowing the
+interaction between these components.
+
+==== Types of entities
+Five types of entities (identified as grey boxes in the figure) are defined in the <<img-entity_arch>> OpenBACH design: network
+entities, user entity, controller entity, collector entity and auditorium entity.
+
+*	A “network entity” is defined as any machine, server, or workstation, able of hosting a Linux OS (and possibly Windows OS in
+further evolutions of OpenBACH) and an OpenBACH Agent component. Some examples of roles performed by these “network entities”
+are: a user terminal, a server, a proxy, a gateway, a satellite terminal, a terrestrial base station.
+*	A “controller entity” is defined as any machine, server, or workstation, able of hosting a Linux OS where the Controller is
+deployed.
+*	A “collector entity” is defined as any machine, server, or workstation, able of hosting a Linux OS where the Collector is deployed.
+*	An “auditorium entity” is defined as any machine, server, or workstation, able of hosting a Linux OS where the different
+frontends of the Auditorium are deployed.
+*	Finally, the “user entity” is defined as any personal computer (or workstation) from which a user would be capable of supervising
+and interacting with OpenBACH. This entity requires at least a shell terminal access and a web browser (Firefox or Chrome) for
+accessing the OpenBACH interfaces.
+
+For the sake of simplicity, the Collector, the Controller and the Auditorium might be deployed in the same entity.
+
+[#img-entity_arch,reftext='Figure {counter:refnum}']
+.Architecture, components and interfaces of OpenBACH
+image::entity_arch.png[align="center"]
+{nbsp} +
+
+====	Functional blocks per entity
+
+
+Below, we list the functional blocks, types of storage and components for each considered entity that OpenBACH shall implement:
+
+*	A « Network entity » shall have:
+**	An Agent :
+***	A Control-Agent
+**	A Collecting agent
+***	Jobs (deployed) and Instances of Jobs (running/scheduled)
+***	A path towards an available data storage: it shall allow to locally store data/logs. It is useful for offline scenarios where
+the network entity is not accessible during the tests (e.g.: when a management network is not available).
+
+*	The « Collector entity »  shall have:
+**	A Collector daemon for statistics and status information.
+**	A Collector daemon for log messages
+**	A data base for storing logs.
+**	A data base for storing statistics/data.
+
+*	A « Controller entity » shall have:
+**	A backend (web server)
+**	A daemon (openbach-conductor).
+**	A data Storage managed by the backend for storing information related to the benchmark (available agents and entities information,
+information of jobs available, status of Jobs instances, scenarios, etc).
+
+*	An “Auditorium entity” shall have several frontends: one per type of display (configuration of benchmark, statistics display and
+logs display). In particular:
+**	A frontend of configuration (web interface)
+**	A python scripts interface
+**	A dashboard frontend for real-time statistics dashboard (web interface)
+**	A dashboard frontend for real-time log messages (web interface)
+**	A frontend for plotting offline and post-processed data (web interface).
+
+
+*	A « User entity » shall dispose of:
+**	A web browser (Chrome/Firefox) client to access the different available frontends, i.e.:
+***	Configuration web interface
+***	Real-time statistics
+***	Logs/errors/status
+***	Post-processing or offline statistics
+**	Linux/Unix shell terminals for jobs/scenarios configuration (related to the Python script frontend).
+
+
+==	Detailed conception
+=== Detailed conception of the Auditorium
+====	Configuration frontends
+
+Herein, we describe the design of the configuration frontends, and in particular the available supervision functions allowing to
+configure OpenBACH and the different jobs/scenarios. On the other hand, the design and requirements of the other OpenBACH frontend,
+i.e. those aiming at displaying the statistics/data and the log messages, are detailed in section <<section_display>> (after the
+description design of the Collector and the Agents). This order is preferable since it makes the comprehension of the chosen solution
+easier as well as the provided requirements of the frontends.
+
+By means of the configuration frontends, the user shall be able to ask for different types of information regarding Agents and Jobs,
+in particular, the user shall be able to ask for:
+
+*	the list of Agents installed and their status (running/not running)
+*	the list of Jobs that might be installed in an Agent (i.e. available for installation in OpenBACH). This might help a user decide
+the jobs that can be installed.
+*	the list of jobs available in each Agent (not necessarily running, only available)
+*	the list of job instances  per Job that are scheduled/started for each Agent.
+*	The scenarios available.
+*	The list of scenario instances scheduled/started and their status.
+
+This information is used by the user to have an update knowledge of the benchmark, so that he would be able to correctly perform
+different tasks. The tasks that a user shall be able to carry out are:
+
+*	Install/uninstall Agents in the network entities. The procedure for installing new Agents is explained in section <<install-agent>>
+(TBD)  and in the wiki OpenBACH (http://opensand.org/support/wiki/doku.php?id=openbach:manuals:index).
+*	Install/remove a job to/from an Agent
+*	Schedule/start/stop a job instance in an Agent with different configuration parameters.
+*	Create/delete/modify scenarios.
+*	Start/stop a scenario instance over different Agents.
+*	After the implementation of a new Job performed by a user, the user shall be able to make the Job available for installation.
+
+The configuration frontend will thus serve as user interface, allowing the user to perform different tasks (as detailed above).
+These tasks will be performed by calling the “openbach-functions” from the frontend in order to send the request to the core of
+the Controller, also known as Backend, which will perform different actions according to the requested tasks. The benchmark shall
+implement two different configuration frontends, one for basic users, which will perform different tasks through the web interface,
+and a second frontend, based on python scripts, allowing for more flexibility and implemented for advanced users.
+
+In order to maximize the evolutivity and the clarity of the backend implementation, both frontends shall be able to call/use the
+same functions implemented in the backend. For this reasons, we propose a backend based on web services.
+
+The communication between the Backend and the configuration frontends shall be carried out via an HTTP Restful API.
+
+All the responses of the backend shall be implemented in JSON format.
+
+=====	Web interface (Basic user)
+In this section, we list some of the requirements that the frontend shall implement.
+
+The web interface dedicated to configuration of the benchmark shall:
+
+*	Display the status of the registered network entities (with Agents) and the collector.
+*	Display the available jobs per Agent and their status.
+*	Be able to configure, launch/schedule/stop the Jobs instances within a scenario.
+*	Configure, display and launch/schedule/stop the available scenarios instances (by means of the openbach-function of the backend).
+*	Be able to activate/deactivate/display the available statistics.
+*	Be able to activate/deactivate/display the logs (and change the log level).
+
+===== Python scripts (Advanced users)
+NOTE: To modify
+
+===	Detailed conception of Controller
+
+The Controller is in charge of centralizing and deploying the configuration of OpenBACH, the Agents the Jobs and scenarios and
+commands the Agents to schedule the Jobs instances to be launched within a scenario instance.
+
+As it can be observed in <<img-controller_design>> (and previously detailed, see section <<section-func_blocks>>), the controller
+shall implement different functional blocks. It mainly consists of a backend for controlling the main tasks and their configuration,
+a daemon (openbach-conductor) to interact with the Agents and a data storage for saving information related to OpenBACH (status,
+profiles, users, scenarios, etc.).
+
+[#img-controller_design,reftext='Figure {counter:refnum}']
+.Controller design: Backend and interfaces
+image::controller_design.png[align="center"]
+{nbsp} +
+
+====	Backend
+The backend design shall follow the Model-View-Controller (MVC) architectural pattern (as represented <<section-func_blocks>>) since
+it allows a proper separation between the user-interface and the substance of the application.
+
+In <<section-func_blocks>>, we can observe that a webserver (e.g. Apache or Nginx) shall be set up in front of the MVC pattern in
+order to handle the user requests (from frontend) before passing those requests that require application logic.
+
+The controller (of the MVC architecture) shall be in charge of receiving inputs and data from user and convert them to commands for
+the views. The model shall be in charge of managing and accessing the database and the view shall contain the ways to set, compute
+or manipulate information in order to send an output representation of required data.
+
+In summary, the controller (of the MVC architecture) receives an action and data from the webserver (pushed by the user). It then
+sends the data to the correct view (i.e. function), depending on the request. The view works with the model to get the appropriate
+data under objects format and handles these objects in order to perform the required actions and create an output (response) to the user.
+
+The views are the way to execute the “openbach-functions”, which are implemented in the openbach-conductor. Through these functions, the backend views shall be able to:
+*	add/install (delete/remove) Agents and Jobs to/from the benchmark
+*	list the available Agents and the available jobs per Agent.
+*	create/modify/delete a scenario.
+*	configure/launch/stop scenario instances.
+*	List the available scenario and scenario instances and their status.
+*	send commands of schedule/start/stop of Jobs instances to the corresponding Agents .
+*	list the scheduled/started job instances and their status.
+
+====	Ansible for communication Controller-Agent
+
+The installation of an Agent or a Job requires the transmission of files (scripts, daemon files, configuration files, etc.), the
+installation of dependencies (python, apt-get, software, etc.) and other needs such as the installation of a ntp client for
+synchronizing the network entity. There are several off-the-shelf frameworks available in open-source allowing for application
+deployment and configuration management (see annex in section 17 for a comparison of different solutions). The Ansible solution has
+been retained because it is a simple and flexible tool that gives you the ability to automate common tasks, deploy applications and
+launch commands in different hosts from a centralized entity (in our case the OpenBACH Controller). In particular, Ansible implements
+the following features:
+*	Ansible is open source and written in Python, which harmonizes with the philosophy of OpenBACH of implementing the Agent and the
+Jobs in Python.
+*	A scripting system based on YAML syntax, which is easily readable and with a very fast learning.
+*	Everything is done via files called "playbook" (YAML syntax). The tasks written in the playbook call the Ansible modules (similar
+to libraries) with different arguments (e.g. call the “apt-get” module with the option “build-dependencies” and the name of the package).
+*	Ansible is only installed in the Controller. The distant hosts do not need any software requirements/dependencies to be controlled,
+except for a SSH access (with the keys for authentication) and Python.
+*	When playbook is executed, Ansible connects to the various entities to deploy configuration and start tasks. Thanks to the modules,
+Ansible also ensures that any services that are supposed to work/run are correctly running, that a software is installed (e.g.
+apt-get install packages), that a task has been performed (i.e. idempotent concept) and that all configuration files are up to date.
+The last one is one of the strong points of Ansible.
+
+====	Openbach-conductor
+The Backend shall rely on a new functional item, a daemon identified as the openbach-conductor, allowing to:
+* launch/manage/control complex scenario instances (over several Agent and with dependencies)
+* implement a scheduler in the Controller because though the Agents control/schedule their own tasks, it is necessary also to schedule
+the launch of Ansible playbooks (e.g. in case a distant network entity is only accessible at a specific time and not at the moment of
+creating the test/scenario).
+* avoid time out problems (associated to the webserver) when the time of execution of some playbooks are large (e.g, those installing
+ Agents or dependencies, etc…). Thus the backend needs a background process (i.e. a daemon) capable of listening/controlling
+ the local post-processing tasks without time constraints.
+
+ It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions” regarding information
+ of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side (configure/launch a Job
+ instances, send updated information/status, etc.). For example, as explained latter, the Controller does not schedule the Job instances
+ itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend communicates to the Agents
+ is discussed next.
+
+The openbach-conductor shall be thus in charge of listening for commands from the views, building and launching the playbooks
+(via SSH to communicate the commands and the tasks to be performed in the Agents).
+
+The commands between the views and the openbach-conductor shall be sent via UNIX sockets.
+
+Finally, it should be highlighted that the choice of Ansible does not add limitations or constraints to the OpenBACH design since it is
+developed so that any other protocol/communication would replace Ansible for deploying/configuring OpenBACH with little effort (we do not
+talk here about the installation of OpenBACH and its dependencies, where Ansible probes to be an asset).
+
+===	MVC: data access
+The model shall handle one database that belongs to the backend, to save user information, agents status (running or not), a jobs list per Agent,
+job instances status, scenarios (and scenario instances) information and status, etc. Some of these information are potentially continuously modified
+(i.e. job instances status). For updating the status information, the Controller shall implement an openbach-function (see next section) that when
+requested (or recursively) sends status information from the Agent to the Collector (via the collecting functions of OpenBACH: i.e. stats and logs). The
+Controller must recursively pull these status from the Collector to update its own database.
+
+Finally, the backend database shall implement different user profile types (see section 9).
+
+===	MVC: openbach-functions views
+The "openbach-functions views" (kind of an access to the openbach-functions) available in the Controller are implemented in the backend, but the real
+implementation of the openbach-functions is available in the openbach-conductor. These functions are summarized in <<img-functions>> and detailed below
+(the input JSON contents highlighted in bold are the required ones, the other ones are optional). They are classified in 6 main groups depending on
+the object/component they concern to, i.e. the Agents, the Jobs, the Job instances, the scenarios or the scenario instances.
+
+
+[#img-functions,reftext='Figure {counter:refnum}']
+.Openbach-functions classified by categories
+image::functions.png[align="center"]
+{nbsp} +
+
+First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
+
+.group 1
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	          | Method	    | url              | Input JSON contents 	                                     | Description
+| install_agent	      | POST	      | /agent           | *address*, *username*, *password*, *collector*, *name*    | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
+| uninstall_agent     | DELETE      |  /agent/*address* |                                                          | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
+| list_agents         | GET         | /agent           | update                                                    | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
+| status_agents       | GET         | /agent/status    | *address* (but multiple are possible)                     | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
+|===
+
+
+Second the group 2 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
+if a user develops a new Job (or takes a new developed Job from someone) and includes it in the list of possible Jobs to be installed.
+
+.group 2
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	         | Method	         | url              | Input JSON contents 	                     | Description
+| add_job	           | POST	           | /job             | *name*, *path*                             | Add a Job to the Jobs list
+| del_job            | PUT             | /job/*job_name*  |                                            | Delete a Job from the Jobs list
+| list_jobs          | GET             | /job             | verbosity                                  | Return the Jobs list.  verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
+| get_job_stats      | GET             | /job/*job_name*  | verbosity                                  | Return the statistics produced by a Job. verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
+| get_job_help       | GET             | /job/*job_name*  |                                            | Return the help of the Job
+|===
+
+Then the group 3 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
+
+.group 3
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	           | Method	         | url               | Input JSON contents 	                                                                           | Description
+| install_jobs	       | POST	           | /job              | *addresses*, *names*, action=’install’, severity, local_severity                    | Install one or more Jobs (identified by name) in one or more network entities (identified by IP address)
+| uninstall_jobs       | POST            | /job              | *addresses*, *names*, action=’uninstall’                                            | Uninstall one or more Jobs (identified by name) from one or more network entities (identified by IP address)
+| status_jobs          | GET             | /job/status       | *address* (but multiple are possible)                                               | Request the agent to send all installed jobs to the Collector.
+| list_installed_jobs  | GET             | /job              | *address*, update, verbosity                                                        | List all the installed Job for a network entity (identified by IP address). If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database. Verbosity: 0-2.
+| set_job_log_severity | POST            | /job/*job_name*   | *address*, *severity*, *action='log_severity'*, local_severity, date                | Set a new log severity to the Job.
+| set_job_stat_policy  | POST            | /job/*job_name*   | *address*, *severity*, *action='stat_policy'*, stat_name, storage, broadcast, date  | Set the policy for the stats generated by this Job on an Agent (if storage=True, the Collector will store the data in the database, if broadcast=True, the Collector will broadcast the data to the Auditorium).
+| push_file            | POST            | /file             | *file*, *path*, *agent_ip*                                                          | Push a file on the Agent.
+|===
+
+The group 4 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
+
+.group 4
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	              | Method	      | url                  | Input JSON contents 	                                                     | Description
+| start_job_instance	    | POST	        | /job_instance        | *agent_ip*, *job_name*, instance_args, action='start', date, interval     | Start a Job instance of the Job on the Agent.
+| stop_job_instance       | POST          | /job_instance        | *ids*, *action=’stop’*, date                                              |Stop one or more job instances using their instance id.
+| restart_job_instance    | POST          | /job_instance/*id*   | action=’restart’, date, interval                                          | Stop then start an Instance. If instance_args is an empty list, the new Job instance will have the same arguments as the old one.
+| watch_job_instance      | POST          | /job_instance/*id*   | action=watch, date, interval, stop                                        | Request the agent to send the status of a Job instance (scheduled, running or not running) to the Collector.
+| list_job_instances      | GET           | /job_instance        | *address* (but can be multiple), update, verbosity                        | Return the list of the Job instances for the Agent. If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database. Verbosity: 0-3.
+| status_job_instance     | GET           | /job_instance/*id*   | update, verbosity                                                         | Return the information of a Job Instance. If update=False or none, the status is by default retrieved from the backend database. If update=true, this function pulls the last status from Collector database. Verbosity: 0-3.
+|===
+
+The group 5 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.
+
+.group 5
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	          | Method	      | url               | Input JSON contents 	 | Description
+| create_scenario	    | POST	        | /scenario         | *scenario_json*        | Create OpenBACH scenario.
+| del_scenario        | DELETE        | /scenario/*id*    |                        | Delete OpenBACH scenario.
+| modify_scenario     | PUT           | /scenario/*id*    | *scenario_json*        | Replace the json of the scenario identifed by the given id.
+| get_scenario        | GET           | /scenario/*id*    |                        | Return the json of the scenario identified by the given id.
+| list_scenarios      | GET           | /scenario         | verbosity              | List all available scenarios.
+|===
+
+And finally, the group 6 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
+
+.group 6
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function	                    | Method	      | url                                          | Input JSON contents 	          | Description
+| start_scenario_instance  	    | POST	        | /scenario_instance                           | *scenario_id*, *args*, date    | Start a scenario instance.
+| stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                           | Stop a scenario instance.
+| list_scenario_instance        | GET           | /scenario_instance                           | scenario_id                    | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
+| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    | verbosity                      | Return the status of the scenario instance
+|===
+
+
+==	Display of data collection

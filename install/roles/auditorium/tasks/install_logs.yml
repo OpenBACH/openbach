@@ -39,17 +39,20 @@
 - name: Uncompress Kibana
   unarchive: src=../src/auditorium/kibana/kibana-{{ version_kibana }}-linux-{{ controller_archi }}.tar.gz \
     dest=/opt/ creates=/opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }}/package.json copy=yes
-    
+
 - name: Create Kibana repository
   file: src=/opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }} state=link dest=/opt/kibana
-  
+
+- name: Limite memory for kibana
+  copy: src=kibana dest=/opt/kibana/bin/ mode=0755
+
 - name: Configure Kibana
   template: src=kibana.yml.j2 dest=/opt/kibana/config/kibana.yml \
     owner=root group=root
 
 - name: Create Kibana Service
-  copy: src=kibana dest=/etc/init.d/ mode=0755
-  
+  copy: src=kibana_service dest=/etc/init.d/kibana mode=0755
+
 - name: Start Kibana
   service: name=kibana state=started
 

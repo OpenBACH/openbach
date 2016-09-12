@@ -43,6 +43,7 @@ import yaml
 import getpass
 import requests
 import json
+from queue import Queue
 from operator import attrgetter
 from datetime import datetime
 from django.core.serializers.json import DjangoJSONEncoder
@@ -55,14 +56,9 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
+from django.db import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
-from openbach_django.models import Agent, Job, Installed_Job, Job_Instance
-from openbach_django.models import Watch, Job_Keyword, Statistic
-from openbach_django.models import Required_Job_Argument, Optional_Job_Argument
-from openbach_django.models import Required_Job_Argument_Instance
-from openbach_django.models import Optional_Job_Argument_Instance
-from openbach_django.models import Job_Argument_Value, Statistic_Instance
-from openbach_django.models import Scenario
+from openbach_django.models import *
 
 
 _SEVERITY_MAPPING = {
@@ -251,7 +247,7 @@ class ClientThread(threading.Thread):
 
     def execute_request(self, data):
         data = json.loads(data)
-        request = data.pop('command')
+        request = '{}_view'.format(data.pop('command'))
 
         # From this point on, request should contain the
         # name of one of the following method: call it
@@ -264,7 +260,7 @@ class ClientThread(threading.Thread):
         return function(**data)
 
 
-    def install_agent(self, address, collector, username, password, name):
+    def install_agent_view(self, address, collector, username, password, name):
         agent = Agent(name=name, address=address, collector=collector,
                       username=username)
         agent.set_password(password)
@@ -314,7 +310,7 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def uninstall_agent(self, address):
+    def uninstall_agent_view(self, address):
         try:
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -338,7 +334,7 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def list_agents(self, update=False):
+    def list_agents_view(self, update=False):
         agents = Agent.objects.all()
         response = {}
         if update:
@@ -365,8 +361,9 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def update_agent(self, agent):
-        url = self.UPDATE_AGENT_URL.format(agent=agent)
+    @staticmethod
+    def update_agent(agent):
+        url = ClientThread.UPDATE_AGENT_URL.format(agent=agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -386,7 +383,7 @@ class ClientThread(threading.Thread):
             agent.save()
 
 
-    def status_agents(self, addresses):
+    def status_agents_view(self, addresses):
         unknown_agents = []
         for agent_ip in addresses:
             try:
@@ -445,7 +442,7 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK' }, 200
 
 
-    def add_job(self, name, path):
+    def add_job_view(self, name, path):
         config_prefix = os.path.join(path, 'files', name)
         config_file = '{}.yml'.format(config_prefix)
         try:
@@ -584,7 +581,7 @@ class ClientThread(threading.Thread):
         return {'msg': 'OK'}, 200
 
 
-    def del_job(self, name):
+    def del_job_view(self, name):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -594,7 +591,7 @@ class ClientThread(threading.Thread):
         return {'msg': 'OK'}, 200
 
 
-    def list_jobs(self, verbosity=0):
+    def list_jobs_view(self, verbosity=0):
         response = {
             'jobs': []
         }
@@ -609,7 +606,7 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def get_job_stats(self, name, verbosity=0):
+    def get_job_stats_view(self, name, verbosity=0):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -628,7 +625,7 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def get_job_help(self, name):
+    def get_job_help_view(self, name):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -638,7 +635,7 @@ class ClientThread(threading.Thread):
         return {'job_name': name, 'help': job.help}, 200
 
 
-    def install_jobs(self, addresses, names, severity=4, local_severity=4):
+    def install_jobs_view(self, addresses, names, severity=4, local_severity=4):
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
 
@@ -692,7 +689,7 @@ class ClientThread(threading.Thread):
                                  404)
 
 
-    def uninstall_jobs(self, addresses, names):
+    def uninstall_jobs_view(self, addresses, names):
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
 
@@ -750,7 +747,7 @@ class ClientThread(threading.Thread):
                                  404)
 
 
-    def list_installed_jobs(self, address, update=False, verbosity=0):
+    def list_installed_jobs_view(self, address, update=False, verbosity=0):
         try:
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -803,9 +800,10 @@ class ClientThread(threading.Thread):
             return response, 200
 
 
-    def update_jobs(self, agent_id):
+    @staticmethod
+    def update_jobs(agent_id):
         agent = Agent.objects.get(pk=agent_id)
-        url = self.UPDATE_JOB_URL.format(agent=agent)
+        url = ClientThread.UPDATE_JOB_URL.format(agent=agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -854,7 +852,7 @@ class ClientThread(threading.Thread):
                              'Controller', 404, {'unknown_jobs': unknown_jobs})
 
 
-    def status_jobs(self, addresses):
+    def status_jobs_view(self, addresses):
         error = False
         unknown_agents = []
         for agent_ip in addresses:
@@ -882,7 +880,7 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK' }, 200
 
 
-    def push_file(self, local_path, remote_path, agent_ip):
+    def push_file_view(self, local_path, remote_path, agent_ip):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
@@ -944,15 +942,12 @@ class ClientThread(threading.Thread):
                                      ' arguments needed or '
                                      'optional'.format(arg_name), 400)
             for arg_value in arg_values:
-                Job_Argument_Value(
-                    value=arg_value,
-                    argument_instance=argument_instance
-                ).save()
-
-        try:
-            instance.check_args()
-        except ValueError as e:
-            raise BadRequest(e.args[0], 400)
+                jav = Job_Argument_Value(argument_instance=argument_instance)
+                try:
+                    jav.check_and_set_value(arg_value)
+                except ValueError as e:
+                    raise BadRequest(e.args[0], 400)
+                jav.save()
 
 
     @staticmethod
@@ -983,8 +978,16 @@ class ClientThread(threading.Thread):
         return date
 
 
-    def start_job_instance(self, agent_ip, job_name, instance_args, date=None,
+    def start_job_instance(self, agent_ip, job_name, instance_args, delta=None,
+                           origin=int(timezone.now().timestamp()*1000),
                            interval=None):
+        date = origin + int(delta)*1000
+        self.start_job_instance_view(agent_ip, job_name, instance_args, date,
+                                     interval)
+
+
+    def start_job_instance_view(self, agent_ip, job_name, instance_args, date=None,
+                                interval=None):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
@@ -1029,7 +1032,7 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK', 'instance_id': instance.id }, 200
 
 
-    def stop_job_instance(self, instance_ids, date=None):
+    def stop_job_instance_view(self, instance_ids, date=None):
         instances = Job_Instance.objects.filter(pk__in=instance_ids)
         warnings = []
 
@@ -1085,8 +1088,8 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def restart_job_instance(self, instance_id, instance_args, date=None,
-                             interval=None):
+    def restart_job_instance_view(self, instance_id, instance_args, date=None,
+                                  interval=None):
         try:
             instance = Job_Instance.objects.get(pk=instance_id)
         except ObjectDoesNotExist:
@@ -1123,8 +1126,8 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK' }, 200
 
 
-    def watch_job_instance(self, instance_id, date=None, interval=None,
-                           stop=None):
+    def watch_job_instance_view(self, instance_id, date=None, interval=None,
+                                stop=None):
         try:
             instance = Job_Instance.objects.get(pk=instance_id)
         except ObjectDoesNotExist:
@@ -1202,7 +1205,7 @@ class ClientThread(threading.Thread):
         instance.save()
 
 
-    def status_job_instance(self, instance_id, verbosity=0, update=False):
+    def status_job_instance_view(self, instance_id, verbosity=0, update=False):
         error_msg = None
         if update:
             try:
@@ -1243,7 +1246,7 @@ class ClientThread(threading.Thread):
         return instance_infos, 200
 
 
-    def list_job_instances(self, addresses, update=False, verbosity=0):
+    def list_job_instances_view(self, addresses, update=False, verbosity=0):
         if not addresses:
             agents = Agent.objects.all()
         else:
@@ -1268,8 +1271,8 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def set_job_log_severity(self, address, job_name, severity, date=None,
-                             local_severity=None):
+    def set_job_log_severity_view(self, address, job_name, severity, date=None,
+                                  local_severity=None):
         name = '{} on {}'.format(job_name, address)
         try:
             installed_job = Installed_Job.objects.get(pk=name)
@@ -1353,8 +1356,8 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def set_job_stat_policy(self, address, job_name, stat_name=None,
-                            storage=None, broadcast=None, date=None):
+    def set_job_stat_policy_view(self, address, job_name, stat_name=None,
+                                 storage=None, broadcast=None, date=None):
         name = '{} on {}'.format(job_name, address)
         try:
             installed_job = Installed_Job.objects.get(pk=name)
@@ -1453,27 +1456,114 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def create_scenario(self, scenario_json):
+    @staticmethod
+    def first_check_on_scenario(scenario_json):
+        required_parameters = ('name', 'args', 'body')
         try:
-            name = scenario_json['name']
+            for k in required_parameters:
+                scenario_json[k]
         except KeyError:
-            raise BadRequest('Your Scenario should have a name')
+            return False
+        required_parameters = ('name', 'type', 'description')
+        if not isinstance(scenario_json['args'], list):
+            return False
+        try:
+            for arg in scenario_json['args']:
+                for k in required_parameters:
+                    arg[k]
+        except KeyError:
+            return False
+        required_parameters = ('parameters', 'openbach_functions')
+        try:
+            for k in required_parameters:
+                scenario_json['body'][k]
+        except KeyError:
+            return False
+        required_parameters = ('name', 'args', 'wait', 'id')
+        if not isinstance(scenario_json['body']['openbach_functions'], list):
+            return False
+        try:
+            for openbach_function in scenario_json['body']['openbach_functions']:
+                for k in required_parameters:
+                    openbach_function[k]
+        except KeyError:
+            return False
+        required_parameters = ('name', 'value', 'type')
+        if not isinstance(scenario_json['body']['parameters'], list):
+            return False
+        try:
+            for parameter in scenario_json['body']['parameters']:
+                for k in required_parameters:
+                    parameter[k]
+        except KeyError:
+            return False
+        for openbach_function in scenario_json['body']['openbach_functions']:
+            if not isinstance(openbach_function['args'], list):
+                return False
+            try:
+                for arg in openbach_function['args']:
+                    for k in required_parameters:
+                        arg[k]
+            except KeyError:
+                return False
+            if openbach_function['name'] == 'start_job_instance':
+                if 'args' not in openbach_function:
+                    return False
+                if not isinstance(openbach_function['args'], list):
+                    return False
+                try:
+                    for arg in openbach_function['args']:
+                        for k in required_parameters:
+                            arg[k]
+                except KeyError:
+                    return False
+        return True
+
+
+    @staticmethod
+    def register_scenario(scenario_json, name):
         try:
             description = scenario_json['description']
         except KeyError:
             description = None
-        scenario = json.dumps(scenario_json)
+        args = scenario_json['args']
+        scenario_string = json.dumps(scenario_json)
 
+        scenario = Scenario(name=name, description=description,
+                            scenario=scenario_string)
         try:
-            Scenario(name=name, description=description, scenario=scenario).save()
+            scenario.save(force_insert=True)
         except IntegrityError:
             raise BadRequest('This name of Scenario \'{}\' is already'
                              ' used'.format(name), 409)
 
+        for arg in args:
+            try:
+                Scenario_Argument(
+                    name=arg['name'],
+                    description=arg['description'],
+                    type=arg['type'],
+                    scenario=scenario
+                ).save()
+            except KeyError:
+                raise BadRequest('At least one of the args is malformed')
+            except IntegrityError:
+                scenario.delete()
+                raise BadRequest('At least two args have the same name', 409,
+                                 infos={'name': arg['name']})
+
         return { 'msg': 'OK', 'scenario_name': name }, 200
 
 
-    def del_scenario(self, scenario_name):
+    def create_scenario_view(self, scenario_json):
+        if not self.first_check_on_scenario(scenario_json):
+            raise BadRequest('Your Scenario is malformed')
+        name = scenario_json['name']
+
+        return self.register_scenario(scenario_json, name)
+
+
+    def del_scenario_view(self, scenario_name):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
@@ -1485,11 +1575,10 @@ class ClientThread(threading.Thread):
         return { 'msg': 'OK' }, 200
 
 
-    def modify_scenario(self, scenario_json, scenario_name):
-        try:
-            name = scenario_json['name']
-        except KeyError:
-            raise BadRequest('Your Scenario should have a name')
+    def modify_scenario_view(self, scenario_json, scenario_name):
+        if not self.first_check_on_scenario(scenario_json):
+            raise BadRequest('Your Scenario is malformed')
+        name = scenario_json['name']
         if name != scenario_name:
             raise BadRequest('The name in the Scenario \'{}\' doesn\'t '
                              'correspond with the name of the route '
@@ -1499,20 +1588,13 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             raise BadRequest('This Scenario is not in the database', 404,
                              infos={'scenario_name': scenario_name})
-        try:
-            description = scenario_json['description']
-        except KeyError:
-            description = None
-        scenario_str = json.dumps(scenario_json)
 
-        scenario.description = description
-        scenario.scenario = scenario_str
-        scenario.save()
+        scenario.delete()
 
-        return { 'msg': 'OK', 'scenario_name': name }, 200
+        return self.register_scenario(scenario_json, name)
 
 
-    def get_scenario(self, scenario_name):
+    def get_scenario_view(self, scenario_name):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
@@ -1522,7 +1604,7 @@ class ClientThread(threading.Thread):
         return json.loads(scenario.scenario), 200
 
 
-    def list_scenarios(self, verbosity=0):
+    def list_scenarios_view(self, verbosity=0):
         scenarios = Scenario.objects.all()
         response = { 'scenarios': [] }
         for scenario in scenarios:
@@ -1536,6 +1618,278 @@ class ClientThread(threading.Thread):
                 response['scenarios'].append(json.loads(scenario.scenario))
 
         return response, 200
+
+
+    @staticmethod
+    def register_scenario_parameter_instances(scenario_instance):
+        scenario_json = json.loads(scenario_instance.scenario.scenario)
+        for parameter in scenario_json['body']['parameters']:
+            if parameter['type'] == 'arg':
+                sa = scenario_instance.scenario.scenario_argument_set.filter(
+                    name=parameter['value'])[0]
+                sai = sa.scenario_argument_instance_set.filter(
+                    scenario_instance=scenario_instance)[0]
+                type_ = sai.argument.type
+                value = sai.value
+            else:
+                type_ = parameter['type']
+                value = parameter['value']
+            spi = Scenario_Parameter_Instance(name=parameter['name'],
+                                              type=type_,
+                                              scenario_instance=scenario_instance)
+            try:
+                spi.check_and_set_value(value)
+            except ValueError as e:
+                raise BadRequest(e.args[0], 400)
+            spi.save()
+
+
+    @staticmethod
+    def register_openbach_function_instances(scenario_instance):
+        scenario_json = json.loads(scenario_instance.scenario.scenario)
+        for openbach_function in scenario_json['body']['openbach_functions']:
+            try:
+                of = Openbach_Function.objects.get(pk=openbach_function['name'])
+            except ObjectDoesNotExist:
+                raise BadRequest('This Openbach_Function doesn\'t exist', 404,
+                                 {'name': openbach_function['name']})
+            ofi = Openbach_Function_Instance(openbach_function=of,
+                                             scenario_instance=scenario_instance,
+                                             openbach_function_instance_id=openbach_function['id'])
+            try:
+                ofi.save()
+            except IntegrityError:
+                raise BadRequest('The Scenario is malformed: the id \'{}\' is '
+                                 'used for multiples openbach functions'
+                                 ''.format(openbach_function['id']))
+            for arg in openbach_function['args']:
+                try:
+                    ofai = Openbach_Function_Argument_Instance(
+                        argument=Openbach_Function_Argument.objects.filter(name=arg['name'])[0],
+                        openbach_function_instance=ofi)
+                except IndexError:
+                    raise BadRequest('Argument \'{}\' don\'t match with'
+                                     ' the arguments'.format(arg['name']), 400)
+                try:
+                    if arg['type'] != 'parameter':
+                        ofai.check_and_set_value(arg['value'])
+                    else:
+                        try:
+                            spi = scenario_instance.scenario_parameter_instance_set.filter(
+                                name=arg['value'])[0]
+                        except IndexError:
+                            raise BadRequest('Parameter \'{}\' doesn\'t match with'
+                                             ' the parameters'.format(arg['name']), 400)
+                        ofai.check_and_set_value(spi.value)
+                except ValueError as e:
+                    raise BadRequest(e.args[0], 400)
+                ofai.save()
+                if openbach_function['name'] == 'start_job_instance' and arg['name'] == 'job_name':
+                    job_args = arg['args']
+                    instance_args = {}
+                    for job_arg in job_args:
+                        if len(job_arg['value']) != len(job_arg['type']):
+                            raise BadRequest('The Scenario is malformed: the '
+                                             'arg \'{}\' should have as mush '
+                                             'value as '
+                                             'type'.format(job_arg['name']))
+                        instance_args[job_arg['name']] = []
+                        for i in range(len(job_arg['value'])):
+                            if job_arg['type'][i] != 'parameter':
+                                instance_args[job_arg['name']].append(job_arg['value'][i])
+                            else:
+                                try:
+                                    spi = scenario_instance.scenario_parameter_instance_set.filter(
+                                        name=job_arg['value'][i])[0]
+                                except IndexError:
+                                    raise BadRequest('Parameter \'{}\' doesn\'t match with'
+                                                     ' the parameters'.format(job_arg['name'][i]), 400)
+                                instance_args[job_arg['name']].append(spi.value)
+                    try:
+                        ofai = Openbach_Function_Argument_Instance(
+                            argument=Openbach_Function_Argument.objects.filter(name='instance_args')[0],
+                            openbach_function_instance=ofi)
+                    except IndexError:
+                        raise BadRequest('Argument \'{}\' don\'t match with'
+                                         ' the arguments'.format(arg['name']), 400)
+                    try:
+                        ofai.check_and_set_value(instance_args)
+                    except ValueError as e:
+                        raise BadRequest(e.args[0], 400)
+                    ofai.save()
+            for wait in openbach_function['wait']:
+                if wait['type'] == 'launch':
+                    for id in wait['id']:
+                        wfl = Wait_For_Launch(scenario_instance=scenario_instance,
+                                              openbach_function_instance=ofi,
+                                              time=wait['time'],
+                                              openbach_function_instance_id_waited=id)
+                        wfl.save()
+                elif wait['type'] == 'finished':
+                    for id in wait['id']:
+                        wff = Wait_For_Finished(scenario_instance=scenario_instance,
+                                                openbach_function_instance=ofi,
+                                                time=wait['time'],
+                                                job_instance_id_waited=id)
+                        wff.save()
+                else:
+                    raise BadRequest('The type of the Wait_For is unknown for '
+                                     'the Openbach_Function with the id \'{}\''
+                                     ''.format(openbach_function['id']))
+
+
+    @staticmethod
+    def register_scenario_instance(scenario, args):
+        scenario_instance = Scenario_Instance(scenario=scenario)
+        scenario_instance.status = "Starting ..."
+        scenario_instance.status_date = timezone.now()
+        scenario_instance.save()
+        # Enregistrer les args de l'instance de scenario
+        for arg_name, arg_value in args.items():
+            try:
+                sai = Scenario_Argument_Instance(argument=scenario.scenario_argument_set.filter(name=arg_name)[0],
+                                                 scenario_instance=scenario_instance)
+                try:
+                    sai.check_and_set_value(arg_value)
+                except ValueError as e:
+                    raise BadRequest(e.args[0], 400)
+                sai.save()
+            except IndexError:
+                raise BadRequest('Argument \'{}\' don\'t match with'
+                                 ' arguments needed or '
+                                 'optional'.format(arg_name), 400)
+
+        ClientThread.register_scenario_parameter_instances(scenario_instance)
+        ClientThread.register_openbach_function_instances(scenario_instance)
+
+        return scenario_instance
+
+
+    @staticmethod
+    def check_scenario(scenario, args):
+        try:
+            scenario_json = json.loads(scenario.scenario)
+        except ValueError:
+            scenario.checked = True
+            scenario.valid = False
+            raise BadRequest('This Scenario is not valid: it is not in JSON'
+                             ' format', infos={'scenario': scenario.name})
+        #TODO
+        scenario.valid = True
+
+        scenario.checked = True
+        scenario.save()
+        return None, None
+
+
+    @staticmethod
+    def build_table(scenario_instance):
+        table = {}
+        for wfl in scenario_instance.wait_for_launch_set.all():
+            ofi_id = wfl.openbach_function_instance.openbach_function_instance_id
+            ofi_waited_id = wfl.openbach_function_instance_id_waited
+            if ofi_id not in table:
+                table[ofi_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
+                                  set(), 'wait_for_finished': set(),
+                                  'is_waited_for_finished': set() }
+            if ofi_waited_id not in table:
+                table[ofi_waited_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
+                                         set(), 'wait_for_finished': set(),
+                                        'is_waited_for_finished': set() }
+            table[ofi_id]['wait_for_launch'].add(ofi_waited_id)
+            table[ofi_waited_id]['is_waited_for_launch'].add(ofi_id)
+        for wff in scenario_instance.wait_for_finished_set.all():
+            ofi_id = wff.openbach_function_instance.openbach_function_instance_id
+            ji_waited_id = wff.job_instance_id_waited
+            if ofi_id not in table:
+                table[ofi_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
+                                  set(), 'wait_for_finished': set(),
+                                  'is_waited_for_finished': set() }
+            if ji_waited_id not in table:
+                table[ji_waited_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
+                                         set(), 'wait_for_finished': set(),
+                                        'is_waited_for_finished': set() }
+            table[ofi_id]['wait_for_finished'].add(ji_waited_id)
+            table[ji_waited_id]['is_waited_for_finished'].add(ofi_id)
+        return table
+
+
+    def launch_openbach_function_instance(self, scenario_instance, ofi_id, l,
+                                          queue, launch_queues, finished_queues,
+                                          date):
+        while l:
+            x = queue.get()
+            l.remove(x)
+        print(ofi_id)
+        ofi = scenario_instance.openbach_function_instance_set.filter(
+            openbach_function_instance_id=ofi_id)[0]
+        try:
+            function = getattr(self, ofi.openbach_function.name)
+        except AttributeError:
+            #TODO gerer mieux l'erreur
+            raise BadRequest('Function {} not implemented yet'.format(request),
+                             500)
+        arguments = {}
+        for arg in ofi.openbach_function_argument_instance_set.all():
+            if arg.argument.type == 'json':
+                arguments[arg.argument.name] = json.loads(arg.value)
+            else:
+                arguments[arg.argument.name] = arg.value
+        print(arguments)
+        # TODO lancer l'openbach_function
+        function(**arguments)
+        for queue in launch_queues:
+            queue.put(ofi_id)
+        for queue in finished_queues:
+            queue.put(ofi_id)
+
+
+    def start_scenario_instance_view(self, scenario_name, args, date=None):
+        try:
+            scenario = Scenario.objects.get(pk=scenario_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario is not in the database', 404,
+                             infos={'scenario_name': scenario_name})
+        scenario_instance = None
+        table = None
+        if not scenario.checked:
+            scenario_instance, table = self.check_scenario(scenario, args)
+        if not scenario.valid:
+            raise BadRequest('This Scenario is not valid',
+                             infos={'scenario_name': scenario_name})
+        if not scenario_instance:
+            scenario_instance = self.register_scenario_instance(scenario, args)
+        if not table:
+            table = self.build_table(scenario_instance)
+        # lance les openbach function possible
+        queues = { id: Queue() for id in table }
+        for ofi_id, data in table.items():
+            queue = queues[ofi_id]
+            launch_queues = [ queues[id] for id in data['is_waited_for_launch'] ]
+            finished_queues = [ queues[id] for id in data['is_waited_for_finished'] ]
+            waited_ids = data['wait_for_launch'].union(data['wait_for_finished'])
+            thread = threading.Thread(
+                target=self.launch_openbach_function_instance,
+                args=(scenario_instance, ofi_id, waited_ids, queue,
+                      launch_queues, finished_queues, date))
+            thread.start()
+
+        return { 'msg': 'OK', 'scenario_instance_id': scenario_instance.id }, 200
+
+
+    def stop_scenario_instance_view(self, scenario_instance_id, date=None):
+
+        return { 'error': 'TODO' }, 400
+
+
+    def list_scenario_instances_view(self, scenario_ids=[]):
+
+        return { 'error': 'TODO' }, 400
+
+
+    def status_scenario_instance_view(self, scenario_instance_id, verbosity=0):
+
+        return { 'error': 'TODO' }, 400
 
 
     def run(self):

@@ -170,9 +170,9 @@ def create_openbach_functions(apps, schema_editor):
                                openbach_function=start_job_instance).save()
     Openbach_Function_Argument(name='job_name', description='', type='str',
                                openbach_function=start_job_instance).save()
-    Openbach_Function_Argument(name='instance_args', description='', type='str',
+    Openbach_Function_Argument(name='instance_args', description='', type='json',
                                openbach_function=start_job_instance).save()
-    Openbach_Function_Argument(name='date', description='', type='str',
+    Openbach_Function_Argument(name='delta', description='', type='str',
                                openbach_function=start_job_instance).save()
     Openbach_Function_Argument(name='interval', description='', type='int',
                                openbach_function=start_job_instance).save()
@@ -190,7 +190,7 @@ def create_openbach_functions(apps, schema_editor):
     restart_job_instance.save()
     Openbach_Function_Argument(name='instance_id', description='', type='int',
                                openbach_function=restart_job_instance).save()
-    Openbach_Function_Argument(name='instance_args', description='', type='str',
+    Openbach_Function_Argument(name='instance_args', description='', type='json',
                                openbach_function=restart_job_instance).save()
     Openbach_Function_Argument(name='date', description='', type='str',
                                openbach_function=restart_job_instance).save()

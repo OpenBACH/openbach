@@ -1,9 +1,6 @@
 from django.contrib import admin
 
-from .models import Agent, Job, Installed_Job, Job_Instance, Watch, Job_Keyword
-from .models import Statistic, Required_Job_Argument, Optional_Job_Argument
-from .models import Required_Job_Argument_Instance, Optional_Job_Argument_Instance
-from .models import Job_Argument_Value, Statistic_Instance, Scenario
+from .models import *
 
 
 class AdminJobInstances(admin.ModelAdmin):
@@ -23,3 +20,13 @@ admin.site.register(Optional_Job_Argument_Instance)
 admin.site.register(Job_Argument_Value)
 admin.site.register(Statistic_Instance)
 admin.site.register(Scenario)
+admin.site.register(Scenario_Argument)
+admin.site.register(Openbach_Function)
+admin.site.register(Openbach_Function_Argument)
+admin.site.register(Scenario_Instance)
+admin.site.register(Scenario_Argument_Instance)
+admin.site.register(Scenario_Parameter_Instance)
+admin.site.register(Openbach_Function_Instance)
+admin.site.register(Wait_For_Launch)
+admin.site.register(Wait_For_Finished)
+admin.site.register(Openbach_Function_Argument_Instance)

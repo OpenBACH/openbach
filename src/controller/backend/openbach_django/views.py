@@ -610,7 +610,7 @@ class ScenarioView(GenericView):
     """Manage action on specific scenario"""
 
     def get(self, request, name):
-        """compute status of a scenario"""
+        """get a scenario"""
 
         data = { 'command': 'get_scenario', 'scenario_name': name }
 
@@ -634,6 +634,56 @@ class ScenarioView(GenericView):
         """remove a scenario from the database"""
 
         data = { 'command': 'del_scenario', 'scenario_name': name }
+
+        return self.conductor_execute(data)
+
+
+class ScenarioInstancesView(GenericView):
+    """Manage actions on scenarios without an ID"""
+
+    def get(self, request):
+        """list all scenario instances"""
+
+        scenario_ids = request.GET.getlist('scenario_ids')
+        data = { 'command': 'list_scenario_instances', 'scenario_ids':
+                 scenario_ids }
+
+        return self.conductor_execute(data)
+
+
+    def post(self, request):
+        """start a new scenario instance"""
+
+        data = request.JSON
+        data['command'] = 'start_scenario_instance'
+
+        return self.conductor_execute(data)
+
+
+class ScenarioInstanceView(GenericView):
+    """Manage action on specific scenario"""
+
+    def get(self, request, id):
+        """compute status of a scenario instance"""
+
+        try:
+            verbosity = int(request.GET.get('verbosity', 0))
+        except ValueError:
+            return {'msg': 'Query string malformed: \'verbosity\' should be an'
+                    ' int' }, 400
+        data = { 'command': 'start_scenario_instance', 'scenario_instance_id':
+                 id, 'verbosity': verbosity }
+
+        return self.conductor_execute(data)
+
+
+    def post(self, request, id):
+        """stop a scenario instance"""
+
+        data = { 'command': 'stop_scenario_instance', 'scenario_instance_id': id }
+        date = self.request.JSON.get('date', None)
+        if date:
+            data['date'] = date
 
         return self.conductor_execute(data)
 

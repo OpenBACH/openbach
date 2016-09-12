@@ -297,3 +297,11 @@ def get_scenario(scenario_name):
 def list_scenarios(verbosity=0):
     return _request_message('scenario', 'GET', verbosity=verbosity)
 
+
+def start_scenario_instance(name, args, date=None):
+    action = _request_message
+    if date is not None:
+        action = partial(action, date=date)
+
+    return action('scenario_instance', 'POST', scenario_name=name, args=args)
+

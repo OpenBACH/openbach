@@ -38,6 +38,7 @@
 from django.db import models
 from django.contrib.auth import hashers
 import ipaddress
+import json
 
 
 class Agent(models.Model):
@@ -97,24 +98,28 @@ class Statistic(models.Model):
         return self.name
 
 
-class Job_Argument(models.Model):
+class Argument(models.Model):
     INTEGER = 'int'
     BOOL = 'bool'
     STRING = 'str'
     FLOAT = 'float'
     IP = 'ip'
+    LIST = 'list'
+    JSON = 'json'
     NONE = 'None'
-    TYPE_CHOICES = (
+    typeCHOICES = (
         (INTEGER, 'Integer'),
         (BOOL, 'Bool'),
         (STRING, 'String'),
         (FLOAT, 'Float'),
         (IP, 'IP'),
+        (LIST, 'List'),
+        (JSON, 'Json'),
         (NONE, 'None'),
     )
     type = models.CharField(
         max_length=5,
-        choices=TYPE_CHOICES,
+        choices=typeCHOICES,
         default=NONE,
     )
     name = models.CharField(max_length=200)
@@ -127,7 +132,7 @@ class Job_Argument(models.Model):
         return self.name
 
 
-class Required_Job_Argument(Job_Argument):
+class Required_Job_Argument(Argument):
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     rank = models.IntegerField()
 
@@ -135,7 +140,7 @@ class Required_Job_Argument(Job_Argument):
         unique_together = (('name', 'job'), ('rank', 'job'))
 
 
-class Optional_Job_Argument(Job_Argument):
+class Optional_Job_Argument(Argument):
     flag = models.CharField(max_length=200)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
 
@@ -182,32 +187,18 @@ class Job_Instance(models.Model):
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
 
-    def check_args(self):
-        nb_required_args = self.job.job.required_job_argument_set.count()
-        nb_required_job_argument_instances = self.required_job_argument_instance_set.count()
-        if nb_required_job_argument_instances != nb_required_args:
-            raise ValueError('Not enough arguments')
-        for required_job_argument_instance in self.required_job_argument_instance_set.all():
-            required_job_argument_instance.check_values()
-        for optional_job_argument_instance in self.optional_job_argument_instance_set.all():
-            optional_job_argument_instance.check_values()
-
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
 
 
-class Job_Argument_Instance(models.Model):
-    pass
+class Argument_Instance(models.Model):
+    argument_instance_id = models.AutoField(primary_key=True)
 
 
-class Required_Job_Argument_Instance(Job_Argument_Instance):
+class Required_Job_Argument_Instance(Argument_Instance):
     argument = models.ForeignKey(Required_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
-    def check_values(self):
-        for value in self.job_argument_value_set.all():
-            value.check_type()
-
     def __str__(self):
         values = ''
         for job_argument_value in self.job_argument_value_set.all():
@@ -218,14 +209,10 @@ class Required_Job_Argument_Instance(Job_Argument_Instance):
         return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
 
 
-class Optional_Job_Argument_Instance(Job_Argument_Instance):
+class Optional_Job_Argument_Instance(Argument_Instance):
     argument = models.ForeignKey(Optional_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
-    def check_values(self):
-        for value in self.job_argument_value_set.all():
-            value.check_type()
-
     def __str__(self):
         values = ''
         for job_argument_value in self.job_argument_value_set.all():
@@ -236,47 +223,67 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
         return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
 
 
-class Job_Argument_Value(models.Model):
+class Argument_Value(models.Model):
+    argument_value_id = models.AutoField(primary_key=True)
     value = models.CharField(max_length=200)
-    argument_instance = models.ForeignKey(Job_Argument_Instance, on_delete=models.CASCADE)
 
-    def check_type(self):
-        type = self.argument_instance.argument.type
+    ACCEPTED_BOOLS = frozenset({'True', 'true', 'TRUE', 'T', 't', 'False', 'false',
+                                'FALSE', 'F', 'f'})
+
+    def _check_type_internal(self, type, value):
         if type == 'int':
             try:
-                int(self.value)
+                int(value)
             except ValueError:
-                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
-                                 ' \'{}\''.format(self.value, type))
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
         elif type == 'bool':
-            accepted_bool = ['True', 'true', 'TRUE', 'T', 't', 'False', 'false',
-                             'FALSE', 'F', 'f']
-            if self.value not in accepted_bool:
-                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
-                                 ' \'{}\''.format(self.value, type))
+            if value not in self.ACCEPTED_BOOLS:
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
         elif type == 'str':
             pass
         elif type == 'float':
             try:
-                float(self.value)
+                float(value)
             except ValueError:
-                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
-                                 ' \'{}\''.format(self.value, type))
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
         elif type == 'ip':
             try:
-                ipaddress.ip_address(self.value)
+                ipaddress.ip_address(value)
             except ValueError:
-                raise ValueError('Job_Argument_Value \'{}\' is not of the type'
-                                 ' \'{}\''.format(self.value, type))
-        elif type =='None':
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
+        elif type == 'None':
             raise ValueError('When the type is \'{}\', it should not have value'
                              .format(type))
+        elif type == 'list':
+            if not isinstance(value, list):
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
+        elif type == 'json':
+            if not isinstance(value, dict):
+                raise ValueError('Argument_Value \'{}\' is not of the type'
+                                 ' \'{}\''.format(value, type))
         else:
-            raise ValueError('Job_Argument_Value \'{}\' has not a known type:'
-                             ' \'{}\''.format(self.value, type))
+            raise ValueError('Argument_Value \'{}\' has not a known type:'
+                             ' \'{}\''.format(value, type))
 
     def __str__(self):
         return self.value
+
+
+class Job_Argument_Value(Argument_Value):
+    argument_instance = models.ForeignKey(Argument_Instance, on_delete=models.CASCADE)
+
+    def check_and_set_value(self, value):
+        type = self.argument_instance.argument.type
+        self._check_type_internal(type, value)
+        if type == 'json':
+            self.value = json.dumps(value)
+        else:
+            self.value = value
 
 
 class Watch(models.Model):
@@ -292,7 +299,145 @@ class Scenario(models.Model):
     name = models.CharField(max_length=20, primary_key=True)
     description = models.CharField(max_length=200, null=True, blank=True)
     scenario = models.TextField()
+    checked = models.BooleanField(default=False)
+    valid = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
+
+
+class Scenario_Argument(Argument):
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (('name', 'scenario'))
+
+
+class Openbach_Function(models.Model):
+    name = models.CharField(max_length=200, primary_key=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Openbach_Function_Argument(Argument):
+    openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (('name', 'openbach_function'))
+
+
+class Scenario_Instance(models.Model):
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
+    status = models.CharField(max_length=200, null=True, blank=True)
+    status_date = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return 'Scenario Instance {}'.format(self.id)
+
+
+class Scenario_Argument_Instance(Argument_Instance, Argument_Value):
+    argument = models.ForeignKey(Scenario_Argument, on_delete=models.CASCADE)
+    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+
+    def check_and_set_value(self, value):
+        type = self.argument.type
+        self._check_type_internal(type, value)
+        if type == 'json':
+            self.value = json.dumps(value)
+        else:
+            self.value = value
+
+    class Meta:
+        unique_together = (('argument', 'scenario_instance'))
+
+    def __str__(self):
+        return self.value
+
+
+class Scenario_Parameter_Instance(Argument, Argument_Instance, Argument_Value):
+    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+
+    def check_and_set_value(self, value):
+        type = self.type
+        self._check_type_internal(type, value)
+        if type == 'json':
+            self.value = json.dumps(value)
+        else:
+            self.value = value
+
+    def __str__(self):
+        return 'Parameter \'{}\' with value \'{}\''.format(self.name, self.value)
+    
+    class Meta:
+        unique_together = (('name', 'scenario_instance'))
+
+
+class Openbach_Function_Instance(models.Model):
+    openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
+    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+    openbach_function_instance_id = models.IntegerField()
+    status = models.CharField(max_length=200, null=True, blank=True)
+    status_date = models.DateTimeField(null=True, blank=True)
+    valid = models.BooleanField(default=False)
+
+    def __str__(self):
+        return 'Scenario \'{}\' openbach_function \'{}\' (Scenario_Instance \'{}\')'.format(
+            self.scenario_instance.scenario.name,
+            self.openbach_function_instance_id, self.scenario_instance.id)
+
+    class Meta:
+        unique_together = (('openbach_function_instance_id', 'scenario_instance'))
+
+
+class Wait_For(models.Model):
+    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
+    time = models.IntegerField()
+
+    class Meta:
+        abstract = True
+
+
+class Wait_For_Launch(Wait_For):
+    openbach_function_instance_id_waited = models.IntegerField()
+
+    class Meta:
+        unique_together = (('openbach_function_instance', 'openbach_function_instance_id_waited'))
+
+    def __str__(self):
+        return 'OFI {} waits for OFI {} to be launch (Scenario_Instance \'{}\')'.format(
+            self.openbach_function_instance.openbach_function_instance_id,
+            self.openbach_function_instance_id_waited,
+            self.scenario_instance.id)
+
+
+class Wait_For_Finished(Wait_For):
+    job_instance_id_waited = models.IntegerField()
+
+    class Meta:
+        unique_together = (('openbach_function_instance', 'job_instance_id_waited'))
+
+    def __str__(self):
+        return 'OFI {} waits for OFI {} to finish (Scenario_Instance \'{}\')'.format(
+            self.openbach_function_instance.openbach_function_instance_id,
+            self.job_instance_id_waited,
+            self.scenario_instance.id)
+
+
+class Openbach_Function_Argument_Instance(Argument_Instance, Argument_Value):
+    argument = models.ForeignKey(Openbach_Function_Argument, on_delete=models.CASCADE)
+    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance,
+                                                   on_delete=models.CASCADE)
+
+    def check_and_set_value(self, value):
+        type = self.argument.type
+        self._check_type_internal(type, value)
+        if type == 'json':
+            self.value = json.dumps(value)
+        else:
+            self.value = value
+
+    def __str__(self):
+        return self.value
 

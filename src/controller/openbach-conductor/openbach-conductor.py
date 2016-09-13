@@ -73,6 +73,24 @@ def convert_severity(severity):
     return _SEVERITY_MAPPING.get(severity, 8)
 
 
+class WaitingQueueManager:
+    __shared_state = {}  # Borg pattern
+
+    def __init__(self, init=False):
+        self.__dict__ = self.__class__.__shared_state
+        
+        if init:
+            self.waiting_queues = {}
+            self.mutex = threading.Lock()
+
+    def __enter__(self):
+        self.mutex.acquire()
+        return self.waiting_queues
+
+    def __exit__(self, t, v, tb):
+        self.mutex.release()
+
+
 class PlaybookBuilder():
     def __init__(self, path_to_build, path_src):
         self.path_to_build = path_to_build
@@ -302,7 +320,7 @@ class ClientThread(threading.Thread):
         list_jobs_failed = []
         for job in list_jobs:
             try:
-                self.install_jobs([agent.address], [job])
+                self.install_jobs_view([agent.address], [job])
             except BadRequest:
                 list_jobs_failed.append(job)
         if list_jobs_failed != []:
@@ -978,12 +996,40 @@ class ClientThread(threading.Thread):
         return date
 
 
-    def start_job_instance(self, agent_ip, job_name, instance_args, delta=None,
+    def start_job_instance(self, scenario_instance_id, agent_ip, job_name,
+                           instance_args, ofi_id, finished_queues, delta=None,
                            origin=int(timezone.now().timestamp()*1000),
                            interval=None):
         date = origin + int(delta)*1000
-        self.start_job_instance_view(agent_ip, job_name, instance_args, date,
-                                     interval)
+        try:
+            result, _ = self.start_job_instance_view(agent_ip, job_name,
+                                                     instance_args, date,
+                                                     interval)
+        except BadRequest as e:
+            # TODO gerer les erreurs
+            pass
+
+        job_instance_id = result['instance_id']
+        try:
+            self.watch_job_instance_view(job_instance_id, interval=2)
+        except BadRequest as e:
+            # TODO gerer les erreurs
+            return
+
+        with WaitingQueueManager() as waiting_queues:
+            waiting_queues[job_instance_id] = (ofi_id, finished_queues)
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect(('', 2845))
+        except socket.error as serr:
+            # TODO status manager injoignable, arrete le scenario ?
+            print('error de connexion')
+            return
+        message = { 'type': 'watch', 'scenario_instance_id':
+                    scenario_instance_id, 'job_instance_id': job_instance_id }
+        sock.send(json.dumps(message).encode())
+        sock.close()
 
 
     def start_job_instance_view(self, agent_ip, job_name, instance_args, date=None,
@@ -1820,7 +1866,7 @@ class ClientThread(threading.Thread):
         while l:
             x = queue.get()
             l.remove(x)
-        print(ofi_id)
+        print('Openbach_Function_Instance number: ', ofi_id)
         ofi = scenario_instance.openbach_function_instance_set.filter(
             openbach_function_instance_id=ofi_id)[0]
         try:
@@ -1835,12 +1881,14 @@ class ClientThread(threading.Thread):
                 arguments[arg.argument.name] = json.loads(arg.value)
             else:
                 arguments[arg.argument.name] = arg.value
+        if ofi.openbach_function.name == 'start_job_instance':
+            arguments['scenario_instance_id'] = scenario_instance.id
+            arguments['ofi_id'] = ofi_id
+            arguments['finished_queues'] = finished_queues
         print(arguments)
         # TODO lancer l'openbach_function
         function(**arguments)
         for queue in launch_queues:
-            queue.put(ofi_id)
-        for queue in finished_queues:
             queue.put(ofi_id)
 
 
@@ -1861,12 +1909,14 @@ class ClientThread(threading.Thread):
             scenario_instance = self.register_scenario_instance(scenario, args)
         if not table:
             table = self.build_table(scenario_instance)
+        print(table)
         # lance les openbach function possible
         queues = { id: Queue() for id in table }
         for ofi_id, data in table.items():
             queue = queues[ofi_id]
             launch_queues = [ queues[id] for id in data['is_waited_for_launch'] ]
-            finished_queues = [ queues[id] for id in data['is_waited_for_finished'] ]
+            finished_queues = tuple([ queues[id] for id in
+                                     data['is_waited_for_finished'] ])
             waited_ids = data['wait_for_launch'].union(data['wait_for_finished'])
             thread = threading.Thread(
                 target=self.launch_openbach_function_instance,
@@ -1909,14 +1959,54 @@ class ClientThread(threading.Thread):
             self.clientsocket.close()
 
 
-if __name__ == '__main__':
-    # Ouverture de la socket d'ecoute
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_socket.bind(('', 1113))
-    tcp_socket.listen(10)
-
+def listen_message_from_backend(tcp_socket):
     while True:
         client_socket, _ = tcp_socket.accept()
         ClientThread(client_socket).start()
+
+
+def handle_message_from_status_manager(clientsocket):
+    request = clientsocket.recv(2048)
+    clientsocket.close()
+    message = json.loads(request.decode())
+    type_ = message['type']
+    scenario_instance_id = message['scenario_instance_id']
+    job_instance_id = message['job_instance_id']
+    if type_ == 'Finished':
+        with WaitingQueueManager() as waiting_queues:
+            ofi_id, finished_queues = waiting_queues[job_instance_id]
+        for queue in finished_queues:
+            queue.put(ofi_id)
+        # TODO Stopper la watch ?
+
+
+def listen_message_from_status_manager(tcp_socket):
+    while True:
+        client_socket, _ = tcp_socket.accept()
+        threading.Thread(target=handle_message_from_status_manager,
+                         args=(client_socket,)).start()
+
+
+if __name__ == '__main__':
+    # Ouverture de la socket d'ecoute avec le backend
+    tcp_socket1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp_socket1.bind(('', 1113))
+    tcp_socket1.listen(10)
+
+    # Ouverture de la socket d'ecoute avec le status_manager
+    tcp_socket2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp_socket2.bind(('', 2846))
+    tcp_socket2.listen(10)
+
+    # Initialiser le WaitingQueueManager
+    WaitingQueueManager(init=True)
+
+    thread1 = threading.Thread(target=listen_message_from_backend,
+                               args=(tcp_socket1,))
+    thread1.start()
+    thread2 = threading.Thread(target=listen_message_from_status_manager,
+                               args=(tcp_socket2,))
+    thread2.start()
 

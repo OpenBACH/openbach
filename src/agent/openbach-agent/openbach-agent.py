@@ -201,18 +201,18 @@ def status_job(job_name, job_instance_id):
             with open(pid_filename) as f:
                 pid = int(f.read())
         except (IOError, ValueError):
-            status = '"Not Running"'
+            status = 'Not Running'
         else:
             if os.path.exists('/proc/{}'.format(pid)):
                 status = 'Running'
             else:
-                status = '"Not Running"'
+                status = 'Not Running'
                 os.remove(pid_filename)
     else:
         if isinstance(job.trigger, DateTrigger):
-            status = '"Programmed on {}"'.format(datetime_repr(job.trigger.run_date))
+            status = 'Programmed on {}'.format(datetime_repr(job.trigger.run_date))
         elif isinstance(job.trigger, IntervalTrigger):
-            status = '"Programmed every {}"'.format(job.trigger.interval_length)
+            status = 'Programmed every {}'.format(job.trigger.interval_length)
 
     # Connexion au service de collecte de l'agent
     connection = RSTAT_REGISTER_STAT()

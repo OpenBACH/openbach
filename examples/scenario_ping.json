@@ -1,0 +1,63 @@
+{
+  "name": "Ping",
+  "description": "First scenario (for test)",
+  "arguments": [
+    {
+      "name": "duration",
+      "description": "duree des pings"
+    }
+  ],
+  "constants": {
+    "agentA": "172.20.42.167",
+    "agentB": "172.20.42.90",
+    "job": "ping"
+  },
+  "openbach_functions": [
+    {
+      "name": "start_job_instance",
+      "args": {
+        "agent_ip": "${agentA}",
+        "job": {
+          "name": "${job}",
+          "args": {
+            "destination_ip": [
+              "${agentB}"
+            ],
+            "duration": [
+              "${duration}"
+            ]
+          }
+        },
+        "offset": 5
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [],
+        "finished_indexes": []
+      }
+    },
+    {
+      "name": "start_job_instance",
+      "args": {
+        "agent_ip": "${agentB}",
+        "job": {
+          "name": "${job}",
+          "args": {
+            "destination_ip": [
+              "${agentA}"
+            ],
+            "duration": [
+              "${duration}"
+            ]
+          }
+        },
+        "offset": 0
+      },
+      "wait": {
+        "time": 10,
+        "launched_indexes": [],
+        "finished_indexes": [0]
+      }
+    }
+  ]
+}

@@ -591,10 +591,10 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 |===
 | Function	         | Method	         | url              | Input JSON contents 	                     | Description
 | add_job	           | POST	           | /job             | *name*, *path*                             | Add a Job to the Jobs list
-| del_job            | PUT             | /job/*job_name*  |                                            | Delete a Job from the Jobs list
+| del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
 | list_jobs          | GET             | /job             | verbosity                                  | Return the Jobs list.  verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
-| get_job_stats      | GET             | /job/*job_name*  | verbosity                                  | Return the statistics produced by a Job. verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
-| get_job_help       | GET             | /job/*job_name*  |                                            | Return the help of the Job
+| get_job_stats      | GET             | /job/*job_name*  | *type=stats*, verbosity                    | Return the statistics produced by a Job. verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
+| get_job_help       | GET             | /job/*job_name*  | *type=help*                                | Return the help of the Job
 |===
 
 Then the group 3 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).

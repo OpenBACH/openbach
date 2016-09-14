@@ -14,19 +14,13 @@
   },
   "openbach_functions": [
     {
-      "name": "start_job_instance",
-      "args": {
+      "start_job_instance": {
         "agent_ip": "${agentA}",
-        "job": {
-          "name": "${job}",
-          "args": {
-            "destination_ip": [
-              "${agentB}"
-            ],
-            "duration": [
-              "${duration}"
-            ]
-          }
+        "${job}": {
+          "destination_ip": "${agentB}",
+          "duration": [
+            "${duration}"
+          ]
         },
         "offset": 5
       },
@@ -37,19 +31,13 @@
       }
     },
     {
-      "name": "start_job_instance",
-      "args": {
+      "start_job_instance": {
         "agent_ip": "${agentB}",
-        "job": {
-          "name": "${job}",
-          "args": {
-            "destination_ip": [
-              "${agentA}"
-            ],
-            "duration": [
-              "${duration}"
-            ]
-          }
+        "${job}": {
+          "destination_ip": "${agentA}",
+          "duration": [
+            "${duration}"
+          ]
         },
         "offset": 0
       },

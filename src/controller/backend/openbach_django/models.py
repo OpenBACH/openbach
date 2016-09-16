@@ -141,15 +141,14 @@ class Required_Job_Argument(Argument):
 
 
 class Optional_Job_Argument(Argument):
-    flag = models.CharField(max_length=200)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    flag = models.CharField(max_length=200)
 
     class Meta:
-        unique_together = (('name', 'job'),('flag', 'job'))
+        unique_together = (('name', 'job'), ('flag', 'job'))
 
 
 class Installed_Job(models.Model):
-    name = models.CharField(max_length=200, primary_key=True)
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     update_status = models.DateTimeField(null=True, blank=True)
@@ -158,11 +157,11 @@ class Installed_Job(models.Model):
     default_stat_storage = models.BooleanField(default=True)
     default_stat_broadcast = models.BooleanField(default=False)
 
-    def set_name(self):
-        self.name = '{0.job} on {0.agent}'.format(self)
+    class Meta:
+        unique_together = ('agent', 'job')
 
     def __str__(self):
-        return self.name
+        return '{0.job} on {0.agent}'.format(self)
 
 
 class Statistic_Instance(models.Model):
@@ -191,11 +190,11 @@ class Job_Instance(models.Model):
         return 'Job Instance {} of {}'.format(self.id, self.job)
 
 
-class Argument_Instance(models.Model):
+class Job_Argument_Instance(models.Model):
     argument_instance_id = models.AutoField(primary_key=True)
 
 
-class Required_Job_Argument_Instance(Argument_Instance):
+class Required_Job_Argument_Instance(Job_Argument_Instance):
     argument = models.ForeignKey(Required_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
@@ -209,7 +208,7 @@ class Required_Job_Argument_Instance(Argument_Instance):
         return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
 
 
-class Optional_Job_Argument_Instance(Argument_Instance):
+class Optional_Job_Argument_Instance(Job_Argument_Instance):
     argument = models.ForeignKey(Optional_Job_Argument, on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
@@ -275,10 +274,10 @@ class Argument_Value(models.Model):
 
 
 class Job_Argument_Value(Argument_Value):
-    argument_instance = models.ForeignKey(Argument_Instance, on_delete=models.CASCADE)
+    job_argument_instance = models.ForeignKey(Job_Argument_Instance, on_delete=models.CASCADE)
 
     def check_and_set_value(self, value):
-        type = self.argument_instance.argument.type
+        type = self.job_argument_instance.argument.type
         self._check_type_internal(type, value)
         if type == 'json':
             self.value = json.dumps(value)
@@ -295,24 +294,6 @@ class Watch(models.Model):
         return 'Watch of Job Instance {0.instance_id} of {0.job}'.format(self)
 
 
-class Scenario(models.Model):
-    name = models.CharField(max_length=20, primary_key=True)
-    description = models.CharField(max_length=200, null=True, blank=True)
-    scenario = models.TextField()
-    checked = models.BooleanField(default=False)
-    valid = models.BooleanField(default=False)
-
-    def __str__(self):
-        return self.name
-
-
-class Scenario_Argument(Argument):
-    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
-
-    class Meta:
-        unique_together = (('name', 'scenario'))
-
-
 class Openbach_Function(models.Model):
     name = models.CharField(max_length=200, primary_key=True)
 
@@ -327,6 +308,30 @@ class Openbach_Function_Argument(Argument):
         unique_together = (('name', 'openbach_function'))
 
 
+class Scenario(models.Model):
+    name = models.CharField(max_length=20, primary_key=True)
+    description = models.CharField(max_length=200, null=True, blank=True)
+    scenario = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+
+class Scenario_Argument(Argument):
+    scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
+
+    def check_or_set_type(self, type):
+        if self.type is 'None':
+            self.type = type
+        else:
+            if self.type != type:
+                return False
+        return True
+
+    class Meta:
+        unique_together = (('name', 'scenario'))
+
+
 class Scenario_Instance(models.Model):
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
     status = models.CharField(max_length=200, null=True, blank=True)
@@ -336,9 +341,13 @@ class Scenario_Instance(models.Model):
         return 'Scenario Instance {}'.format(self.id)
 
 
-class Scenario_Argument_Instance(Argument_Instance, Argument_Value):
+class Scenario_Argument_Instance(Argument_Value):
     argument = models.ForeignKey(Scenario_Argument, on_delete=models.CASCADE)
-    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+    scenario_instance = models.ForeignKey(Scenario_Instance,
+                                          on_delete=models.CASCADE, null=True,
+                                          blank=True)
+
+    TRUE = frozenset({'True', 'true', 'TRUE', 'T', 't'})
 
     def check_and_set_value(self, value):
         type = self.argument.type
@@ -355,31 +364,10 @@ class Scenario_Argument_Instance(Argument_Instance, Argument_Value):
         return self.value
 
 
-class Scenario_Parameter_Instance(Argument, Argument_Instance, Argument_Value):
-    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
-
-    def check_and_set_value(self, value):
-        type = self.type
-        self._check_type_internal(type, value)
-        if type == 'json':
-            self.value = json.dumps(value)
-        else:
-            self.value = value
-
-    def __str__(self):
-        return 'Parameter \'{}\' with value \'{}\''.format(self.name, self.value)
-    
-    class Meta:
-        unique_together = (('name', 'scenario_instance'))
-
-
 class Openbach_Function_Instance(models.Model):
     openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
     scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
     openbach_function_instance_id = models.IntegerField()
-    status = models.CharField(max_length=200, null=True, blank=True)
-    status_date = models.DateTimeField(null=True, blank=True)
-    valid = models.BooleanField(default=False)
 
     def __str__(self):
         return 'Scenario \'{}\' openbach_function \'{}\' (Scenario_Instance \'{}\')'.format(
@@ -396,14 +384,12 @@ class Wait_For(models.Model):
     time = models.IntegerField()
 
     class Meta:
-        abstract = True
+        unique_together = (('openbach_function_instance', 'scenario_instance'))
 
 
-class Wait_For_Launch(Wait_For):
-    openbach_function_instance_id_waited = models.IntegerField()
-
-    class Meta:
-        unique_together = (('openbach_function_instance', 'openbach_function_instance_id_waited'))
+class Wait_For_Launched(models.Model):
+    openbach_function_instance_id = models.IntegerField()
+    wait_for = models.ForeignKey(Wait_For, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to be launch (Scenario_Instance \'{}\')'.format(
@@ -412,11 +398,9 @@ class Wait_For_Launch(Wait_For):
             self.scenario_instance.id)
 
 
-class Wait_For_Finished(Wait_For):
-    job_instance_id_waited = models.IntegerField()
-
-    class Meta:
-        unique_together = (('openbach_function_instance', 'job_instance_id_waited'))
+class Wait_For_Finished(models.Model):
+    job_instance_id = models.IntegerField()
+    wait_for = models.ForeignKey(Wait_For, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to finish (Scenario_Instance \'{}\')'.format(
@@ -425,7 +409,7 @@ class Wait_For_Finished(Wait_For):
             self.scenario_instance.id)
 
 
-class Openbach_Function_Argument_Instance(Argument_Instance, Argument_Value):
+class Openbach_Function_Argument_Instance(Argument_Value):
     argument = models.ForeignKey(Openbach_Function_Argument, on_delete=models.CASCADE)
     openbach_function_instance = models.ForeignKey(Openbach_Function_Instance,
                                                    on_delete=models.CASCADE)

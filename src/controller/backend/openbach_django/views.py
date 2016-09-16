@@ -597,11 +597,10 @@ class ScenariosView(GenericView):
     def post(self, request):
         """create a new scenario"""
 
-        if 'scenario_json' not in request.JSON:
-            return {'msg': 'Missing parameter \'scenario_json\''}, 400
-
-        data = request.JSON
-        data['command'] = 'create_scenario'
+        data = {
+            'command': 'create_scenario',
+            'scenario_json': request.JSON,
+        }
 
         return self.conductor_execute(data)
 
@@ -620,12 +619,11 @@ class ScenarioView(GenericView):
     def put(self, request, name):
         """modify a scenario"""
 
-        if 'scenario_json' not in request.JSON:
-            return {'msg': 'Missing parameter \'scenario_json\''}, 400
-
-        data = request.JSON
-        data['command'] = 'modify_scenario'
-        data['scenario_name'] = name
+        data = {
+            'command': 'modify_scenario',
+            'scenario_json': request.JSON,
+            'scenario_name': name,
+        }
 
         return self.conductor_execute(data)
 

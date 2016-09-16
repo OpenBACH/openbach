@@ -43,10 +43,10 @@ import yaml
 import getpass
 import requests
 import json
+import parse
 from queue import Queue
 from operator import attrgetter
 from datetime import datetime
-from django.core.serializers.json import DjangoJSONEncoder
 from contextlib import contextmanager
 
 import sys
@@ -58,6 +58,7 @@ application = get_wsgi_application()
 from django.utils import timezone
 from django.db import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
 
 
@@ -679,15 +680,18 @@ class ClientThread(threading.Thread):
                         'ansible_ssh_pass={agent.password} '
                         '{job.path}/install_{job.name}.yml'
                         .format(path_src=self.path_src, agent=agent, job=job))
+                except BadRequest:
+                    sucess = False
+                else:
                     installed_job = Installed_Job(
                             agent=agent, job=job,
                             severity=severity,
-                            local_severity=local_severity)
-                    installed_job.set_name()
-                    installed_job.update_status = timezone.now()
-                    installed_job.save()
-                except BadRequest:
-                    sucess = False
+                            local_severity=local_severity,
+                            update_status=timezone.now())
+                    try:
+                        installed_job.save()
+                    except IntegrityError:
+                        pass
 
         if success:
             if warning:
@@ -726,7 +730,8 @@ class ClientThread(threading.Thread):
             for job in jobs:
                 installed_job_name = '{} on {}'.format(job, agent)
                 try:
-                    installed_job = Installed_Job.objects.get(pk=installed_job_name)
+                    installed_job = Installed_Job.objects.get(agent=agent,
+                                                              job=job)
                 except ObjectDoesNotExist:
                     jobs_not_installed.append(installed_job_name)
                     continue
@@ -858,11 +863,9 @@ class ClientThread(threading.Thread):
                 unknown_jobs.append(job_name)
                 error = True
                 continue
-            installed_job = Installed_Job(agent=agent, job=job)
-            installed_job.set_name()
-            installed_job.update_status = date
-            installed_job.severity = 4
-            installed_job.local_severity = 4
+            installed_job = Installed_Job(agent=agent, job=job,
+                                          udpate_status=date, severity=4,
+                                          local_severity=4)
             installed_job.save()
 
         if error:
@@ -920,15 +923,15 @@ class ClientThread(threading.Thread):
 
 
     @staticmethod
-    def format_args(instance):
+    def format_args(job_instance):
         args = ''
-        for argument in instance.required_job_argument_instance_set.all().order_by('argument__rank'):
+        for argument in job_instance.required_job_argument_instance_set.all().order_by('argument__rank'):
             for job_argument_value in argument.job_argument_value_set.all():
                 if args == '':
                     args = '{}'.format(job_argument_value.value)
                 else:
                     args = '{} {}'.format(args, job_argument_value.value)
-        for optional_argument in instance.optional_job_argument_instance_set.all():
+        for optional_argument in job_instance.optional_job_argument_instance_set.all():
             if args == '':
                 args = '{}'.format(optional_argument.argument.flag)
             else:
@@ -940,80 +943,90 @@ class ClientThread(threading.Thread):
 
 
     @staticmethod
-    def fill_and_check_args(instance, instance_args):
+    def fill_and_check_args(job_instance, instance_args):
         for arg_name, arg_values in instance_args.items():
             try:
                 argument_instance = Required_Job_Argument_Instance(
-                    argument=instance.job.job.required_job_argument_set.filter(name=arg_name)[0],
-                    job_instance=instance
+                    argument=job_instance.job.job.required_job_argument_set.filter(name=arg_name)[0],
+                    job_instance=job_instance
                 )
                 argument_instance.save()
             except IndexError:
                 try:
                     argument_instance = Optional_Job_Argument_Instance(
-                        argument=instance.job.job.optional_job_argument_set.filter(name=arg_name)[0],
-                        job_instance=instance
+                        argument=job_instance.job.job.optional_job_argument_set.filter(name=arg_name)[0],
+                        job_instance=job_instance
                     )
                     argument_instance.save()
                 except IndexError:
                     raise BadRequest('Argument \'{}\' don\'t match with'
                                      ' arguments needed or '
                                      'optional'.format(arg_name), 400)
-            for arg_value in arg_values:
-                jav = Job_Argument_Value(argument_instance=argument_instance)
+            if isinstance(arg_values, list):
+                for arg_value in arg_values:
+                    jav = Job_Argument_Value(job_argument_instance=argument_instance)
+                    try:
+                        jav.check_and_set_value(arg_value)
+                    except ValueError as e:
+                        raise BadRequest(e.args[0], 400)
+                    jav.save()
+            else:
+                jav = Job_Argument_Value(job_argument_instance=argument_instance)
                 try:
-                    jav.check_and_set_value(arg_value)
+                    jav.check_and_set_value(arg_values)
                 except ValueError as e:
                     raise BadRequest(e.args[0], 400)
                 jav.save()
 
 
     @staticmethod
-    def fill_job_instance(instance, instance_args, date=None, interval=None,
+    def fill_job_instance(job_instance, instance_args, date=None, interval=None,
                           restart=False):
-        instance.status = "Starting ..."
-        instance.update_status = timezone.now()
+        job_instance.status = "Starting ..."
+        job_instance.update_status = timezone.now()
 
         if interval:
-            instance.start_date = timezone.now()
-            instance.periodic = True
-            instance.save()
+            job_instance.start_date = timezone.now()
+            job_instance.periodic = True
+            job_instance.save()
         else:
             if not date:
-                instance.start_date = timezone.now()
+                job_instance.start_date = timezone.now()
                 date = 'now'
             else:
                 start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
-                instance.start_date = start_date
-            instance.periodic = False
-            instance.save()
+                job_instance.start_date = start_date
+            job_instance.periodic = False
+            job_instance.save()
 
         if restart:
-            instance.required_job_argument_instance_set.all().delete()
-            instance.optional_job_argument_instance_set.all().delete()
+            job_instance.required_job_argument_instance_set.all().delete()
+            job_instance.optional_job_argument_instance_set.all().delete()
 
-        ClientThread.fill_and_check_args(instance, instance_args)
+        ClientThread.fill_and_check_args(job_instance, instance_args)
         return date
 
 
     def start_job_instance(self, scenario_instance_id, agent_ip, job_name,
-                           instance_args, ofi_id, finished_queues, delta=None,
+                           instance_args, ofi_id, finished_queues, offset=None,
                            origin=int(timezone.now().timestamp()*1000),
                            interval=None):
-        date = origin + int(delta)*1000
+        date = origin + int(offset)*1000
         try:
             result, _ = self.start_job_instance_view(agent_ip, job_name,
                                                      instance_args, date,
                                                      interval)
         except BadRequest as e:
             # TODO gerer les erreurs
-            pass
+            print(e)
+            return
 
         job_instance_id = result['instance_id']
         try:
             self.watch_job_instance_view(job_instance_id, interval=2)
         except BadRequest as e:
             # TODO gerer les erreurs
+            print(e)
             return
 
         with WaitingQueueManager() as waiting_queues:
@@ -1044,21 +1057,21 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': job_name})
-        name = '{} on {}'.format(job_name, agent_ip)
         try:
-            installed_job = Installed_Job.objects.get(pk=name)
+            installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             raise BadRequest('This Installed_Job isn\'t in the database', 404,
-                             {'job_name': name})
+                             {'job_name': '{} on {}'.format(job_name,
+                                                            agent_ip)})
 
-        instance = Job_Instance(job=installed_job)
-        date = self.fill_job_instance(instance, instance_args, date, interval)
+        job_instance = Job_Instance(job=installed_job)
+        date = self.fill_job_instance(job_instance, instance_args, date, interval)
         self.playbook_builder.write_hosts(agent.address)
-        args = self.format_args(instance)
+        args = self.format_args(job_instance)
         with self.playbook_builder.playbook_file(
                 'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_start(
-                    job.name, instance.id,
+                    job.name, job_instance.id,
                     args, date, interval,
                     playbook, extra_vars)
         try:
@@ -1070,19 +1083,19 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
         except BadRequest:
-            instance.delete()
+            job_instance.delete()
             raise
-        instance.status = "Started"
-        instance.update_status = timezone.now()
-        instance.save()
-        return { 'msg': 'OK', 'instance_id': instance.id }, 200
+        job_instance.status = "Started"
+        job_instance.update_status = timezone.now()
+        job_instance.save()
+        return { 'msg': 'OK', 'instance_id': job_instance.id }, 200
 
 
     def stop_job_instance_view(self, instance_ids, date=None):
-        instances = Job_Instance.objects.filter(pk__in=instance_ids)
+        job_instances = Job_Instance.objects.filter(pk__in=instance_ids)
         warnings = []
 
-        no_job_instance = set(instance_ids) - set(map(attrgetter('id'), instances))
+        no_job_instance = set(instance_ids) - set(map(attrgetter('id'), job_instances))
         if no_job_instance:
             warnings.append({'msg': 'At least one of the Job_Instances is '
                              'unknown to the Controller', 'unknown_job_instance':
@@ -1096,19 +1109,19 @@ class ClientThread(threading.Thread):
 
         already_stopped = {'msg': 'Those Job_Instances are already stopped',
                            'job_instance_ids': []}
-        for instance in instances:
-            if instance.is_stopped:
-                already_stopped['job_instance_ids'].append(instance.id)
+        for job_instance in job_instances:
+            if job_instance.is_stopped:
+                already_stopped['job_instance_ids'].append(job_instance.id)
                 continue
-            instance.stop_date = stop_date
-            instance.save()
-            job = instance.job.job
-            agent = instance.job.agent
+            job_instance.stop_date = stop_date
+            job_instance.save()
+            job = job_instance.job.job
+            agent = job_instance.job.agent
             self.playbook_builder.write_hosts(agent.address)
             with self.playbook_builder.playbook_file(
                     'stop_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
                 self.playbook_builder.build_stop(
-                        job.name, instance.id, date,
+                        job.name, job_instance.id, date,
                         playbook, extra_vars)
             try:
                 self.launch_playbook(
@@ -1120,11 +1133,11 @@ class ClientThread(threading.Thread):
                     .format(playbook.name, agent=agent))
             except BadRequest as e:
                 warnings.append({'msg': e.reason, 'job_instance_id':
-                                 instance.id})
+                                 job_instance.id})
             else:
                 if stop_date <= timezone.now():
-                    instance.is_stopped = True
-                    instance.save()
+                    job_instance.is_stopped = True
+                    job_instance.save()
 
         if already_stopped['job_instance_ids']:
             warnings.append(already_stopped)
@@ -1137,21 +1150,21 @@ class ClientThread(threading.Thread):
     def restart_job_instance_view(self, instance_id, instance_args, date=None,
                                   interval=None):
         try:
-            instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
                              {'instance_id': instance_id})
 
-        date = self.fill_job_instance(instance, instance_args, date, interval,
+        date = self.fill_job_instance(job_instance, instance_args, date, interval,
                                       True)
-        job = instance.job.job
-        agent = instance.job.agent
+        job = job_instance.job.job
+        agent = job_instance.job.agent
         self.playbook_builder.write_hosts(agent.address)
-        args = self.format_args(instance)
+        args = self.format_args(job_instance)
         with self.playbook_builder.playbook_file(
                 'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_restart(
-                    job.name, instance.id,
+                    job.name, job_instance.id,
                     args, date, interval,
                     playbook, extra_vars)
         try:
@@ -1163,23 +1176,23 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
         except BadRequest:
-            instance.delete()
+            job_instance.delete()
             raise
-        instance.is_stopped = False
-        instance.status = "Restarted"
-        instance.update_status = timezone.now()
-        instance.save()
+        job_instance.is_stopped = False
+        job_instance.status = "Restarted"
+        job_instance.update_status = timezone.now()
+        job_instance.save()
         return { 'msg': 'OK' }, 200
 
 
     def watch_job_instance_view(self, instance_id, date=None, interval=None,
                                 stop=None):
         try:
-            instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
                              {'instance_id': instance_id})
-        installed_job = instance.job
+        installed_job = job_instance.job
 
         try:
             watch = Watch.objects.get(pk=instance_id)
@@ -1227,9 +1240,9 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def update_instance(instance_id):
-        instance = Job_Instance.objects.get(pk=instance_id)
+        job_instance = Job_Instance.objects.get(pk=instance_id)
         url = ClientThread.UPDATE_INSTANCE_URL.format(
-                instance.job.job.name, instance.id, agent=instance.job.agent)
+                job_instance.job.job.name, job_instance.id, agent=job_instance.job.agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -1246,9 +1259,9 @@ class ClientThread(threading.Thread):
                         timezone.get_current_timezone())
             elif column == 'last':
                 status = value
-        instance.update_status = date
-        instance.status = status
-        instance.save()
+        job_instance.update_status = date
+        job_instance.status = status
+        job_instance.save()
 
 
     def status_job_instance_view(self, instance_id, verbosity=0, update=False):
@@ -1259,32 +1272,33 @@ class ClientThread(threading.Thread):
             except BadRequest as e:
                 error_msg = e.reason
         try:
-            instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
                              {'instance_id': instance_id})
         instance_infos = {
-                'id': instance.id,
+                'id': job_instance.id,
                 'arguments': {}
         }
-        for required_job_argument in instance.required_job_argument_instance_set.all():
+        for required_job_argument in job_instance.required_job_argument_instance_set.all():
             for value in required_job_argument.job_argument_value_set.all():
                 if required_job_argument.argument.name not in instance_infos['arguments']:
                     instance_infos['arguments'][required_job_argument.argument.name] = []
                 instance_infos['arguments'][required_job_argument.argument.name].append(value.value)
-        for optional_job_argument in instance.optional_job_argument_instance_set.all():
+        for optional_job_argument in job_instance.optional_job_argument_instance_set.all():
             for value in optional_job_argument.job_argument_value_set.all():
                 if optional_job_argument.argument.name not in instance_infos['arguments']:
                     instance_infos['arguments'][optional_job_argument.argument.name] = []
                 instance_infos['arguments'][optional_job_argument.argument.name].append(value.value)
         if verbosity > 0:
-            instance_infos['update_status'] = instance.update_status.astimezone(timezone.get_current_timezone())
-            instance_infos['status'] = instance.status
+            instance_infos['update_status'] = job_instance.update_status.astimezone(
+                timezone.get_current_timezone())
+            instance_infos['status'] = job_instance.status
         if verbosity > 1:
-            instance_infos['start_date'] = instance.start_date.astimezone(timezone.get_current_timezone())
+            instance_infos['start_date'] = job_instance.start_date.astimezone(timezone.get_current_timezone())
         if verbosity > 2:
             try:
-                instance_infos['stop_date'] = instance.stop_date.astimezone(timezone.get_current_timezone())
+                instance_infos['stop_date'] = job_instance.stop_date.astimezone(timezone.get_current_timezone())
             except AttributeError:
                 instance_infos['stop_date'] = 'Not programmed yet'
         if error_msg is not None:
@@ -1319,33 +1333,45 @@ class ClientThread(threading.Thread):
 
     def set_job_log_severity_view(self, address, job_name, severity, date=None,
                                   local_severity=None):
-        name = '{} on {}'.format(job_name, address)
         try:
-            installed_job = Installed_Job.objects.get(pk=name)
+            job = Job.objects.get(name=job_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             infos={'job_name': job_name})
+        try:
+            agent = Job.objects.get(address=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent isn\'t in the database', 404,
+                             infos={'agent_ip': address})
+        try:
+            installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             raise BadRequest('This Installed_Job isn\'t in the database', 404,
-                             infos={'job_name': name})
+                             infos={'job_name': installed_job})
 
         try:
-            logs_job = Installed_Job.objects.get(pk='rsyslog_job on '
-                                                 '{}'.format(address))
+            job = Job.objects.get(name='rsyslog_job')
+        except ObjectDoesNotExist:
+            raise BadRequest('The Job rsyslog_job isn\'t in the database', 404,
+                             infos={'job_name': 'rsyslog_job'})
+        try:
+            logs_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             raise BadRequest('The Installed_Job rsyslog isn\'t in the database',
                              404, infos={'job_name': 'rsyslog_job on '
                                          '{}'.format(address)})
 
-        instance = Job_Instance(job=logs_job)
-        instance.status = "Starting ..."
-        instance.update_status = timezone.now()
-        instance.start_date = timezone.now()
-        instance.periodic = False
-        instance.save()
+        job_instance = Job_Instance(job=logs_job)
+        job_instance.status = "Starting ..."
+        job_instance.update_status = timezone.now()
+        job_instance.start_date = timezone.now()
+        job_instance.periodic = False
+        job_instance.save()
 
-        instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
-        date = self.fill_job_instance(instance, instance_args, date)
+        instance_args = { 'job_name': [job_name], 'instance_id': [job_instance.id] }
+        date = self.fill_job_instance(job_instance, instance_args, date)
 
-        agent = instance.job.agent
-        logs_job_path = instance.job.job.path
+        logs_job_path = job_instance.job.job.path
         syslogseverity = convert_severity(int(severity))
         if not local_severity:
             local_severity = installed_job.local_severity
@@ -1363,24 +1389,24 @@ class ClientThread(threading.Thread):
             else:
                 print('syslogseverity_local:', syslogseverity_local, file=extra_vars)
             print('job:', job_name, file=extra_vars)
-            print('instance_id:', instance.id, file=extra_vars)
+            print('instance_id:', job_instance.id, file=extra_vars)
 
             argument_instance = Optional_Job_Argument_Instance(
-                argument=instance.job.job.optional_job_argument_set.filter(name='disable_code')[0],
-                job_instance=instance
+                argument=job_instance.job.job.optional_job_argument_set.filter(name='disable_code')[0],
+                job_instance=job_instance
             )
             argument_instance.save()
             Job_Argument_Value(
                 value=disable,
-                argument_instance=argument_instance
+                job_argument_instance=argument_instance
             ).save()
 
-            args = self.format_args(instance)
+            args = self.format_args(job_instance)
             self.playbook_builder.build_enable_log(
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
             self.playbook_builder.build_start(
-                    'rsyslog_job', instance.id, args,
+                    'rsyslog_job', job_instance.id, args,
                     date, None, playbook, extra_vars)
         try:
             self.launch_playbook(
@@ -1392,24 +1418,33 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
         except BadRequest as e:
-            instance.delete()
+            job_instance.delete()
             return e.reason, 404
 
-        instance.status = "Started"
-        instance.update_status = timezone.now()
-        instance.save()
+        job_instance.status = "Started"
+        job_instance.update_status = timezone.now()
+        job_instance.save()
         result = { 'msg': 'OK' }
         return result, 200
 
 
     def set_job_stat_policy_view(self, address, job_name, stat_name=None,
                                  storage=None, broadcast=None, date=None):
-        name = '{} on {}'.format(job_name, address)
         try:
-            installed_job = Installed_Job.objects.get(pk=name)
+            job = Job.objects.get(name=job_name)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             infos={'job_name': job_name})
+        try:
+            agent = Job.objects.get(address=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Agent isn\'t in the database', 404,
+                             infos={'agent_ip': address})
+        try:
+            installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             raise BadRequest('This Installed_Job isn\'t in the database', 404,
-                             infos={'job_name': name})
+                             infos={'job_name': installed_job})
 
         if stat_name != None:
             statistic = installed_job.job.statistic_set.filter(name=stat_name)
@@ -1443,25 +1478,27 @@ class ClientThread(threading.Thread):
 
         rstat_name = 'rstats_job on {}'.format(address)
         try:
-            rstats_job = Installed_Job.objects.get(pk=rstat_name)
+            job = Job.objects.get(name='rstats_job')
+        except ObjectDoesNotExist:
+            raise BadRequest('The Job rstats_job isn\'t in the database', 404,
+                             infos={'job_name': 'rstats_job'})
+        try:
+            rstats_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             raise BadRequest('The Installed_Job rstats_job isn\'t in the database',
-                             404, infos={'job_name': rstat_name})
+                             404, infos={'job_name': rstat_job})
 
-        instance = Job_Instance(job=rstats_job)
-        instance.status = "Starting ..."
-        instance.update_status = timezone.now()
-        instance.start_date = timezone.now()
-        instance.periodic = False
-        instance.save()
+        job_instance = Job_Instance(job=rstats_job)
+        job_instance.status = "Starting ..."
+        job_instance.update_status = timezone.now()
+        job_instance.start_date = timezone.now()
+        job_instance.periodic = False
+        job_instance.save()
  
-        instance_args = { 'job_name': [job_name], 'instance_id': [instance.id] }
-        date = self.fill_job_instance(instance, instance_args, date)
+        instance_args = { 'job_name': [job_name], 'instance_id': [job_instance.id] }
+        date = self.fill_job_instance(job_instance, instance_args, date)
 
-        agent = instance.job.agent
-        rstats_job_path = instance.job.job.path
-        installed_name = '{} on {}'.format(job_name, agent.address)
-        installed_job = Installed_Job.objects.get(pk=installed_name)
+        rstats_job_path = job_instance.job.job.path
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
             print('[default]', file=rstats_filter)
             print('storage =', installed_job.default_stat_storage,
@@ -1474,13 +1511,13 @@ class ClientThread(threading.Thread):
                 print('broadcast =', stat.broadcast, file=rstats_filter)
         self.playbook_builder.write_hosts(agent.address)
         remote_path = ('/opt/openbach-jobs/{0}/{0}{1}'
-                '_rstats_filter.conf.locked').format(job_name, instance.id)
+                '_rstats_filter.conf.locked').format(job_name, job_instance.id)
         with self.playbook_builder.playbook_file('rstats') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_push_file(
                     rstats_filter.name, remote_path, playbook)
-            args = self.format_args(instance)
+            args = self.format_args(job_instance)
             self.playbook_builder.build_start(
-                    'rstats_job', instance.id, args,
+                    'rstats_job', job_instance.id, args,
                     date, None, playbook, extra_vars)
         try:
             self.launch_playbook(
@@ -1492,78 +1529,127 @@ class ClientThread(threading.Thread):
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
         except BadRequest as e:
-            instance.delete()
-            installed_job.save()
+            job_instance.delete()
             return e.reason, 404
-        instance.status = "Started"
-        instance.update_status = timezone.now()
-        instance.save()
+        job_instance.status = "Started"
+        job_instance.update_status = timezone.now()
+        job_instance.save()
         result = { 'msg': 'OK' }
         return result, 200
 
 
     @staticmethod
     def first_check_on_scenario(scenario_json):
-        required_parameters = ('name', 'args', 'body')
+        required_parameters = ('name', 'description', 'arguments', 'constants',
+                               'openbach_functions')
         try:
             for k in required_parameters:
                 scenario_json[k]
         except KeyError:
             return False
-        required_parameters = ('name', 'type', 'description')
-        if not isinstance(scenario_json['args'], list):
+        if not isinstance(scenario_json['name'], str):
             return False
-        try:
-            for arg in scenario_json['args']:
-                for k in required_parameters:
-                    arg[k]
-        except KeyError:
+        if not isinstance(scenario_json['description'], str):
             return False
-        required_parameters = ('parameters', 'openbach_functions')
-        try:
-            for k in required_parameters:
-                scenario_json['body'][k]
-        except KeyError:
+        if not isinstance(scenario_json['arguments'], dict):
             return False
-        required_parameters = ('name', 'args', 'wait', 'id')
-        if not isinstance(scenario_json['body']['openbach_functions'], list):
+        for argument, description in scenario_json['arguments'].items():
+            if not isinstance(argument, str):
+                return False
+            if not isinstance(description, str):
+                return False
+        if not isinstance(scenario_json['constants'], dict):
             return False
-        try:
-            for openbach_function in scenario_json['body']['openbach_functions']:
-                for k in required_parameters:
-                    openbach_function[k]
-        except KeyError:
+        for constant, _ in scenario_json['constants'].items():
+            if not isinstance(constant, str):
+                return False
+        if not isinstance(scenario_json['openbach_functions'], list):
             return False
-        required_parameters = ('name', 'value', 'type')
-        if not isinstance(scenario_json['body']['parameters'], list):
-            return False
-        try:
-            for parameter in scenario_json['body']['parameters']:
-                for k in required_parameters:
-                    parameter[k]
-        except KeyError:
-            return False
-        for openbach_function in scenario_json['body']['openbach_functions']:
-            if not isinstance(openbach_function['args'], list):
+        known = { 'wait' }
+        for openbach_function in scenario_json['openbach_functions']:
+            if not isinstance(openbach_function['wait'], dict):
+                return False
+            other = [ k for k in openbach_function if k not in known ]
+            if len(other) != 1:
+                return False
+            if not isinstance(openbach_function[other[0]], dict):
                 return False
             try:
-                for arg in openbach_function['args']:
-                    for k in required_parameters:
-                        arg[k]
+                if not isinstance(openbach_function['wait']['time'], int):
+                    return False
+                if not isinstance(openbach_function['wait']['finished_indexes'],
+                                  list):
+                    return False
+                if not isinstance(openbach_function['wait']['launched_indexes'],
+                                  list):
+                    return False
             except KeyError:
                 return False
-            if openbach_function['name'] == 'start_job_instance':
-                if 'args' not in openbach_function:
-                    return False
-                if not isinstance(openbach_function['args'], list):
-                    return False
-                try:
-                    for arg in openbach_function['args']:
-                        for k in required_parameters:
-                            arg[k]
-                except KeyError:
-                    return False
+            #if openbach_function['name'] == 'start_job_instance':
+            #    if 'args' not in openbach_function:
+            #        return False
+            #    if not isinstance(openbach_function['args'], list):
+            #        return False
+            #    try:
+            #        for arg in openbach_function['args']:
+            #            for k in required_parameters:
+            #                arg[k]
+            #    except KeyError:
+            #        return False
         return True
+
+
+    @staticmethod
+    def check_type_or_get_reference(argument, arg_value):
+        expected_type = argument.type
+        if isinstance(arg_value, str):
+            substitution_pattern = '${}'
+            escaped_substitution_pattern = '\${}'
+            try:
+                scenario_arg = parse.parse(substitution_pattern, arg_value)[0]
+            except TypeError:
+                try:
+                    value = parse.parse(escaped_substitution_pattern, arg_value)[0]
+                    value = '${}'.format(value)
+                except TypeError:
+                    value = arg_value
+            else:
+                return scenario_arg
+        else:
+            value = arg_value
+        av = Argument_Value()
+        try:
+            av._check_type_internal(expected_type, value)
+        except ValueError:
+            raise BadRequest('The type of this argument is not valid', 404,
+                             {'name': argument.name})
+        return False
+
+
+    @staticmethod
+    def check_type(argument, arg_value, scenario_arguments, scenario_constants):
+        is_reference = ClientThread.check_type_or_get_reference(
+            argument, arg_value)
+        if is_reference:
+            scenario_arg = is_reference
+            if scenario_arg in scenario_arguments:
+                sa = scenario_arguments[scenario_arg]
+                if not sa.check_or_set_type(argument.type):
+                    raise BadRequest('This scenario argument is use on '
+                                     'two different types', 404,
+                                     {'scenario_argument':
+                                      scenario_arg})
+            elif scenario_arg in scenario_constants:
+                sc = scenario_constants[scenario_arg]['scenario_constant']
+                if not sc.check_or_set_type(argument.type):
+                    raise BadRequest('This scenario constant is use on '
+                                     'two different types', 404,
+                                     {'scenario_argument':
+                                      scenario_arg})
+            else:
+                raise BadRequest('Reference to an argument or a constant'
+                                 ' that does not exist', 404, {'name':
+                                                               scenario_arg})
 
 
     @staticmethod
@@ -1572,33 +1658,143 @@ class ClientThread(threading.Thread):
             description = scenario_json['description']
         except KeyError:
             description = None
-        args = scenario_json['args']
         scenario_string = json.dumps(scenario_json)
 
         scenario = Scenario(name=name, description=description,
                             scenario=scenario_string)
         try:
             scenario.save(force_insert=True)
+            #TODO delete scenario if an error occurs !
         except IntegrityError:
             raise BadRequest('This name of Scenario \'{}\' is already'
                              ' used'.format(name), 409)
+        try:
+            result = ClientThread.register_scenario_arguments(scenario, scenario_json)
+        except BadRequest:
+            scenario.delete()
+            raise
+        return result
 
-        for arg in args:
+
+    @staticmethod
+    def register_scenario_arguments(scenario, scenario_json):
+        scenario_arguments = {}
+        for arg_name, description in scenario_json['arguments'].items():
             try:
-                Scenario_Argument(
-                    name=arg['name'],
-                    description=arg['description'],
-                    type=arg['type'],
+                sa = Scenario_Argument(
+                    name=arg_name,
+                    description=description,
                     scenario=scenario
-                ).save()
+                )
             except KeyError:
                 raise BadRequest('At least one of the args is malformed')
+            scenario_arguments[arg_name] = sa
+        scenario_constants = {}
+        for const_name, const_value in scenario_json['constants'].items():
+            sa = Scenario_Argument(
+                name=const_name,
+                scenario=scenario
+            )
+            scenario_constants[const_name] = { 'value': const_value,
+                                               'scenario_constant': sa }
+        for openbach_function in scenario_json['openbach_functions']:
+            wait = openbach_function.pop('wait')
+            (name, args), = openbach_function.items()
+            try:
+                of = Openbach_Function.objects.get(pk=name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Openbach_Function doesn\'t exist', 404,
+                                 {'name': openbach_function['name']})
+            if name == 'start_job_instance':
+                try:
+                    agent_ip = args.pop('agent_ip')
+                    offset = args.pop('offset')
+                except KeyError:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name':
+                                                             'start_job_instance'})
+                of_argument = of.openbach_function_argument_set.get(
+                    name='agent_ip')
+                ClientThread.check_type(of_argument, agent_ip,
+                                        scenario_arguments, scenario_constants)
+                of_argument = of.openbach_function_argument_set.get(
+                    name='offset')
+                ClientThread.check_type(of_argument, offset,
+                                        scenario_arguments, scenario_constants)
+                try:
+                    (job_name, job_args), = args.items()
+                except ValueError:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name':
+                                                             'start_job_instance'})
+                try:
+                    job = Job.objects.get(name=job_name)
+                except ObjectDoesNotExist:
+                    raise BadRequest('This Job does not exist', 404, {'name':
+                                                                      job_name})
+                if not isinstance(job_args, dict):
+                    raise BadRequest('Your Scenario is malformed')
+                for job_arg, job_value in job_args.items():
+                    try:
+                        ja = job.required_job_argument_set.get(name=job_arg)
+                    except ObjectDoesNotExist:
+                        try:
+                            ja = job.optional_job_argument_set.get(name=job_arg)
+                        except ObjectDoesNotExist:
+                            raise BadRequest('This Job_Argument does not exist',
+                                             404, {'job_name': job_name,
+                                                   'argument_name': job_arg})
+                    if isinstance(job_value, list):
+                        for v in job_value:
+                            ClientThread.check_type(ja, v,
+                                                    scenario_arguments,
+                                                    scenario_constants)
+                    else:
+                        ClientThread.check_type(ja, job_value,
+                                                scenario_arguments,
+                                                scenario_constants)
+            else:
+                for of_arg, of_value in args.items():
+                    try:
+                        of_argument = Openbach_Function_Argument.objects.get(
+                            name=of_arg, openbach_function=of)
+                    except ObjectDoesNotExist:
+                        raise BadRequest('This Openbach_Function doesn\'t have this'
+                                         ' argument', 404, {'name': name,
+                                                            'argument': of_arg})
+                ClientThread.check_type(of_argument, of_value,
+                                        scenario_arguments, scenario_constants)
+        result = {}
+        for _, sa in scenario_arguments.items():
+            try:
+                sa.save()
             except IntegrityError:
-                scenario.delete()
                 raise BadRequest('At least two args have the same name', 409,
                                  infos={'name': arg['name']})
+            result[sa.name] = sa.type
+        for const_name, sc_dict in scenario_constants.items():
+            sc = sc_dict['scenario_constant']
+            value = sc_dict['value']
+            try:
+                sc.save()
+            except IntegrityError:
+                raise BadRequest('At least two constants have the same name', 409,
+                                 infos={'name': arg['name']})
+            sai = Scenario_Argument_Instance(argument=sc)
+            try:
+                sai.check_and_set_value(value)
+            except ValueError:
+                raise BadRequest('This constant does not have the good type',
+                                 409, {'constant': sc.name, 'expected_type':
+                                       sc.type})
+            try:
+                sai.save()
+            except IntegrityError:
+                raise BadRequest('At least two constants have the same name', 409,
+                                 infos={'name': arg['name']})
 
-        return { 'msg': 'OK', 'scenario_name': name }, 200
+        result['scenario_name'] = name
+        return result, 200
 
 
     def create_scenario_view(self, scenario_json):
@@ -1632,10 +1828,9 @@ class ClientThread(threading.Thread):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario is not in the database', 404,
-                             infos={'scenario_name': scenario_name})
-
-        scenario.delete()
+            pass
+        else:
+            scenario.delete()
 
         return self.register_scenario(scenario_json, name)
 
@@ -1667,121 +1862,156 @@ class ClientThread(threading.Thread):
 
 
     @staticmethod
-    def register_scenario_parameter_instances(scenario_instance):
-        scenario_json = json.loads(scenario_instance.scenario.scenario)
-        for parameter in scenario_json['body']['parameters']:
-            if parameter['type'] == 'arg':
-                sa = scenario_instance.scenario.scenario_argument_set.filter(
-                    name=parameter['value'])[0]
-                sai = sa.scenario_argument_instance_set.filter(
-                    scenario_instance=scenario_instance)[0]
-                type_ = sai.argument.type
-                value = sai.value
+    def register_openbach_function_argument_instance(arg_name, arg_value,
+                                                     openbach_function_instance,
+                                                     scenario_instance):
+        of = openbach_function_instance.openbach_function
+        ofai = Openbach_Function_Argument_Instance(
+            argument=Openbach_Function_Argument.objects.get(name=arg_name,
+                                                            openbach_function=of),
+            openbach_function_instance=openbach_function_instance)
+        of_argument = Openbach_Function_Argument.objects.get(
+            name=arg_name, openbach_function=of)
+        is_reference = ClientThread.check_type_or_get_reference(
+            of_argument, arg_value)
+        try:
+            if is_reference:
+                sa = scenario_instance.scenario.scenario_argument_set.get(
+                    name=is_reference)
+                try:
+                    spi = scenario_instance.scenario_argument_instance_set.get(
+                        argument=sa)
+                except ObjectDoesNotExist:
+                    spi = scenario_instance.scenario.scenario_argument_set.get(
+                        name=is_reference).scenario_argument_instance_set.get(
+                            scenario_instance=None)
+                ofai.check_and_set_value(spi.value)
             else:
-                type_ = parameter['type']
-                value = parameter['value']
-            spi = Scenario_Parameter_Instance(name=parameter['name'],
-                                              type=type_,
-                                              scenario_instance=scenario_instance)
-            try:
-                spi.check_and_set_value(value)
-            except ValueError as e:
-                raise BadRequest(e.args[0], 400)
-            spi.save()
+                escaped_substitution_pattern = '\${}'
+                try:
+                    value = parse.parse(escaped_substitution_pattern, arg_value)[0]
+                    value = '${}'.format(value)
+                except TypeError:
+                    value = arg_value
+                ofai.check_and_set_value(value)
+        except ValueError as e:
+            raise BadRequest(e.args[0], 400)
+        ofai.save()
 
 
     @staticmethod
     def register_openbach_function_instances(scenario_instance):
         scenario_json = json.loads(scenario_instance.scenario.scenario)
-        for openbach_function in scenario_json['body']['openbach_functions']:
+        openbach_function_id = 0
+        scenario_arguments = {}
+        for sai in scenario_instance.scenario_argument_instance_set.all():
+            scenario_arguments[sai.argument.name] = sai
+        for sa in scenario_instance.scenario.scenario_argument_set.all():
             try:
-                of = Openbach_Function.objects.get(pk=openbach_function['name'])
+                sc = sa.scenario_argument_instance_set.get(scenario_instance=None)
             except ObjectDoesNotExist:
-                raise BadRequest('This Openbach_Function doesn\'t exist', 404,
-                                 {'name': openbach_function['name']})
+                continue
+            scenario_arguments[sc.argument.name] = sc
+        for openbach_function in scenario_json['openbach_functions']:
+            wait = openbach_function.pop('wait')
+            (name, args), = openbach_function.items()
+            of = Openbach_Function.objects.get(pk=name)
             ofi = Openbach_Function_Instance(openbach_function=of,
                                              scenario_instance=scenario_instance,
-                                             openbach_function_instance_id=openbach_function['id'])
-            try:
-                ofi.save()
-            except IntegrityError:
-                raise BadRequest('The Scenario is malformed: the id \'{}\' is '
-                                 'used for multiples openbach functions'
-                                 ''.format(openbach_function['id']))
-            for arg in openbach_function['args']:
-                try:
-                    ofai = Openbach_Function_Argument_Instance(
-                        argument=Openbach_Function_Argument.objects.filter(name=arg['name'])[0],
-                        openbach_function_instance=ofi)
-                except IndexError:
-                    raise BadRequest('Argument \'{}\' don\'t match with'
-                                     ' the arguments'.format(arg['name']), 400)
-                try:
-                    if arg['type'] != 'parameter':
-                        ofai.check_and_set_value(arg['value'])
+                                             openbach_function_instance_id=openbach_function_id)
+            ofi.save()
+            if name == 'start_job_instance':
+                agent_ip = args.pop('agent_ip')
+                ClientThread.register_openbach_function_argument_instance(
+                    'agent_ip', agent_ip, ofi, scenario_instance)
+                offset = args.pop('offset')
+                ClientThread.register_openbach_function_argument_instance(
+                    'offset', offset, ofi, scenario_instance)
+                (job_name, job_args), = args.items()
+                ClientThread.register_openbach_function_argument_instance(
+                    'job_name', job_name, ofi, scenario_instance)
+                job = Job.objects.get(name=job_name)
+                instance_args = {}
+                for job_arg, job_value in job_args.items():
+                    try:
+                        ja = job.required_job_argument_set.get(name=job_arg)
+                    except ObjectDoesNotExist:
+                        ja = job.optional_job_argument_set.get(name=job_arg)
+                    if isinstance(job_value, list):
+                        instance_args[job_arg] = []
+                        for v in job_value:
+                            is_reference = ClientThread.check_type_or_get_reference(
+                                ja, v)
+                            if is_reference:
+                                sa = scenario_instance.scenario.scenario_argument_set.get(
+                                    name=is_reference)
+                                try:
+                                    spi = scenario_instance.scenario_argument_instance_set.get(
+                                        argument=sa)
+                                except ObjectDoesNotExist:
+                                    spi = scenario_instance.scenario.scenario_argument_set.get(
+                                        name=is_reference).scenario_argument_instance_set.get(
+                                            scenario_instance=None)
+                                instance_args[job_arg].append(spi.value)
+                            else:
+                                escaped_substitution_pattern = '\${}'
+                                try:
+                                    value = parse.parse(
+                                        escaped_substitution_pattern,
+                                        arg_value)[0]
+                                    value = '${}'.format(value)
+                                except TypeError:
+                                    value = arg_value
+                                instance_args[job_arg].append(value)
                     else:
-                        try:
-                            spi = scenario_instance.scenario_parameter_instance_set.filter(
-                                name=arg['value'])[0]
-                        except IndexError:
-                            raise BadRequest('Parameter \'{}\' doesn\'t match with'
-                                             ' the parameters'.format(arg['name']), 400)
-                        ofai.check_and_set_value(spi.value)
+                        is_reference = ClientThread.check_type_or_get_reference(
+                            ja, job_value)
+                        if is_reference:
+                            sa = scenario_instance.scenario.scenario_argument_set.get(
+                                name=is_reference)
+                            try:
+                                spi = scenario_instance.scenario_argument_instance_set.get(
+                                    argument=sa)
+                            except ObjectDoesNotExist:
+                                spi = scenario_instance.scenario.scenario_argument_set.get(
+                                    name=is_reference).scenario_argument_instance_set.get(
+                                        scenario_instance=None)
+                            instance_args[job_arg] = spi.value
+                        else:
+                            escaped_substitution_pattern = '\${}'
+                            try:
+                                value = parse.parse(
+                                    escaped_substitution_pattern,
+                                    arg_value)[0]
+                                value = '${}'.format(value)
+                            except TypeError:
+                                value = arg_value
+                            instance_args[job_arg] = value
+                ofai = Openbach_Function_Argument_Instance(
+                    argument=Openbach_Function_Argument.objects.get(
+                        name='instance_args', openbach_function=of),
+                    openbach_function_instance=ofi)
+                try:
+                    ofai.check_and_set_value(instance_args)
                 except ValueError as e:
                     raise BadRequest(e.args[0], 400)
                 ofai.save()
-                if openbach_function['name'] == 'start_job_instance' and arg['name'] == 'job_name':
-                    job_args = arg['args']
-                    instance_args = {}
-                    for job_arg in job_args:
-                        if len(job_arg['value']) != len(job_arg['type']):
-                            raise BadRequest('The Scenario is malformed: the '
-                                             'arg \'{}\' should have as mush '
-                                             'value as '
-                                             'type'.format(job_arg['name']))
-                        instance_args[job_arg['name']] = []
-                        for i in range(len(job_arg['value'])):
-                            if job_arg['type'][i] != 'parameter':
-                                instance_args[job_arg['name']].append(job_arg['value'][i])
-                            else:
-                                try:
-                                    spi = scenario_instance.scenario_parameter_instance_set.filter(
-                                        name=job_arg['value'][i])[0]
-                                except IndexError:
-                                    raise BadRequest('Parameter \'{}\' doesn\'t match with'
-                                                     ' the parameters'.format(job_arg['name'][i]), 400)
-                                instance_args[job_arg['name']].append(spi.value)
-                    try:
-                        ofai = Openbach_Function_Argument_Instance(
-                            argument=Openbach_Function_Argument.objects.filter(name='instance_args')[0],
-                            openbach_function_instance=ofi)
-                    except IndexError:
-                        raise BadRequest('Argument \'{}\' don\'t match with'
-                                         ' the arguments'.format(arg['name']), 400)
-                    try:
-                        ofai.check_and_set_value(instance_args)
-                    except ValueError as e:
-                        raise BadRequest(e.args[0], 400)
-                    ofai.save()
-            for wait in openbach_function['wait']:
-                if wait['type'] == 'launch':
-                    for id in wait['id']:
-                        wfl = Wait_For_Launch(scenario_instance=scenario_instance,
-                                              openbach_function_instance=ofi,
-                                              time=wait['time'],
-                                              openbach_function_instance_id_waited=id)
-                        wfl.save()
-                elif wait['type'] == 'finished':
-                    for id in wait['id']:
-                        wff = Wait_For_Finished(scenario_instance=scenario_instance,
-                                                openbach_function_instance=ofi,
-                                                time=wait['time'],
-                                                job_instance_id_waited=id)
-                        wff.save()
-                else:
-                    raise BadRequest('The type of the Wait_For is unknown for '
-                                     'the Openbach_Function with the id \'{}\''
-                                     ''.format(openbach_function['id']))
+            else:
+                for arg_name, arg_value in args.items():
+                    ClientThread.register_openbach_function_argument_instance(
+                        arg_name, arg_value, ofi, scenario_instance)
+            wf = Wait_For(scenario_instance=scenario_instance,
+                          openbach_function_instance=ofi,
+                          time=wait['time'])
+            wf.save()
+            for index in wait['launched_indexes']:
+                wfl = Wait_For_Launched(wait_for=wf,
+                                        openbach_function_instance_id=index)
+                wfl.save()
+            for index in wait['finished_indexes']:
+                wff = Wait_For_Finished(wait_for=wf, job_instance_id=index)
+                wff.save()
+            openbach_function_id += 1
 
 
     @staticmethod
@@ -1793,70 +2023,55 @@ class ClientThread(threading.Thread):
         # Enregistrer les args de l'instance de scenario
         for arg_name, arg_value in args.items():
             try:
-                sai = Scenario_Argument_Instance(argument=scenario.scenario_argument_set.filter(name=arg_name)[0],
-                                                 scenario_instance=scenario_instance)
+                scenario_argument = scenario.scenario_argument_set.get(
+                    name=arg_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('Argument \'{}\' don\'t match with'
+                                 ' the arguments'.format(arg_name))
+            try:
+                scenario_argument.scenario_argument_instance_set.get(scenario_instance=None)
+            except ObjectDoesNotExist:
+                sai = Scenario_Argument_Instance(
+                    argument=scenario_argument,
+                    scenario_instance=scenario_instance)
                 try:
                     sai.check_and_set_value(arg_value)
                 except ValueError as e:
                     raise BadRequest(e.args[0], 400)
                 sai.save()
-            except IndexError:
-                raise BadRequest('Argument \'{}\' don\'t match with'
-                                 ' arguments needed or '
-                                 'optional'.format(arg_name), 400)
 
-        ClientThread.register_scenario_parameter_instances(scenario_instance)
         ClientThread.register_openbach_function_instances(scenario_instance)
 
         return scenario_instance
 
 
     @staticmethod
-    def check_scenario(scenario, args):
-        try:
-            scenario_json = json.loads(scenario.scenario)
-        except ValueError:
-            scenario.checked = True
-            scenario.valid = False
-            raise BadRequest('This Scenario is not valid: it is not in JSON'
-                             ' format', infos={'scenario': scenario.name})
-        #TODO
-        scenario.valid = True
-
-        scenario.checked = True
-        scenario.save()
-        return None, None
-
-
-    @staticmethod
     def build_table(scenario_instance):
         table = {}
-        for wfl in scenario_instance.wait_for_launch_set.all():
-            ofi_id = wfl.openbach_function_instance.openbach_function_instance_id
-            ofi_waited_id = wfl.openbach_function_instance_id_waited
-            if ofi_id not in table:
-                table[ofi_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
-                                  set(), 'wait_for_finished': set(),
-                                  'is_waited_for_finished': set() }
-            if ofi_waited_id not in table:
-                table[ofi_waited_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
-                                         set(), 'wait_for_finished': set(),
-                                        'is_waited_for_finished': set() }
-            table[ofi_id]['wait_for_launch'].add(ofi_waited_id)
-            table[ofi_waited_id]['is_waited_for_launch'].add(ofi_id)
-        for wff in scenario_instance.wait_for_finished_set.all():
-            ofi_id = wff.openbach_function_instance.openbach_function_instance_id
-            ji_waited_id = wff.job_instance_id_waited
-            if ofi_id not in table:
-                table[ofi_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
-                                  set(), 'wait_for_finished': set(),
-                                  'is_waited_for_finished': set() }
-            if ji_waited_id not in table:
-                table[ji_waited_id] = { 'wait_for_launch': set(), 'is_waited_for_launch':
-                                         set(), 'wait_for_finished': set(),
-                                        'is_waited_for_finished': set() }
-            table[ofi_id]['wait_for_finished'].add(ji_waited_id)
-            table[ji_waited_id]['is_waited_for_finished'].add(ofi_id)
+        for wf in scenario_instance.wait_for_set.all():
+            ofi_id = wf.openbach_function_instance.openbach_function_instance_id
+            table[ofi_id] = { 'wait_for_launched': set(),
+                              'is_waited_for_launched': set(),
+                              'wait_for_finished': set(),
+                              'is_waited_for_finished': set() }
+            for wfl in wf.wait_for_launched_set.all():
+                ofi_waited_id = wfl.openbach_function_instance_id
+                if ofi_waited_id not in table:
+                    table[ofi_waited_id] = { 'wait_for_launched': set(),
+                                             'is_waited_for_launched': set(),
+                                             'wait_for_finished': set(),
+                                             'is_waited_for_finished': set() }
+                table[ofi_id]['wait_for_launched'].add(ofi_waited_id)
+                table[ofi_waited_id]['is_waited_for_launched'].add(ofi_id)
+            for wff in wf.wait_for_finished_set.all():
+                ji_waited_id = wff.job_instance_id
+                if ji_waited_id not in table:
+                    table[ji_waited_id] = { 'wait_for_launched': set(),
+                                            'is_waited_for_launched': set(),
+                                            'wait_for_finished': set(),
+                                            'is_waited_for_finished': set() }
+                table[ofi_id]['wait_for_finished'].add(ji_waited_id)
+                table[ji_waited_id]['is_waited_for_finished'].add(ofi_id)
         return table
 
 
@@ -1866,7 +2081,6 @@ class ClientThread(threading.Thread):
         while l:
             x = queue.get()
             l.remove(x)
-        print('Openbach_Function_Instance number: ', ofi_id)
         ofi = scenario_instance.openbach_function_instance_set.filter(
             openbach_function_instance_id=ofi_id)[0]
         try:
@@ -1885,8 +2099,6 @@ class ClientThread(threading.Thread):
             arguments['scenario_instance_id'] = scenario_instance.id
             arguments['ofi_id'] = ofi_id
             arguments['finished_queues'] = finished_queues
-        print(arguments)
-        # TODO lancer l'openbach_function
         function(**arguments)
         for queue in launch_queues:
             queue.put(ofi_id)
@@ -1898,33 +2110,22 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             raise BadRequest('This Scenario is not in the database', 404,
                              infos={'scenario_name': scenario_name})
-        scenario_instance = None
-        table = None
-        if not scenario.checked:
-            scenario_instance, table = self.check_scenario(scenario, args)
-        if not scenario.valid:
-            raise BadRequest('This Scenario is not valid',
-                             infos={'scenario_name': scenario_name})
-        if not scenario_instance:
-            scenario_instance = self.register_scenario_instance(scenario, args)
-        if not table:
-            table = self.build_table(scenario_instance)
-        print(table)
-        # lance les openbach function possible
+        scenario_instance = self.register_scenario_instance(scenario, args)
+        table = self.build_table(scenario_instance)
         queues = { id: Queue() for id in table }
         for ofi_id, data in table.items():
             queue = queues[ofi_id]
-            launch_queues = [ queues[id] for id in data['is_waited_for_launch'] ]
+            launch_queues = [ queues[id] for id in data['is_waited_for_launched'] ]
             finished_queues = tuple([ queues[id] for id in
                                      data['is_waited_for_finished'] ])
-            waited_ids = data['wait_for_launch'].union(data['wait_for_finished'])
+            waited_ids = data['wait_for_launched'].union(data['wait_for_finished'])
             thread = threading.Thread(
                 target=self.launch_openbach_function_instance,
                 args=(scenario_instance, ofi_id, waited_ids, queue,
                       launch_queues, finished_queues, date))
             thread.start()
 
-        return { 'msg': 'OK', 'scenario_instance_id': scenario_instance.id }, 200
+        return { 'scenario_instance_id': scenario_instance.id }, 200
 
 
     def stop_scenario_instance_view(self, scenario_instance_id, date=None):

@@ -67,7 +67,7 @@ urlpatterns = [
 
     url(r'^scenario_instance/?$', views.ScenarioInstancesView.as_view(),
         name='scenario_instances_view'),
-    url(r'^scenario_instance/(?P<name>[^/]+)/?$',
+    url(r'^scenario_instance/(?P<id>[^/]+)/?$',
         views.ScenarioInstanceView.as_view(), name='scenario_instance_view'),
 ]
 

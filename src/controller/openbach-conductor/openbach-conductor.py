@@ -310,7 +310,7 @@ class ClientThread(threading.Thread):
         agent.status = 'Available'
         agent.update_status = timezone.now()
         agent.save()
-        result = { 'msg': 'OK' }
+        result = {}
         # Recuperer la liste des jobs a installer
         list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
         list_jobs = []
@@ -349,8 +349,7 @@ class ClientThread(threading.Thread):
             'ansible_ssh_pass={agent.password}'
             ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
             .format(agent=agent))
-        result = { 'msg': 'OK' }
-        return result, 200
+        return {}, 200
 
 
     def list_agents_view(self, update=False):
@@ -458,7 +457,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('At least one of the Agents isn\'t in the '
                              'database', 404, {'unknown_agents':
                                                unknown_agents})
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     def add_job_view(self, name, path):
@@ -597,7 +596,7 @@ class ClientThread(threading.Thread):
                                  ' formed', 409, {'configuration file':
                                                   config_file})
 
-        return {'msg': 'OK'}, 200
+        return {}, 200
 
 
     def del_job_view(self, name):
@@ -607,7 +606,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Job isn\'t in the database', 404, {
                 'job_name': name })
         job.delete()
-        return {'msg': 'OK'}, 200
+        return {}, 200
 
 
     def list_jobs_view(self, verbosity=0):
@@ -695,11 +694,11 @@ class ClientThread(threading.Thread):
 
         if success:
             if warning:
-                result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
+                result = {'warning': warning, 'unknown Agents':
                           list(no_agent), 'unknown Jobs': list(no_job)}, 200
                 return result
             else:
-                return {'msg': 'OK'}, 200
+                return {}, 200
         else:
             if warning:
                 raise BadRequest('At least one of the installation have failed',
@@ -751,10 +750,10 @@ class ClientThread(threading.Thread):
 
         if success:
             if warning:
-                result = {'msg': 'OK', 'warning': warning, 'unknown Agents':
+                result = {'warning': warning, 'unknown Agents':
                           list(no_agent), 'unknown Jobs': list(no_job)}, 200
             else:
-                result = {'msg': 'OK'}, 200
+                result = {}, 200
             if jobs_not_installed:
                 result[0]['msg'] = 'OK but some Jobs were not installed'
                 result[0]['jobs_not_installed'] = jobs_not_installed
@@ -898,7 +897,7 @@ class ClientThread(threading.Thread):
         if error:
             raise BadRequest('At least one of the Agents isn\'t in the '
                              'database', 404, {'addresses': unknown_agents})
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     def push_file_view(self, local_path, remote_path, agent_ip):
@@ -919,7 +918,7 @@ class ClientThread(threading.Thread):
             'ansible_sudo_pass={agent.password} -e '
             'ansible_ssh_pass={agent.password} {}'
             .format(playbook.name, agent=agent))
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     @staticmethod
@@ -1008,7 +1007,7 @@ class ClientThread(threading.Thread):
 
 
     def start_job_instance(self, scenario_instance_id, agent_ip, job_name,
-                           instance_args, ofi_id, finished_queues, offset=None,
+                           instance_args, ofi, finished_queues, offset=None,
                            origin=int(timezone.now().timestamp()*1000),
                            interval=None):
         date = origin + int(offset)*1000
@@ -1019,18 +1018,22 @@ class ClientThread(threading.Thread):
         except BadRequest as e:
             # TODO gerer les erreurs
             print(e)
-            return
+            raise
 
         job_instance_id = result['instance_id']
+        ofi.job_instance = Job_Instance.objects.get(pk=job_instance_id)
+        ofi.save()
         try:
             self.watch_job_instance_view(job_instance_id, interval=2)
         except BadRequest as e:
             # TODO gerer les erreurs
             print(e)
-            return
+            raise
 
-        with WaitingQueueManager() as waiting_queues:
-            waiting_queues[job_instance_id] = (ofi_id, finished_queues)
+        if len(finished_queues) != 0:
+            with WaitingQueueManager() as waiting_queues:
+                waiting_queues[job_instance_id] = (ofi.openbach_function_instance_id,
+                                                   finished_queues)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -1088,14 +1091,27 @@ class ClientThread(threading.Thread):
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        return { 'msg': 'OK', 'instance_id': job_instance.id }, 200
+        return {'instance_id': job_instance.id }, 200
 
 
-    def stop_job_instance_view(self, instance_ids, date=None):
-        job_instances = Job_Instance.objects.filter(pk__in=instance_ids)
+    def stop_job_instance(self, openbach_function_indexes, scenario_instance, date=None):
+        job_instance_ids = []
+        for openbach_function_id in openbach_function_indexes:
+            try:
+                ofi = scenario_instance.openbach_function_instance_set.get(
+                    openbach_function_instance_id=openbach_function_id)
+            except ObjectDoesNotExist:
+                #TODO see how to handle this error
+                continue
+            job_instance_ids.append(ofi.job_instance.id)
+        self.stop_job_instance_view(job_instance_ids, date)
+
+
+    def stop_job_instance_view(self, job_instance_ids, date=None):
+        job_instances = Job_Instance.objects.filter(pk__in=job_instance_ids)
         warnings = []
 
-        no_job_instance = set(instance_ids) - set(map(attrgetter('id'), job_instances))
+        no_job_instance = set(job_instance_ids) - set(map(attrgetter('id'), job_instances))
         if no_job_instance:
             warnings.append({'msg': 'At least one of the Job_Instances is '
                              'unknown to the Controller', 'unknown_job_instance':
@@ -1141,7 +1157,7 @@ class ClientThread(threading.Thread):
 
         if already_stopped['job_instance_ids']:
             warnings.append(already_stopped)
-        response = {'msg': 'OK'}
+        response = {}
         if warnings:
             response.update({'warning': warnings})
         return response, 200
@@ -1182,7 +1198,7 @@ class ClientThread(threading.Thread):
         job_instance.status = "Restarted"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     def watch_job_instance_view(self, instance_id, date=None, interval=None,
@@ -1235,7 +1251,7 @@ class ClientThread(threading.Thread):
 
         if should_delete_watch:
             watch.delete()
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     @staticmethod
@@ -1424,7 +1440,7 @@ class ClientThread(threading.Thread):
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        result = { 'msg': 'OK' }
+        result = {}
         return result, 200
 
 
@@ -1534,7 +1550,7 @@ class ClientThread(threading.Thread):
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        result = { 'msg': 'OK' }
+        result = {}
         return result, 200
 
 
@@ -1618,6 +1634,8 @@ class ClientThread(threading.Thread):
         else:
             value = arg_value
         av = Argument_Value()
+        if expected_type == 'None':
+            return False
         try:
             av._check_type_internal(expected_type, value)
         except ValueError:
@@ -1754,6 +1772,7 @@ class ClientThread(threading.Thread):
                                                 scenario_arguments,
                                                 scenario_constants)
             else:
+                print(args)
                 for of_arg, of_value in args.items():
                     try:
                         of_argument = Openbach_Function_Argument.objects.get(
@@ -1814,7 +1833,7 @@ class ClientThread(threading.Thread):
 
         scenario.delete()
 
-        return { 'msg': 'OK' }, 200
+        return {}, 200
 
 
     def modify_scenario_view(self, scenario_json, scenario_name):
@@ -2000,16 +2019,15 @@ class ClientThread(threading.Thread):
                 for arg_name, arg_value in args.items():
                     ClientThread.register_openbach_function_argument_instance(
                         arg_name, arg_value, ofi, scenario_instance)
-            wf = Wait_For(scenario_instance=scenario_instance,
-                          openbach_function_instance=ofi,
-                          time=wait['time'])
-            wf.save()
+            ofi.time = wait['time']
+            ofi.save()
             for index in wait['launched_indexes']:
-                wfl = Wait_For_Launched(wait_for=wf,
-                                        openbach_function_instance_id=index)
+                wfl = Wait_For_Launched(openbach_function_instance=ofi,
+                                        openbach_function_instance_id_waited=index)
                 wfl.save()
             for index in wait['finished_indexes']:
-                wff = Wait_For_Finished(wait_for=wf, job_instance_id=index)
+                wff = Wait_For_Finished(openbach_function_instance=ofi,
+                                        job_instance_id_waited=index)
                 wff.save()
             openbach_function_id += 1
 
@@ -2048,14 +2066,14 @@ class ClientThread(threading.Thread):
     @staticmethod
     def build_table(scenario_instance):
         table = {}
-        for wf in scenario_instance.wait_for_set.all():
-            ofi_id = wf.openbach_function_instance.openbach_function_instance_id
+        for ofi in scenario_instance.openbach_function_instance_set.all():
+            ofi_id = ofi.openbach_function_instance_id
             table[ofi_id] = { 'wait_for_launched': set(),
                               'is_waited_for_launched': set(),
                               'wait_for_finished': set(),
                               'is_waited_for_finished': set() }
-            for wfl in wf.wait_for_launched_set.all():
-                ofi_waited_id = wfl.openbach_function_instance_id
+            for wfl in ofi.wait_for_launched_set.all():
+                ofi_waited_id = wfl.openbach_function_instance_id_waited
                 if ofi_waited_id not in table:
                     table[ofi_waited_id] = { 'wait_for_launched': set(),
                                              'is_waited_for_launched': set(),
@@ -2063,8 +2081,8 @@ class ClientThread(threading.Thread):
                                              'is_waited_for_finished': set() }
                 table[ofi_id]['wait_for_launched'].add(ofi_waited_id)
                 table[ofi_waited_id]['is_waited_for_launched'].add(ofi_id)
-            for wff in wf.wait_for_finished_set.all():
-                ji_waited_id = wff.job_instance_id
+            for wff in ofi.wait_for_finished_set.all():
+                ji_waited_id = wff.job_instance_id_waited
                 if ji_waited_id not in table:
                     table[ji_waited_id] = { 'wait_for_launched': set(),
                                             'is_waited_for_launched': set(),
@@ -2081,8 +2099,9 @@ class ClientThread(threading.Thread):
         while l:
             x = queue.get()
             l.remove(x)
-        ofi = scenario_instance.openbach_function_instance_set.filter(
-            openbach_function_instance_id=ofi_id)[0]
+        print('Openbach_Function_Instance number: ', ofi_id)
+        ofi = scenario_instance.openbach_function_instance_set.get(
+            openbach_function_instance_id=ofi_id)
         try:
             function = getattr(self, ofi.openbach_function.name)
         except AttributeError:
@@ -2097,8 +2116,11 @@ class ClientThread(threading.Thread):
                 arguments[arg.argument.name] = arg.value
         if ofi.openbach_function.name == 'start_job_instance':
             arguments['scenario_instance_id'] = scenario_instance.id
-            arguments['ofi_id'] = ofi_id
+            arguments['ofi'] = ofi
             arguments['finished_queues'] = finished_queues
+        elif ofi.openbach_function.name == 'stop_job_instance':
+            arguments['scenario_instance'] = scenario_instance
+        print(arguments)
         function(**arguments)
         for queue in launch_queues:
             queue.put(ofi_id)
@@ -2112,6 +2134,8 @@ class ClientThread(threading.Thread):
                              infos={'scenario_name': scenario_name})
         scenario_instance = self.register_scenario_instance(scenario, args)
         table = self.build_table(scenario_instance)
+        print(table)
+        # lance les openbach function possible
         queues = { id: Queue() for id in table }
         for ofi_id, data in table.items():
             queue = queues[ofi_id]
@@ -2133,14 +2157,79 @@ class ClientThread(threading.Thread):
         return { 'error': 'TODO' }, 400
 
 
-    def list_scenario_instances_view(self, scenario_ids=[]):
+    @staticmethod
+    def infos_openbach_function_instance(openbach_function_instance, verbosity=0):
+        infos = {}
+        infos['name'] = openbach_function_instance.openbach_function.name
+        if verbosity > 0:
+            infos['status'] = openbach_function_instance.status
+            infos['status_date'] = openbach_function_instance.status_date
+        if verbosity > 1:
+            infos['arguments'] = []
+            for ofai in openbach_function_instance.openbach_function_argument_instance_set.all():
+                info = {'name': ofai.argument.name, 'type': ofai.argument.type,
+                        'value': ofai.value}
+                infos['arguments'].append(info)
+        if verbosity > 2:
+            infos['wait'] = {'time': openbach_function_instance.time,
+                             'launched_indexes': [], 'finished_indexes': []}
+            for wfl in openbach_function_instance.wait_for_launched_set.all():
+                infos['wait']['launched_indexes'].append(wfl.openbach_function_instance_id_waited)
+            for wff in openbach_function_instance.wait_for_finished_set.all():
+                infos['wait']['finished_indexes'].append(wff.job_instance_id_waited)
+        return infos
 
-        return { 'error': 'TODO' }, 400
+
+    @staticmethod
+    def infos_scenario_instance(scenario_instance, verbosity=0):
+        infos = {}
+        infos['scenario_instance_id'] = scenario_instance.id
+        if verbosity > 0:
+            infos['status'] = scenario_instance.status
+            infos['status_date'] = scenario_instance.status_date
+        if verbosity > 1:
+            infos['arguments'] = []
+            for argument in scenario_instance.scenario_argument_instance_set.all():
+                info = {'name': argument.argument.name, 'type':
+                        argument.argument.type, 'value': argument.value}
+                infos['arguments'].append(info)
+        if verbosity > 2:
+            infos['openbach_functions'] = []
+            for ofi in scenario_instance.openbach_function_instance_set.all():
+                info = ClientThread.infos_openbach_function_instance(
+                    ofi, verbosity-3)
+                infos['openbach_functions'].append(info)
+        return infos
+
+
+    def list_scenario_instances_view(self, scenario_names=[], verbosity=0):
+        if not scenario_names:
+            scenarios = Scenario.objects.all()
+        else:
+            scenarios = Scenario.objects.filter(pk__in=scenario_names)
+
+        result = {}
+        for scenario in scenarios:
+            result[scenario.name] = []
+            for scenario_instance in scenario.scenario_instance_set.all():
+                infos = self.infos_scenario_instance(scenario_instance,
+                                                     verbosity)
+                result[scenario.name].append(infos)
+
+        return result, 200
 
 
     def status_scenario_instance_view(self, scenario_instance_id, verbosity=0):
+        try:
+            scenario_instance = Scenario_Instance.objects.get(
+                pk=scenario_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario_Instance does not exist in the '
+                             'database', 404, {'scenario_instance_id':
+                                               scenario_instance_id})
+        result = self.infos_scenario_instance(scenario_instance, verbosity)
 
-        return { 'error': 'TODO' }, 400
+        return {scenario_instance.scenario.name: result}, 200
 
 
     def run(self):
@@ -2175,7 +2264,7 @@ def handle_message_from_status_manager(clientsocket):
     job_instance_id = message['job_instance_id']
     if type_ == 'Finished':
         with WaitingQueueManager() as waiting_queues:
-            ofi_id, finished_queues = waiting_queues[job_instance_id]
+            ofi_id, finished_queues = waiting_queues.pop(job_instance_id)
         for queue in finished_queues:
             queue.put(ofi_id)
         # TODO Stopper la watch ?

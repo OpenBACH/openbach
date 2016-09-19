@@ -171,18 +171,6 @@ class AgentsView(BaseAgentView):
 class AgentView(BaseAgentView):
     """Manage actions on specific agents"""
 
-    def put(self, request, address):
-        """create a new agent"""
-
-        required_parameters = ('username', 'collector', 'name', 'password')
-        try:
-            parameters = {k: request.JSON[k] for k in required_parameters}
-        except KeyError as e:
-            return {'msg': 'Missing parameter {}'.format(e)}, 400
-
-        return self._create_agent(address, **parameters)
-
-
     def delete(self, request, address):
         """remove an agent from the database"""
 
@@ -329,17 +317,6 @@ class JobView(BaseJobView):
                  verbosity }
 
         return self.conductor_execute(data)
-
-
-    def put(self, request, name):
-        """create a new job"""
-
-        try:
-            path = request.JSON['path']
-        except KeyError:
-            return {'msg': 'Data malformed: \'path\' missing'}, 400
-
-        return self._create_job(name, path)
 
 
     def delete(self, request, name):
@@ -642,9 +619,14 @@ class ScenarioInstancesView(GenericView):
     def get(self, request):
         """list all scenario instances"""
 
-        scenario_ids = request.GET.getlist('scenario_ids')
-        data = { 'command': 'list_scenario_instances', 'scenario_ids':
-                 scenario_ids }
+        try:
+            verbosity = int(request.GET.get('verbosity', 0))
+        except ValueError:
+            return {'msg': 'Query string malformed: \'verbosity\' should be an'
+                    ' int' }, 400
+        scenario_names = request.GET.getlist('scenario_name')
+        data = { 'command': 'list_scenario_instances', 'scenario_names':
+                 scenario_names, 'verbosity': verbosity }
 
         return self.conductor_execute(data)
 
@@ -669,7 +651,7 @@ class ScenarioInstanceView(GenericView):
         except ValueError:
             return {'msg': 'Query string malformed: \'verbosity\' should be an'
                     ' int' }, 400
-        data = { 'command': 'start_scenario_instance', 'scenario_instance_id':
+        data = { 'command': 'status_scenario_instance', 'scenario_instance_id':
                  id, 'verbosity': verbosity }
 
         return self.conductor_execute(data)

@@ -647,7 +647,7 @@ And finally, the group 6 of openbach-functions allowing to start/stop a scenario
 | Function                      | Method        | url                                          | Input contents (JSON or Query string) | Description
 | start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *args*, date         | Start a scenario instance.
 | stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                  | Stop a scenario instance.
-| list_scenario_instance        | GET           | /scenario_instance                           | scenario_ids                          | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
+| list_scenario_instances       | GET           | /scenario_instance                           | scenario_names, verbosity             | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
 | status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    | verbosity                             | Return the status of the scenario instance
 |===
 

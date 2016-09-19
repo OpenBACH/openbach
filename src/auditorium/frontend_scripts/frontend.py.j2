@@ -85,19 +85,13 @@ def date_to_timestamp(date, fmt='%Y-%m-%d %H:%M:%S.%f'):
 
 
 def install_agent(agent_ip, collector_ip, username, password, name):
-    return _request_message('agent/{}'.format(agent_ip), 'PUT',
+    return _request_message('agent', 'POST', address=agent_ip,
                             username=username, password=password,
                             collector=collector_ip, name=name)
-    # or alternatively
-    # return _request_message('agent', 'POST', address=agent_ip,
-    #                         username=username, password=password,
-    #                         collector=collector_ip, name=name)
 
 
 def add_job(job_name, path):
-    return _request_message('job/{}'.format(job_name), 'PUT', path=path)
-    # or alteratively
-    # return _request_message('job', 'POST', name=job_name, path=path)
+    return _request_message('job', 'POST', name=job_name, path=path)
 
 
 def uninstall_agent(agent_ip):
@@ -304,4 +298,25 @@ def start_scenario_instance(name, args, date=None):
         action = partial(action, date=date)
 
     return action('scenario_instance', 'POST', scenario_name=name, args=args)
+
+
+def stop_scenario_instance(scenario_instance_id, date=None):
+    action = _request_message
+    if date is not None:
+        action = partial(action, date=date)
+
+    return action('scenario_instance/{}'.format(scenario_instance_id), 'POST')
+
+
+def list_scenario_instances(scenario_names=[], verbosity=0):
+    query_string = [('scenario_name', name) for name in scenario_names]
+    if verbosity is not None:
+        query_string.append(('verbosity', verbosity))
+    return requests.get(_URL.format('scenario_instance'), params=urlencode(query_string))
+
+
+def status_scenario_instance(scenario_instance_id, verbosity=0):
+    return _request_message('scenario_instance/{}'.format(scenario_instance_id),
+                            'GET', verbosity=verbosity)
+
 

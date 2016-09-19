@@ -368,6 +368,10 @@ class Openbach_Function_Instance(models.Model):
     openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
     scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
     openbach_function_instance_id = models.IntegerField()
+    job_instance = models.ForeignKey(Job_Instance, null=True, blank=True)
+    status = models.CharField(max_length=200, null=True, blank=True)
+    status_date = models.DateTimeField(null=True, blank=True)
+    time = models.IntegerField(default=0)
 
     def __str__(self):
         return 'Scenario \'{}\' openbach_function \'{}\' (Scenario_Instance \'{}\')'.format(
@@ -378,35 +382,26 @@ class Openbach_Function_Instance(models.Model):
         unique_together = (('openbach_function_instance_id', 'scenario_instance'))
 
 
-class Wait_For(models.Model):
-    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
-    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
-    time = models.IntegerField()
-
-    class Meta:
-        unique_together = (('openbach_function_instance', 'scenario_instance'))
-
-
 class Wait_For_Launched(models.Model):
-    openbach_function_instance_id = models.IntegerField()
-    wait_for = models.ForeignKey(Wait_For, on_delete=models.CASCADE)
+    openbach_function_instance_id_waited = models.IntegerField()
+    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to be launch (Scenario_Instance \'{}\')'.format(
             self.openbach_function_instance.openbach_function_instance_id,
             self.openbach_function_instance_id_waited,
-            self.scenario_instance.id)
+            self.openbach_function_instance.scenario_instance.id)
 
 
 class Wait_For_Finished(models.Model):
-    job_instance_id = models.IntegerField()
-    wait_for = models.ForeignKey(Wait_For, on_delete=models.CASCADE)
+    job_instance_id_waited = models.IntegerField()
+    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to finish (Scenario_Instance \'{}\')'.format(
             self.openbach_function_instance.openbach_function_instance_id,
             self.job_instance_id_waited,
-            self.scenario_instance.id)
+            self.openbach_function_instance.scenario_instance.id)
 
 
 class Openbach_Function_Argument_Instance(Argument_Value):

@@ -33,8 +33,17 @@
 
 ---
 
-- name: Install python3-pip
-  apt: pkg=python3-pip state=installed update_cache=false
+- name: Install pip
+  apt: pkg={{item}} state=installed update_cache=false
+  with_items:
+    - python3-pip
+    - python-pip
+
+- name: Install postgresql-server
+  apt: pkg=postgresql-server-dev-9.3 state=installed update_cache=false
+
+- name: Install postgresql
+  apt: pkg=postgresql state=installed update_cache=false
 
 - name: Download Django
   copy: src=../src/controller/django dest=/tmp/
@@ -42,8 +51,35 @@
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
 
+- name: Download psycopg2
+  copy: src=../src/controller/psycopg2 dest=/tmp/
+
+- name: Install psycopg2
+  pip: name=psycopg2 executable=pip3 version={{ psycopg2_version }} extra_args='--download-cache /tmp/psycopg2/'
+
+- name: Install prerequis for psycopg2 (for ansible)
+  apt: pkg={{item}} state=installed update_cache=false
+  with_items:
+    - libpq-dev
+    - python-dev
+
+- name: Install psycopg2 for ansible
+  pip: name=psycopg2 executable=pip version={{ psycopg2_version }} extra_args='--download-cache /tmp/psycopg2/'
+
 - name: Install python3-yaml
   apt: pkg=python3-yaml state=installed update_cache=false
+
+- name: Download parse module
+  copy: src=../src/controller/parse dest=/tmp/
+
+- name: Install parse module
+  pip: name=parse executable=pip3 version={{ parse_version }} extra_args='--download-cache /tmp/parse/'
+
+- name: Download APScheduler
+  copy: src=../src/controller/apscheduler dest=/tmp/
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--download-cache /tmp/apscheduler/'
 
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
@@ -54,6 +90,23 @@
     - { name: 'backend', mode: '0755' }
     - { name: 'openbach-backend.py', mode: '0755' }
     - { name: 'openbach_django', mode: '0755' }
+
+- name: Create a secret key
+  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))" | python3
+  register: key
+
+- name: Create a password
+  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(10, chars))" | python3
+  register: password
+
+- name: Set up settings
+  template: src=settings.py.j2 dest=/opt/openbach-controller/backend/backend/settings.py
+
+- name: Set up local settings
+  template: src=local_settings.py.j2 dest=/opt/openbach-controller/backend/backend/local_settings.py
+
+- name: Install the status-manager
+  copy: src=../src/controller/status-manager/status-manager.py dest=/opt/openbach-controller/status-manager/ mode=0755
 
 - name: Install the openbach-conductor
   copy: src=../src/controller/openbach-conductor/{{ item.name }} dest=/opt/openbach-controller/openbach-conductor/ mode={{ item.mode }}
@@ -72,17 +125,29 @@
 - name: Install the installation of the Agents
   copy: src=../src/controller/install_agent dest=/opt/openbach-controller/
 
+- name: Copy the src of APScheduler
+  copy: src=../src/controller/apscheduler dest=/opt/openbach-controller/src_agent
+
 - name: Install the src of the Jobs
   copy: src=../src/jobs dest=/opt/openbach-controller
 
 - name: Set the influxdb port to use
   replace: dest=/opt/openbach-controller/openbach-conductor/openbach-conductor.py regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
 
+- name: Change postgresql methode to trust for user postgres
+  lineinfile: dest=/etc/postgresql/9.3/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
+
+- name: Restart postgresql
+  service: name=postgresql state=restarted
+
+- name: Create the database
+  postgresql_db: name=openbach_db state=present
+
+- name: Create an admin user on the database
+  postgresql_user: db=openbach_db name=openbach password='{{password.stdout}}' priv=CONNECT
+
 - name: Initialize the database
-  shell: /opt/openbach-controller/backend/openbach-backend.py {{ item }}
-  with_items:
-    - makemigrations
-    - migrate
+  shell: /opt/openbach-controller/backend/openbach-backend.py migrate
 
 - name: Create a default superuser on the database
   shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/openbach-backend.py shell
@@ -93,6 +158,12 @@
 
 - name: Start openbach-conductor
   service: name=openbach-conductor state=started
+
+- name: Create status-manager service
+  copy: src=../src/controller/status-manager/status-manager dest=/etc/init.d/ mode=0755
+
+- name: Start status-manager
+  service: name=status-manager state=started
 
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend dest=/etc/init.d/ mode=0755

@@ -36,8 +36,11 @@
 - name: Install python3-pip
   apt: pkg=python3-pip state=installed update_cache=true
   
-- name: Install apscheduler
-  pip: name=apscheduler state=present executable=pip3
+- name: Download APScheduler
+  copy: src=../src_agent/apscheduler dest=/tmp/apscheduler
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--download-cache /tmp/apscheduler/'
 
 - name: Upgrade setuptools
   pip: name=setuptools extra_args='--upgrade' executable=pip3

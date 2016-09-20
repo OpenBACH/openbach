@@ -44,6 +44,7 @@ import getpass
 import requests
 import json
 import parse
+import time
 from queue import Queue
 from operator import attrgetter
 from datetime import datetime
@@ -987,7 +988,7 @@ class ClientThread(threading.Thread):
         if interval:
             job_instance.start_date = timezone.now()
             job_instance.periodic = True
-            job_instance.save()
+            job_instance.save(force_insert=True)
         else:
             if not date:
                 job_instance.start_date = timezone.now()
@@ -996,7 +997,7 @@ class ClientThread(threading.Thread):
                 start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
                 job_instance.start_date = start_date
             job_instance.periodic = False
-            job_instance.save()
+            job_instance.save(force_insert=True)
 
         if restart:
             job_instance.required_job_argument_instance_set.all().delete()
@@ -1772,7 +1773,6 @@ class ClientThread(threading.Thread):
                                                 scenario_arguments,
                                                 scenario_constants)
             else:
-                print(args)
                 for of_arg, of_value in args.items():
                     try:
                         of_argument = Openbach_Function_Argument.objects.get(
@@ -1812,7 +1812,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('At least two constants have the same name', 409,
                                  infos={'name': arg['name']})
 
-        result['scenario_name'] = name
+        result['scenario_name'] = scenario.name
         return result, 200
 
 
@@ -1977,10 +1977,10 @@ class ClientThread(threading.Thread):
                                 try:
                                     value = parse.parse(
                                         escaped_substitution_pattern,
-                                        arg_value)[0]
+                                        v)[0]
                                     value = '${}'.format(value)
                                 except TypeError:
-                                    value = arg_value
+                                    value = v
                                 instance_args[job_arg].append(value)
                     else:
                         is_reference = ClientThread.check_type_or_get_reference(
@@ -2001,10 +2001,10 @@ class ClientThread(threading.Thread):
                             try:
                                 value = parse.parse(
                                     escaped_substitution_pattern,
-                                    arg_value)[0]
+                                    job_value)[0]
                                 value = '${}'.format(value)
                             except TypeError:
-                                value = arg_value
+                                value = job_value
                             instance_args[job_arg] = value
                 ofai = Openbach_Function_Argument_Instance(
                     argument=Openbach_Function_Argument.objects.get(
@@ -2120,6 +2120,7 @@ class ClientThread(threading.Thread):
             arguments['finished_queues'] = finished_queues
         elif ofi.openbach_function.name == 'stop_job_instance':
             arguments['scenario_instance'] = scenario_instance
+        time.sleep(ofi.time)
         print(arguments)
         function(**arguments)
         for queue in launch_queues:

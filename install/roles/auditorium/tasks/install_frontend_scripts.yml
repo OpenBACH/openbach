@@ -40,24 +40,33 @@
   copy: src=../src/auditorium/frontend_scripts/{{ item }} dest=/opt/openbach-auditorium/frontend_scripts/ mode=0755
   with_items:
     - add_job.py
+    - create_scenario.py
     - del_job.py
+    - del_scenario.py
     - get_job_help.py
     - get_job_stats.py
+    - get_scenario.py
     - install_agent.py
     - install_jobs.py
     - list_agents.py
     - list_installed_jobs.py
     - list_job_instances.py
     - list_jobs.py
+    - list_scenario_instances.py
+    - list_scenarios.py
+    - modify_scenario.py
     - push_file.py
     - restart_job_instance.py
     - set_job_log_severity.py
     - set_job_stat_policy.py
     - start_job_instance.py
+    - start_scenario_instance.py
     - status_agents.py
     - status_job_instance.py
     - status_jobs.py
+    - status_scenario_instance.py
     - stop_job_instance.py
+    - stop_scenario_instance.py
     - uninstall_agent.py
     - uninstall_jobs.py
 

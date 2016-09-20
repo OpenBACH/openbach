@@ -56,6 +56,11 @@ arguments:
       flag:        '-t'
       description: >
           Set the IP Time to Live.
+    - name:        duration
+      type:        'int'
+      flag:        '-w'
+      description: >
+          Duration of the ping
 
 statistics:
 

@@ -490,6 +490,18 @@ class JobInstancesView(BaseJobInstanceView):
         return self.conductor_execute(data)
 
 
+    def _action_kill(self):
+        """stop all the job instance"""
+
+        data = { 'command': 'kill_all_job_instance' }
+
+        request_data = self.request.JSON
+        if 'date' in request_data:
+            data['date'] = request_data['date']
+
+        return self.conductor_execute(data)
+
+
 class JobInstanceView(BaseJobInstanceView):
     """Manage actions on specific job instances"""
 

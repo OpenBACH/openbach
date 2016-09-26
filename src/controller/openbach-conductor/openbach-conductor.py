@@ -2832,6 +2832,16 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
+    def kill_all_job_instance_view(self, date=None):
+        job_instance_ids = []
+        for job_instance in Job_Instance.objects.all():
+            if not job_instance.is_stopped:
+                job_instance_ids.append(job_instance.id)
+        self.stop_job_instance_view(job_instance_ids)
+
+        return {}, 200
+
+
     def run(self):
         request = self.clientsocket.recv(2048)
         try:

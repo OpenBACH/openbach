@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,26 +28,36 @@
    
    
    
-   @file     status_agents.py
-   @brief    Call the openbach-function status_agents
+   @file     kill_all_job_instances.py
+   @brief    Call the openbach-function kill_all_job_instances
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_agents, pretty_print
+from frontend import kill_all_job_instances, date_to_timestamp, pretty_print
+
+
+class DateMetavarHelper:
+    def __init__(self):
+        self.first = False
+
+    def __repr__(self):
+        self.first = not self.first
+        return 'DATE' if self.first else 'TIME'
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - Status Agent',
+    parser = argparse.ArgumentParser(description='OpenBach - Stop all Job'
+                                     ' Instances',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agents_ip', help='IP address of the Agents', nargs='+')
-    parser.add_argument('-u', '--update', action='store_true',
-        help='Use only the last status present on the collector')
+    parser.add_argument('-d', '--date', metavar=DateMetavarHelper(),
+                        nargs=2, help='Date of the execution')
     
     # get args
     args = parser.parse_args()
+    date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
-    pretty_print(status_agents)(args.agents_ip, args.update)
+    pretty_print(kill_all_job_instances)(date)
 

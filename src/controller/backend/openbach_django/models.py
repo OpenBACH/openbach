@@ -39,6 +39,39 @@ from django.db import models
 from django.contrib.auth import hashers
 import ipaddress
 import json
+import requests
+from .utils import BadRequest
+
+
+class ContentTyped(models.Model):
+    content_model = models.CharField(editable=False, max_length=50, null=True)
+
+    class Meta:
+        abstract = True
+
+    def concrete(self):
+        klass = self.__class__
+        for kls in reversed(klass.__mro__):
+            if issubclass(kls, ContentTyped) and not kls._meta.abstract:
+                return kls
+        return klass  # Mimic `or model.__class__`
+
+    def set_content_model(self):
+        """
+        Set content_model to the child class's related name, or None if this is
+        the base class.
+        """
+        is_base_class = (
+            self.concrete() == self.__class__)
+        self.content_model = (
+            None if is_base_class else self._meta.object_name.lower())
+
+    def get_content_model(self):
+        """
+        Return content model, or if this is the base class return it.
+        """
+        return (getattr(self, self.content_model) if self.content_model
+else self)
 
 
 class Agent(models.Model):
@@ -237,7 +270,7 @@ class Argument_Value(models.Model):
                 raise ValueError('Argument_Value \'{}\' is not of the type'
                                  ' \'{}\''.format(value, type))
         elif type == 'bool':
-            if value not in self.ACCEPTED_BOOLS:
+            if str(value) not in self.ACCEPTED_BOOLS:
                 raise ValueError('Argument_Value \'{}\' is not of the type'
                                  ' \'{}\''.format(value, type))
         elif type == 'str':
@@ -255,8 +288,9 @@ class Argument_Value(models.Model):
                 raise ValueError('Argument_Value \'{}\' is not of the type'
                                  ' \'{}\''.format(value, type))
         elif type == 'None':
-            raise ValueError('When the type is \'{}\', it should not have value'
-                             .format(type))
+            pass
+            #raise ValueError('When the type is \'{}\', it should not have value'
+            #                 .format(type))
         elif type == 'list':
             if not isinstance(value, list):
                 raise ValueError('Argument_Value \'{}\' is not of the type'
@@ -281,17 +315,25 @@ class Job_Argument_Value(Argument_Value):
         self._check_type_internal(type, value)
         if type == 'json':
             self.value = json.dumps(value)
+        elif type == 'list':
+            new_value = ''
+            for v in value:
+                if new_value == '':
+                    new_value = '"{}"'.format(v)
+                else:
+                    new_value = '{} "{}"'.format(new_value, v)
+                self.value = new_value
         else:
             self.value = value
 
 
 class Watch(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
-    instance_id = models.IntegerField(primary_key=True)
+    job_instance_id = models.IntegerField(primary_key=True)
     interval = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
-        return 'Watch of Job Instance {0.instance_id} of {0.job}'.format(self)
+        return 'Watch of Job Instance {0.job_instance_id} of {0.job}'.format(self)
 
 
 class Openbach_Function(models.Model):
@@ -354,6 +396,14 @@ class Scenario_Argument_Instance(Argument_Value):
         self._check_type_internal(type, value)
         if type == 'json':
             self.value = json.dumps(value)
+        elif type == 'list':
+            new_value = ''
+            for v in value:
+                if new_value == '':
+                    new_value = '"{}"'.format(v)
+                else:
+                    new_value = '{} "{}"'.format(new_value, v)
+                self.value = new_value
         else:
             self.value = value
 
@@ -364,9 +414,171 @@ class Scenario_Argument_Instance(Argument_Value):
         return self.value
 
 
+class Operand(ContentTyped):
+    def get_value(self):
+        if self.__class__ == Operand:
+            if self.content_model:
+                return self.get_content_model().get_value()
+        raise NotImplementedError
+
+    def save(self, *args, **kwargs):
+        self.set_content_model()
+        super(Operand, self).save(*args, **kwargs)
+
+
+class Operand_Database(Operand):
+    name = models.CharField(max_length=20)
+    key = models.CharField(max_length=20)
+    attribute = models.CharField(max_length=20)
+
+    def get_value(self):
+        model = globals()[self.name]
+        data = model.objects.get(pk=self.key)
+        return getattr(data, self.attribute)
+
+
+class Operand_Value(Operand):
+    TRUE = frozenset({'True', 'true', 'TRUE'})
+    FALSE = frozenset({'False', 'false', 'FALSE'})
+
+    value = models.CharField(max_length=200)
+
+    def get_value(self):
+        value = self.value
+        try:
+            value = float(self.value)
+        except ValueError:
+            pass
+        if self.value in self.TRUE:
+            return True
+        if self.value in self.FALSE:
+            return False
+        return value
+
+
+class Operand_Statistic(Operand):
+    UPDATE_STAT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("{stat.field}")+FROM+"{stat.measurement}"'
+    measurmement = models.CharField(max_length=200)
+    field = models.CharField(max_length=200)
+
+    def get_value(self, agent):
+        url = self.UPDATE_STAT_URL.format(agent=agent, stat=self)
+        result = requests.get(url).json()
+        try:
+            columns = result['results'][0]['series'][0]['columns']
+            values = result['results'][0]['series'][0]['values'][0]
+        except KeyError:
+            raise BadRequest('Required Stats doesn\'t exist in the Database')
+
+        for column, value in zip(columns, values):
+            if column == 'last':
+                return value
+
+
+class Condition(ContentTyped):
+    def get_value(self):
+        if self.__class__ == Condition:
+            if self.content_model:
+                return self.get_content_model().get_value()
+        raise NotImplementedError
+
+    def save(self, *args, **kwargs):
+        self.set_content_model()
+        super(Condition, self).save(*args, **kwargs)
+
+
+class Condition_Not(Condition):
+    condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='not_condition')
+
+    def get_value(self):
+        return not self.condition.get_value()
+
+
+class Condition_Or(Condition):
+    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='or_condition1')
+    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='or_condition2')
+
+    def get_value(self):
+        return self.condition1.get_value() or self.condition2.get_value()
+
+
+class Condition_And(Condition):
+    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='and_condition1')
+    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='and_condition2')
+
+    def get_value(self):
+        return self.condition1.get_value() and self.condition2.get_value()
+
+
+class Condition_Xor(Condition):
+    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='xor_condition1')
+    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  related_name='xor_condition2')
+
+    def get_value(self):
+        return (self.condition1.get_value() or self.condition2.get_value()) and not (self.condition1.get_value() and self.condition2.get_value())
+
+
+class Condition_Equal(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='equal_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='equal_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() == self.operand2.get_value()
+
+
+class Condition_Below_Or_Equal(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='boe_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='boe_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() <= self.operand2.get_value()
+
+
+class Condition_Below(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='below_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='below_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() < self.operand2.get_value()
+
+
+class Condition_Upper_Or_Equal(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='uoe_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='uoe_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() >= self.operand2.get_value()
+
+
+class Condition_Upper(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='upper_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='upper_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() > self.operand2.get_value()
+
 class Openbach_Function_Instance(models.Model):
     openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
     scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+    condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                  null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
     job_instance = models.ForeignKey(Job_Instance, null=True, blank=True)
     status = models.CharField(max_length=200, null=True, blank=True)
@@ -414,6 +626,14 @@ class Openbach_Function_Argument_Instance(Argument_Value):
         self._check_type_internal(type, value)
         if type == 'json':
             self.value = json.dumps(value)
+        elif type == 'list':
+            new_value = ''
+            for v in value:
+                if new_value == '':
+                    new_value = '"{}"'.format(v)
+                else:
+                    new_value = '{} "{}"'.format(new_value, v)
+                self.value = new_value
         else:
             self.value = value
 

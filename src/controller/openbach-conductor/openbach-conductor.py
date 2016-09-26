@@ -61,6 +61,7 @@ from django.db import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
+from openbach_django.utils import BadRequest
 
 
 _SEVERITY_MAPPING = {
@@ -130,16 +131,20 @@ class PlaybookBuilder():
             yield playbook
 
     @contextmanager
-    def extra_vars_file(self, filename='/tmp/openbach_extra_vars'):
+    def extra_vars_file(self, filename=None):
+        if not filename:
+            filename = '/tmp/openbach_extra_vars'
+        else:
+            filename = '/tmp/openbach_extra_vars_{}'.format(filename)
         with open(filename, 'w') as extra_vars:
             yield extra_vars
 
-    def build_start(self, job_name, instance_id, job_args, date, interval,
+    def build_start(self, job_name, job_instance_id, job_args, date, interval,
                     playbook_handle, extra_vars_handle):
         instance = 'start_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': instance_id,
+                'id:': job_instance_id,
                 'job_options:': job_args,
         }
 
@@ -153,12 +158,12 @@ class PlaybookBuilder():
         return self._build_helper(instance, playbook_handle,
                                   variables, extra_vars_handle)
 
-    def build_status(self, job_name, instance_id, date, interval, stop,
+    def build_status(self, job_name, job_instance_id, date, interval, stop,
                      playbook_handle, extra_vars_handle):
         instance = 'status_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': instance_id,
+                'id:': job_instance_id,
         }
 
         if date is not None:
@@ -173,12 +178,12 @@ class PlaybookBuilder():
         return self._build_helper(instance, playbook_handle,
                                   variables, extra_vars_handle)
 
-    def build_restart(self, job_name, instance_id, job_args, date, interval,
+    def build_restart(self, job_name, job_instance_id, job_args, date, interval,
                       playbook_handle, extra_vars_handle):
         instance = 'restart_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': instance_id,
+                'id:': job_instance_id,
                 'job_options:': job_args,
         }
         if date is not None:
@@ -191,10 +196,10 @@ class PlaybookBuilder():
         return self._build_helper(instance, playbook_handle,
                                   variables, extra_vars_handle)
 
-    def build_stop(self, job_name, instance_id, date, playbook, extra_vars):
+    def build_stop(self, job_name, job_instance_id, date, playbook, extra_vars):
         variables = {
                 'job_name:': job_name,
-                'id:': instance_id,
+                'id:': job_instance_id,
                 'date: date': date,
         }
         return self._build_helper('stop_job_instance_agent', playbook, variables, extra_vars)
@@ -215,7 +220,7 @@ class PlaybookBuilder():
             src_file = 'src={}/templates/{{{{ item.src }}}}'.format(job_path)
             print('    - name: Push new rsyslog conf files', file=playbook_file)
             print('      template:', src_file,
-                  'dest=/etc/rsyslog.d/{{ job }}{{ instance_id }}'
+                  'dest=/etc/rsyslog.d/{{ job }}{{ job_instance_id }}'
                   '{{ item.dst }}.locked owner=root group=root',
                   file=playbook_file)
             print('      with_items:', file=playbook_file)
@@ -232,18 +237,6 @@ class PlaybookBuilder():
         print('      copy: src={} dest={}'.format(local_path, remote_path), file=playbook_file)
         print('      become: yes', file=playbook_file)
         return True
-
-
-class BadRequest(Exception):
-    """Custom exception raised when parsing of a request failed"""
-    def __init__(self, reason, returncode=400, infos=None):
-        super().__init__(reason)
-        self.reason = reason
-        self.returncode = returncode
-        if infos:
-            self.infos = infos
-        else:
-            self.infos = {}
 
 
 class ClientThread(threading.Thread):
@@ -278,6 +271,10 @@ class ClientThread(threading.Thread):
                              500)
 
         return function(**data)
+
+
+    def install_agent(self, address, collector, username, password, name):
+        self.install_agent_view(address,collector, username, password, name)
 
 
     def install_agent_view(self, address, collector, username, password, name):
@@ -330,6 +327,10 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
+    def uninstall_agent(self, address):
+        self.uninstall_agent_view(address)
+
+
     def uninstall_agent_view(self, address):
         try:
             agent = Agent.objects.get(pk=address)
@@ -351,6 +352,10 @@ class ClientThread(threading.Thread):
             ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
             .format(agent=agent))
         return {}, 200
+
+
+#    def list_agents(self, update=False):
+#        self.list_agents_view(update)
 
 
     def list_agents_view(self, update=False):
@@ -402,7 +407,11 @@ class ClientThread(threading.Thread):
             agent.save()
 
 
-    def status_agents_view(self, addresses):
+    def status_agents(self, addresses, update=False):
+        self.status_agents_view(addresses, update)
+
+
+    def status_agents_view(self, addresses, update=False):
         unknown_agents = []
         for agent_ip in addresses:
             try:
@@ -458,7 +467,24 @@ class ClientThread(threading.Thread):
             raise BadRequest('At least one of the Agents isn\'t in the '
                              'database', 404, {'unknown_agents':
                                                unknown_agents})
-        return {}, 200
+        response = {}
+        if update:
+            if agent.reachable and agent.update_status < agent.update_reachable:
+                try:
+                    self.update_agent(agent)
+                except BadRequest as e:
+                    response['errors'] = {
+                        'agent_ip': agent.address,
+                        'error': result[3:],
+                    }
+                else:
+                    agent.refresh_from_db()
+
+        return response, 200
+
+
+    def add_job(self, name, path):
+        self.add_job_view(name, path)
 
 
     def add_job_view(self, name, path):
@@ -600,6 +626,10 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
+    def del_job(self, name):
+        self.del_job_view(name)
+
+
     def del_job_view(self, name):
         try:
             job = Job.objects.get(pk=name)
@@ -608,6 +638,10 @@ class ClientThread(threading.Thread):
                 'job_name': name })
         job.delete()
         return {}, 200
+
+
+#    def list_jobs(self, verbosity=0):
+#        self.list_jobs_view(verbosity)
 
 
     def list_jobs_view(self, verbosity=0):
@@ -623,6 +657,10 @@ class ClientThread(threading.Thread):
                                           job.statistic_set.all()]
             response['jobs'].append(job_info)
         return response, 200
+
+
+#    def get_job_stats(self, name, verbosity=0):
+#        self.get_job_stats_view(name, verbosity)
 
 
     def get_job_stats_view(self, name, verbosity=0):
@@ -644,6 +682,10 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
+#    def get_job_help(self, name):
+#        self.get_job_help_view(name)
+
+
     def get_job_help_view(self, name):
         try:
             job = Job.objects.get(pk=name)
@@ -652,6 +694,10 @@ class ClientThread(threading.Thread):
                              {'job_name': name})
 
         return {'job_name': name, 'help': job.help}, 200
+
+
+    def install_jobs(self, addresses, names, severity=4, local_severity=4):
+        self.install_jobs_view(addresses, names, severity, local_severity)
 
 
     def install_jobs_view(self, addresses, names, severity=4, local_severity=4):
@@ -711,6 +757,10 @@ class ClientThread(threading.Thread):
                                  404)
 
 
+    def uninstall_jobs(self, addresses, names):
+        self.uninstall_jobs_view(addresses, names)
+
+
     def uninstall_jobs_view(self, addresses, names):
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
@@ -768,6 +818,10 @@ class ClientThread(threading.Thread):
             else:
                 raise BadRequest('At least one of the installation have failed',
                                  404)
+
+
+    def list_installed_jobs(self, address, update=False, verbosity=0):
+        self.list_installed_jobs_view(address, update, verbosity)
 
 
     def list_installed_jobs_view(self, address, update=False, verbosity=0):
@@ -873,6 +927,10 @@ class ClientThread(threading.Thread):
                              'Controller', 404, {'unknown_jobs': unknown_jobs})
 
 
+    def status_jobs(self, addresses):
+        self.status_jobs_view(addresses)
+
+
     def status_jobs_view(self, addresses):
         error = False
         unknown_agents = []
@@ -899,6 +957,10 @@ class ClientThread(threading.Thread):
             raise BadRequest('At least one of the Agents isn\'t in the '
                              'database', 404, {'addresses': unknown_agents})
         return {}, 200
+
+
+    def push_file(self, local_path, remote_path, agent_ip):
+        self.push_file_view(local_path, remote_path, agent_ip)
 
 
     def push_file_view(self, local_path, remote_path, agent_ip):
@@ -1021,7 +1083,7 @@ class ClientThread(threading.Thread):
             print(e)
             raise
 
-        job_instance_id = result['instance_id']
+        job_instance_id = result['job_instance_id']
         ofi.job_instance = Job_Instance.objects.get(pk=job_instance_id)
         ofi.save()
         try:
@@ -1031,10 +1093,9 @@ class ClientThread(threading.Thread):
             print(e)
             raise
 
-        if len(finished_queues) != 0:
-            with WaitingQueueManager() as waiting_queues:
-                waiting_queues[job_instance_id] = (ofi.openbach_function_instance_id,
-                                                   finished_queues)
+        with WaitingQueueManager() as waiting_queues:
+            waiting_queues[job_instance_id] = (ofi.openbach_function_instance_id,
+                                               finished_queues)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -1073,7 +1134,7 @@ class ClientThread(threading.Thread):
         self.playbook_builder.write_hosts(agent.address)
         args = self.format_args(job_instance)
         with self.playbook_builder.playbook_file(
-                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance.id) as extra_vars:
             self.playbook_builder.build_start(
                     job.name, job_instance.id,
                     args, date, interval,
@@ -1081,21 +1142,22 @@ class ClientThread(threading.Thread):
         try:
             self.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
-                '@/tmp/openbach_extra_vars -e '
+                '@{} -e '
                 'ansible_ssh_user={agent.username} -e '
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
-                .format(playbook.name, agent=agent))
+                .format(extra_vars.name, playbook.name, agent=agent))
         except BadRequest:
             job_instance.delete()
             raise
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        return {'instance_id': job_instance.id }, 200
+        return {'job_instance_id': job_instance.id }, 200
 
 
     def stop_job_instance(self, openbach_function_indexes, scenario_instance, date=None):
+        print(openbach_function_indexes)
         job_instance_ids = []
         for openbach_function_id in openbach_function_indexes:
             try:
@@ -1164,13 +1226,20 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def restart_job_instance_view(self, instance_id, instance_args, date=None,
+    def restart_job_instance(self, job_instance_id, instance_args, date=None,
+                             interval=None):
+        #TODO
+        self.restart_job_instance_view(job_instance_id, instance_args, date,
+                                       interval)
+
+
+    def restart_job_instance_view(self, job_instance_id, instance_args, date=None,
                                   interval=None):
         try:
-            job_instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
-                             {'instance_id': instance_id})
+                             {'job_instance_id': job_instance_id})
 
         date = self.fill_job_instance(job_instance, instance_args, date, interval,
                                       True)
@@ -1202,21 +1271,28 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
-    def watch_job_instance_view(self, instance_id, date=None, interval=None,
+    def watch_job_instance(self, job_instance_id, date=None, interval=None,
+                           stop=None):
+        #TODO est-ce utile ? toutes les job_instance sont lance avec une watch
+        #     dans les scenarios
+        self.watch_job_instance_view(job_instance_id, date, interval, stop)
+
+
+    def watch_job_instance_view(self, job_instance_id, date=None, interval=None,
                                 stop=None):
         try:
-            job_instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
-                             {'instance_id': instance_id})
+                             {'job_instance_id': job_instance_id})
         installed_job = job_instance.job
 
         try:
-            watch = Watch.objects.get(pk=instance_id)
+            watch = Watch.objects.get(pk=job_instance_id)
             if not interval and not stop:
                 raise BadRequest('A Watch already exists in the database', 400)
         except ObjectDoesNotExist:
-            watch = Watch(job=installed_job, instance_id=instance_id)
+            watch = Watch(job=installed_job, job_instance_id=job_instance_id)
 
         should_delete_watch = True
         if interval:
@@ -1233,19 +1309,19 @@ class ClientThread(threading.Thread):
         agent = watch.job.agent
         self.playbook_builder.write_hosts(agent.address)
         with self.playbook_builder.playbook_file(
-                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance_id) as extra_vars:
             self.playbook_builder.build_status(
-                    job.name, instance_id,
+                    job.name, job_instance_id,
                     date, interval, stop,
                     playbook, extra_vars)
         try:
             self.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
-                '@/tmp/openbach_extra_vars -e '
+                '@{} -e '
                 'ansible_ssh_user={agent.username} -e '
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
-                .format(playbook.name, agent=agent))
+                .format(extra_vars.name, playbook.name, agent=agent))
         except BadRequest:
             watch.delete()
             raise
@@ -1256,8 +1332,8 @@ class ClientThread(threading.Thread):
 
 
     @staticmethod
-    def update_instance(instance_id):
-        job_instance = Job_Instance.objects.get(pk=instance_id)
+    def update_instance(job_instance_id):
+        job_instance = Job_Instance.objects.get(pk=job_instance_id)
         url = ClientThread.UPDATE_INSTANCE_URL.format(
                 job_instance.job.job.name, job_instance.id, agent=job_instance.job.agent)
         result = requests.get(url).json()
@@ -1281,18 +1357,22 @@ class ClientThread(threading.Thread):
         job_instance.save()
 
 
-    def status_job_instance_view(self, instance_id, verbosity=0, update=False):
+#    def status_job_instance(self, job_instance_id, verbosity=0, update=False):
+#        self.status_job_instance_view(job_instance_id, verbosity, update)
+
+
+    def status_job_instance_view(self, job_instance_id, verbosity=0, update=False):
         error_msg = None
         if update:
             try:
-                ClientThread.update_instance(instance_id)
+                ClientThread.update_instance(job_instance_id)
             except BadRequest as e:
                 error_msg = e.reason
         try:
-            job_instance = Job_Instance.objects.get(pk=instance_id)
+            job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
-                             {'instance_id': instance_id})
+                             {'job_instance_id': job_instance_id})
         instance_infos = {
                 'id': job_instance.id,
                 'arguments': {}
@@ -1320,7 +1400,12 @@ class ClientThread(threading.Thread):
                 instance_infos['stop_date'] = 'Not programmed yet'
         if error_msg is not None:
             instance_infos['error'] = error_msg
+            instance_infos['job_name'] = job_instance.job.name
         return instance_infos, 200
+
+
+#    def list_job_instances(self, addresses, update=False, verbosity=0):
+#        self.list_job_instances_view(addresses, update, verbosity)
 
 
     def list_job_instances_view(self, addresses, update=False, verbosity=0):
@@ -1335,17 +1420,22 @@ class ClientThread(threading.Thread):
             job_instances_for_agent = { 'address': agent.address, 'installed_jobs':
                                       []}
             for job in agent.installed_job_set.all():
-                job_instances_for_job = { 'job_name': job.name, 'instances': [] }
+                job_instances_for_job = { 'job_name': job.__str__(), 'instances': [] }
                 for job_instance in job.job_instance_set.filter(is_stopped=False):
-                    instance_infos, _ = self.status_job_instance(job_instance.id,
-                                                                    verbosity,
-                                                                    update)
+                    instance_infos, _ = self.status_job_instance_view(
+                        job_instance.id, verbosity, update)
                     job_instances_for_job['instances'].append(instance_infos)
                 if job_instances_for_job['instances']:
                     job_instances_for_agent['installed_jobs'].append(job_instances_for_job)
             if job_instances_for_agent['installed_jobs']:
                 response['instances'].append(job_instances_for_agent)
         return response, 200
+
+
+    def set_job_log_severity(self, address, job_name, severity, date=None,
+                             local_severity=None):
+        self.set_job_log_severity_view(address, job_name, severity, date,
+                                       local_severity)
 
 
     def set_job_log_severity_view(self, address, job_name, severity, date=None,
@@ -1385,7 +1475,7 @@ class ClientThread(threading.Thread):
         job_instance.periodic = False
         job_instance.save()
 
-        instance_args = { 'job_name': [job_name], 'instance_id': [job_instance.id] }
+        instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
         date = self.fill_job_instance(job_instance, instance_args, date)
 
         logs_job_path = job_instance.job.job.path
@@ -1406,7 +1496,7 @@ class ClientThread(threading.Thread):
             else:
                 print('syslogseverity_local:', syslogseverity_local, file=extra_vars)
             print('job:', job_name, file=extra_vars)
-            print('instance_id:', job_instance.id, file=extra_vars)
+            print('job_instance_id:', job_instance.id, file=extra_vars)
 
             argument_instance = Optional_Job_Argument_Instance(
                 argument=job_instance.job.job.optional_job_argument_set.filter(name='disable_code')[0],
@@ -1443,6 +1533,12 @@ class ClientThread(threading.Thread):
         job_instance.save()
         result = {}
         return result, 200
+
+
+    def set_job_stat_policy(self, address, job_name, stat_name=None,
+                            storage=None, broadcast=None, date=None):
+        self.set_job_stat_policy_view(address, job_name, stat_name,
+                                      storage, broadcast, date)
 
 
     def set_job_stat_policy_view(self, address, job_name, stat_name=None,
@@ -1512,7 +1608,7 @@ class ClientThread(threading.Thread):
         job_instance.periodic = False
         job_instance.save()
  
-        instance_args = { 'job_name': [job_name], 'instance_id': [job_instance.id] }
+        instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
         date = self.fill_job_instance(job_instance, instance_args, date)
 
         rstats_job_path = job_instance.job.job.path
@@ -1553,6 +1649,51 @@ class ClientThread(threading.Thread):
         job_instance.save()
         result = {}
         return result, 200
+
+
+    def of_if(self, condition, openbach_functions_true,
+              openbach_functions_false, table, queues, scenario_instance):
+        if condition.get_value():
+            for ofi_id in openbach_functions_true:
+                thread = threading.Thread(
+                    target=self.launch_openbach_function_instance,
+                    args=(scenario_instance, int(ofi_id), table, queues))
+                thread.start()
+        else:
+            for ofi_id in openbach_functions_false:
+                thread = threading.Thread(
+                    target=self.launch_openbach_function_instance,
+                    args=(scenario_instance, int(ofi_id), table, queues))
+                thread.start()
+
+
+    def of_while(self, condition, openbach_functions_while,
+                 openbach_functions_end, table, queues, scenario_instance,
+                 openbach_function_instance_id):
+        if condition.get_value():
+            table[openbach_function_instance_id]['wait_for_launched'].clear()
+            for ofi_id in openbach_functions_while:
+                table[openbach_function_instance_id]['wait_for_launched'].add(
+                    int(ofi_id))
+                table[int(ofi_id)]['is_waited_for_launched'].add(openbach_function_instance_id)
+                table[int(ofi_id)]['wait_for_launched'].clear()
+                table[int(ofi_id)]['wait_for_finished'].clear()
+            for ofi_id in openbach_functions_while:
+                thread = threading.Thread(
+                    target=self.launch_openbach_function_instance,
+                    args=(scenario_instance, int(ofi_id), table, queues))
+                thread.start()
+            thread = threading.Thread(
+                target=self.launch_openbach_function_instance,
+                args=(scenario_instance, openbach_function_instance_id, table,
+                      queues))
+            thread.start()
+        else:
+            for ofi_id in openbach_functions_end:
+                thread = threading.Thread(
+                    target=self.launch_openbach_function_instance,
+                    args=(scenario_instance, int(ofi_id), table, queues))
+                thread.start()
 
 
     @staticmethod
@@ -1602,23 +1743,11 @@ class ClientThread(threading.Thread):
                     return False
             except KeyError:
                 return False
-            #if openbach_function['name'] == 'start_job_instance':
-            #    if 'args' not in openbach_function:
-            #        return False
-            #    if not isinstance(openbach_function['args'], list):
-            #        return False
-            #    try:
-            #        for arg in openbach_function['args']:
-            #            for k in required_parameters:
-            #                arg[k]
-            #    except KeyError:
-            #        return False
         return True
 
 
     @staticmethod
-    def check_type_or_get_reference(argument, arg_value):
-        expected_type = argument.type
+    def check_reference(arg_value):
         if isinstance(arg_value, str):
             substitution_pattern = '${}'
             escaped_substitution_pattern = '\${}'
@@ -1631,9 +1760,19 @@ class ClientThread(threading.Thread):
                 except TypeError:
                     value = arg_value
             else:
-                return scenario_arg
+                return True, scenario_arg
         else:
             value = arg_value
+
+        return False, value
+
+
+    @staticmethod
+    def check_type_or_get_reference(argument, arg_value):
+        expected_type = argument.type
+        is_reference, value = ClientThread.check_reference(arg_value)
+        if is_reference:
+            return value
         av = Argument_Value()
         if expected_type == 'None':
             return False
@@ -1693,6 +1832,126 @@ class ClientThread(threading.Thread):
             scenario.delete()
             raise
         return result
+
+
+    @staticmethod
+    def check_condition(condition):
+        try:
+            condition_type = condition.pop('type')
+        except KeyError:
+            raise BadRequest('This Condition is malformed (no type)')
+        if condition_type == '=':
+            try:
+                operand1 = condition.pop('operand1')
+                operand2 = condition.pop('operand2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_operand(operand1)
+            ClientThread.check_operand(operand2)
+        elif condition_type == '<=':
+            try:
+                operand1 = condition.pop('operand1')
+                operand2 = condition.pop('operand2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_operand(operand1)
+            ClientThread.check_operand(operand2)
+        elif condition_type == '<':
+            try:
+                operand1 = condition.pop('operand1')
+                operand2 = condition.pop('operand2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_operand(operand1)
+            ClientThread.check_operand(operand2)
+        elif condition_type == '>=':
+            try:
+                operand1 = condition.pop('operand1')
+                operand2 = condition.pop('operand2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_operand(operand1)
+            ClientThread.check_operand(operand2)
+        elif condition_type == '>':
+            try:
+                operand1 = condition.pop('operand1')
+                operand2 = condition.pop('operand2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_operand(operand1)
+            ClientThread.check_operand(operand2)
+        elif condition_type == 'not':
+            try:
+                new_condition = condition.pop('condition')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_condition(new_condition)
+        elif condition_type == 'or':
+            try:
+                condition1 = condition.pop('condition1')
+                condition2 = condition.pop('condition2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_condition(condition1)
+            ClientThread.check_condition(condition2)
+        elif condition_type == 'and':
+            try:
+                condition1 = condition.pop('condition1')
+                condition2 = condition.pop('condition2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_condition(condition1)
+            ClientThread.check_condition(condition2)
+        elif condition_type == 'xor':
+            try:
+                condition1 = condition.pop('condition1')
+                condition2 = condition.pop('condition2')
+            except KeyError:
+                raise BadRequest('This Condition is malformed', 404,
+                                 {'condition': condition_type})
+            ClientThread.check_condition(condition1)
+            ClientThread.check_condition(condition2)
+        else:
+            raise BadRequest('The type of the Condition is unknown',
+                             404, {'name': 'if', 'type': condition_type})
+
+
+    @staticmethod
+    def check_operand(operand):
+        try:
+            operand_type = operand.pop('type')
+        except KeyError:
+            raise BadRequest('This Operand is malformed (no type)')
+        if operand_type == 'database':
+            try:
+                operand_name = operand.pop('name')
+                key = operand.pop('key')
+                attribute = operand.pop('attribute')
+            except KeyError:
+                raise BadRequest('This Operand is malformed', 404,
+                                 {'operand': operand_type})
+        elif operand_type == 'value':
+            if 'value' not in operand:
+                raise BadRequest('This Operand is malformed', 404,
+                                 {'operand': operand_type})
+        elif operand_type == 'statistic':
+            try:
+                measurement = operand.pop('measurement')
+                field = operand.pop('field')
+            except KeyError:
+                raise BadRequest('This Operand is malformed', 404,
+                                 {'operand': operand_type})
+        else:
+            raise BadRequest('This Operand is malformed', 404,
+                             {'operand': operand_type})
 
 
     @staticmethod
@@ -1772,6 +2031,54 @@ class ClientThread(threading.Thread):
                         ClientThread.check_type(ja, job_value,
                                                 scenario_arguments,
                                                 scenario_constants)
+            elif name == 'if':
+                try:
+                    openbach_function_true_indexes = args.pop(
+                        'openbach_function_true_indexes')
+                    openbach_function_false_indexes = args.pop(
+                        'openbach_function_false_indexes')
+                    condition = args.pop('condition')
+                except KeyError:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name': 'if'})
+                if args:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name': 'if'})
+                of_argument = of.openbach_function_argument_set.get(
+                    name='openbach_functions_true')
+                ClientThread.check_type(of_argument,
+                                        openbach_function_true_indexes,
+                                        scenario_arguments, scenario_constants)
+                of_argument = of.openbach_function_argument_set.get(
+                    name='openbach_functions_false')
+                ClientThread.check_type(of_argument,
+                                        openbach_function_false_indexes,
+                                        scenario_arguments, scenario_constants)
+                ClientThread.check_condition(condition)
+            elif name == 'while':
+                try:
+                    openbach_function_while_indexes = args.pop(
+                        'openbach_function_while_indexes')
+                    openbach_function_end_indexes = args.pop(
+                        'openbach_function_end_indexes')
+                    condition = args.pop('condition')
+                except KeyError:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name': 'while'})
+                if args:
+                    raise BadRequest('The arguments of this Openbach_Function'
+                                     ' are malformed', 404, {'name': 'while'})
+                of_argument = of.openbach_function_argument_set.get(
+                    name='openbach_functions_while')
+                ClientThread.check_type(of_argument,
+                                        openbach_function_while_indexes,
+                                        scenario_arguments, scenario_constants)
+                of_argument = of.openbach_function_argument_set.get(
+                    name='openbach_functions_end')
+                ClientThread.check_type(of_argument,
+                                        openbach_function_end_indexes,
+                                        scenario_arguments, scenario_constants)
+                ClientThread.check_condition(condition)
             else:
                 for of_arg, of_value in args.items():
                     try:
@@ -1891,31 +2198,140 @@ class ClientThread(threading.Thread):
             openbach_function_instance=openbach_function_instance)
         of_argument = Openbach_Function_Argument.objects.get(
             name=arg_name, openbach_function=of)
-        is_reference = ClientThread.check_type_or_get_reference(
-            of_argument, arg_value)
+        if isinstance(arg_value, list):
+            value = []
+            for v in arg_value:
+                value.append(ClientThread.get_value(v, scenario_instance))
+        else:
+            value = ClientThread.get_value(arg_value, scenario_instance)
         try:
-            if is_reference:
-                sa = scenario_instance.scenario.scenario_argument_set.get(
-                    name=is_reference)
-                try:
-                    spi = scenario_instance.scenario_argument_instance_set.get(
-                        argument=sa)
-                except ObjectDoesNotExist:
-                    spi = scenario_instance.scenario.scenario_argument_set.get(
-                        name=is_reference).scenario_argument_instance_set.get(
-                            scenario_instance=None)
-                ofai.check_and_set_value(spi.value)
-            else:
-                escaped_substitution_pattern = '\${}'
-                try:
-                    value = parse.parse(escaped_substitution_pattern, arg_value)[0]
-                    value = '${}'.format(value)
-                except TypeError:
-                    value = arg_value
-                ofai.check_and_set_value(value)
+            ofai.check_and_set_value(value)
         except ValueError as e:
             raise BadRequest(e.args[0], 400)
         ofai.save()
+
+
+    @staticmethod
+    def get_value(value, scenario_instance):
+        is_reference, value = ClientThread.check_reference(value)
+        if is_reference:
+            sa = scenario_instance.scenario.scenario_argument_set.get(
+                name=value)
+            try:
+                spi = scenario_instance.scenario_argument_instance_set.get(
+                    argument=sa)
+            except ObjectDoesNotExist:
+                spi = scenario_instance.scenario.scenario_argument_set.get(
+                    name=value).scenario_argument_instance_set.get(
+                        scenario_instance=None)
+            value = spi.value
+        return value
+
+
+    @staticmethod
+    def register_operand(operand_json, scenario_instance):
+        operand_type = operand_json.pop('type')
+        if operand_type == 'database':
+            name = operand_json.pop('name')
+            key = operand_json.pop('key')
+            attribute = operand_json.pop('attribute')
+            key = ClientThread.get_value(key, scenario_instance)
+            operand = Operand_Database(name=name, key=key, attribute=attribute)
+        elif operand_type == 'value':
+            value = operand_json.pop('value')
+            value = ClientThread.get_value(value, scenario_instance)
+            operand = Operand_Value(value=value)
+        elif operand_type == 'statistic':
+            measurement = operand_json.pop('measurement')
+            field = operand_json.pop('field')
+            measurement = ClientThread.get_value(measurement, scenario_instance)
+            field = ClientThread.get_value(field, scenario_instance)
+            operand = Operand_Statistic(measurement=measurement, field=field)
+
+        operand.save()
+        return operand
+
+
+    @staticmethod
+    def register_condition(condition_json, scenario_instance):
+        condition_type = condition_json.pop('type')
+        if condition_type == 'not':
+            new_condition_json = condition_json.pop('condition')
+            new_condition = ClientThread.register_condition(new_condition_json,
+                                                            scenario_instance)
+            condition = Condition_Not(condition=condition)
+        elif condition_type == 'or':
+            condition1_json = condition_json.pop('condition1')
+            condition1 = ClientThread.register_condition(condition1_json,
+                                            scenario_instance)
+            condition2_json = condition_json.pop('condition2')
+            condition2 = ClientThread.register_condition(condition2_json,
+                                            scenario_instance)
+            condition = Condition_Or(condition1=condition1,
+                                     condition2=condition2)
+        elif condition_type == 'and':
+            condition1_json = condition_json.pop('condition1')
+            condition1 = ClientThread.register_condition(condition1_json,
+                                            scenario_instance)
+            condition2_json = condition_json.pop('condition2')
+            condition2 = ClientThread.register_condition(condition2_json,
+                                            scenario_instance)
+            condition = Condition_And(condition1=condition1,
+                                     condition2=condition2)
+        elif condition_type == 'xor':
+            condition1_json = condition_json.pop('condition1')
+            condition1 = ClientThread.register_condition(condition1_json,
+                                            scenario_instance)
+            condition2_json = condition_json.pop('condition2')
+            condition2 = ClientThread.register_condition(condition2_json,
+                                            scenario_instance)
+            condition = Condition_Xor(condition1=condition1,
+                                     condition2=condition2)
+        elif condition_type == '=':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Equal(operand1=operand1, operand2=operand2)
+        elif condition_type == '<=':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Below_Or_Equal(operand1=operand1,
+                                                 operand2=operand2)
+        elif condition_type == '<':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Below(operand1=operand1, operand2=operand2)
+        elif condition_type == '>=':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Upper_Or_Equal(operand1=operand1,
+                                                 operand2=operand2)
+        elif condition_type == '>':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Upper(operand1=operand1, operand2=operand2)
+
+        condition.save()
+        return condition
 
 
     @staticmethod
@@ -1959,53 +2375,11 @@ class ClientThread(threading.Thread):
                     if isinstance(job_value, list):
                         instance_args[job_arg] = []
                         for v in job_value:
-                            is_reference = ClientThread.check_type_or_get_reference(
-                                ja, v)
-                            if is_reference:
-                                sa = scenario_instance.scenario.scenario_argument_set.get(
-                                    name=is_reference)
-                                try:
-                                    spi = scenario_instance.scenario_argument_instance_set.get(
-                                        argument=sa)
-                                except ObjectDoesNotExist:
-                                    spi = scenario_instance.scenario.scenario_argument_set.get(
-                                        name=is_reference).scenario_argument_instance_set.get(
-                                            scenario_instance=None)
-                                instance_args[job_arg].append(spi.value)
-                            else:
-                                escaped_substitution_pattern = '\${}'
-                                try:
-                                    value = parse.parse(
-                                        escaped_substitution_pattern,
-                                        v)[0]
-                                    value = '${}'.format(value)
-                                except TypeError:
-                                    value = v
-                                instance_args[job_arg].append(value)
+                            value = ClientThread.get_value(v, scenario_instance)
+                            instance_args[job_arg].append(value)
                     else:
-                        is_reference = ClientThread.check_type_or_get_reference(
-                            ja, job_value)
-                        if is_reference:
-                            sa = scenario_instance.scenario.scenario_argument_set.get(
-                                name=is_reference)
-                            try:
-                                spi = scenario_instance.scenario_argument_instance_set.get(
-                                    argument=sa)
-                            except ObjectDoesNotExist:
-                                spi = scenario_instance.scenario.scenario_argument_set.get(
-                                    name=is_reference).scenario_argument_instance_set.get(
-                                        scenario_instance=None)
-                            instance_args[job_arg] = spi.value
-                        else:
-                            escaped_substitution_pattern = '\${}'
-                            try:
-                                value = parse.parse(
-                                    escaped_substitution_pattern,
-                                    job_value)[0]
-                                value = '${}'.format(value)
-                            except TypeError:
-                                value = job_value
-                            instance_args[job_arg] = value
+                        value = ClientThread.get_value(job_value, scenario_instance)
+                        instance_args[job_arg] = value
                 ofai = Openbach_Function_Argument_Instance(
                     argument=Openbach_Function_Argument.objects.get(
                         name='instance_args', openbach_function=of),
@@ -2015,6 +2389,36 @@ class ClientThread(threading.Thread):
                 except ValueError as e:
                     raise BadRequest(e.args[0], 400)
                 ofai.save()
+            elif name == 'if':
+                openbach_function_true_indexes = args.pop(
+                    'openbach_function_true_indexes')
+                ClientThread.register_openbach_function_argument_instance(
+                    'openbach_functions_true',
+                    openbach_function_true_indexes, ofi, scenario_instance)
+                openbach_function_false_indexes = args.pop(
+                    'openbach_function_false_indexes')
+                ClientThread.register_openbach_function_argument_instance(
+                    'openbach_functions_false',
+                    openbach_function_false_indexes, ofi, scenario_instance)
+                condition_json = args.pop('condition')
+                condition = ClientThread.register_condition(condition_json,
+                                                            scenario_instance)
+                ofi.condition = condition
+            elif name == 'while':
+                openbach_function_while_indexes = args.pop(
+                    'openbach_function_while_indexes')
+                ClientThread.register_openbach_function_argument_instance(
+                    'openbach_functions_while',
+                    openbach_function_while_indexes, ofi, scenario_instance)
+                openbach_function_end_indexes = args.pop(
+                    'openbach_function_end_indexes')
+                ClientThread.register_openbach_function_argument_instance(
+                    'openbach_functions_end',
+                    openbach_function_end_indexes, ofi, scenario_instance)
+                condition_json = args.pop('condition')
+                condition = ClientThread.register_condition(condition_json,
+                                                            scenario_instance)
+                ofi.condition = condition
             else:
                 for arg_name, arg_value in args.items():
                     ClientThread.register_openbach_function_argument_instance(
@@ -2067,18 +2471,81 @@ class ClientThread(threading.Thread):
     def build_table(scenario_instance):
         table = {}
         for ofi in scenario_instance.openbach_function_instance_set.all():
+            if ofi.openbach_function.name == 'if':
+                of = ofi.openbach_function
+                ofa = of.openbach_function_argument_set.get(
+                    name='openbach_functions_true')
+                ofai = ofi.openbach_function_argument_instance_set.get(
+                    argument=ofa)
+                for id_ in shlex.split(ofai.value):
+                    ofi_id = int(id_)
+                    if ofi_id not in table:
+                        table[ofi_id] = { 'wait_for_launched': set(),
+                                          'is_waited_for_launched': set(),
+                                          'wait_for_finished': set(),
+                                          'is_waited_for_finished': set(),
+                                          'programmable': False }
+                    else:
+                        table[ofi_id]['programmable'] = False
+                ofa = of.openbach_function_argument_set.get(
+                    name='openbach_functions_false')
+                ofai = ofi.openbach_function_argument_instance_set.get(
+                    argument=ofa)
+                for id_ in shlex.split(ofai.value):
+                    ofi_id = int(id_)
+                    if ofi_id not in table:
+                        table[ofi_id] = { 'wait_for_launched': set(),
+                                          'is_waited_for_launched': set(),
+                                          'wait_for_finished': set(),
+                                          'is_waited_for_finished': set(),
+                                          'programmable': False }
+                    else:
+                        table[ofi_id]['programmable'] = False
+            elif ofi.openbach_function.name == 'while':
+                of = ofi.openbach_function
+                ofa = of.openbach_function_argument_set.get(
+                    name='openbach_functions_while')
+                ofai = ofi.openbach_function_argument_instance_set.get(
+                    argument=ofa)
+                for id_ in shlex.split(ofai.value):
+                    ofi_id = int(id_)
+                    if ofi_id not in table:
+                        table[ofi_id] = { 'wait_for_launched': set(),
+                                          'is_waited_for_launched': set(),
+                                          'wait_for_finished': set(),
+                                          'is_waited_for_finished': set(),
+                                          'programmable': False }
+                    else:
+                        table[ofi_id]['programmable'] = False
+                ofa = of.openbach_function_argument_set.get(
+                    name='openbach_functions_end')
+                ofai = ofi.openbach_function_argument_instance_set.get(
+                    argument=ofa)
+                for id_ in shlex.split(ofai.value):
+                    ofi_id = int(id_)
+                    if ofi_id not in table:
+                        table[ofi_id] = { 'wait_for_launched': set(),
+                                          'is_waited_for_launched': set(),
+                                          'wait_for_finished': set(),
+                                          'is_waited_for_finished': set(),
+                                          'programmable': False }
+                    else:
+                        table[ofi_id]['programmable'] = False
             ofi_id = ofi.openbach_function_instance_id
-            table[ofi_id] = { 'wait_for_launched': set(),
-                              'is_waited_for_launched': set(),
-                              'wait_for_finished': set(),
-                              'is_waited_for_finished': set() }
+            if ofi_id not in table:
+                table[ofi_id] = { 'wait_for_launched': set(),
+                                  'is_waited_for_launched': set(),
+                                  'wait_for_finished': set(),
+                                  'is_waited_for_finished': set(),
+                                  'programmable': True }
             for wfl in ofi.wait_for_launched_set.all():
                 ofi_waited_id = wfl.openbach_function_instance_id_waited
                 if ofi_waited_id not in table:
                     table[ofi_waited_id] = { 'wait_for_launched': set(),
                                              'is_waited_for_launched': set(),
                                              'wait_for_finished': set(),
-                                             'is_waited_for_finished': set() }
+                                             'is_waited_for_finished': set(),
+                                             'programmable': True }
                 table[ofi_id]['wait_for_launched'].add(ofi_waited_id)
                 table[ofi_waited_id]['is_waited_for_launched'].add(ofi_id)
             for wff in ofi.wait_for_finished_set.all():
@@ -2087,23 +2554,39 @@ class ClientThread(threading.Thread):
                     table[ji_waited_id] = { 'wait_for_launched': set(),
                                             'is_waited_for_launched': set(),
                                             'wait_for_finished': set(),
-                                            'is_waited_for_finished': set() }
+                                            'is_waited_for_finished': set(),
+                                            'programmable': True }
                 table[ofi_id]['wait_for_finished'].add(ji_waited_id)
                 table[ji_waited_id]['is_waited_for_finished'].add(ofi_id)
         return table
 
 
-    def launch_openbach_function_instance(self, scenario_instance, ofi_id, l,
-                                          queue, launch_queues, finished_queues,
-                                          date):
-        while l:
-            x = queue.get()
-            l.remove(x)
+    def launch_openbach_function_instance(self, scenario_instance, ofi_id,
+                                          table, queues):
         print('Openbach_Function_Instance number: ', ofi_id)
+        data = table[ofi_id]
+        queue = queues[ofi_id]
+        launch_queues = [ queues[id] for id in data['is_waited_for_launched'] ]
+        finished_queues = tuple([ queues[id] for id in
+                                 data['is_waited_for_finished'] ])
+        waited_ids = data['wait_for_launched'].union(data['wait_for_finished'])
         ofi = scenario_instance.openbach_function_instance_set.get(
             openbach_function_instance_id=ofi_id)
+        ofi.status = 'Waiting ...'
+        ofi.status_date = timezone.now()
+        ofi.save()
+        while waited_ids:
+            x = queue.get()
+            waited_ids.remove(x)
+        time.sleep(ofi.time)
+        ofi.status = 'Starting ...'
+        ofi.status_date = timezone.now()
+        ofi.save()
         try:
-            function = getattr(self, ofi.openbach_function.name)
+            name = ofi.openbach_function.name
+            if name == 'if' or name == 'while':
+                name = 'of_{}'.format(name)
+            function = getattr(self, name)
         except AttributeError:
             #TODO gerer mieux l'erreur
             raise BadRequest('Function {} not implemented yet'.format(request),
@@ -2112,6 +2595,10 @@ class ClientThread(threading.Thread):
         for arg in ofi.openbach_function_argument_instance_set.all():
             if arg.argument.type == 'json':
                 arguments[arg.argument.name] = json.loads(arg.value)
+            elif arg.argument.type == 'list':
+                arguments[arg.argument.name] = []
+                for value in shlex.split(arg.value):
+                    arguments[arg.argument.name].append(value)
             else:
                 arguments[arg.argument.name] = arg.value
         if ofi.openbach_function.name == 'start_job_instance':
@@ -2120,11 +2607,28 @@ class ClientThread(threading.Thread):
             arguments['finished_queues'] = finished_queues
         elif ofi.openbach_function.name == 'stop_job_instance':
             arguments['scenario_instance'] = scenario_instance
-        time.sleep(ofi.time)
+        elif (ofi.openbach_function.name == 'if' or ofi.openbach_function.name
+              == 'while'):
+            arguments['condition'] = ofi.condition
+            arguments['scenario_instance'] = scenario_instance
+            arguments['table'] = table
+            arguments['queues'] = queues
+        if ofi.openbach_function.name == 'while':
+            arguments['openbach_function_instance_id'] = ofi.openbach_function_instance_id
         print(arguments)
         function(**arguments)
+        ofi.status = 'Finished, warning other openbach_functions ...'
+        ofi.status_date = timezone.now()
+        ofi.save()
         for queue in launch_queues:
             queue.put(ofi_id)
+        ofi.status = 'Finished'
+        ofi.status_date = timezone.now()
+        ofi.save()
+
+
+    def start_scenario_instance(self, scenario_name, args, date=None):
+        self.start_scenario_instance_view(scenario_name, args, date)
 
 
     def start_scenario_instance_view(self, scenario_name, args, date=None):
@@ -2135,20 +2639,14 @@ class ClientThread(threading.Thread):
                              infos={'scenario_name': scenario_name})
         scenario_instance = self.register_scenario_instance(scenario, args)
         table = self.build_table(scenario_instance)
-        print(table)
         # lance les openbach function possible
         queues = { id: Queue() for id in table }
         for ofi_id, data in table.items():
-            queue = queues[ofi_id]
-            launch_queues = [ queues[id] for id in data['is_waited_for_launched'] ]
-            finished_queues = tuple([ queues[id] for id in
-                                     data['is_waited_for_finished'] ])
-            waited_ids = data['wait_for_launched'].union(data['wait_for_finished'])
-            thread = threading.Thread(
-                target=self.launch_openbach_function_instance,
-                args=(scenario_instance, ofi_id, waited_ids, queue,
-                      launch_queues, finished_queues, date))
-            thread.start()
+            if data['programmable']:
+                thread = threading.Thread(
+                    target=self.launch_openbach_function_instance,
+                    args=(scenario_instance, ofi_id, table, queues))
+                thread.start()
 
         return { 'scenario_instance_id': scenario_instance.id }, 200
 
@@ -2158,13 +2656,18 @@ class ClientThread(threading.Thread):
         return { 'error': 'TODO' }, 400
 
 
-    @staticmethod
-    def infos_openbach_function_instance(openbach_function_instance, verbosity=0):
+    def infos_openbach_function_instance(self, openbach_function_instance, verbosity=0):
         infos = {}
         infos['name'] = openbach_function_instance.openbach_function.name
         if verbosity > 0:
             infos['status'] = openbach_function_instance.status
             infos['status_date'] = openbach_function_instance.status_date
+            if infos['name'] == 'start_job_instance':
+                job_instance = openbach_function_instance.job_instance
+                if job_instance:
+                    info, _ = self.status_job_instance_view(job_instance.id,
+                                                            verbosity=1)
+                    infos[job_instance.job.__str__()] = info
         if verbosity > 1:
             infos['arguments'] = []
             for ofai in openbach_function_instance.openbach_function_argument_instance_set.all():
@@ -2181,8 +2684,7 @@ class ClientThread(threading.Thread):
         return infos
 
 
-    @staticmethod
-    def infos_scenario_instance(scenario_instance, verbosity=0):
+    def infos_scenario_instance(self, scenario_instance, verbosity=0):
         infos = {}
         infos['scenario_instance_id'] = scenario_instance.id
         if verbosity > 0:
@@ -2197,7 +2699,7 @@ class ClientThread(threading.Thread):
         if verbosity > 2:
             infos['openbach_functions'] = []
             for ofi in scenario_instance.openbach_function_instance_set.all():
-                info = ClientThread.infos_openbach_function_instance(
+                info = self.infos_openbach_function_instance(
                     ofi, verbosity-3)
                 infos['openbach_functions'].append(info)
         return infos
@@ -2229,8 +2731,9 @@ class ClientThread(threading.Thread):
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
         result = self.infos_scenario_instance(scenario_instance, verbosity)
+        result['scenario_name'] = scenario_instance.scenario.name
 
-        return {scenario_instance.scenario.name: result}, 200
+        return result, 200
 
 
     def run(self):

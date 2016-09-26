@@ -581,6 +581,7 @@ class Openbach_Function_Instance(models.Model):
                                   null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
     job_instance = models.ForeignKey(Job_Instance, null=True, blank=True)
+    scenario_instance = models.ForeignKey(Scenario_Instance, null=True, blank=True)
     status = models.CharField(max_length=200, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
     time = models.IntegerField(default=0)

@@ -2613,6 +2613,8 @@ class ClientThread(threading.Thread):
             arguments['scenario_instance'] = scenario_instance
             arguments['table'] = table
             arguments['queues'] = queues
+        elif ofi.openbach_function.name == 'start_scenario_instance':
+            arguments['ofi'] = ofi
         if ofi.openbach_function.name == 'while':
             arguments['openbach_function_instance_id'] = ofi.openbach_function_instance_id
         print(arguments)
@@ -2627,8 +2629,19 @@ class ClientThread(threading.Thread):
         ofi.save()
 
 
-    def start_scenario_instance(self, scenario_name, args, date=None):
-        self.start_scenario_instance_view(scenario_name, args, date)
+    def start_scenario_instance(self, scenario_name, args, ofi, date=None):
+        try:
+            result, _ = self.start_scenario_instance_view(scenario_name, args,
+                                                          date))
+        except BadRequest as e:
+            # TODO gerer les erreurs
+            print(e)
+            raise
+
+        scenario_instance_id = result['scenario_instance_id']
+        ofi.scenario_instance = Scenario_Instance.objects.get(
+            pk=scenario_instance_id)
+        ofi.save()
 
 
     def start_scenario_instance_view(self, scenario_name, args, date=None):
@@ -2659,6 +2672,12 @@ class ClientThread(threading.Thread):
     def infos_openbach_function_instance(self, openbach_function_instance, verbosity=0):
         infos = {}
         infos['name'] = openbach_function_instance.openbach_function.name
+        if (openbach_function_instance.openbach_function.name ==
+            'start_scenario_instance'):
+            scenario_instance = openbach_function_instance.scenario_instance
+            info, _ = self.infos_scenario_instance(scenario_instance, verbosity)
+            infos = { **infos, **info }
+            return infos
         if verbosity > 0:
             infos['status'] = openbach_function_instance.status
             infos['status_date'] = openbach_function_instance.status_date

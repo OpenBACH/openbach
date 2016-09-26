@@ -39,3 +39,6 @@
 - name: Add openbach-backend to boot
   shell: update-rc.d openbach-backend defaults 80
 
+- name: Add status-manager to boot
+  shell: update-rc.d status-manager defaults 80
+

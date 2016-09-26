@@ -39,3 +39,6 @@
 - name: Delete openbach-backend to boot
   shell: update-rc.d -f openbach-conductor remove
 
+- name: Delete status-manager to boot
+  shell: update-rc.d -f status-manager remove
+

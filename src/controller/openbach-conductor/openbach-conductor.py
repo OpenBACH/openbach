@@ -45,7 +45,7 @@ import requests
 import json
 import parse
 import time
-from queue import Queue
+from queue import Queue, Empty
 from operator import attrgetter
 from datetime import datetime
 from contextlib import contextmanager
@@ -74,6 +74,24 @@ _SEVERITY_MAPPING = {
 
 def convert_severity(severity):
     return _SEVERITY_MAPPING.get(severity, 8)
+
+
+class ThreadManager:
+    __shared_state = {}  # Borg pattern
+
+    def __init__(self, init=False):
+        self.__dict__ = self.__class__.__shared_state
+        
+        if init:
+            self.threads = {}
+            self.mutex = threading.Lock()
+
+    def __enter__(self):
+        self.mutex.acquire()
+        return self.threads
+
+    def __exit__(self, t, v, tb):
+        self.mutex.release()
 
 
 class WaitingQueueManager:
@@ -1658,13 +1676,23 @@ class ClientThread(threading.Thread):
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, int(ofi_id), table, queues))
+                thread.do_run = True
                 thread.start()
+                with ThreadManager() as threads:
+                    if scenario_instance.id not in threads:
+                        threads[scenario_instance.id] = {}
+                    threads[scenario_instance.id][ofi_id] = thread
         else:
             for ofi_id in openbach_functions_false:
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, int(ofi_id), table, queues))
+                thread.do_run = True
                 thread.start()
+                with ThreadManager() as threads:
+                    if scenario_instance.id not in threads:
+                        threads[scenario_instance.id] = {}
+                    threads[scenario_instance.id][ofi_id] = thread
 
 
     def of_while(self, condition, openbach_functions_while,
@@ -1682,18 +1710,33 @@ class ClientThread(threading.Thread):
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, int(ofi_id), table, queues))
+                thread.do_run = True
                 thread.start()
+                with ThreadManager() as threads:
+                    if scenario_instance.id not in threads:
+                        threads[scenario_instance.id] = {}
+                    threads[scenario_instance.id][ofi_id] = thread
             thread = threading.Thread(
                 target=self.launch_openbach_function_instance,
                 args=(scenario_instance, openbach_function_instance_id, table,
                       queues))
+            thread.do_run = True
             thread.start()
+            with ThreadManager() as threads:
+                if scenario_instance.id not in threads:
+                    threads[scenario_instance.id] = {}
+                threads[scenario_instance.id][ofi_id] = thread
         else:
             for ofi_id in openbach_functions_end:
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, int(ofi_id), table, queues))
+                thread.do_run = True
                 thread.start()
+                with ThreadManager() as threads:
+                    if scenario_instance.id not in threads:
+                        threads[scenario_instance.id] = {}
+                    threads[scenario_instance.id][ofi_id] = thread
 
 
     @staticmethod
@@ -2575,9 +2618,18 @@ class ClientThread(threading.Thread):
         ofi.status = 'Waiting ...'
         ofi.status_date = timezone.now()
         ofi.save()
+        t = threading.currentThread()
         while waited_ids:
-            x = queue.get()
-            waited_ids.remove(x)
+            try:
+                x = queue.get(timeout=0.5)
+            except Empty:
+                if not t.do_run:
+                    ofi.status = 'Stopped'
+                    ofi.status_date = timezone.now()
+                    ofi.save()
+                    return
+            else:
+                waited_ids.remove(x)
         time.sleep(ofi.time)
         ofi.status = 'Starting ...'
         ofi.status_date = timezone.now()
@@ -2632,7 +2684,7 @@ class ClientThread(threading.Thread):
     def start_scenario_instance(self, scenario_name, args, ofi, date=None):
         try:
             result, _ = self.start_scenario_instance_view(scenario_name, args,
-                                                          date))
+                                                          date)
         except BadRequest as e:
             # TODO gerer les erreurs
             print(e)
@@ -2659,14 +2711,39 @@ class ClientThread(threading.Thread):
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, ofi_id, table, queues))
+                thread.do_run = True
                 thread.start()
+                with ThreadManager() as threads:
+                    if scenario_instance.id not in threads:
+                        threads[scenario_instance.id] = {}
+                    threads[scenario_instance.id][ofi_id] = thread
 
         return { 'scenario_instance_id': scenario_instance.id }, 200
 
 
     def stop_scenario_instance_view(self, scenario_instance_id, date=None):
+        scenario_instance_id = int(scenario_instance_id)
+        print(type(scenario_instance_id))
+        try:
+            scenario_instance = Scenario_Instance.objects.get(
+                pk=scenario_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('This Scenario_Instance does not exist in the '
+                             'database', 404, {'scenario_instance_id':
+                                               scenario_instance_id})
+        with ThreadManager() as threads:
+            print(threads)
+            scenario_threads = threads[scenario_instance_id]
+            for ofi_id, thread in scenario_threads.items():
+                thread.do_run = False
+                ofi = scenario_instance.openbach_function_instance_set.get(
+                    openbach_function_instance_id=ofi_id)
+                if ofi.job_instance:
+                    result, returncode = self.stop_job_instance_view(
+                        [ofi.job_instance.id])
+                    #TODO mieux gerer les erreurs !
 
-        return { 'error': 'TODO' }, 400
+        return {}, 200
 
 
     def infos_openbach_function_instance(self, openbach_function_instance, verbosity=0):
@@ -2676,7 +2753,7 @@ class ClientThread(threading.Thread):
             'start_scenario_instance'):
             scenario_instance = openbach_function_instance.scenario_instance
             info, _ = self.infos_scenario_instance(scenario_instance, verbosity)
-            infos = { **infos, **info }
+            infos.update(info)
             return infos
         if verbosity > 0:
             infos['status'] = openbach_function_instance.status
@@ -2815,6 +2892,9 @@ if __name__ == '__main__':
 
     # Initialiser le WaitingQueueManager
     WaitingQueueManager(init=True)
+
+    # Initialiser le ThreadManager
+    ThreadManager(init=True)
 
     thread1 = threading.Thread(target=listen_message_from_backend,
                                args=(tcp_socket1,))

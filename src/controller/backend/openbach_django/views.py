@@ -491,9 +491,9 @@ class JobInstancesView(BaseJobInstanceView):
 
 
     def _action_kill(self):
-        """stop all the job instance"""
+        """stop all the scenario instances, job instances and watchs"""
 
-        data = { 'command': 'kill_all_job_instance' }
+        data = { 'command': 'kill_all' }
 
         request_data = self.request.JSON
         if 'date' in request_data:

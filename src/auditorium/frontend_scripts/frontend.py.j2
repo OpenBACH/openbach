@@ -322,7 +322,7 @@ def status_scenario_instance(scenario_instance_id, verbosity=0):
                             'GET', verbosity=verbosity)
 
 
-def kill_all_job_instances(date=None):
+def kill_all(date=None):
     action = _request_message
     if date is not None:
         action = partial(action, date=date)

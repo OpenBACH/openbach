@@ -28,14 +28,14 @@
    
    
    
-   @file     kill_all_job_instances.py
-   @brief    Call the openbach-function kill_all_job_instances
+   @file     kill_all.py
+   @brief    Call the openbach-function kill_all
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import kill_all_job_instances, date_to_timestamp, pretty_print
+from frontend import kill_all, date_to_timestamp, pretty_print
 
 
 class DateMetavarHelper:
@@ -59,5 +59,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
-    pretty_print(kill_all_job_instances)(date)
+    pretty_print(kill_all)(date)
 

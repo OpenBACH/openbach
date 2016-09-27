@@ -378,6 +378,7 @@ class Scenario_Instance(models.Model):
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
     status = models.CharField(max_length=200, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
+    is_stopped = models.BooleanField(default=False)
 
     def __str__(self):
         return 'Scenario Instance {}'.format(self.id)

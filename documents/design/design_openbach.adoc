@@ -624,7 +624,7 @@ The group 4 of openbach-functions allowing to start/schedule/stop a Job instance
 | watch_job_instance      | POST          | /job_instance/*id*   | *action=watch*, date, interval, stop                                      | Request the agent to send the status of a Job instance (scheduled, running or not running) to the Collector.
 | list_job_instances      | GET           | /job_instance        | *address* (but can be multiple), update, verbosity                        | Return the list of the Job instances for the Agent. If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database. Verbosity: 0-3.
 | status_job_instance     | GET           | /job_instance/*id*   | update, verbosity                                                         | Return the information of a Job Instance. If update=False or none, the status is by default retrieved from the backend database. If update=true, this function pulls the last status from Collector database. Verbosity: 0-3.
-| kill_all_job_instance   | POST          | /job_instance        | *action=kill*, date                                                       | Stop all the job instances.
+| kill_all                | POST          | /job_instance        | *action=kill*, date                                                       | Stop all the scenario instance, job instances and watchs.
 |===
 
 The group 5 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.

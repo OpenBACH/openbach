@@ -82,13 +82,13 @@
     {
       "stop_job_instance": {
         "openbach_function_indexes": [
-          4
+          3
         ]
       },
       "wait": {
         "time": 10,
         "launched_indexes": [
-          4
+          3
         ],
         "finished_indexes": []
       }

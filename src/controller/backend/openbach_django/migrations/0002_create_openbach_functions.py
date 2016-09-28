@@ -28,7 +28,7 @@
    
    
    @file     0002_create_openbach_functions.py
-   @brief    File that will create the openbach_function ine the DB durint the
+   @brief    File that will create the openbach functions in the DB during the
              initialization
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """

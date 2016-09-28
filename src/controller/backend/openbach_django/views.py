@@ -121,10 +121,13 @@ class StatusView(GenericView):
     def get(self, request):
         """compute status of agents or jobs on it"""
 
+        update = 'update' in request.GET
         assert self.status_type is not None
 
         data = { 'addresses': request.GET.getlist('address'), 'command':
                  self.status_type }
+        if update:
+            data['update'] = update
 
         return self.conductor_execute(data)
 

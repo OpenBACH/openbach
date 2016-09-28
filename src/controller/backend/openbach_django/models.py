@@ -218,6 +218,7 @@ class Job_Instance(models.Model):
     stop_date = models.DateTimeField(null=True, blank=True)
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
+    openbach_function_instance = models.ForeignKey("Openbach_Function_Instance", null=True, blank=True)
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
@@ -379,6 +380,9 @@ class Scenario_Instance(models.Model):
     status = models.CharField(max_length=200, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
     is_stopped = models.BooleanField(default=False)
+    openbach_function_instance_master = models.ForeignKey(
+        "Openbach_Function_Instance", null=True, blank=True,
+        related_name='openbach_function_instance_master')
 
     def __str__(self):
         return 'Scenario Instance {}'.format(self.id)
@@ -536,6 +540,16 @@ class Condition_Equal(Condition):
         return self.operand1.get_value() == self.operand2.get_value()
 
 
+class Condition_Unequal(Condition):
+    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='unequal_operand1')
+    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                  related_name='unequal_operand2')
+
+    def get_value(self):
+        return self.operand1.get_value() != self.operand2.get_value()
+
+
 class Condition_Below_Or_Equal(Condition):
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='boe_operand1')
@@ -575,14 +589,13 @@ class Condition_Upper(Condition):
     def get_value(self):
         return self.operand1.get_value() > self.operand2.get_value()
 
+
 class Openbach_Function_Instance(models.Model):
     openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
     scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
     condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
-    job_instance = models.ForeignKey(Job_Instance, null=True, blank=True)
-    scenario_instance = models.ForeignKey(Scenario_Instance, null=True, blank=True)
     status = models.CharField(max_length=200, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
     time = models.IntegerField(default=0)

@@ -1102,8 +1102,9 @@ class ClientThread(threading.Thread):
             raise
 
         job_instance_id = result['job_instance_id']
-        ofi.job_instance = Job_Instance.objects.get(pk=job_instance_id)
-        ofi.save()
+        job_instance = Job_Instance.objects.get(pk=job_instance_id)
+        job_instance.openbach_function_instance = ofi
+        job_instance.save()
         try:
             self.watch_job_instance_view(job_instance_id, interval=2)
         except BadRequest as e:
@@ -1184,7 +1185,8 @@ class ClientThread(threading.Thread):
             except ObjectDoesNotExist:
                 #TODO see how to handle this error
                 continue
-            job_instance_ids.append(ofi.job_instance.id)
+            for job_instance in ofi.job_instance_set.all():
+                job_instance_ids.append(job_instance.id)
         self.stop_job_instance_view(job_instance_ids, date)
 
 
@@ -1670,29 +1672,85 @@ class ClientThread(threading.Thread):
 
 
     def of_if(self, condition, openbach_functions_true,
-              openbach_functions_false, table, queues, scenario_instance):
+              openbach_functions_false, table, queues, scenario_instance,
+              openbach_function_instance_id):
         if condition.get_value():
-            for ofi_id in openbach_functions_true:
-                thread = threading.Thread(
-                    target=self.launch_openbach_function_instance,
-                    args=(scenario_instance, int(ofi_id), table, queues))
-                thread.do_run = True
-                thread.start()
-                with ThreadManager() as threads:
-                    if scenario_instance.id not in threads:
-                        threads[scenario_instance.id] = {}
-                    threads[scenario_instance.id][ofi_id] = thread
+            for id_ in openbach_functions_true:
+                entry = table[id_]
+                openbach_functions_only_false = [ x for x in
+                                                  openbach_functions_false if x
+                                                  not in openbach_functions_true
+                                                ]
+                entry['wait_for_launched'] = set([ x for x in
+                                                   entry['wait_for_launched']
+                                                   if x not in
+                                                   openbach_functions_only_false ])
+                entry['wait_for_finished'] = set([ x for x in
+                                                   entry['wait_for_finished']
+                                                   if x not in
+                                                   openbach_functions_only_false ])
+                try:
+                    entry['wait_if_true'].remove(openbach_function_instance_id)
+                    entry['wait_if_false'].remove(openbach_function_instance_id)
+                except KeyError:
+                    pass
+                self.check_programmable(id_, table)
+                if entry['programmable']:
+                    thread = threading.Thread(
+                        target=self.launch_openbach_function_instance,
+                        args=(scenario_instance, int(id_), table, queues))
+                    thread.do_run = True
+                    thread.start()
+                    with ThreadManager() as threads:
+                        if scenario_instance.id not in threads:
+                            threads[scenario_instance.id] = {}
+                        threads[scenario_instance.id][id_] = thread
         else:
-            for ofi_id in openbach_functions_false:
-                thread = threading.Thread(
-                    target=self.launch_openbach_function_instance,
-                    args=(scenario_instance, int(ofi_id), table, queues))
-                thread.do_run = True
-                thread.start()
-                with ThreadManager() as threads:
-                    if scenario_instance.id not in threads:
-                        threads[scenario_instance.id] = {}
-                    threads[scenario_instance.id][ofi_id] = thread
+            for id_ in openbach_functions_false:
+                entry = table[id_]
+                openbach_functions_only_true = [ x for x in
+                                                 openbach_functions_true if x
+                                                 not in openbach_functions_false
+                                               ]
+                entry['wait_for_launched'] = set([ x for x in
+                                                   entry['wait_for_launched']
+                                                   if x not in
+                                                   openbach_functions_only_true ])
+                entry['wait_for_finished'] = set([ x for x in
+                                                   entry['wait_for_finished']
+                                                   if x not in
+                                                   openbach_functions_only_true ])
+                entry['wait_if_false'].remove(openbach_function_instance_id)
+                try:
+                    entry['wait_if_true'].remove(openbach_function_instance_id)
+                except KeyError:
+                    pass
+                self.check_programmable(id_, table)
+                if entry['programmable']:
+                    thread = threading.Thread(
+                        target=self.launch_openbach_function_instance,
+                        args=(scenario_instance, int(id_), table, queues))
+                    thread.do_run = True
+                    thread.start()
+                    with ThreadManager() as threads:
+                        if scenario_instance.id not in threads:
+                            threads[scenario_instance.id] = {}
+                        threads[scenario_instance.id][id_] = thread
+
+
+    @staticmethod
+    def check_programmable(ofi_id, table):
+        entry = table[ofi_id]
+        if entry['wait_while']:
+            entry['programmable'] = False
+        elif entry['wait_while_end']:
+            entry['programmable'] = False
+        elif entry['wait_if_true']:
+            entry['programmable'] = False
+        elif entry['wait_if_false']:
+            entry['programmable'] = False
+        else:
+            entry['programmable'] = True
 
 
     def of_while(self, condition, openbach_functions_while,
@@ -1704,39 +1762,62 @@ class ClientThread(threading.Thread):
                 table[openbach_function_instance_id]['wait_for_launched'].add(
                     int(ofi_id))
                 table[int(ofi_id)]['is_waited_for_launched'].add(openbach_function_instance_id)
-                table[int(ofi_id)]['wait_for_launched'].clear()
-                table[int(ofi_id)]['wait_for_finished'].clear()
-            for ofi_id in openbach_functions_while:
+                # TODO virer les 2 prochains clear et mettre les id qui gene sur
+                # le 1er while
+                #table[int(ofi_id)]['wait_for_launched'].clear()
+                #table[int(ofi_id)]['wait_for_finished'].clear()
+                if table[int(ofi_id)]['if_false']:
+                    for id_ in table[int(ofi_id)]['if_false']:
+                        table[id_]['wait_if_false'].add(int(ofi_id))
+                if table[int(ofi_id)]['if_true']:
+                    for id_ in table[int(ofi_id)]['if_true']:
+                        table[id_]['wait_if_true'].add(int(ofi_id))
+                if table[int(ofi_id)]['while']:
+                    for id_ in table[int(ofi_id)]['while']:
+                        table[id_]['wait_while'].add(int(ofi_id))
+                if table[int(ofi_id)]['while_end']:
+                    for id_ in table[int(ofi_id)]['while_end']:
+                        table[id_]['wait_while_end'].add(int(ofi_id))
+                try:
+                    table[int(ofi_id)]['wait_while'].remove(openbach_function_instance_id)
+                except KeyError:
+                    pass
+                self.check_programmable(int(ofi_id), table)
+                if table[int(ofi_id)]['programmable']:
+                    thread = threading.Thread(
+                        target=self.launch_openbach_function_instance,
+                        args=(scenario_instance, int(ofi_id), table, queues))
+                    thread.do_run = True
+                    thread.start()
+                    with ThreadManager() as threads:
+                        if scenario_instance.id not in threads:
+                            threads[scenario_instance.id] = {}
+                        threads[scenario_instance.id][ofi_id] = thread
+            if table[openbach_function_instance_id]['programmable']:
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
-                    args=(scenario_instance, int(ofi_id), table, queues))
+                    args=(scenario_instance, openbach_function_instance_id, table,
+                          queues))
                 thread.do_run = True
                 thread.start()
                 with ThreadManager() as threads:
                     if scenario_instance.id not in threads:
                         threads[scenario_instance.id] = {}
                     threads[scenario_instance.id][ofi_id] = thread
-            thread = threading.Thread(
-                target=self.launch_openbach_function_instance,
-                args=(scenario_instance, openbach_function_instance_id, table,
-                      queues))
-            thread.do_run = True
-            thread.start()
-            with ThreadManager() as threads:
-                if scenario_instance.id not in threads:
-                    threads[scenario_instance.id] = {}
-                threads[scenario_instance.id][ofi_id] = thread
         else:
             for ofi_id in openbach_functions_end:
-                thread = threading.Thread(
-                    target=self.launch_openbach_function_instance,
-                    args=(scenario_instance, int(ofi_id), table, queues))
-                thread.do_run = True
-                thread.start()
-                with ThreadManager() as threads:
-                    if scenario_instance.id not in threads:
-                        threads[scenario_instance.id] = {}
-                    threads[scenario_instance.id][ofi_id] = thread
+                table[int(ofi_id)]['wait_while_end'].remove(openbach_function_instance_id)
+                self.check_programmable(int(ofi_id), table)
+                if table[int(ofi_id)]['programmable']:
+                    thread = threading.Thread(
+                        target=self.launch_openbach_function_instance,
+                        args=(scenario_instance, int(ofi_id), table, queues))
+                    thread.do_run = True
+                    thread.start()
+                    with ThreadManager() as threads:
+                        if scenario_instance.id not in threads:
+                            threads[scenario_instance.id] = {}
+                        threads[scenario_instance.id][ofi_id] = thread
 
 
     @staticmethod
@@ -2287,7 +2368,7 @@ class ClientThread(threading.Thread):
             scenario.delete()
 
         result = self.register_scenario(scenario_json, name)
-        scenario = Scenario.object.get(name=name)
+        scenario = Scenario.objects.get(name=name)
         try:
             self.check_scenario(scenario)
         except BadRequest:
@@ -2431,6 +2512,14 @@ class ClientThread(threading.Thread):
             operand2 = ClientThread.register_operand(operand2_json,
                                         scenario_instance)
             condition = Condition_Equal(operand1=operand1, operand2=operand2)
+        elif condition_type == '!=':
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(operand1_json,
+                                        scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(operand2_json,
+                                        scenario_instance)
+            condition = Condition_Unequal(operand1=operand1, operand2=operand2)
         elif condition_type == '<=':
             operand1_json = condition_json.pop('operand1')
             operand1 = ClientThread.register_operand(operand1_json,
@@ -2682,60 +2771,52 @@ class ClientThread(threading.Thread):
                     table[ji_waited_id] = ClientThread.build_entry()
                 table[ofi_id]['wait_for_finished'].add(ji_waited_id)
                 table[ji_waited_id]['is_waited_for_finished'].add(ofi_id)
-        for ofi_id, entry in table.items():
-            if entry['wait_if_true']:
-                for id_ in entry['is_waited_for_launched']:
-                    for waited_if_id in entry['wait_if_true']:
-                        table[waited_if_id]['if_true'].add(id_)
-                        table[id_]['wait_if_true'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-                for id_ in entry['is_waited_for_finished']:
-                    for waited_if_id in entry['wait_if_true']:
-                        table[waited_if_id]['if_true'].add(id_)
-                        table[id_]['wait_if_true'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-            if entry['wait_if_false']:
-                for id_ in entry['is_waited_for_launched']:
-                    for waited_if_id in entry['wait_if_false']:
-                        table[waited_if_id]['if_false'].add(id_)
-                        table[id_]['wait_if_false'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-                for id_ in entry['is_waited_for_finished']:
-                    for waited_if_id in entry['wait_if_false']:
-                        table[waited_if_id]['if_false'].add(id_)
-                        table[id_]['wait_if_false'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-            if entry['wait_while']:
-                for id_ in entry['is_waited_for_launched']:
-                    for waited_if_id in entry['wait_while']:
-                        table[waited_if_id]['while'].add(id_)
-                        table[id_]['while'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-                for id_ in entry['is_waited_for_finished']:
-                    for waited_if_id in entry['wait_while']:
-                        table[waited_if_id]['while'].add(id_)
-                        table[id_]['while'].add(waited_if_id)
-                        table[id_]['programmable'] = False
-            if entry['wait_while_end']:
-                for id_ in entry['is_waited_for_launched']:
-                    for waited_if_id in entry['wait_while_end']:
-                        table[waited_if_id]['while_end'].add(id_)
-                        table[id_]['wait_while_end'].add(waited_if_id)
-                for id_ in entry['is_waited_for_finished']:
-                    for waited_if_id in entry['wait_while_end']:
-                        table[waited_if_id]['while_end'].add(id_)
-                        table[id_]['wait_while_end'].add(waited_if_id)
+        has_changed = True
+        while has_changed:
+            has_changed = False
+            for ofi_id, entry in table.items():
+                list_id = set()
+                list_id.update(entry['is_waited_for_launched'])
+                list_id.update(entry['is_waited_for_finished'])
+                list_id.update(entry['if_true'])
+                list_id.update(entry['if_false'])
+                list_id.update(entry['while'])
+                list_id.update(entry['while_end'])
+                if entry['wait_if_true']:
+                    for id_ in list_id:
+                        for waited_id in entry['wait_if_true']:
+                            if id_ not in table[waited_id]['if_true']:
+                                table[waited_id]['if_true'].add(id_)
+                                table[id_]['wait_if_true'].add(waited_id)
+                                has_changed = True
+                            table[id_]['programmable'] = False
+                if entry['wait_if_false']:
+                    for id_ in list_id:
+                        for waited_id in entry['wait_if_false']:
+                            if id_ not in table[waited_id]['if_false']:
+                                table[waited_id]['if_false'].add(id_)
+                                table[id_]['wait_if_false'].add(waited_id)
+                                has_changed = True
+                            table[id_]['programmable'] = False
+                if entry['wait_while']:
+                    for id_ in list_id:
+                        for waited_id in entry['wait_while']:
+                            if id_ not in table[waited_id]['while']:
+                                table[waited_id]['while'].add(id_)
+                                table[id_]['wait_while'].add(waited_id)
+                                has_changed = True
+                            table[id_]['programmable'] = False
         return table
 
 
     def launch_openbach_function_instance(self, scenario_instance, ofi_id,
                                           table, queues):
-        data = table[ofi_id]
+        entry = table[ofi_id]
         queue = queues[ofi_id]
-        launch_queues = [ queues[id] for id in data['is_waited_for_launched'] ]
+        launch_queues = [ queues[id] for id in entry['is_waited_for_launched'] ]
         finished_queues = tuple([ queues[id] for id in
-                                 data['is_waited_for_finished'] ])
-        waited_ids = data['wait_for_launched'].union(data['wait_for_finished'])
+                                 entry['is_waited_for_finished'] ])
+        waited_ids = entry['wait_for_launched'].union(entry['wait_for_finished'])
         ofi = scenario_instance.openbach_function_instance_set.get(
             openbach_function_instance_id=ofi_id)
         ofi.status = 'Waiting ...'
@@ -2788,6 +2869,7 @@ class ClientThread(threading.Thread):
             arguments['scenario_instance'] = scenario_instance
             arguments['table'] = table
             arguments['queues'] = queues
+            arguments['openbach_function_instance_id'] = ofi_id
         elif ofi.openbach_function.name == 'start_scenario_instance':
             arguments['ofi'] = ofi
         if ofi.openbach_function.name == 'if':
@@ -2798,8 +2880,17 @@ class ClientThread(threading.Thread):
         if ofi.openbach_function.name == 'while':
             del arguments['openbach_functions_while']
             arguments['openbach_functions_while'] = table[ofi_id]['while']
-            arguments['openbach_function_instance_id'] = ofi.openbach_function_instance_id
-        function(**arguments)
+        try:
+            function(**arguments)
+        except BadRequest as e:
+            #TODO Mieux gerer les erreurs
+            print(e)
+            return
+        if not t.do_run:
+            ofi.status = 'Stopped'
+            ofi.status_date = timezone.now()
+            ofi.save()
+            return
         ofi.status = 'Finished, warning other openbach_functions ...'
         ofi.status_date = timezone.now()
         ofi.save()
@@ -2820,9 +2911,10 @@ class ClientThread(threading.Thread):
             raise
 
         scenario_instance_id = result['scenario_instance_id']
-        ofi.scenario_instance = Scenario_Instance.objects.get(
+        scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
-        ofi.save()
+        scenario_instance.openbach_function_instance_master = ofi
+        scenario_instance.save()
 
 
     def start_scenario_instance_view(self, scenario_name, args, date=None):
@@ -2835,8 +2927,8 @@ class ClientThread(threading.Thread):
         table = self.build_table(scenario_instance)
         # lance les openbach function possible
         queues = { id: Queue() for id in table }
-        for ofi_id, data in table.items():
-            if data['programmable']:
+        for ofi_id, entry in table.items():
+            if entry['programmable']:
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
                     args=(scenario_instance, ofi_id, table, queues))
@@ -2865,12 +2957,12 @@ class ClientThread(threading.Thread):
                 thread.do_run = False
                 ofi = scenario_instance.openbach_function_instance_set.get(
                     openbach_function_instance_id=ofi_id)
-                if ofi.job_instance:
+                for job_instance in ofi.job_instance_set.all():
                     result, returncode = self.stop_job_instance_view(
-                        [ofi.job_instance.id])
+                        [job_instance.id])
                     #TODO mieux gerer les erreurs !
                     result, returncode = self.watch_job_instance_view(
-                        ofi.job_instance.id, stop='now')
+                        job_instance.id, stop='now')
                     #TODO mieux gerer les erreurs !
         scenario_instance.is_stopped = True
         scenario_instance.save()
@@ -2983,7 +3075,7 @@ class ClientThread(threading.Thread):
 
 
     def run(self):
-        request = self.clientsocket.recv(2048)
+        request = self.clientsocket.recv(9999)
         try:
             result, returncode = self.execute_request(request.decode())
         except BadRequest as e:

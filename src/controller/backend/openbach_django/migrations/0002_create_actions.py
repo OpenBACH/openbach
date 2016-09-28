@@ -81,6 +81,8 @@ def create_openbach_functions(apps, schema_editor):
     status_agents.save()
     Openbach_Function_Argument(name='addresses', description='', type='list',
                                openbach_function=status_agents).save()
+    Openbach_Function_Argument(name='update', description='', type='bool',
+                               openbach_function=status_agents).save()
 
     # add_job
     add_job = Openbach_Function(name='add_job')
@@ -260,6 +262,30 @@ def create_openbach_functions(apps, schema_editor):
                                openbach_function=set_job_stat_policy).save()
     Openbach_Function_Argument(name='date', description='', type='str',
                                openbach_function=set_job_stat_policy).save()
+
+    # if
+    if_ = Openbach_Function(name='if')
+    if_.save()
+    Openbach_Function_Argument(name='openbach_functions_true', description='',
+                               type='list', openbach_function=if_).save()
+    Openbach_Function_Argument(name='openbach_functions_false', description='',
+                               type='list', openbach_function=if_).save()
+
+    # while
+    while_ = Openbach_Function(name='while')
+    while_.save()
+    Openbach_Function_Argument(name='openbach_functions_while', description='',
+                               type='list', openbach_function=while_).save()
+    Openbach_Function_Argument(name='openbach_functions_end', description='',
+                               type='list', openbach_function=while_).save()
+
+    # start_scenario_instance
+    start_scenario_instance = Openbach_Function(name='start_scenario_instance')
+    start_scenario_instance.save()
+    Openbach_Function_Argument(name='scenario_name', description='', type='str',
+                               openbach_function=start_scenario_instance).save()
+    Openbach_Function_Argument(name='args', description='', type='json',
+                               openbach_function=start_scenario_instance).save()
 
 
 class Migration(migrations.Migration):

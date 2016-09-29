@@ -409,7 +409,7 @@ class BaseJobInstanceView(GenericView):
     def _action_stop(self, ids):
         """stop the given job instances"""
 
-        data = { 'instance_ids': ids, 'command': 'stop_job_instance' }
+        data = { 'job_instance_ids': ids, 'command': 'stop_job_instance' }
         request_data = self.request.JSON
         if 'date' in request_data:
             data['date'] = request_data['date']

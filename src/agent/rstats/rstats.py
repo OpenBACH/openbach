@@ -41,7 +41,11 @@ import shlex
 import os.path
 import time
 from configparser import ConfigParser
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 import resource
 resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
@@ -342,11 +346,27 @@ class ClientThread(threading.Thread):
         # reload la conf
         stats_client.reload_conf()
 
+    def remove_stat(self, id):
+        with StatsManager() as stats:
+            try:
+                del stats[id]
+            except KeyError:
+                raise BadRequest(
+                        'KO The given id doesn\'t '
+                        'represent an open connection')
+
     def reload_stats(self):
         with StatsManager() as stats:
             for stats_client in stats.values():
                 # reload la conf
                 stats_client.reload_conf()
+
+    def get_config(self):
+        configs = defaultdict(set)
+        with StatsManager() as stats:
+            for job_config in stats.values():
+                configs[job_config.job_name].add(job_config._confpath)
+        return json.dumps({name: list(paths) for name, paths in configs.items())
 
     def execute_request(self, data): 
         request, *args = self.parse_and_check(data)
@@ -354,7 +374,9 @@ class ClientThread(threading.Thread):
                 self.create_stat,
                 self.send_stat,
                 self.reload_stat,
+                self.remove_stat,
                 self.reload_stats,
+                self.get_config,
         ]
         return functions[request-1](*args)
 

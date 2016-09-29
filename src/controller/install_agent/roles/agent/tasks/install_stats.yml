@@ -36,6 +36,26 @@
 - name: Create Rstats log repository
   file: path=/var/openbach_stats state=directory mode=0755
 
+- name: Install Rstats client sources
+  copy: src=../src_agent/rstats/client_api/{{ item }} dest=/opt/rstats/client_api/ mode=0755
+  with_items:
+    - Makefile
+    - src
+    - dependencies
+
+- name: Install Build dependencies
+  apt: name={{ item }} state=present
+  with_items:
+    - make
+    - g++
+
+- name: Build Rstats client library
+  make:
+    chdir: /opt/rstats/client_api/
+    target: install
+    params:
+      DESTDIR: /opt/rstats/
+
 - name: Install Rstats
   copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755
   with_items:

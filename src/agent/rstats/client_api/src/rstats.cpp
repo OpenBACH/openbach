@@ -115,7 +115,7 @@ std::string send_stat(
   try {
     return rstats_messager(command.str());
   } catch (std::exception& e) {
-    std::string msg = "Failed to send statistic to rstats: ";
+    std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
     syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
@@ -142,7 +142,7 @@ std::string send_prepared_stat(
   try {
     return rstats_messager(command.str());
   } catch (std::exception& e) {
-    std::string msg = "Failed to send statistic to rstats: ";
+    std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
     syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
@@ -162,7 +162,27 @@ std::string reload_stat(unsigned int id) {
   try {
     return rstats_messager(command.str());
   } catch (std::exception& e) {
-    std::string msg = "Failed to reload statistic: ";
+    std::string msg = "KO Failed to reload statistic: ";
+    msg += e.what();
+    syslog(LOG_ERR, "%s", msg.c_str());
+    return msg;
+  }
+}
+
+/*
+ * Create the message to remove a registered job;
+ * send it to the RStats service and propagate its response.
+ */
+std::string remove_stat(unsigned int id) {
+  // Format the message
+  std::stringstream command;
+  command << "4 " << id;
+
+  // Send the message and propagate RStats response
+  try {
+    return rstats_messager(command.str());
+  } catch (std::exception& e) {
+    std::string msg = "KO Failed to remove statistic: ";
     msg += e.what();
     syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
@@ -175,9 +195,24 @@ std::string reload_stat(unsigned int id) {
  */
 std::string reload_all_stats() {
   try {
-    return rstats_messager("4");
+    return rstats_messager("5");
   } catch (std::exception& e) {
-    std::string msg = "Failed to reload statistics: ";
+    std::string msg = "KO Failed to reload statistics: ";
+    msg += e.what();
+    syslog(LOG_ERR, "%s", msg.c_str());
+    return msg;
+  }
+}
+
+/*
+ * Create the message to fetch current jobs configurations;
+ * send it to the RStats service and propagate its response.
+ */
+std::string get_configs() {
+  try {
+    return rstats_messager("6");
+  } catch (std::exception& e) {
+    std::string msg = "KO Failed to fetch configurations: ";
     msg += e.what();
     syslog(LOG_ERR, "%s", msg.c_str());
     return msg;
@@ -227,6 +262,20 @@ char* rstats_reload_stat(unsigned int id) {
 /*
  * Maps C interface to C++ call.
  */
+char* rstats_remove_stat(unsigned int id) {
+  return convert_std_string_to_char(rstats::remove_stat(id));
+}
+
+/*
+ * Maps C interface to C++ call.
+ */
 char* rstats_reload_all_stats() {
   return convert_std_string_to_char(rstats::reload_all_stats());
+}
+
+/*
+ * Maps C interface to C++ call.
+ */
+char* rstats_get_configs() {
+  return convert_std_string_to_char(rstats::get_configs());
 }

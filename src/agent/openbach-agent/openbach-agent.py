@@ -220,7 +220,7 @@ def status_job(job_name, job_instance_id):
         return
 
     # Envoie de la stat à Rstats
-    rstats.send_stat(connection, stat_name, timestamp, 'status', status)
+    rstats.send_stat(connection, stat_name, timestamp, status=status)
 
 
 def stop_watch(job_id):
@@ -331,15 +331,7 @@ def ls_jobs():
     # Récupération des jobs disponibles
     with JobManager() as jobs:
         count = len(jobs)
-        # TODO send_stat(..., **kwargs)
-        # job_names = {'nb': count}
-        # job_names.update({'job{}'.format(i): job for i, job in enumerate(jobs, 1)})
-        values = [count] + list(jobs)
-        header = ['job{}'.format(i) for i in range(count)]
-        header.insert(0, 'nb')
-
-    # Construction du nom de la stat
-    stat_name = "jobs_list"
+        job_names = {'job{}'.format(i): job for i, job in enumerate(jobs, 1)}
 
     # Connexion au service de collecte de l'agent
     connection = RSTAT_REGISTER_STAT()
@@ -347,9 +339,7 @@ def ls_jobs():
         quit()  # [Mathias] same than status_job
 
     # Envoie de la stat à Rstats
-    rstats.send_stat(connection, 'jobs_list', timestamp, header, values)
-    # TODO send_stat(..., **kwargs)
-    # rstats.send_stat(connection, 'jobs_list', timestamp, **job_names)
+    rstats.send_stat(connection, 'jobs_list', timestamp, nb=count, **job_names)
 
 
 class BadRequest(ValueError):

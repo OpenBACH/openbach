@@ -43,9 +43,22 @@ namespace rstats {
   DLL_PUBLIC std::string reload_stat(unsigned int id);
 
   /*
+   * Remove the statistic represented by its ID
+   * from the pool of statistics handled by the
+   * Rstats server.
+   */
+  DLL_PUBLIC std::string remove_stat(unsigned int id);
+
+  /*
    * Reload the configuration for all registered jobs.
    */
   DLL_PUBLIC std::string reload_all_stats();
+
+  /*
+   * Retrive informations about the configuration of
+   * currently monitored stats.
+   */
+  DLL_PUBLIC std::string get_configs();
 
 }
 
@@ -64,6 +77,8 @@ extern "C" DLL_PUBLIC char* rstats_send_stat(
   long long timestamp,
   char* stats);
 extern "C" DLL_PUBLIC char* rstats_reload_stat(unsigned int id);
+extern "C" DLL_PUBLIC char* rstats_remove_stat(unsigned int id);
 extern "C" DLL_PUBLIC char* rstats_reload_all_stats();
+extern "C" DLL_PUBLIC char* rstats_get_configs();
 
 #endif /* _RSTATS_API_H__ */

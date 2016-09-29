@@ -1,0 +1,13 @@
+[Unit]
+Description=Startup script for Rstats
+Requires=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/rstats/rstats.py
+ExecReload=/usr/bin/python3 /opt/rstats/rstats_api.py
+
+[Install]
+WantedBy=multi-user.target
+
+

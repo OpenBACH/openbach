@@ -37,10 +37,15 @@
   apt: pkg=python3-pip state=installed update_cache=true
   
 - name: Download APScheduler
-  copy: src=../src_agent/apscheduler dest=/tmp/apscheduler
+  copy: src=../src_agent/apscheduler/ dest=/tmp/apscheduler
 
 - name: Install APScheduler
   pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--download-cache /tmp/apscheduler/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--no-index --find-links=file:///tmp/apscheduler/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Upgrade setuptools
   pip: name=setuptools extra_args='--upgrade' executable=pip3
@@ -71,4 +76,13 @@
   
 - name: Create the service
   template: src=../src_agent/openbach-agent/openbach-agent.j2 dest=/etc/init.d/openbach-agent mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create the service
+  copy: src=../src_agent/openbach-agent/openbach-agent.service dest=/etc/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
+
+- name: Install the daemon (part 2)
+  template: src=../src_agent/openbach-agent/openbach-agent.status.j2 dest=/opt/openbach-agent/ mode=0755
+  when: ansible_distribution_version == "16.04"
 

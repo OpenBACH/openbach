@@ -38,6 +38,11 @@
     
 - name: Remove the service
   file: path=/etc/init.d/openbach-agent state=absent
+  when: ansible_distribution_version != "16.04"
+  
+- name: Remove the service
+  file: path=/etc/systemd/system/openbach-agent.service state=absent
+  when: ansible_distribution_version == "16.04"
   
 - name: Uninstall the daemon
   file: path=/opt/openbach-agent/ state=absent

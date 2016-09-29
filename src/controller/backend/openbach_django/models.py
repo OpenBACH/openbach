@@ -219,6 +219,7 @@ class Job_Instance(models.Model):
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
     openbach_function_instance = models.ForeignKey("Openbach_Function_Instance", null=True, blank=True)
+    scenario_instance = models.ForeignKey("Scenario_Instance", null=True, blank=True)
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)

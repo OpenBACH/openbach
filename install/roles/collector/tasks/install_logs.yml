@@ -50,11 +50,17 @@
 
 - name: Install openjdk-7-jdk
   apt: pkg=openjdk-7-jdk state=installed update_cache=false
-  
+  when: ansible_distribution_version != "16.04"
+
+- name: Install Java 8
+  unarchive: src=../src/collector/java8/jre-8u101-linux-x64.tar.gz dest=/usr/local/ extra_opts='--strip-components=1'
+  when: ansible_distribution_version == "16.04"
+  ignore_errors: yes
+
 - name: Configure ElasticSearch 
   template: src=elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
     owner=root group=elasticsearch
-  
+
 - name: Start ElasticSearch
   service: name=elasticsearch state=started
 
@@ -63,7 +69,7 @@
   register: logstash_check_deb
   ignore_errors: yes
   changed_when: logstash_check_deb.stdout != '{{ version_logstash }}'
-  
+
 - name: Download LogStash
   copy: src=../src/collector/logstash/logstash_{{ version_logstash }}_all.deb \
     dest=/tmp/
@@ -76,7 +82,7 @@
 - name: Configure LogStash
   template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
     owner=root group=root
-  
+
 - name: Start LogStash
   service: name=logstash state=started
 

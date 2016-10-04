@@ -38,9 +38,15 @@
 
 - name: Remove Kibana Service
   file: path=/etc/init.d/kibana state=absent
-  
+  when: ansible_distribution_version != "16.04"
+
+- name: Remove Kibana Service
+  file: path=/etc/systemd/system/kibana.service state=absent
+  when: ansible_distribution_version == "16.04"
+
 - name: Uninstall Kibana
   file: path={{ item }} state=absent
   with_items:
   - /opt/kibana-{{ version_kibana }}-linux-{{ controller_archi }}
   - /opt/kibana
+

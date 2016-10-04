@@ -10,4 +10,3 @@ ExecReload=/usr/bin/python3 /opt/rstats/rstats_api.py
 [Install]
 WantedBy=multi-user.target
 
-

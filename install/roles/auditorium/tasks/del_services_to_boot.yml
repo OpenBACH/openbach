@@ -33,9 +33,17 @@
 
 ---
 
-- name: Delete Kibana to boot
-  shell: update-rc.d -f kibana remove
+- name: Delete services to boot
+  shell: update-rc.d -f {{ item }} remove
+  with_items:
+    - kibana
+    - grafana-server
+  when: ansible_distribution_version != "16.04"
 
-- name: Delete Grafana to boot
-  shell: update-rc.d -f grafana-server remove
+- name: Delete services to boot
+  shell: systemctl disable {{ item }}
+  with_items:
+    - kibana
+    - grafana-server
+  when: ansible_distribution_version == "16.04"
 

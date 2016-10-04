@@ -48,6 +48,7 @@
     - get_scenario.py
     - install_agent.py
     - install_jobs.py
+    - kill_all.py
     - list_agents.py
     - list_installed_jobs.py
     - list_job_instances.py

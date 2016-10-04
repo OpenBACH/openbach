@@ -33,12 +33,19 @@
 
 ---
 
-- name: Delete openbach-conductor to boot
-  shell: update-rc.d -f openbach-conductor remove
+- name: Delete services to boot
+  shell: update-rc.d -f {{ item }} remove
+  with_items:
+    - openbach-conductor
+    - openbach-backend
+    - status-manager
+  when: ansible_distribution_version != "16.04"
 
-- name: Delete openbach-backend to boot
-  shell: update-rc.d -f openbach-conductor remove
-
-- name: Delete status-manager to boot
-  shell: update-rc.d -f status-manager remove
+- name: Delete services to boot
+  shell: systemctl disable {{ item }}
+  with_items:
+    - openbach-conductor
+    - openbach-backend
+    - status-manager
+  when: ansible_distribution_version == "16.04"
 

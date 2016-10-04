@@ -1,0 +1,12 @@
+[Unit]
+Description=Startup script for OpenBACH Conductor
+Requires=network.target
+
+[Service]
+User={{ ansible_ssh_user }}
+Type=simple
+ExecStart=/usr/bin/python3 /opt/openbach-controller/openbach-conductor/openbach-conductor.py
+
+[Install]
+WantedBy=multi-user.target
+

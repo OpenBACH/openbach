@@ -165,17 +165,17 @@ echo "auditorium_ip: $auditorium_address" >> configs/ips
 echo "ansible_ssh_user: $controller_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $controller_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $controller_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/controller.yml --tags install $skip_tag_controller
+ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/controller.yml --tags install $skip_tag_controller
 
 echo "ansible_ssh_user: $collector_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $collector_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $collector_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/collector.yml --tags install
+ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/collector.yml --tags install
 
 echo "ansible_ssh_user: $auditorium_username" > /tmp/openbach_extra_vars
 echo "ansible_ssh_pass: $auditorium_password" >> /tmp/openbach_extra_vars
 echo "ansible_sudo_pass: $auditorium_password" >> /tmp/openbach_extra_vars
-sudo ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/auditorium.yml --tags install
+ansible-playbook -i /tmp/openbach_hosts -e @configs/ips -e @configs/all -e @/tmp/openbach_extra_vars -e @/tmp/openbach_extra_vars2 install/auditorium.yml --tags install
 
 rm /tmp/openbach_hosts configs/ips /tmp/openbach_extra_vars /tmp/openbach_extra_vars2
 

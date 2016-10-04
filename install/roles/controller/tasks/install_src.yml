@@ -41,21 +41,41 @@
 
 - name: Install postgresql-server
   apt: pkg=postgresql-server-dev-9.3 state=installed update_cache=false
+  when: ansible_distribution_version != "16.04"
+
+- name: Install postgresql-server
+  apt: pkg=postgresql-server-dev-9.5 state=installed update_cache=false
+  when: ansible_distribution_version == "16.04"
 
 - name: Install postgresql
   apt: pkg=postgresql state=installed update_cache=false
 
 - name: Download Django
   copy: src=../src/controller/django dest=/tmp/
+  when: ansible_distribution_version != "16.04"
+
+- name: Download Django
+  copy: src=../src/controller/django2 dest=/tmp/
+  when: ansible_distribution_version == "16.04"
 
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install Django
+  pip: name=django executable=pip3 version={{ django_version }} extra_args='--no-index --find-links=file:///tmp/django2/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Download psycopg2
   copy: src=../src/controller/psycopg2 dest=/tmp/
 
 - name: Install psycopg2
   pip: name=psycopg2 executable=pip3 version={{ psycopg2_version }} extra_args='--download-cache /tmp/psycopg2/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install psycopg2
+  pip: name=psycopg2 executable=pip3 version={{ psycopg2_version }} extra_args='--no-index --find-links=file:///tmp/psycopg2/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Install prerequis for psycopg2 (for ansible)
   apt: pkg={{item}} state=installed update_cache=false
@@ -65,6 +85,11 @@
 
 - name: Install psycopg2 for ansible
   pip: name=psycopg2 executable=pip version={{ psycopg2_version }} extra_args='--download-cache /tmp/psycopg2/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install psycopg2 for ansible
+  pip: name=psycopg2 executable=pip version={{ psycopg2_version }} extra_args='--no-index --find-links=file:///tmp/psycopg2/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Install python3-yaml
   apt: pkg=python3-yaml state=installed update_cache=false
@@ -74,12 +99,22 @@
 
 - name: Install parse module
   pip: name=parse executable=pip3 version={{ parse_version }} extra_args='--download-cache /tmp/parse/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install parse module
+  pip: name=parse executable=pip3 version={{ parse_version }} extra_args='--no-index --find-links=file:///tmp/parse/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Download APScheduler
   copy: src=../src/controller/apscheduler dest=/tmp/
 
 - name: Install APScheduler
   pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--download-cache /tmp/apscheduler/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--no-index --find-links=file:///tmp/apscheduler/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
@@ -136,6 +171,11 @@
 
 - name: Change postgresql methode to trust for user postgres
   lineinfile: dest=/etc/postgresql/9.3/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
+  when: ansible_distribution_version != "16.04"
+
+- name: Change postgresql methode to trust for user postgres
+  lineinfile: dest=/etc/postgresql/9.5/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
+  when: ansible_distribution_version == "16.04"
 
 - name: Restart postgresql
   service: name=postgresql state=restarted
@@ -155,18 +195,33 @@
 
 - name: Create openbach-conductor service
   copy: src=../src/controller/openbach-conductor/openbach-conductor dest=/etc/init.d/ mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create openbach-conductor service
+  template: src=../src/controller/openbach-conductor/openbach-conductor.service.j2 dest=/etc/systemd/system/openbach-conductor.service mode=0644
+  when: ansible_distribution_version == "16.04"
 
 - name: Start openbach-conductor
   service: name=openbach-conductor state=started
 
 - name: Create status-manager service
   copy: src=../src/controller/status-manager/status-manager dest=/etc/init.d/ mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create status-manager service
+  copy: src=../src/controller/status-manager/status-manager.service dest=/etc/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
 
 - name: Start status-manager
   service: name=status-manager state=started
 
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend dest=/etc/init.d/ mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create openbach-backend service
+  copy: src=../src/controller/backend/openbach-backend.service dest=/etc/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
 
 - name: Start openbach-backend
   service: name=openbach-backend state=started

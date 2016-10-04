@@ -1484,7 +1484,7 @@ class ClientThread(threading.Thread):
                 instance_infos['stop_date'] = 'Not programmed yet'
         if error_msg is not None:
             instance_infos['error'] = error_msg
-            instance_infos['job_name'] = job_instance.job.name
+            instance_infos['job_name'] = job_instance.job.__str__()
         return instance_infos, 200
 
 

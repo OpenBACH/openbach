@@ -104,8 +104,7 @@ def main(path, port, interval):
                 cwnd = data[6]
                 try:
                     # Envoie de la stat au collecteur
-                    r = rstats.send_stat(connection_id, stat_name, timestamp,
-                                         "value", cwnd)
+                    r = rstats.send_stat(connection_id, stat_name, timestamp, value=cwnd)
                 except Exception as ex: 
                     print "Erreur: %s" % ex
             i = 1

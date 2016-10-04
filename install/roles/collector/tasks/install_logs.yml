@@ -82,6 +82,10 @@
   template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
     owner=root group=root
 
+- name: Indicate LogStash where to find Java
+  lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin' backup=yes
+  when: ansible_distribution_version != "16.04"
+
 - name: Start LogStash
   service: name=logstash state=started
 

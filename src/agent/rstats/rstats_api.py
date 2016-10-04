@@ -7,7 +7,6 @@
    Agents (one for each network entity that wants to be tested).
    
    
-   Copyright © 2016 CNES
    
    
    This file is part of the OpenBACH testbed.
@@ -87,12 +86,12 @@ def send_stat(connection_id, stat_name, timestamp, value_names, values):
         if isinstance(values, list):
             if len(values) != len(value_names):
                 return 'KO, You should provide as many value as value_name'
-            args = ' '.join('{} {}'.format(name, '\\n'.join(value.split('\n'))) for name, value in zip(value_names, values))
+            args = ' '.join('{} {}'.format(name, '\\n'.join(str(value).split('\n'))) for name, value in zip(value_names, values))
             cmd = '{} \"{}\"'.format(cmd, args)
         else:
             return 'KO, You should provide as many value as value_name'
     else:
-        cmd = '{} {} \"{}\"'.format(cmd, value_names, '\\n'.join(values.split('\n')))
+        cmd = '{} {} \"{}\"'.format(cmd, value_names, '\\n'.join(str(values).split('\n')))
     return _rstat_send_message(cmd)
 
 

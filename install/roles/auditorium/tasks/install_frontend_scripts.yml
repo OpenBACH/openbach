@@ -70,6 +70,7 @@
     - stop_scenario_instance.py
     - uninstall_agent.py
     - uninstall_jobs.py
+    - watch_job_instance.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

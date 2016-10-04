@@ -417,10 +417,10 @@ class BaseJobInstanceView(GenericView):
         return self.conductor_execute(data)
 
 
-    def _job_instance_status(self, instance_id, data):
+    def _job_instance_status(self, job_instance_id, data):
         """query the status of the given installed job"""
 
-        data['instance_id'] = instance_id
+        data['job_instance_id'] = job_instance_id
         data['command'] = 'watch_job_instance'
         del data['action']
 
@@ -463,9 +463,9 @@ class JobInstancesView(BaseJobInstanceView):
 
         if action == 'stop':
             try:
-                ids = request.JSON['instance_ids']
+                ids = request.JSON['job_instance_ids']
             except KeyError:
-                return {'msg': 'POST data malformed: missing instance_ids'}, 400
+                return {'msg': 'POST data malformed: missing job_instance_ids'}, 400
             return function(ids)
 
         return function()
@@ -518,7 +518,7 @@ class JobInstanceView(BaseJobInstanceView):
                     ' int' }, 400
         update = 'update' in request.GET
 
-        data = { 'command': 'status_job_instance', 'instance_id': id,
+        data = { 'command': 'status_job_instance', 'job_instance_id': id,
                  'verbosity': verbosity, 'update': update }
 
         return self.conductor_execute(data)
@@ -552,7 +552,7 @@ class JobInstanceView(BaseJobInstanceView):
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
-        data = { 'command': 'restart_job_instance', 'instance_id': id,
+        data = { 'command': 'restart_job_instance', 'job_instance_id': id,
                  'instance_args': instance_args }
 
         if 'date' in request_data:

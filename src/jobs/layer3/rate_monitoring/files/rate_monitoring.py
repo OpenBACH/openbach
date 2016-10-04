@@ -83,7 +83,7 @@ def monitor():
     mutex.release()
     
     # Envoie de la stat au collecteur
-    r = rstats.send_stat(connection_id, stat_name, timestamp, "rate", rate)
+    r = rstats.send_stat(connection_id, stat_name, timestamp, rate=rate)
     
     # Mise a jour des vieilles stats pour le prochain calcul de debit
     mutex.acquire()

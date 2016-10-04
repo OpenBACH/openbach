@@ -100,8 +100,7 @@ def main(collector, port, begin, end, simu_name, database_name, username,
             print "Connection to rstats failed"
             exit()
         
-        rstats.send_stat(connection_id, stat_name, str(finished[i]),
-                         ['mean', 'compteur'], [mean, cpt])
+        rstats.send_stat(connection_id, stat_name, str(finished[i]), mean=mean, compteur=cpt)
         #cmd = "curl -X POST 'http://" + collector + ":" + str(port) + "/write?d"
         #cmd += "b=" + database_name + "&precision=" + 'ms' + "&u=" + username
         #cmd += "&p=" + password +  "' --data-binary '" + stat_name + " mean="

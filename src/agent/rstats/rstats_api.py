@@ -1,110 +1,111 @@
 #!/usr/bin/env python3
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
-   
-   
+
+
+   Copyright © 2016 CNES
+
+
    This file is part of the OpenBACH testbed.
-   
-   
-   OpenBACH is a free software : you can redistribute it and/or modify it under the
-   terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-   
+
+
+   OpenBACH is a free software : you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free
+   Software Foundation, either version 3 of the License, or (at your option)
+   any later version.
+
    This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-   
+   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+   more details.
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
-   @file     rstats_api.py
-   @brief    The API to use to communicate with rstats
-   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+
+
+
+   @file     rstats_client.py
+   @brief    rstats communication client
+   @author   Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
 """
 
 
-import socket
-import syslog
-import errno
+import ctypes
+import json
 
 
-def _rstat_send_message(message):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.connect(('', 1111))
-    except socket.error as serr:
-        if serr.errno == errno.ECONNREFUSED:
-            syslog.syslog(syslog.LOG_ERR,
-                    'ERROR: Connexion to rstats refused, '
-                    'maybe rstats service isn\'t started')
-        raise serr
-    sock.send(message.encode())
-    result = sock.recv(9999).decode()
-    sock.close()
-    return result
+try:
+    rstats = ctypes.cdll.LoadLibrary('librstats.so')
+except OSError:
+    rstats = ctypes.cdll.LoadLibrary('rstats.dll')
 
 
-def register_stat(conffile, job_name, prefix=None):
-    if prefix:
-        cmd = '1 {} {} {}'.format(conffile, job_name, prefix)
-    else:
-        cmd = '1 {} {}'.format(conffile, job_name)
+_register_stat = rstats.rstats_register_stat
+_register_stat.restype = ctypes.c_uint
+_register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
 
-    result = _rstat_send_message(cmd)
-    if result.startswith('OK'):
-        try:
-            ok, id = result.split()
-            id = int(id)
-        except ValueError:
-            syslog.syslog(syslog.LOG_ERR, 'ERROR: Return message isn\'t well formed')
-            syslog.syslog(syslog.LOG_ERR, '\t{}'.format(result))
-        else:
-            syslog.syslog(syslog.LOG_NOTICE, 'NOTICE: Identifiant de connexion = {}'.format(id))
-            return id
-    elif result.startswith('KO'):
-        syslog.syslog(syslog.LOG_ERR, 'ERROR: Something went wrong :')
-        syslog.syslog(syslog.LOG_ERR, '\t{}'.format(result))
-    else:
-        syslog.syslog(syslog.LOG_ERR, 'ERROR: Return message isn\'t well formed')
-        syslog.syslog(syslog.LOG_ERR, '\t{}'.format(result))
+_send_stat = rstats.rstats_send_stat
+_send_stat.restype = ctypes.c_char_p
+_send_stat.argtypes = [
+        ctypes.c_uint, ctypes.c_char_p, ctypes.c_longlong, ctypes.c_char_p]
 
+_reload_stat = rstats.rstats_reload_stat
+_reload_stat.restype = ctypes.c_char_p
+_reload_stat.argtypes = [ctypes.c_uint]
 
-def send_stat(connection_id, stat_name, timestamp, value_names, values):
-    # TODO send_stat(..., **kwargs)
-    cmd = '2 {} {} {}'.format(connection_id, stat_name, timestamp)
-    if isinstance(value_names, list):
-        if isinstance(values, list):
-            if len(values) != len(value_names):
-                return 'KO, You should provide as many value as value_name'
-            args = ' '.join('{} {}'.format(name, '\\n'.join(str(value).split('\n'))) for name, value in zip(value_names, values))
-            cmd = '{} \"{}\"'.format(cmd, args)
-        else:
-            return 'KO, You should provide as many value as value_name'
-    else:
-        cmd = '{} {} \"{}\"'.format(cmd, value_names, '\\n'.join(str(values).split('\n')))
-    return _rstat_send_message(cmd)
+_remove_stat = rstats.rstats_remove_stat
+_remove_stat.restype = ctypes.c_char_p
+_remove_stat.argtypes = [ctypes.c_uint]
+
+_reload_all_stats = rstats.rstats_reload_all_stats
+_reload_all_stats.restype = ctypes.c_char_p
+_reload_all_stats.argtypes = []
+
+_get_configs = rstats.rstats_get_configs
+_get_configs.restype = ctypes.c_char_p
+_get_configs.argtypes = []
 
 
-def reload_stat(connection_id):
-    return _rstat_send_message('3 {}'.format(connection_id))
+def register_stat(config_file, job_name, prefix=None):
+    if prefix is None:
+        prefix = ''
+    return _register_stat(
+            config_file.encode(),
+            job_name.encode(),
+            prefix.encode())
+
+
+def send_stat(id, stat_name, timestamp, **kwargs):
+    stats = ' '.join(
+            '"{}" "{}"'.format(k, v)
+            for k, v in kwargs.items())
+    return _send_stat(
+            id, stat_name.encode(),
+            timestamp, stats.encode()).decode(errors='replace')
+
+
+def reload_stat(id):
+    return _reload_stat(id).decode(errors='replace')
+
+
+def remove_stat(id):
+    return _remove_stat(id).decode(errors='replace')
 
 
 def reload_all_stats():
-    return _rstat_send_message('4')
+    return _reload_all_stats().decode(errors='replace')
+
+
+def get_configs():
+    configs = _get_configs().decode(errors='replace')
+    return json.loads(configs)
 
 
 if __name__ == '__main__':
-    # Reload rstat when calling this file
     result = reload_all_stats()
-    print('Rstat reloaded. Message was', result)
-
+    print('Rstats reloaded. Message was', result)
+>>>>>>> scenario

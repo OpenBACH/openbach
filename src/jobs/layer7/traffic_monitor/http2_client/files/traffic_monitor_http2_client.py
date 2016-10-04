@@ -130,8 +130,7 @@ def get_url():
         syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Delai = " + str(conntime))
         try:
             # Envoie de la stat au collecteur
-            r = rstats.send_stat(connection_id, simu_name, timestamp, "value",
-                                 conntime)
+            r = rstats.send_stat(connection_id, simu_name, timestamp, value=conntime)
         except Exception as ex: 
             print "Erreur: %s" % ex
 

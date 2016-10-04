@@ -37,17 +37,17 @@
           }
         },
         "openbach_function_true_indexes": [
-          2,
-          3
+          3,
+          4
         ],
         "openbach_function_false_indexes": [
-          4
+          5
         ]
       },
       "wait": {
         "time": 0,
         "launched_indexes": [
-          0
+          1
         ],
         "finished_indexes": []
       }
@@ -100,15 +100,15 @@
     {
       "stop_job_instance": {
         "openbach_function_indexes": [
-          2,
-          3
+          3,
+          4
         ]
       },
       "wait": {
         "time": 10,
         "launched_indexes": [
-          2,
-          3
+          3,
+          4
         ],
         "finished_indexes": []
       }
@@ -116,13 +116,13 @@
     {
       "stop_job_instance": {
         "openbach_function_indexes": [
-          4
+          5
         ]
       },
       "wait": {
         "time": 10,
         "launched_indexes": [
-          4
+          5
         ],
         "finished_indexes": []
       }

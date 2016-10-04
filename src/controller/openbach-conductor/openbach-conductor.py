@@ -236,7 +236,12 @@ class PlaybookBuilder():
 
     def build_status_agent(self, playbook_file):
         print('    - name: Get status of openbach-agent', file=playbook_file)
-        print('      shell: /etc/init.d/openbach-agent status', file=playbook_file)
+        print('      shell: service openbach-agent status', file=playbook_file)
+        print('      when: ansible_distribution_version != "16.04"', file=playbook_file)
+        print('    - name: Get status of openbach-agent', file=playbook_file)
+        print('      service: name=openbach-agent state=reloaded', file=playbook_file)
+        print('      become: yes', file=playbook_file)
+        print('      when: ansible_distribution_version == "16.04"', file=playbook_file)
         return True
     
     def build_list_jobs_agent(self, playbook_file):
@@ -501,6 +506,7 @@ class ClientThread(threading.Thread):
                 self.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '
                     'ansible_ssh_user={agent.username} -e '
+                    'ansible_sudo_pass={agent.username} -e '
                     'ansible_ssh_pass={agent.password} {}'
                     .format(playbook.name, agent=agent))
             except BadRequest:

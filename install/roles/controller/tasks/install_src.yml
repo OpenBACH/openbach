@@ -52,18 +52,13 @@
 
 - name: Download Django
   copy: src=../src/controller/django dest=/tmp/
-  when: ansible_distribution_version != "16.04"
-
-- name: Download Django
-  copy: src=../src/controller/django2 dest=/tmp/
-  when: ansible_distribution_version == "16.04"
 
 - name: Install Django
   pip: name=django executable=pip3 version={{ django_version }} extra_args='--download-cache /tmp/django/'
   when: ansible_distribution_version != "16.04"
 
 - name: Install Django
-  pip: name=django executable=pip3 version={{ django_version }} extra_args='--no-index --find-links=file:///tmp/django2/'
+  pip: name=django executable=pip3 version={{ django_version }} extra_args='--no-index --find-links=file:///tmp/django/'
   when: ansible_distribution_version == "16.04"
 
 - name: Download psycopg2
@@ -154,16 +149,16 @@
     - { name: 'restart_job_instance_agent.yml', mode: '0644' }
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
-- name: Install the src of the Agents
+- name: Copy the src of the Agents
   copy: src=../src/agent/ dest=/opt/openbach-controller/src_agent
 
-- name: Install the installation of the Agents
+- name: Copy the installation of the Agents
   copy: src=../src/controller/install_agent dest=/opt/openbach-controller/
 
 - name: Copy the src of APScheduler
   copy: src=../src/controller/apscheduler dest=/opt/openbach-controller/src_agent
 
-- name: Install the src of the Jobs
+- name: Copy the src of the Jobs
   copy: src=../src/jobs dest=/opt/openbach-controller
 
 - name: Set the influxdb port to use

@@ -41,7 +41,6 @@
 
 - name: Install libfontconfig
   apt: pkg=libfontconfig state=installed update_cache=false
-  when: ansible_distribution_version == "16.04"
 
 - name: Download Grafana (64bits)
   copy: src=../src/auditorium/grafana/grafana_{{ version_grafana }}_amd64.deb \

@@ -37,16 +37,16 @@
           }
         },
         "openbach_function_while_indexes": [
-          2
+          3
         ],
         "openbach_function_end_indexes": [
-          3
+          4
         ]
       },
       "wait": {
         "time": 0,
         "launched_indexes": [
-          0
+          1
         ],
         "finished_indexes": []
       }
@@ -88,7 +88,7 @@
       "wait": {
         "time": 10,
         "launched_indexes": [
-          3
+          4
         ],
         "finished_indexes": []
       }

@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Status Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('instance_id', help='Id of the Instance')
+    parser.add_argument('job_instance_id', help='Id of the Instance')
     parser.add_argument('-u', '--update', action='store_true',
                         help='Use only the last status present on the collector')
     parser.add_argument("-v", "--verbosity", action="count",
@@ -50,8 +50,8 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    instance_id = args.instance_id
+    job_instance_id = args.job_instance_id
     update = args.update
     verbosity = args.verbosity
 
-    pretty_print(status_job_instance)(instance_id, update, verbosity)
+    pretty_print(status_job_instance)(job_instance_id, update, verbosity)

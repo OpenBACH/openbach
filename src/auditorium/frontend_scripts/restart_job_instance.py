@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Restart Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('instance_id', help='Id of the instance')
+    parser.add_argument('job_instance_id', help='Id of the instance')
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-d', '--date', metavar=DateMetavarHelper(),
             nargs=2, help='Date of the execution')
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     
     # get args
     args = parser.parse_args()
-    instance_id = args.instance_id
+    job_instance_id = args.job_instance_id
     if type(args.argument) == list:
         arguments = dict(args.argument)
     else:
@@ -74,5 +74,5 @@ if __name__ == "__main__":
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     interval = args.interval
 
-    pretty_print(restart_job_instance)(instance_id, arguments, date, interval)
+    pretty_print(restart_job_instance)(job_instance_id, arguments, date, interval)
 

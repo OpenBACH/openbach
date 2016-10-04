@@ -156,14 +156,14 @@ def list_job_instances(agent_ips, update=None, verbosity=None):
     return requests.get(_URL.format('job_instance'), params=urlencode(query_string))
 
 
-def status_job_instance(instance_id, update=None, verbosity=None):
+def status_job_instance(job_instance_id, update=None, verbosity=None):
     action = _request_message
     if update:
         action = partial(action, update='')
     if verbosity is not None:
         action = partial(action, verbosity=verbosity)
 
-    return action('job_instance/{}'.format(instance_id), 'GET')
+    return action('job_instance/{}'.format(job_instance_id), 'GET')
 
 
 def push_file(local_path, remote_path, agent_ip):
@@ -174,7 +174,7 @@ def push_file(local_path, remote_path, agent_ip):
                 files={'file': file_to_send})
 
 
-def restart_job_instance(instance_id, arguments=None, date=None, interval=None):
+def restart_job_instance(job_instance_id, arguments=None, date=None, interval=None):
     action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
@@ -182,7 +182,7 @@ def restart_job_instance(instance_id, arguments=None, date=None, interval=None):
         action = partial(action, date=date)
 
     return action(
-            'job_instance/{}'.format(instance_id),
+            'job_instance/{}'.format(job_instance_id),
             'POST', action='restart',
             instance_args={} if arguments is None else arguments)
 
@@ -207,7 +207,7 @@ def status_agents(agent_ips, update=None):
     return requests.get(_URL.format('agent/status'), params=urlencode(query_string))
 
 
-def watch_job_instance(instance_id, date=None, interval=None, stop=None):
+def watch_job_instance(job_instance_id, date=None, interval=None, stop=None):
     action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
@@ -216,7 +216,7 @@ def watch_job_instance(instance_id, date=None, interval=None, stop=None):
     if stop is not None:
         action = partial(action, stop=stop)
 
-    return action('job_instance/{}'.format(instance_id), 'POST', action='watch')
+    return action('job_instance/{}'.format(job_instance_id), 'POST', action='watch')
 
 
 def status_jobs(agent_ips):
@@ -224,12 +224,12 @@ def status_jobs(agent_ips):
     return requests.get(_URL.format('job/status'), params=urlencode(query_string))
 
 
-def stop_job_instance(instance_ids, date=None):
+def stop_job_instance(job_instance_ids, date=None):
     action = _request_message
     if date is not None:
         action = partial(action, date=date)
 
-    return action('job_instance', 'POST', action='stop', instance_ids=instance_ids)
+    return action('job_instance', 'POST', action='stop', job_instance_ids=job_instance_ids)
 
 
 def uninstall_jobs(job_names, agent_ips):

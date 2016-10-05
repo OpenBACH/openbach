@@ -251,9 +251,10 @@ class RstatsRule(namedtuple('RstatsRule', 'name storage broadcast')):
 
 
 class ClientThread(threading.Thread):
-    def __init__(self, client_socket, conf):
+    def __init__(self, data, client_addr, conf):
         super().__init__()
-        self.socket = client_socket
+        self.data = data
+        self.client = client_addr
         self.conf = conf
 
     def parse_and_check(self, data):
@@ -380,34 +381,34 @@ class ClientThread(threading.Thread):
         ]
         return functions[request-1](*args)
 
+
     def run(self):
-        data = self.socket.recv(2048)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            result = self.execute_request(data.decode())
+            result = self.execute_request(self.data.decode())
         except BadRequest as e:
-            self.socket.send(e.reason.encode())
-        except UnicodeError:
-            self.socket.send(b'KO The message couldn\'t be decyphered')
+            sock.sendto(e.reason.encode(), self.client)
+        except Exception as e:
+            msg = 'KO: An error occured: {}\0'.format(e)
+            sock.sendto(msg.encode(), self.client)
         else:
             if result is None:
-                self.socket.send(b'OK')
+                sock.sendto(b'OK\0', self.client)
             else:
-                msg = 'OK {}'.format(result)
-                self.socket.send(msg.encode())
+                msg = 'OK {}\0'.format(result)
+                sock.sendto(msg.encode(), self.client)
         finally:
-            self.socket.close()
+            sock.close()
 
 
 if __name__ == '__main__':
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_socket.bind(('', 1111))
-    tcp_socket.listen(1000)
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.bind(('', 1111))
 
     StatsManager(init=True)
     conf = Conf('rstats.cfg')
 
     while True:
-        client, _ = tcp_socket.accept()
-        ClientThread(client, conf).start()
+        data, remote = udp_socket.recvfrom(2048)
+        ClientThread(data, remote, conf).start()
 

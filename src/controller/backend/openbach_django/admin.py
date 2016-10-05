@@ -6,7 +6,10 @@ from .models import *
 class AdminInstances(admin.ModelAdmin):
     list_display = ('__str__', 'is_stopped')
 
-admin.site.register(Agent)
+class AdminAgent(admin.ModelAdmin):
+    exclude = ('password',)
+
+admin.site.register(Agent, AdminAgent)
 admin.site.register(Job_Keyword)
 admin.site.register(Job)
 admin.site.register(Statistic)

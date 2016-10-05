@@ -108,4 +108,3 @@ def get_configs():
 if __name__ == '__main__':
     result = reload_all_stats()
     print('Rstats reloaded. Message was', result)
->>>>>>> scenario

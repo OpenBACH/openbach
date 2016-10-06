@@ -26,53 +26,35 @@
 #   
 #   
 #   
-#   @file     main.yml
-#   @brief    File that indicates the tasks to perform in this role
+#   @file     install_send_stats.yml
+#   @brief    Playbook that install the Job send_stats
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-# Install
-- include: install_stats.yml
-  tags:
-    - install
-- include: install_daemon.yml
-  tags:
-    - install
-- include: install_synchro.yml
-  tags:
-    - install
-- include: install_logs.yml
-  tags:
-    - install
-- include: install_ssh_key.yml
-  tags:
-    - install
-- include: start_daemon.yml
-  tags:
-    - install
-- include: add_services_to_boot.yml
-  tags:
-    - install
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: send_stats.yml
 
-# Uninstall
-- include: uninstall_synchro.yml
-  tags:
-    - uninstall
-- include: uninstall_stats.yml
-  tags:
-    - uninstall
-- include: uninstall_logs.yml
-  tags:
-    - uninstall
-- include: uninstall_daemon.yml
-  tags:
-    - uninstall
-- include: uninstall_ssh_key.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
-  tags:
-    - uninstall
+  tasks:
+  - name: Create send_stats repository
+    file: path=/opt/openbach-jobs/send_stats/ state=directory
+    become: yes
+
+  - name: Install send_stats
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/send_stats/ mode={{ item.mode }}
+    with_items:
+      - { file: 'send_stats.py', mode: '0755' }
+      - { file: 'send_stats.help', mode: '0644' }
+      - { file: 'send_stats_rstats_filter.conf', mode: '0644' }
+    become: yes
+    
+  - name: Inform Agent that send_stats is installed
+    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
 

@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -98,7 +99,7 @@ class Rstats:
         logfile = os.path.join(logpath, '{0}/{0}_{1}.stats'.format(self.job_name, date))
         try:
             fhd = logging.FileHandler(logfile, mode='a')
-            fhd.setFormatter(logging.Formatter('{asctime} | {levelname} | {message}', style='{'))
+            fhd.setFormatter(logging.Formatter('{message}', style='{'))
             self._logger.addHandler(fhd)
         except:  # [Mathias] except What?
             pass
@@ -158,45 +159,43 @@ class Rstats:
         if not self._is_broadcast_denied(stat_name):
             flag += 2
         if self.prefix:
-            stat_name = '{}.{}'.format(self.prefix, stat_name)
+            stat_name_with_prefix = '{}.{}'.format(self.prefix, stat_name)
 
         # recuperation des stats
         time = str(stats['time'])
         del stats['time']
-        formatted_header_log = [
-                'Stat{{0}}{}'.format(stat_name),
-                'Time{{0}}{}'.format(time),
-        ]
-        formatted_stats = ['{}{{0}}"{}"'.format(k, v) for k, v in stats.items()]
-        logs = ', '.join(formatted_header_log).format(': ') + ', ' + ', '.join(formatted_stats).format(': ')
-        self._logger.info(logs)
 
-        if flag != 0:
-            stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(stat_name, time, flag)
-            for k, v in stats.items():
-                try:
-                    float(v)
-                    stats_to_send = '{}, "{}": {}'.format(stats_to_send, k, v)
-                except ValueError:
-                    # TODO: Gerer les vrais booleens dans influxdb (voir avec la
-                    #       conf de logstash aussi)
-                    if v in BOOLEAN_TRUE:
-                        stats_to_send = '{}, "{}": "true"'.format(stats_to_send, k)
-                    elif v in BOOLEAN_FALSE:
-                        stats_to_send = '{}, "{}": "false"'.format(stats_to_send, k)
-                    else:
-                        stats_to_send = '{}, "{}": "{}"'.format(stats_to_send, k, v)
-            stats_to_send = '{}{}{}'.format('{', stats_to_send, '}')
+        stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(
+            stat_name_with_prefix, time, flag)
+        stats_to_log = '"stat_name": "{}", "time": {}, "flag":{}'.format(
+            stat_name, time, flag)
+        statistics = ''
+        for k, v in stats.items():
             try:
-                send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
-            except KeyError:
-                raise BadRequest('Mode not known')
+                float(v)
+                statistics = '{}, "{}": {}'.format(statistics, k, v)
+            except ValueError:
+                # TODO: Gerer les vrais booleens dans influxdb (voir avec la
+                #       conf de logstash aussi)
+                if v in BOOLEAN_TRUE:
+                    statistics = '{}, "{}": "true"'.format(statistics, k)
+                elif v in BOOLEAN_FALSE:
+                    statistics = '{}, "{}": "false"'.format(statistics, k)
+                else:
+                    statistics = '{}, "{}": "{}"'.format(statistics, k, v)
+        stats_to_send = '{}{}{}{}'.format('{', stats_to_send, statistics, '}')
+        stats_to_log = '{}{}{}{}'.format('{', stats_to_log, statistics, '}')
+        try:
+            send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
+        except KeyError:
+            raise BadRequest('Mode not known')
+        if flag != 0:
             send_function(stats_to_send)
+        self._logger.info(stats_to_log)
         self._mutex.release()
 
     def reload_conf(self):
         self._mutex.acquire()
-        self._logger.info('Load new configuration:')
 
         self._default_storage = RstatsRule.ACCEPT
         self._default_broadcast = RstatsRule.ACCEPT
@@ -218,8 +217,6 @@ class Rstats:
         except Exception:
             pass
 
-        for rule in self._rules:
-            self._logger.info('    {}', rule)
         self._mutex.release()
 
 
@@ -367,7 +364,7 @@ class ClientThread(threading.Thread):
         with StatsManager() as stats:
             for job_config in stats.values():
                 configs[job_config.job_name].add(job_config._confpath)
-        return json.dumps({name: list(paths) for name, paths in configs.items())
+        return json.dumps({name: list(paths) for name, paths in configs.items()})
 
     def execute_request(self, data): 
         request, *args = self.parse_and_check(data)
@@ -380,7 +377,6 @@ class ClientThread(threading.Thread):
                 self.get_config,
         ]
         return functions[request-1](*args)
-
 
     def run(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -406,7 +402,7 @@ if __name__ == '__main__':
     udp_socket.bind(('', 1111))
 
     StatsManager(init=True)
-    conf = Conf('rstats.cfg')
+    conf = Conf('/opt/rstats/rstats.cfg')
 
     while True:
         data, remote = udp_socket.recvfrom(2048)

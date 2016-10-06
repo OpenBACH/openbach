@@ -22,10 +22,12 @@ arguments:
   required:
     - name:        size
       type:        'int'
+      count:       1
       description: >
           The size of the smart initial window
     - name:        disable_pacing
       type:        'int'
+      count:       1
       description: >
           0 to enable pacing, 1 to disable it
   optional:

@@ -24,10 +24,12 @@ arguments:
   required:
     - name:        job_name
       type:        'str'
+      count:       1
       description: >
           The name of the Job you want to change the stats policy
     - name:        instance_id
       type:        'int'
+      count:       1
       description: >
           The id of the current instance
   optional:

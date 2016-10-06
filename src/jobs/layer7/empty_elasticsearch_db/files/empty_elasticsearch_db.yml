@@ -24,6 +24,7 @@ arguments:
   optional:
     - name:        port
       type:        'int'
+      count:       1
       flag:        '-p'
       description: >
           Port of Elasticsearch

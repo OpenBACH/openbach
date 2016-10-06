@@ -23,11 +23,13 @@ arguments:
   required:
     - name:        port
       type:        'int'
+      count:       1
       description: >
           Port where the server is available
   optional:
     - name:        no_tls
       type:        'None'
+      count:       1
       flag:        '--no-tls'
       description: >
           Disable SSL/TLS.

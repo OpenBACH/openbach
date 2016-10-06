@@ -24,21 +24,25 @@ arguments:
   optional:
     - name:        port
       type:        'int'
+      count:       1
       flag:        '-p'
       description: >
           Port of InfluxDB
     - name:        database
       type:        'str'
+      count:       1
       flag:        '-d'
       description: >
           Name of the database
     - name:        username
       type:        'str'
+      count:       1
       flag:        '-u'
       description: >
           Name of the user
     - name:        password
       type:        'str'
+      count:       1
       flag:        '-pa'
       description: >
           Password of the user

@@ -34,7 +34,7 @@
 ---
 
 - name: Install python3-pip
-  apt: pkg=python3-pip state=installed update_cache=true
+  apt: pkg=python3-pip state=installed
   
 - name: Download APScheduler
   copy: src=../src_agent/apscheduler/ dest=/tmp/apscheduler
@@ -85,4 +85,7 @@
 - name: Install the daemon (part 2)
   template: src=../src_agent/openbach-agent/openbach-agent.status.j2 dest=/opt/openbach-agent/openbach-agent.status mode=0755
   when: ansible_distribution_version == "16.04"
+
+- name: Start openbach-agent
+  service: name=openbach-agent state=started
 

@@ -27,52 +27,11 @@
 #   
 #   
 #   @file     main.yml
-#   @brief    File that indicates the tasks to perform in this role
+#   @brief    File that containts all the variable needed for the playbooks
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-# Install
-- include: install_stats.yml
-  tags:
-    - install
-- include: install_daemon.yml
-  tags:
-    - install
-- include: install_synchro.yml
-  tags:
-    - install
-- include: install_logs.yml
-  tags:
-    - install
-- include: install_ssh_key.yml
-  tags:
-    - install
-- include: start_daemon.yml
-  tags:
-    - install
-- include: add_services_to_boot.yml
-  tags:
-    - install
-
-# Uninstall
-- include: uninstall_synchro.yml
-  tags:
-    - uninstall
-- include: uninstall_stats.yml
-  tags:
-    - uninstall
-- include: uninstall_logs.yml
-  tags:
-    - uninstall
-- include: uninstall_daemon.yml
-  tags:
-    - uninstall
-- include: uninstall_ssh_key.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
-  tags:
-    - uninstall
+job_name: send_stats
 

@@ -21,50 +21,60 @@ arguments:
   required:
     - name:        interval
       type:        'int'
+      count:       1
       description: >
           The interval the rate is mesured
     - name:        chain
       type:        'str'
+      count:       1
       description: >
           The chain (in iptables) to monitor
   optional:
     - name:        jump
       type:        'str'
+      count:       1
       flag:        '-j'
       description: >
           This specifies the target of the rule
     - name:        source
       type:        'ip'
+      count:       1
       flag:        '-s'
       description: >
           The source to monitor
     - name:        destination
       type:        'ip'
+      count:       1
       flag:        '-d'
       description: >
           The destination to monitor
     - name:        protocol
       type:        'str'
+      count:       1
       flag:        '-p'
       description: >
           The protocol to monitor
     - name:        in_interface
       type:        'str'
+      count:       1
       flag:        '-i'
       description: >
           The incomming interface of the packets to monitor
     - name:        out_interface
       type:        'str'
+      count:       1
       flag:        '-o'
       description: >
           The outgoing interface of the packets to monitor
     - name:        destination_port
       type:        'int'
+      count:       1
       flag:        '--dport'
       description: >
           The destination port to monitor
     - name:        source_port
       type:        'int'
+      count:       1
       flag:        '--sport'
       description: >
           The source port to monitor

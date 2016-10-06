@@ -371,7 +371,8 @@ class JobConfiguration:
             args = content['arguments']['required']
             if type(args) == list:
                 for arg in args:
-                    self.required.append(arg['name'])
+                    for i in range(arg['count']):
+                        self.required.append(arg['name'])
             self.optional = True if type(content['arguments']['optional']) == list else False
             self.persistent = content['general']['persistent']
         except KeyError:

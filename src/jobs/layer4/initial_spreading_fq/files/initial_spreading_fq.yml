@@ -22,19 +22,23 @@ arguments:
   required:
     - name:        rate
       type:        'int'
+      count:       1
       description: >
           Tcp initial spreading minimal rate
     - name:        disable_pacing
       type:        'int'
+      count:       1
       description: >
           0 to enable pacing, 1 to disable it
     - name:        interface
       type:        'str'
+      count:       1
       description: >
           The interface where the initial spreading fq is set
   optional:
     - name:        other_interfaces
       type:        'str'
+      count:       1
       flag:        ''
       description: >
           The other interfaces where the initial spreading fq is set

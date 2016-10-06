@@ -22,22 +22,27 @@ arguments:
   required:
     - name:        network
       type:        'str'
+      count:       1
       description: >
           The destination network
     - name:        gw
       type:        'ip'
+      count:       1
       description: >
           The next hop of the route
     - name:        interface
       type:        'str'
+      count:       1
       description: >
           Interface where to set the initial windows
     - name:        initcwnd
       type:        'int'
+      count:       1
       description: >
           Initial congestion window
     - name:        initrwnd
       type:        'int'
+      count:       1
       description: >
           Initial congestion receipt window
   optional:

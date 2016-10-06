@@ -155,11 +155,27 @@ class Argument(models.Model):
         choices=typeCHOICES,
         default=NONE,
     )
+    count = models.CharField(max_length=5, null=True, blank=True)
     name = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
 
     class Meta:
         abstract = True
+
+    def check_count(self, actual_count):
+        if not isinstance(actual_count, int):
+            raise BadRequest('The given count should be an int')
+        if self.count == '*':
+            return True
+        if self.count == '+':
+            if actual_count > 0:
+                return True
+            else:
+                return False
+        count = int(self.count)
+        if actual_count != count:
+            return False
+        return True
 
     def __str__(self):
         return self.name
@@ -169,6 +185,13 @@ class Required_Job_Argument(Argument):
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     rank = models.IntegerField()
 
+    def save(self, *args, **kwargs):
+        try:
+            int(self.count)
+        except ValueError:
+            raise BadRequest('count should be an int')
+        super(Argument, self).save(*args, **kwargs)
+
     class Meta:
         unique_together = (('name', 'job'), ('rank', 'job'))
 
@@ -176,6 +199,16 @@ class Required_Job_Argument(Argument):
 class Optional_Job_Argument(Argument):
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     flag = models.CharField(max_length=200)
+
+    def save(self, *args, **kwargs):
+        if self.count == '*' or self.count == '+':
+            pass
+        else:
+            try:
+                int(self.count)
+            except ValueError:
+                raise BadRequest('count should be \'*\', \'+\' or an int')
+        super(Argument, self).save(*args, **kwargs)
 
     class Meta:
         unique_together = (('name', 'job'), ('flag', 'job'))

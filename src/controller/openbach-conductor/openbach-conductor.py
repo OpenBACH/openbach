@@ -641,6 +641,7 @@ class ClientThread(threading.Thread):
                     name=required_arg['name'],
                     description=required_arg['description'],
                     type=required_arg['type'],
+                    count=required_arg['count'],
                     rank=rank,
                     job=job
                 ).save()
@@ -664,6 +665,7 @@ class ClientThread(threading.Thread):
                     name=optional_arg['name'],
                     flag=optional_arg['flag'],
                     type=optional_arg['type'],
+                    count=optional_arg['count'],
                     description=optional_arg['description'],
                     job=job
                 ).save()
@@ -787,7 +789,7 @@ class ClientThread(threading.Thread):
                         '{job.path}/install_{job.name}.yml'
                         .format(path_src=self.path_src, agent=agent, job=job))
                 except BadRequest:
-                    sucess = False
+                    success = False
                 else:
                     installed_job = Installed_Job(
                             agent=agent, job=job,
@@ -859,7 +861,7 @@ class ClientThread(threading.Thread):
                         .format(path_src=self.path_src, agent=agent, job=job))
                     installed_job.delete()
                 except BadRequest:
-                    sucess = False
+                    success = False
 
         if success:
             if warning:
@@ -1093,6 +1095,11 @@ class ClientThread(threading.Thread):
                                      ' arguments needed or '
                                      'optional'.format(arg_name), 400)
             if isinstance(arg_values, list):
+                if not argument_instance.argument.check_count(len(arg_values)):
+                    raise BadRequest('This argument \'{}\' does not have the '
+                                     'right number of values'.format(arg_name),
+                                     400, {'needed_count':
+                                           argument_instance.argument.count})
                 for arg_value in arg_values:
                     jav = Job_Argument_Value(job_argument_instance=argument_instance)
                     try:
@@ -1118,7 +1125,7 @@ class ClientThread(threading.Thread):
         if interval:
             job_instance.start_date = timezone.now()
             job_instance.periodic = True
-            job_instance.save(force_insert=True)
+            job_instance.save()
         else:
             if not date:
                 job_instance.start_date = timezone.now()
@@ -1127,7 +1134,7 @@ class ClientThread(threading.Thread):
                 start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
                 job_instance.start_date = start_date
             job_instance.periodic = False
-            job_instance.save(force_insert=True)
+            job_instance.save()
 
         if restart:
             job_instance.required_job_argument_instance_set.all().delete()
@@ -1205,6 +1212,11 @@ class ClientThread(threading.Thread):
                                                             agent_ip)})
 
         job_instance = Job_Instance(job=installed_job)
+        job_instance.status = "Starting ..."
+        job_instance.update_status = timezone.now()
+        job_instance.start_date = timezone.now()
+        job_instance.periodic = False
+        job_instance.save(force_insert=True)
         date = self.fill_job_instance(job_instance, instance_args, date, interval)
         self.playbook_builder.write_hosts(agent.address)
         args = self.format_args(job_instance)
@@ -1561,7 +1573,7 @@ class ClientThread(threading.Thread):
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
-        job_instance.save()
+        job_instance.save(force_insert=True)
 
         instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
         date = self.fill_job_instance(job_instance, instance_args, date)
@@ -1639,7 +1651,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Job isn\'t in the database', 404,
                              infos={'job_name': job_name})
         try:
-            agent = Job.objects.get(address=address)
+            agent = Agent.objects.get(address=address)
         except ObjectDoesNotExist:
             raise BadRequest('This Agent isn\'t in the database', 404,
                              infos={'agent_ip': address})
@@ -1674,9 +1686,9 @@ class ClientThread(threading.Thread):
                 stat.save()
         else:
             if broadcast != None:
-                installed_job.broadcast = broadcast
+                installed_job.default_stat_broadcast = broadcast
             if storage != None:
-                installed_job.storage = storage
+                installed_job.default_stat_storage = storage
         installed_job.save()
 
         rstat_name = 'rstats_job on {}'.format(address)
@@ -1696,7 +1708,7 @@ class ClientThread(threading.Thread):
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
-        job_instance.save()
+        job_instance.save(force_insert=True)
  
         instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
         date = self.fill_job_instance(job_instance, instance_args, date)

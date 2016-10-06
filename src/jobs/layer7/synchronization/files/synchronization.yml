@@ -22,6 +22,7 @@ arguments:
   required:
     - name:        address_ip
       type:        'ip'
+      count:       1
       description: >
           The ip address with who you want to synchronize
   optional:

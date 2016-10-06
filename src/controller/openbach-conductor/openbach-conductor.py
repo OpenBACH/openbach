@@ -243,12 +243,12 @@ class PlaybookBuilder():
         print('      become: yes', file=playbook_file)
         print('      when: ansible_distribution_version == "16.04"', file=playbook_file)
         return True
-    
+
     def build_list_jobs_agent(self, playbook_file):
         print('    - name: Get the list of the installed jobs', file=playbook_file)
         print('      shell: /opt/openbach-agent/openbach-baton status_jobs_agent', file=playbook_file)
         return True
-    
+
     def build_enable_log(self, syslogseverity, syslogseverity_local, job_path,
             playbook_file):
         if syslogseverity != 8 or syslogseverity_local != 8:
@@ -266,12 +266,19 @@ class PlaybookBuilder():
             print(file=playbook_file)
             print('      become: yes', file=playbook_file)
         return True
-    
+
     def build_push_file(self, local_path, remote_path, playbook_file):
         print('    - name: Push file', file=playbook_file)
         print('      copy: src={} dest={}'.format(local_path, remote_path), file=playbook_file)
         print('      become: yes', file=playbook_file)
         return True
+
+
+    def launch_playbook(self, cmd_ansible):
+        p = subprocess.Popen(cmd_ansible, shell=True)
+        p.wait()
+        if p.returncode:
+            raise BadRequest('Ansible playbook execution failed')
 
 
 class ClientThread(threading.Thread):
@@ -284,13 +291,6 @@ class ClientThread(threading.Thread):
         self.clientsocket = clientsocket
         self.path_src = '/opt/openbach-controller/openbach-conductor/'
         self.playbook_builder = PlaybookBuilder('/tmp/', self.path_src)
-
-
-    def launch_playbook(self, cmd_ansible):
-        p = subprocess.Popen(cmd_ansible, shell=True)
-        p.wait()
-        if p.returncode:
-            raise BadRequest('Ansible playbook execution failed')
 
 
     def execute_request(self, data):
@@ -332,7 +332,7 @@ class ClientThread(threading.Thread):
             print('local_username:', getpass.getuser(), file=extra_vars)
             print('agent_name:', agent.name, file=extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@/tmp/openbach_agents -e '
                 '@/opt/openbach-controller/configs/ips -e '
@@ -384,7 +384,7 @@ class ClientThread(threading.Thread):
         self.playbook_builder.write_agent(agent.address)
         with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
-        self.launch_playbook(
+        self.playbook_builder.launch_playbook(
             'ansible-playbook -i /tmp/openbach_hosts -e '
             '@/opt/openbach-controller/configs/all -e '
             '@/tmp/openbach_agents -e '
@@ -485,7 +485,7 @@ class ClientThread(threading.Thread):
                 print(file=playbook)
                 print('- hosts: Agents', file=playbook)
             try:
-                self.launch_playbook(
+                self.playbook_builder.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '
                     'ansible_ssh_user={agent.username} -e '
                     'ansible_ssh_pass={agent.password} {}'
@@ -503,7 +503,7 @@ class ClientThread(threading.Thread):
             with self.playbook_builder.playbook_file('status_agent') as playbook:
                 self.playbook_builder.build_status_agent(playbook) 
             try:
-                self.launch_playbook(
+                self.playbook_builder.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '
                     'ansible_ssh_user={agent.username} -e '
                     'ansible_sudo_pass={agent.username} -e '
@@ -780,7 +780,7 @@ class ClientThread(threading.Thread):
             for job in jobs:
                 self.playbook_builder.write_hosts(agent.address)
                 try:
-                    self.launch_playbook(
+                    self.playbook_builder.launch_playbook(
                         'ansible-playbook -i /tmp/openbach_hosts -e '
                         'path_src={path_src} -e '
                         'ansible_ssh_user={agent.username} -e '
@@ -851,7 +851,7 @@ class ClientThread(threading.Thread):
                     continue
                 self.playbook_builder.write_hosts(agent.address)
                 try:
-                    self.launch_playbook(
+                    self.playbook_builder.launch_playbook(
                         'ansible-playbook -i /tmp/openbach_hosts -e '
                         'path_src={path_src} -e '
                         'ansible_ssh_user={agent.username} -e '
@@ -1014,7 +1014,7 @@ class ClientThread(threading.Thread):
             with self.playbook_builder.playbook_file('status_jobs') as playbook:
                 self.playbook_builder.build_list_jobs_agent(playbook) 
             try:
-                self.launch_playbook(
+                self.playbook_builder.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '
                     'ansible_ssh_user={agent.username} -e '
                     'ansible_ssh_pass={agent.password} {}'
@@ -1045,7 +1045,7 @@ class ClientThread(threading.Thread):
         with self.playbook_builder.playbook_file('push_file') as playbook:
             self.playbook_builder.build_push_file(
                     local_path, remote_path, playbook)
-        self.launch_playbook(
+        self.playbook_builder.launch_playbook(
             'ansible-playbook -i /tmp/openbach_hosts -e '
             'ansible_ssh_user={agent.username} -e '
             'ansible_sudo_pass={agent.password} -e '
@@ -1151,26 +1151,18 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         date = origin + int(offset)*1000
-        try:
-            result, _ = self.start_job_instance_view(agent_ip, job_name,
-                                                     instance_args, date,
-                                                     interval)
-        except BadRequest as e:
-            # TODO gerer les erreurs
-            print(e)
-            raise
+
+        result, _ = self.start_job_instance_view(agent_ip, job_name,
+                                                 instance_args, date,
+                                                 interval)
 
         job_instance_id = result['job_instance_id']
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         job_instance.openbach_function_instance = ofi
         job_instance.scenario_instance = scenario_instance
         job_instance.save()
-        try:
-            self.watch_job_instance_view(job_instance_id, interval=2)
-        except BadRequest as e:
-            # TODO gerer les erreurs
-            print(e)
-            raise
+
+        self.watch_job_instance_view(job_instance_id, interval=2)
 
         with WaitingQueueManager() as waiting_queues:
             waiting_queues[job_instance_id] = (scenario_instance_id,
@@ -1181,9 +1173,7 @@ class ClientThread(threading.Thread):
         try:
             sock.connect(('', 2845))
         except socket.error as serr:
-            # TODO status manager injoignable, arrete le scenario ?
-            print('Connexion error with the Status Manager')
-            return []
+            raise BadRequest('Connexion error with the Status Manager')
         message = { 'type': 'watch', 'scenario_instance_id':
                     scenario_instance_id, 'job_instance_id': job_instance_id }
         sock.send(json.dumps(message).encode())
@@ -1227,7 +1217,7 @@ class ClientThread(threading.Thread):
                     args, date, interval,
                     playbook, extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@{} -e '
                 'ansible_ssh_user={agent.username} -e '
@@ -1293,7 +1283,7 @@ class ClientThread(threading.Thread):
                         job.name, job_instance.id, date,
                         playbook, extra_vars)
             try:
-                self.launch_playbook(
+                self.playbook_builder.launch_playbook(
                     'ansible-playbook -i /tmp/openbach_hosts -e '
                     '@/tmp/openbach_extra_vars -e '
                     'ansible_ssh_user={agent.username} -e '
@@ -1346,7 +1336,7 @@ class ClientThread(threading.Thread):
                     args, date, interval,
                     playbook, extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@/tmp/openbach_extra_vars -e '
                 'ansible_ssh_user={agent.username} -e '
@@ -1409,7 +1399,7 @@ class ClientThread(threading.Thread):
                     date, interval, stop,
                     playbook, extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@{} -e '
                 'ansible_ssh_user={agent.username} -e '
@@ -1616,7 +1606,7 @@ class ClientThread(threading.Thread):
                     'rsyslog_job', job_instance.id, args,
                     date, None, playbook, extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@/tmp/openbach_extra_vars -e '
                 '@/opt/openbach-controller/configs/all -e '
@@ -1735,7 +1725,7 @@ class ClientThread(threading.Thread):
                     'rstats_job', job_instance.id, args,
                     date, None, playbook, extra_vars)
         try:
-            self.launch_playbook(
+            self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@/tmp/openbach_extra_vars -e '
                 '@/opt/openbach-controller/configs/all -e '
@@ -2037,7 +2027,6 @@ class ClientThread(threading.Thread):
                             scenario=scenario_string)
         try:
             scenario.save(force_insert=True)
-            #TODO delete scenario if an error occurs !
         except IntegrityError:
             raise BadRequest('This name of Scenario \'{}\' is already'
                              ' used'.format(name), 409)
@@ -2935,9 +2924,8 @@ class ClientThread(threading.Thread):
                 name = 'of_{}'.format(name)
             function = getattr(self, name)
         except AttributeError:
-            #TODO gerer mieux l'erreur
-            raise BadRequest('Function {} not implemented yet'.format(request),
-                             500)
+            self.stop_scenario_instance(scenario_instance.id,
+                                        state='Scheduling Error')
         arguments = {}
         for arg in ofi.openbach_function_argument_instance_set.all():
             if arg.argument.type == 'json':
@@ -2973,10 +2961,9 @@ class ClientThread(threading.Thread):
             arguments['openbach_functions_while'] = table[ofi_id]['while']
         try:
             threads = function(**arguments)
-        except BadRequest as e:
-            #TODO Mieux gerer les erreurs
-            print(e)
-            return
+        except BadRequest:
+            self.stop_scenario_instance(scenario_instance.id,
+                                        state='Scheduling Error')
         if not t.do_run:
             ofi.status = 'Stopped'
             ofi.status_date = timezone.now()
@@ -2995,13 +2982,7 @@ class ClientThread(threading.Thread):
 
 
     def start_scenario_instance(self, scenario_name, args, ofi, date=None):
-        try:
-            result, _ = self.start_scenario_instance_view(scenario_name, args,
-                                                          date)
-        except BadRequest as e:
-            # TODO gerer les erreurs
-            print(e)
-            raise
+        result, _ = self.start_scenario_instance_view(scenario_name, args, date)
 
         scenario_instance_id = result['scenario_instance_id']
         scenario_instance = Scenario_Instance.objects.get(
@@ -3069,6 +3050,15 @@ class ClientThread(threading.Thread):
         return { 'scenario_instance_id': scenario_instance.id }, 200
 
 
+    def stop_scenario_instance(self, scenario_instance_id, state='Stopped',
+                               date=None):
+        self.stop_scenario_instance_view(scenario_instance_id, date)
+        scenario_instance = Scenario_Instance.objects.get(
+            pk=scenario_instance_id)
+        scenario_instance.status = state
+        scenario_instance.save()
+
+
     def stop_scenario_instance_view(self, scenario_instance_id, date=None):
         scenario_instance_id = int(scenario_instance_id)
         try:
@@ -3078,6 +3068,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario_Instance does not exist in the '
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
+        out_of_controll = False
         with ThreadManager() as threads:
             scenario_threads = threads[scenario_instance_id]
             for ofi_id, thread in scenario_threads.items():
@@ -3085,13 +3076,17 @@ class ClientThread(threading.Thread):
                 ofi = scenario_instance.openbach_function_instance_set.get(
                     openbach_function_instance_id=ofi_id)
                 for job_instance in ofi.job_instance_set.all():
-                    result, returncode = self.stop_job_instance_view(
-                        [job_instance.id])
-                    #TODO mieux gerer les erreurs !
-                    result, returncode = self.watch_job_instance_view(
-                        job_instance.id, stop='now')
-                    #TODO mieux gerer les erreurs !
-        scenario_instance.status = "Stopped"
+                    try:
+                        result, returncode = self.stop_job_instance_view(
+                            [job_instance.id])
+                        result, returncode = self.watch_job_instance_view(
+                            job_instance.id, stop='now')
+                    except BadRequest:
+                        out_of_controll = True
+        if out_of_controll:
+            scenario_instance.status = "Running, out of controll"
+        else:
+            scenario_instance.status = "Stopped"
         scenario_instance.status_date = timezone.now()
         scenario_instance.is_stopped = True
         scenario_instance.save()
@@ -3194,11 +3189,13 @@ class ClientThread(threading.Thread):
             if not job_instance.is_stopped:
                 job_instance_ids.append(job_instance.id)
         result, returncode = self.stop_job_instance_view(job_instance_ids)
-        #TODO mieux gerer les erreurs !
         for watch in Watch.objects.all():
-            result, returncode = self.watch_job_instance_view(
-                watch.job_instance.id, stop='now')
-            #TODO mieux gerer les erreurs !
+            try:
+                result, returncode = self.watch_job_instance_view(
+                    watch.job_instance.id, stop='now')
+            except BadRequest:
+                #TODO mieux gerer les erreurs !
+                pass
 
         return {}, 200
 
@@ -3227,6 +3224,7 @@ def listen_message_from_backend(tcp_socket):
 
 
 def handle_message_from_status_manager(clientsocket):
+    playbook_builder = PlaybookBuilder('/tmp/', self.path_src)
     request = clientsocket.recv(2048)
     clientsocket.close()
     message = json.loads(request.decode())
@@ -3238,7 +3236,6 @@ def handle_message_from_status_manager(clientsocket):
             si_id, ofi_id, finished_queues = waiting_queues.pop(job_instance_id)
         for queue in finished_queues:
             queue.put(ofi_id)
-        # TODO Stopper la watch ?
         scenario_instance = Scenario_Instance.objects.get(pk=si_id)
         if scenario_instance.job_instance_set.all().count() == 0:
             with ThreadManager() as threads:
@@ -3249,6 +3246,32 @@ def handle_message_from_status_manager(clientsocket):
                         scenario_instance.status_date = timezone.now()
                         scenario_instance.is_stopped = True
                         scenario_instance.save()
+    elif type_ == 'Error':
+        # TODO Stop the scenario
+        pass
+    if type_ in ('Finished', 'Error'):
+        watch = Watch.objects.get(pk=job_instance_id)
+        job = watch.job.job
+        agent = watch.job.agent
+        self.playbook_builder.write_hosts(agent.address)
+        with self.playbook_builder.playbook_file(
+                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance_id) as extra_vars:
+            self.playbook_builder.build_status(
+                    job.name, job_instance_id,
+                    None, None, 'now',
+                    playbook, extra_vars)
+        try:
+            playbook_builder.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@{} -e '
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password} {}'
+                .format(extra_vars.name, playbook.name, agent=agent))
+        except BadRequest:
+            # TODO see how to handle this
+            pass
+        watch.delete()
 
 
 def listen_message_from_status_manager(tcp_socket):

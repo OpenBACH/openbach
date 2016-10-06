@@ -49,7 +49,7 @@
   - name: Install Ping Job
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ping/ mode={{ item.mode }}
     with_items:
-      - { file: 'ping', mode: '0755' }
+      - { file: 'ping.py', mode: '0755' }
       - { file: 'ping.help', mode: '0644' }
     become: yes
   

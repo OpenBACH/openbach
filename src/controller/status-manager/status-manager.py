@@ -78,7 +78,7 @@ class ScenarioManager:
 
 
 class ClientThread(threading.Thread):
-    UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}{}"'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}"+WHERE+job_instance_id+=+{}'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -105,15 +105,19 @@ class ClientThread(threading.Thread):
         job_instance.update_status = date
         job_instance.status = status
         job_instance.save()
+        type_= None
         if status == 'Not Running':
+            type_ = 'Finished'
+        elif status == 'Error':
+            type_ = 'Error'
+        if type_ != None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 sock.connect(('', 2846))
             except socket.error as serr:
-                # TODO status manager injoignable, arrete le scenario ?
-                print('error de connexion')
+                print('Connexion with the Conductor')
                 return
-            message = { 'type': 'Finished', 'scenario_instance_id':
+            message = { 'type': type_, 'scenario_instance_id':
                         scenario_instance_id, 'job_instance_id': job_instance_id
                       }
             sock.send(json.dumps(message).encode())

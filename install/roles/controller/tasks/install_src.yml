@@ -162,7 +162,10 @@
   copy: src=../src/jobs dest=/opt/openbach-controller
 
 - name: Set the influxdb port to use
-  replace: dest=/opt/openbach-controller/openbach-conductor/openbach-conductor.py regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
+  replace: dest=/opt/openbach-controller/{{item}} regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
+  with_items:
+    - openbach-conductor/openbach-conductor.py
+    - status-manager/status-manager.py
 
 - name: Change postgresql methode to trust for user postgres
   lineinfile: dest=/etc/postgresql/9.3/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes

@@ -51,6 +51,7 @@
     with_items:
       - { file: 'ping.py', mode: '0755' }
       - { file: 'ping.help', mode: '0644' }
+      - { file: 'ping_rstats_filter.conf', mode: '0644' }
     become: yes
   
   - name: Inform Agent that Ping Job is installed

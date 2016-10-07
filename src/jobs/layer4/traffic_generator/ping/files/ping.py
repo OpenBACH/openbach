@@ -84,11 +84,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='')
+                        help='The Id of the Job Instance')
     parser.add_argument('destination_ip', metavar='destination_ip', type=str,
                         help='')
     parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='')
+                        help='The Id of the Scenario Instance')
     parser.add_argument('-c', '--count', type=int,
                         help='')
     parser.add_argument('-i', '--interval', type=int,

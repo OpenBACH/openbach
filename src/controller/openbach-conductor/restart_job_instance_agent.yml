@@ -34,4 +34,4 @@
 ---
 
 - name: Restart the Job Instance
-  shell: /opt/openbach-agent/openbach-baton restart_job_instance_agent {{ job_name }} {{ id }} {{ date_interval }} {{ job_options }}
+  shell: /opt/openbach-agent/openbach-baton restart_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ date_interval }} {{ job_options }}

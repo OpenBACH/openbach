@@ -154,11 +154,12 @@ def signal_term_handler(signal, frame):
     exit(0)
 
 
-def launch_job(job_name, job_instance_id, command, args):
+def launch_job(job_name, job_instance_id, scenario_instance_id, command, args):
     proc = subprocess.Popen(
-            'PID=`{} {} > /dev/null 2>&1 & echo $!`; echo'
-            ' $PID > {}/{}{}.pid'.format(command, args, PID_FOLDER, job_name,
-                                         job_instance_id),
+            'PID=`{} {} {} -sii {} > /dev/null 2>&1 & echo $!`; echo'
+            ' $PID > {}/{}{}.pid'.format(command, job_instance_id, args,
+                                         scenario_instance_id, PID_FOLDER,
+                                         job_name, job_instance_id),
             shell=True)
 
 
@@ -230,8 +231,8 @@ def stop_watch(job_id):
         pass
 
 
-def schedule_job_instance(job_name, job_instance_id, arguments, date_value,
-                          reschedule=False):
+def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
+                          arguments, date_value, reschedule=False):
     timestamp = time.time()
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
     try:
@@ -244,7 +245,8 @@ def schedule_job_instance(job_name, job_instance_id, arguments, date_value,
         try:
             JobManager().scheduler.add_job(
                     launch_job, 'date', run_date=date,
-                    args=(job_name, job_instance_id, command, arguments),
+                    args=(job_name, job_instance_id, scenario_instance_id,
+                          command, arguments),
                     id=job_name+job_instance_id)
         except ConflictingIdError:
             raise BadRequest('KO A job {} is already programmed'.format(job_name))
@@ -418,11 +420,11 @@ class ClientThread(threading.Thread):
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),
             'start_job_instance_agent':
-                (4, 'You should provide a job name, an '
+                (5, 'You should provide a job name, an '
                 'instance id, a watch type and its value. '
                 'Optional arguments may follow'),
             'restart_job_instance_agent':
-                (4, 'You should provide a job name, an '
+                (5, 'You should provide a job name, an '
                 'instance id, a watch type and its value. '
                 'Optional arguments may follow'),
             'stop_job_instance_agent':
@@ -436,20 +438,24 @@ class ClientThread(threading.Thread):
         self.path_jobs = path_jobs
         self.path_scheduled_instances_job = path_scheduled_instances_job
 
-    def start_job_instance(self, name, job_instance_id, date_type, date_value, args):
+    def start_job_instance(self, name, job_instance_id, scenario_instance_id,
+                           date_type, date_value, args):
         with JobManager(name) as job:
             command = job['command']
             command_stop = job['command_stop']
 
         arguments = ' '.join(args)
         if date_type == 'date':
-            date, _ = schedule_job_instance(name, job_instance_id, arguments, date_value)
+            date, _ = schedule_job_instance(name, job_instance_id,
+                                            scenario_instance_id, arguments,
+                                            date_value)
             if date != None:
                 filename = '{}{}{}.start'.format(self.path_scheduled_instances_job,
                                                  name, job_instance_id)
                 with open(filename, 'w') as job_instance_prog:
-                    print('{}\n{}\n{}\n{}'.format(name, job_instance_id,
-                                                  date_value, arguments),
+                    print('{}\n{}\n{}\n{}\n{}'.format(name, job_instance_id,
+                                                      scenario_instance_id,
+                                                      date_value, arguments),
                           file=job_instance_prog)
 
         elif date_type == 'interval':
@@ -477,7 +483,8 @@ class ClientThread(threading.Thread):
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'interval', seconds=date_value,
-                        args=(name, job_instance_id, command, arguments),
+                        args=(name, job_instance_id, scenario_instance_id,
+                              command, arguments),
                         id=name+job_instance_id)
             except ConflictingIdError:
                 raise BadRequest(
@@ -591,17 +598,17 @@ class ClientThread(threading.Thread):
                                 'already started'.format(job_name, job_instance_id))
 
             # On récupère la date ou l'interval
-            if args[2] == 'date':
+            if args[3] == 'date':
                 try:
                     # [Mathias] warning, will put floats in here use // instead of / if integers are required
-                    args[3] = 0 if args[3] == 'now' else int(args[3]) / 1000
+                    args[4] = 0 if args[4] == 'now' else int(args[4]) / 1000
                 except ValueError:
                     raise BadRequest(
                             'KO The date to begin should be '
                             'given as a timestamp in milliseconds')
-            elif args[2] == 'interval':
+            elif args[3] == 'interval':
                 try:
-                    args[3] = int(args[3])
+                    args[4] = int(args[4])
                 except ValueError:
                     raise BadRequest(
                             'KO The interval to execute the '
@@ -693,8 +700,8 @@ class ClientThread(threading.Thread):
                 del jobs[job_name]
 
         elif request == 'start_job_instance_agent':
-            job, job_instance_id, date, value, *args = extra_args
-            self.start_job_instance(job, job_instance_id, date, value, args)
+            job, job_instance_id, scenario_instance_id, date, value, *args = extra_args
+            self.start_job_instance(job, job_instance_id, scenario_instance_id, date, value, args)
 
         elif request == 'stop_job_instance_agent':
             job_name, job_instance_id, _, value = extra_args
@@ -723,7 +730,7 @@ class ClientThread(threading.Thread):
                       file=job_instance_status)
 
         elif request == 'restart_job_instance_agent':
-            job_name, job_instance_id, date, value, *args = extra_args
+            job_name, job_instance_id, scenario_instance_id, date, value, *args = extra_args
             # Stoppe le job si il est lancé
             need_stop = False
             with JobManager(job_name) as job:
@@ -742,7 +749,8 @@ class ClientThread(threading.Thread):
                 pass
 
             # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
-            self.start_job_instance(job_name, job_instance_id, date, value, args)
+            self.start_job_instance(job_name, job_instance_id,
+                                    scenario_instance_id, date, value, args)
 
     def run(self):
         request = self.socket.recv(2048)
@@ -801,14 +809,16 @@ if __name__ == '__main__':
                     try:
                         job_name = f.readline().rstrip('\n')
                         job_instance_id = f.readline().rstrip('\n')
+                        scenario_instance_id = f.readline().rstrip('\n')
                         date_value = float(f.readline().rstrip('\n'))
                         arguments = f.readline().rstrip('\n')
                     except ValueError:
                         print('Error with the reading of {}{}'.format(root,
                                                                       filename))
                         continue
-                    date, result = schedule_job_instance(job_name, job_instance_id, arguments,
-                                        date_value, reschedule=True)
+                    date, result = schedule_job_instance(
+                        job_name, job_instance_id, scenario_instance_id,
+                        arguments, date_value, reschedule=True)
                     if result:
                         with ArgsManager(job_name) as args:
                             args[job_instance_id] = {

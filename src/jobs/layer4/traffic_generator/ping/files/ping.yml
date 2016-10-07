@@ -12,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/ping/ping'
+    command:       '/opt/openbach-jobs/ping/ping.py'
     command_stop:
 
   windows:

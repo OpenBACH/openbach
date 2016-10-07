@@ -169,12 +169,14 @@ class PlaybookBuilder():
         with open(filename, 'w') as extra_vars:
             yield extra_vars
 
-    def build_start(self, job_name, job_instance_id, job_args, date, interval,
-                    playbook_handle, extra_vars_handle):
+    def build_start(self, job_name, job_instance_id, scenario_instance_id,
+                    job_args, date, interval, playbook_handle,
+                    extra_vars_handle):
         instance = 'start_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': job_instance_id,
+                'job_instance_id:': job_instance_id,
+                'scenario_instance_id:': scenario_instance_id,
                 'job_options:': job_args,
         }
 
@@ -193,7 +195,7 @@ class PlaybookBuilder():
         instance = 'status_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': job_instance_id,
+                'job_instance_id:': job_instance_id,
         }
 
         if date is not None:
@@ -208,12 +210,14 @@ class PlaybookBuilder():
         return self._build_helper(instance, playbook_handle,
                                   variables, extra_vars_handle)
 
-    def build_restart(self, job_name, job_instance_id, job_args, date, interval,
-                      playbook_handle, extra_vars_handle):
+    def build_restart(self, job_name, job_instance_id, scenario_instance_id,
+                      job_args, date, interval, playbook_handle,
+                      extra_vars_handle):
         instance = 'restart_job_instance_agent'
         variables = {
                 'job_name:': job_name,
-                'id:': job_instance_id,
+                'job_instance_id:': job_instance_id,
+                'scenario_instance_id:': scenario_instance_id,
                 'job_options:': job_args,
         }
         if date is not None:
@@ -229,7 +233,7 @@ class PlaybookBuilder():
     def build_stop(self, job_name, job_instance_id, date, playbook, extra_vars):
         variables = {
                 'job_name:': job_name,
-                'id:': job_instance_id,
+                'job_instance_id:': job_instance_id,
                 'date: date': date,
         }
         return self._build_helper('stop_job_instance_agent', playbook, variables, extra_vars)
@@ -1154,7 +1158,7 @@ class ClientThread(threading.Thread):
 
         result, _ = self.start_job_instance_view(agent_ip, job_name,
                                                  instance_args, date,
-                                                 interval)
+                                                 interval, scenario_instance_id)
 
         job_instance_id = result['job_instance_id']
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
@@ -1183,7 +1187,7 @@ class ClientThread(threading.Thread):
 
 
     def start_job_instance_view(self, agent_ip, job_name, instance_args, date=None,
-                                interval=None):
+                                interval=None, scenario_instance_id=0):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
@@ -1214,6 +1218,7 @@ class ClientThread(threading.Thread):
                 'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance.id) as extra_vars:
             self.playbook_builder.build_start(
                     job.name, job_instance.id,
+                    scenario_instance_id,
                     args, date, interval,
                     playbook, extra_vars)
         try:
@@ -1306,17 +1311,16 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def restart_job_instance(self, job_instance_id, instance_args, date=None,
-                             interval=None):
-        #TODO
+    def restart_job_instance(self, job_instance_id, scenario_instance_id,
+                             instance_args, date=None, interval=None):
         self.restart_job_instance_view(job_instance_id, instance_args, date,
-                                       interval)
+                                       interval, scenario_instance_id)
 
         return []
 
 
     def restart_job_instance_view(self, job_instance_id, instance_args, date=None,
-                                  interval=None):
+                                  interval=None, scenario_instance_id=0):
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
@@ -1332,9 +1336,8 @@ class ClientThread(threading.Thread):
         with self.playbook_builder.playbook_file(
                 'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_restart(
-                    job.name, job_instance.id,
-                    args, date, interval,
-                    playbook, extra_vars)
+                    job.name, job_instance.id, scenario_instance_id,
+                    args, date, interval, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -1520,16 +1523,17 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-    def set_job_log_severity(self, address, job_name, severity, date=None,
+    def set_job_log_severity(self, address, job_name, severity,
+                             scenario_instance_id, date=None,
                              local_severity=None):
         self.set_job_log_severity_view(address, job_name, severity, date,
-                                       local_severity)
+                                       local_severity, scenario_instance_id)
 
         return []
 
 
     def set_job_log_severity_view(self, address, job_name, severity, date=None,
-                                  local_severity=None):
+                                  local_severity=None, scenario_instance_id=0):
         try:
             job = Job.objects.get(name=job_name)
         except ObjectDoesNotExist:
@@ -1603,7 +1607,7 @@ class ClientThread(threading.Thread):
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
             self.playbook_builder.build_start(
-                    'rsyslog_job', job_instance.id, args,
+                    'rsyslog_job', job_instance.id, scenario_instance_id, args,
                     date, None, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
@@ -1625,16 +1629,19 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def set_job_stat_policy(self, address, job_name, stat_name=None,
-                            storage=None, broadcast=None, date=None):
+    def set_job_stat_policy(self, address, job_name, scenario_instance_id,
+                            stat_name=None, storage=None, broadcast=None,
+                            date=None):
         self.set_job_stat_policy_view(address, job_name, stat_name,
-                                      storage, broadcast, date)
+                                      storage, broadcast, date,
+                                      scenario_instance_id)
 
         return []
 
 
     def set_job_stat_policy_view(self, address, job_name, stat_name=None,
-                                 storage=None, broadcast=None, date=None):
+                                 storage=None, broadcast=None, date=None,
+                                 scenario_instance_id=0):
         try:
             job = Job.objects.get(name=job_name)
         except ObjectDoesNotExist:
@@ -1722,7 +1729,7 @@ class ClientThread(threading.Thread):
                     rstats_filter.name, remote_path, playbook)
             args = self.format_args(job_instance)
             self.playbook_builder.build_start(
-                    'rstats_job', job_instance.id, args,
+                    'rstats_job', job_instance.id, scenario_instance_id, args,
                     date, None, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(

@@ -418,7 +418,7 @@ class ClientThread(threading.Thread):
                     except BadRequest as e:
                         response.setdefault('errors', []).append({
                             'agent_ip': agent.address,
-                            'error': result[3:],
+                            'error': e.reason,
                         })
                     else:
                         agent.refresh_from_db()

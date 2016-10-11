@@ -112,14 +112,14 @@
     become: yes
 
   - name: Download HTTP2 Server sources
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/http2_server/ mode=0644
+    copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/http2_server/ mode={{ item.mode }}
     with_items:
-      - server.tar.gz
-      - http2_server.help
+      - { 'name': 'http2_server.help', 'mode': '0644' }
+      - { 'name': 'http2_server.py', 'mode': '0755' }
     become: yes
     
   - name: Install HTTP2 Server
-    shell: tar xvzf server.tar.gz chdir=/opt/openbach-jobs/http2_server/
+    unarchive: src=files/server.tar.gz dest=/opt/openbach-jobs/http2_server/
     become: yes
     
   - name: Install HTTP2 Server configuration file

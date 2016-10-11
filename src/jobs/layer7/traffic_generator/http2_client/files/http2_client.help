@@ -13,5 +13,5 @@ Statistics: it doesn't produce any statistic
 
 Example:
   - Generate HTTP2 traffic with 172.20.0.83 : -a "server_address 172.20.0.83"
-  - Generate HTTP2 traffic with 172.20.0.83 during 2 minutes : -a "serveur_address 172.20.0.83" "lambd 1.0" "sim_t 120"
+  - Generate HTTP2 traffic with 172.20.0.83 during 2 minutes : -a "server_address 172.20.0.83" "lambd 1.0" "sim_t 120"
 

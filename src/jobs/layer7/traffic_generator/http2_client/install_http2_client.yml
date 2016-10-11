@@ -112,10 +112,10 @@
     when: nghttp_check_deb.rc == 1
  
   - name: Install HTTP2 Client
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/http2_client/ mode=0644
+    copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/http2_client/ mode={{ item.mode }}
     with_items:
-      - http2_client.py
-      - http2_client.help
+      - { 'name': 'http2_client.py', 'mode': '0755' }
+      - { 'name': 'http2_client.help', 'mode': '0644' }
     become: yes
     
   - name: Install HTTP2 Client configuration file

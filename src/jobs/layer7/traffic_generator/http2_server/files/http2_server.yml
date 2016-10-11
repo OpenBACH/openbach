@@ -12,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'cd /opt/openbach-jobs/http2_server; nghttpd'
+    command:       'cd /opt/openbach-jobs/http2_server; ./http2_server.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'
@@ -29,7 +29,7 @@ arguments:
   optional:
     - name:        no_tls
       type:        'None'
-      count:       1
+      count:       0
       flag:        '--no-tls'
       description: >
           Disable SSL/TLS.

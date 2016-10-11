@@ -28,27 +28,27 @@ arguments:
           The IP address of the server 
   optional:
     - name:        lambd
-      type:        'int'
+      type:        'float'
       count:       1
-      flag:        ''
+      flag:        '-l'
       description: >
           Exponential law lambda (default=1.0)
     - name:        sim_t
-      type:        'int'
+      type:        'float'
       count:       1
-      flag:        ''
+      flag:        '--sim-t'
       description: >
           Simulation time in seconds (default=60)
     - name:        n_req
       type:        'int'
       count:       1
-      flag:        ''
+      flag:        '-n'
       description: >
           Number of connections (default=0)
     - name:        page
       type:        'int'
       count:       1
-      flag:        ''
+      flag:        '-p'
       description: >
           Page number (default=1)
 

@@ -155,7 +155,7 @@ class Argument(models.Model):
         choices=typeCHOICES,
         default=NONE,
     )
-    count = models.CharField(max_length=5, null=True, blank=True)
+    count = models.CharField(max_length=11, null=True, blank=True)
     name = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
 
@@ -172,9 +172,15 @@ class Argument(models.Model):
                 return True
             else:
                 return False
-        count = int(self.count)
-        if actual_count != count:
-            return False
+        counts = self.count.split('-')
+        if len(counts) == 2:
+            if (actual_count >= int(counts[0]) and actual_count <=
+                int(counts[1])):
+                return True
+        else:
+            count = int(self.count)
+            if actual_count != count:
+                return False
         return True
 
     def __str__(self):
@@ -189,7 +195,22 @@ class Required_Job_Argument(Argument):
         try:
             int(self.count)
         except ValueError:
-            raise BadRequest('count should be an int')
+            counts = self.count.split('-')
+            if len(counts) == 2:
+                count1 = counts[0]
+                count2 = counts[1]
+                try:
+                    count1 = int(count1)
+                    count2 = int(count2)
+                except:
+                    raise BadRequest('interval of counts are allowed but its'
+                                     ' should be ints')
+                if count1 > count2:
+                    raise BadRequest('interval of counts are allowed but the'
+                                     ' first should be lower or equal to the'
+                                     ' second')
+            else:
+                raise BadRequest('count should be an int or an interval')
         super(Argument, self).save(*args, **kwargs)
 
     class Meta:
@@ -207,7 +228,23 @@ class Optional_Job_Argument(Argument):
             try:
                 int(self.count)
             except ValueError:
-                raise BadRequest('count should be \'*\', \'+\' or an int')
+                counts = self.count.split('-')
+                if len(counts) == 2:
+                    count1 = counts[0]
+                    count2 = counts[1]
+                    try:
+                        count1 = int(count1)
+                        count2 = int(count2)
+                    except:
+                        raise BadRequest('interval of counts are allowed but its'
+                                         ' should be ints')
+                    if count1 > count2:
+                        raise BadRequest('interval of counts are allowed but the'
+                                         ' first should be lower or equal to the'
+                                         ' second')
+                else:
+                    raise BadRequest('count should be \'*\', \'+\', an int or'
+                                     ' an interval')
         super(Argument, self).save(*args, **kwargs)
 
     class Meta:

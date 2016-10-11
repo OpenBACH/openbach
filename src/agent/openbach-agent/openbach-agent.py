@@ -373,7 +373,11 @@ class JobConfiguration:
             args = content['arguments']['required']
             if type(args) == list:
                 for arg in args:
-                    for i in range(arg['count']):
+                    count = arg['count']
+                    if not isinstance(count, int):
+                        counts = count.split('-')
+                        count = int(counts[0])
+                    for i in range(count):
                         self.required.append(arg['name'])
             self.optional = True if type(content['arguments']['optional']) == list else False
             self.persistent = content['general']['persistent']

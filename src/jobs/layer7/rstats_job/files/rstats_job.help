@@ -1,11 +1,3 @@
-This Job is used by OpenBACH to modify the stat policy of a Job. It moves a configuration file pushed by the Controller in advanced to be the configuration file consider by Rstats then reload Rstats.
-
-Required Arguments:
- job_name :  the name of the Job you want to change the stats policy
- instance_id : the id of the current instance
-
-Statistics: it doesn't produce any statistic
-
 Example:
-  - Change the policy of the Job 'rate_monitoring' (currently the instance_id is 5) : -a "job_name rate_monitoring" "instance_id 5"
+  - Change the policy of the Job 'rate_monitoring': -a "job_name rate_monitoring"
 

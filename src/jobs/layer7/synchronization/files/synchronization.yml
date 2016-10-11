@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'ntpdate -u'
+    command:       '/opt/openbach-jobs/synchronization/synchronization.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'

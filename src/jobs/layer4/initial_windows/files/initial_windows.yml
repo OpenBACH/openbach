@@ -5,13 +5,13 @@ general:
   description: >
       This Job set up the initial windows
   job_version:     0.1
-  keywords:        []
+  keywords:        [initial, windows, congestion, tcp]
   persistent:      False
 
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/initial_windows/initial_windows.sh'
+    command:       '/opt/openbach-jobs/initial_windows/initial_windows.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'

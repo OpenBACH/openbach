@@ -1,13 +1,3 @@
-This Job launches the iperf command.
-
-Required Arguments:
-  type : you have to specify if you want to launch a server (-s) or a client (-c). In the client case, you have also to specify the destination IP (i.e. the server IP)
-
-Optionnal Arguments:
-  all the arguments taken by the iperf command
-
-Statistics: it doesn't produce any statistic
-
 Example:
   - Launch an iperf server : -a "mode -s"
   - Launch an iperf client that will connect with the server in 172.20.0.83 : -a "mode -c 172.20.0.83" 

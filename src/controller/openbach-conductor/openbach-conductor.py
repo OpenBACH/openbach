@@ -1540,7 +1540,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Job isn\'t in the database', 404,
                              infos={'job_name': job_name})
         try:
-            agent = Job.objects.get(address=address)
+            agent = Agent.objects.get(address=address)
         except ObjectDoesNotExist:
             raise BadRequest('This Agent isn\'t in the database', 404,
                              infos={'agent_ip': address})
@@ -1569,7 +1569,7 @@ class ClientThread(threading.Thread):
         job_instance.periodic = False
         job_instance.save(force_insert=True)
 
-        instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
+        instance_args = { 'job_name': [job_name] }
         date = self.fill_job_instance(job_instance, instance_args, date)
 
         logs_job_path = job_instance.job.job.path
@@ -1618,9 +1618,9 @@ class ClientThread(threading.Thread):
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
-        except BadRequest as e:
+        except BadRequest:
             job_instance.delete()
-            return e.reason, 404
+            raise
 
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()

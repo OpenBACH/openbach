@@ -29,8 +29,8 @@
    
    
    
-   @file     initial_spreading_fq.py
-   @brief    Sources of the Job initial_spreading_fq
+   @file     smartiw.py
+   @brief    Sources of the Job smartiw
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
@@ -39,15 +39,10 @@ import argparse
 import subprocess
 
 
-def main(rate, interfaces, disable_pacing):
-    cmd = 'sysctl net.ipv4.tcp_initial_spreading_rate_min={}'.format(rate)
+def main(size, disable_pacing):
+    cmd = 'sysctl net.ipv4.tcp_smart_iw={}'.format(size)
     p = subprocess.Popen(cmd, shell=True)
     p.wait()
-
-    for interface in interfaces:
-        cmd = 'tc qdisc add dev {} root fq'.format(interface)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
 
     if disable_pacing:
         pacing=1
@@ -64,10 +59,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
                         help='The Id of the Job Instance')
-    parser.add_argument('rate', type=int, help='Tcp initial spreading minimal'
-                        ' rate')
-    parser.add_argument('interfaces', type=str, nargs='+', help='The interfaces'
-                        ' where the initial spreading fq is set')
+    parser.add_argument('size', type=int,
+                        help='The size of the smart initial window')
     parser.add_argument('-sii', '--scenario-instance-id', type=int,
                         help='The Id of the Scenario Instance')
     parser.add_argument('-d', '--disable-pacing', action='store_true',
@@ -75,9 +68,8 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    rate = args.rate
-    interfaces = args.interfaces
+    size = args.size
     disable_pacing = args.disable_pacing
 
-    main(rate, interfaces, disable_pacing)
+    main(size, disable_pacing)
 

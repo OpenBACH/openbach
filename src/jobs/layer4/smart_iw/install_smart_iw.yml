@@ -47,7 +47,7 @@
   - name: Install Smart IW
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/smart_iw/ mode={{ item.mode }}
     with_items:
-      - { file: 'smart_iw.sh', mode: '0755' }
+      - { file: 'smart_iw.py', mode: '0755' }
       - { file: 'smart_iw.help', mode: '0644' }
     become: yes
       

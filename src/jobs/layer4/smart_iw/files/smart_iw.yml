@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/smart_iw/smart_iw.sh'
+    command:       '/opt/openbach-jobs/smart_iw/smart_iw.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'
@@ -25,12 +25,13 @@ arguments:
       count:       1
       description: >
           The size of the smart initial window
-    - name:        disable_pacing
-      type:        'int'
-      count:       1
-      description: >
-          0 to enable pacing, 1 to disable it
   optional:
+    - name:        disable_pacing
+      type:        'None'
+      count:       0
+      flag:        '-d'
+      description: >
+          Disable pacing
 
 statistics:
 

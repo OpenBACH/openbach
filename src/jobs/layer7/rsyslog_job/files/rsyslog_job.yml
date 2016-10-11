@@ -27,16 +27,11 @@ arguments:
       count:       1
       description: >
           The name of the Job you want to change the logs policy
-    - name:        instance_id
-      type:        'int'
-      count:       1
-      description: >
-          The id of the current instance
   optional:
     - name:        disable_code
       type:        'int'
       count:       1
-      flag:        ''
+      flag:        '-d'
       description: >
           1 to disable sending logs to the Collector
           2 to disable local registery of logs

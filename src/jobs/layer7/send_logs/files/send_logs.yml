@@ -1,0 +1,37 @@
+---
+
+general:
+  name:            send_logs
+  description: >
+      This Job will resend the logs produce by the named Job since the date
+  job_version:     0.1
+  keywords:        [logs]
+  persistent:      False
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/send_logs/send_logs.py'
+    command_stop:
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  required:
+    - name:        job_name
+      type:        'str'
+      count:       1
+      description: >
+          The name of the Job you want to send the logs
+    - name:        date
+      type:        'str'
+      count:       2
+      description: >
+          All the logs already generate since this date will be send to the
+          collector
+  optional:
+
+statistics:
+

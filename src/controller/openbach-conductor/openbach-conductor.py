@@ -662,6 +662,9 @@ class ClientThread(threading.Thread):
                     raise BadRequest('The configuration file of the Job is not '
                                      'well formed', 409, {'configuration file':
                                                           config_file})
+            except BadRequest:
+                job.delete()
+                raise
 
         for optional_arg in optional_args:
             try:
@@ -678,6 +681,9 @@ class ClientThread(threading.Thread):
                 raise BadRequest('The configuration file of the Job is not well'
                                  ' formed', 409, {'configuration file':
                                                   config_file})
+            except BadRequest:
+                job.delete()
+                raise
 
         return {}, 200
 

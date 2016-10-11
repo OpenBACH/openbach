@@ -113,6 +113,7 @@ class Job(models.Model):
     job_version = models.CharField(max_length=200, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     keywords = models.ManyToManyField(Job_Keyword)
+    has_uncertain_required_arg = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -192,25 +193,34 @@ class Required_Job_Argument(Argument):
     rank = models.IntegerField()
 
     def save(self, *args, **kwargs):
-        try:
-            int(self.count)
-        except ValueError:
-            counts = self.count.split('-')
-            if len(counts) == 2:
-                count1 = counts[0]
-                count2 = counts[1]
-                try:
-                    count1 = int(count1)
-                    count2 = int(count2)
-                except:
-                    raise BadRequest('interval of counts are allowed but its'
-                                     ' should be ints')
-                if count1 > count2:
-                    raise BadRequest('interval of counts are allowed but the'
-                                     ' first should be lower or equal to the'
-                                     ' second')
-            else:
-                raise BadRequest('count should be an int or an interval')
+        if self.job.has_uncertain_required_arg:
+            raise BadRequest('This Job can only have one required argument with'
+                             ' an uncertain count, and it should be the last'
+                             ' one')
+        if self.count == '+':
+            self.job.has_uncertain_required_arg = True
+        else:
+            try:
+                int(self.count)
+            except ValueError:
+                counts = self.count.split('-')
+                if len(counts) == 2:
+                    count1 = counts[0]
+                    count2 = counts[1]
+                    try:
+                        count1 = int(count1)
+                        count2 = int(count2)
+                    except:
+                        raise BadRequest('interval of counts are allowed but'
+                                         ' its should be ints')
+                    if count1 > count2:
+                        raise BadRequest('interval of counts are allowed but'
+                                         ' the first should be lower or equal'
+                                         ' to the second')
+                else:
+                    raise BadRequest('count should be \'+\', an int or an'
+                                     ' interval')
+                self.job.has_uncertain_required_arg = True
         super(Argument, self).save(*args, **kwargs)
 
     class Meta:

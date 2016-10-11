@@ -86,6 +86,9 @@
   template: src=../src_agent/openbach-agent/openbach-agent.status.j2 dest=/opt/openbach-agent/openbach-agent.status mode=0755
   when: ansible_distribution_version == "16.04"
 
+- name: Copy information about the collector
+  template: src=../src_agent/openbach-agent/collector.yml.j2 dest=/opt/openbach-agent/collector.yml mode=0644
+
 - name: Start openbach-agent
   service: name=openbach-agent state=started
 

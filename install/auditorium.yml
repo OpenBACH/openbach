@@ -36,7 +36,7 @@
 - hosts: localhost
   connection: local
   tasks:
-    - name: Scan Controller public key
+    - name: Scan Auditorium public key
       known_hosts: name='{{ item }}' key="{{ lookup('pipe', 'ssh-keyscan -t rsa {{ item }}') }}"
       with_items:
         - '{{ auditorium_ip }}'

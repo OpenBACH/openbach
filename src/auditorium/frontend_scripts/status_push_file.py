@@ -29,26 +29,26 @@
    
    
    
-   @file     status_agents.py
-   @brief    Call the openbach-function status_agents
+   @file     status_push_file.py
+   @brief    Call the openbach-function status_push_file
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_agents, pretty_print
+from frontend import status_push_file, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Status Agent',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agents_ip', help='IP address of the Agents', nargs='+')
-    parser.add_argument('-u', '--update', action='store_true',
-        help='Use only the last status present on the collector')
-    
+    parser.add_argument('filename', help='Name of the file')
+    parser.add_argument('path', help='Path where the file is')
+    parser.add_argument('agent_ip', help='IP address of the Agent')
+
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_agents)(args.agents_ip, args.update)
+    pretty_print(status_push_file)(args.filename, args.path, args.agent_ip)
 

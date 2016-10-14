@@ -153,7 +153,8 @@ def list_job_instances(agent_ips, update=None, verbosity=None):
         query_string.append(('update', ''))
     if verbosity is not None:
         query_string.append(('verbosity', verbosity))
-    return requests.get(_URL.format('job_instance'), params=urlencode(query_string))
+    return requests.get(_URL.format('job_instance'),
+                        params=urlencode(query_string))
 
 
 def status_job_instance(job_instance_id, update=None, verbosity=None):
@@ -174,7 +175,8 @@ def push_file(local_path, remote_path, agent_ip):
                 files={'file': file_to_send})
 
 
-def restart_job_instance(job_instance_id, arguments=None, date=None, interval=None):
+def restart_job_instance(job_instance_id, arguments=None, date=None,
+                         interval=None):
     action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
@@ -187,7 +189,8 @@ def restart_job_instance(job_instance_id, arguments=None, date=None, interval=No
             instance_args={} if arguments is None else arguments)
 
 
-def start_job_instance(agent_ip, job_name, arguments=None, date=None, interval=None):
+def start_job_instance(agent_ip, job_name, arguments=None, date=None,
+                       interval=None):
     action = _request_message
     if interval is not None:
         action = partial(action, interval=interval)
@@ -200,11 +203,12 @@ def start_job_instance(agent_ip, job_name, arguments=None, date=None, interval=N
             instance_args={} if arguments is None else arguments)
 
 
-def status_agents(agent_ips, update=None):
-    query_string = [('address', ip) for ip in agent_ips]
+def retrieve_status_agents(agent_ips, update=False):
+    action = _request_message
     if update:
-       query_string['update'] = ''
-    return requests.get(_URL.format('agent/status'), params=urlencode(query_string))
+        action = partial(action, update='')
+    return action('agent', 'POST', action='retrieve_status',
+                  addresses=agent_ips)
 
 
 def watch_job_instance(job_instance_id, date=None, interval=None, stop=None):
@@ -216,12 +220,13 @@ def watch_job_instance(job_instance_id, date=None, interval=None, stop=None):
     if stop is not None:
         action = partial(action, stop=stop)
 
-    return action('job_instance/{}'.format(job_instance_id), 'POST', action='watch')
+    return action('job_instance/{}'.format(job_instance_id), 'POST',
+                  action='watch')
 
 
-def status_jobs(agent_ips):
-    query_string = [('address', ip) for ip in agent_ips]
-    return requests.get(_URL.format('job/status'), params=urlencode(query_string))
+def retrieve_status_jobs(agent_ips):
+    return _request_message('job', 'POST', action='retrieve_status',
+                            addresses=agent_ips)
 
 
 def stop_job_instance(job_instance_ids, date=None):
@@ -229,7 +234,8 @@ def stop_job_instance(job_instance_ids, date=None):
     if date is not None:
         action = partial(action, date=date)
 
-    return action('job_instance', 'POST', action='stop', job_instance_ids=job_instance_ids)
+    return action('job_instance', 'POST', action='stop',
+                  job_instance_ids=job_instance_ids)
 
 
 def uninstall_jobs(job_names, agent_ips):
@@ -283,7 +289,8 @@ def del_scenario(scenario_name):
 
 
 def modify_scenario(scenario_name, scenario_json):
-    return _request_message('scenario/{}'.format(scenario_name), 'PUT', **scenario_json)
+    return _request_message('scenario/{}'.format(scenario_name), 'PUT',
+                            **scenario_json)
 
 
 def get_scenario(scenario_name):
@@ -314,7 +321,8 @@ def list_scenario_instances(scenario_names=[], verbosity=0):
     query_string = [('scenario_name', name) for name in scenario_names]
     if verbosity is not None:
         query_string.append(('verbosity', verbosity))
-    return requests.get(_URL.format('scenario_instance'), params=urlencode(query_string))
+    return requests.get(_URL.format('scenario_instance'),
+                        params=urlencode(query_string))
 
 
 def status_scenario_instance(scenario_instance_id, verbosity=0):
@@ -329,4 +337,68 @@ def kill_all(date=None):
 
     return action('job_instance', 'POST', action='kill')
 
+
+def status_install_agent(address):
+    return _request_message('agent/status', 'GET', address=address,
+                            action='install')
+
+
+def status_uninstall_agent(address):
+    return _request_message('agent/status', 'GET', address=address,
+                            action='uninstall')
+
+
+def status_retrieve_status_agents(address):
+    return _request_message('agent/status', 'GET', address=address,
+                            action='retrieve_status')
+
+
+def status_install_jobs(address, name):
+    return _request_message('job/status', 'GET', address=address, name=name,
+                            action='status_install')
+
+
+def status_uninstall_jobs(address, name):
+    return _request_message('job/status', 'GET', address=address, name=name,
+                            action='status_uninstall')
+
+
+def status_retrieve_status_jobs(address):
+    return _request_message('job/status', 'GET', address=address,
+                            action='status_retrieve_status')
+
+
+def status_set_job_log_severity(address, job_name):
+    return _request_message('job/{}/status'.format(job_name), 'GET',
+                            address=address, action='log_severity')
+
+
+def status_set_job_stat_policy(address, job_name):
+    return _request_message('job/{}/status'.format(job_name), 'GET',
+                            address=address, action='stat_policy')
+
+
+def status_push_file(filename, path, agent_ip):
+    return _request_message('file/status', 'GET', filename=filename, path=path,
+                            agent_ip=agent_ip)
+
+
+def status_start_job_instance(job_instance_id):
+    return _request_message('job_instance/status', 'GET',
+                            job_instance_id=job_instance_id, action='start')
+
+
+def status_stop_job_instance(job_instance_id):
+    return _request_message('job_instance/status', 'GET',
+                            job_instance_id=job_instance_id, action='stop')
+
+
+def status_restart_job_instance(job_instance_id):
+    return _request_message('job_instance/{}/status'.format(job_instance_id),
+                            'GET', action='restart')
+
+
+def status_watch_job_instance(job_instance_id):
+    return _request_message('job_instance/{}/status'.format(job_instance_id),
+                            'GET', action='watch')
 

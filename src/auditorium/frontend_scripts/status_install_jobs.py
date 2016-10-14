@@ -29,25 +29,25 @@
    
    
    
-   @file     status_jobs.py
-   @brief    Call the openbach-function status_jobs
+   @file     status_install_jobs.py
+   @brief    Call the openbach-function status_install_jobs
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_jobs, pretty_print
+from frontend import status_install_jobs, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - Status Jobs',
+    parser = argparse.ArgumentParser(description='OpenBach - Status Agent',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('agents_ip', nargs='+',
-                        help='IP Address of the Agents')
-    
+    parser.add_argument('address', help='IP address of the Agent')
+    parser.add_argument('name', help='Name of the Job')
+
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_jobs)(args.agents_ip)
+    pretty_print(status_install_jobs)(args.address, args.name)
 

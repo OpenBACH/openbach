@@ -299,7 +299,7 @@ class ClientThread(threading.Thread):
 
     def execute_request(self, data):
         data = json.loads(data)
-        request = '{}_view'.format(data.pop('command'))
+        request = '{}_action'.format(data.pop('command'))
 
         # From this point on, request should contain the
         # name of one of the following method: call it
@@ -312,13 +312,34 @@ class ClientThread(threading.Thread):
         return function(**data)
 
 
-    def install_agent(self, address, collector, username, password, name):
-        self.install_agent_view(address,collector, username, password, name)
+    def install_agent_of(self, address, collector, username, password, name):
+        self.install_agent(address,collector, username, password, name)
 
         return []
 
 
-    def install_agent_view(self, address, collector, username, password, name):
+    def install_agent_action(self, address, collector, username, password,
+                             name):
+        thread = threading.Thread(
+            target=self.install_agent,
+            args=(address, collector, username, password, name))
+        thread.start()
+
+        return {}, 202
+
+
+    def install_agent(self, address, collector, username, password, name):
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            command_result = Agent_Command_Result(address=address)
+        if command_result.status_install == None:
+            status_install = Command_Result()
+            status_install.save()
+            command_result.status_install = status_install
+            command_result.save()
+        else:
+            command_result.status_install.reset()
         agent = Agent(name=name, address=address, collector=collector,
                       username=username)
         agent.set_password(password)
@@ -329,7 +350,11 @@ class ClientThread(threading.Thread):
         try:
             agent.save()
         except IntegrityError:
-            raise BadRequest('Name of the Agent already used')
+            response = {'error': 'Name of the Agent already used'}
+            command_result.status_install.response = json.dumps(response)
+            command_result.status_install.returncode = 400
+            command_result.status_install.save()
+            raise BadRequest(response['error'])
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
         with self.playbook_builder.extra_vars_file() as extra_vars:
@@ -344,11 +369,16 @@ class ClientThread(threading.Thread):
                 '@/tmp/openbach_extra_vars -e @/opt/openbach-controller/configs'
                 '/all -e ansible_ssh_user={agent.username} -e '
                 'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password}'
-                ' /opt/openbach-controller/install_agent/agent.yml --tags install'
+                'ansible_ssh_pass={agent.password} '
+                '/opt/openbach-controller/install_agent/agent.yml --tags install'
                 .format(agent=agent))
-        except BadRequest:
+        except BadRequest as e:
             agent.delete()
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_install.response = json.dumps(response)
+            command_result.status_install.returncode = e.returncode
+            command_result.status_install.save()
             raise
         agent.status = 'Available'
         agent.update_status = timezone.now()
@@ -357,57 +387,110 @@ class ClientThread(threading.Thread):
         # Recuperer la liste des jobs a installer
         list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
         list_jobs = []
-        with open(list_default_jobs) as f:
+        with open(list_default_jobs, 'r') as f:
             for line in f:
                 list_jobs.append(line.rstrip('\n'))
         # Installer les jobs
         list_jobs_failed = []
         for job in list_jobs:
             try:
-                self.install_jobs_view([agent.address], [job])
+                self.install_jobs([agent.address], [job])
             except BadRequest:
                 list_jobs_failed.append(job)
         if list_jobs_failed != []:
-            result['warning'] = 'Some Jobs couldn’t be installed {}'.format(' '.join(list_jobs_failed))
-        return result, 200
+            result['warning'] = 'Some Jobs couldn’t be installed {}'.format(
+                ' '.join(list_jobs_failed))
+        returncode = 200
+        command_result.status_install.response = json.dumps(result)
+        command_result.status_install.returncode = returncode
+        command_result.status_install.save()
+        return result, returncode
 
 
-    def uninstall_agent(self, address):
-        self.uninstall_agent_view(address)
+    def uninstall_agent_of(self, address):
+        self.uninstall_agent(address)
 
         return []
 
 
-    def uninstall_agent_view(self, address):
+    def uninstall_agent_action(self, address):
+        print('coucou4')
+        thread = threading.Thread(
+            target=self.uninstall_agent,
+            args=(address,))
+        print('coucou3')
+        thread.start()
+        print('coucou2')
+
+        return {}, 202
+
+
+    def uninstall_agent(self, address):
+        print('coucou1')
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            command_result = Agent_Command_Result(address=address)
+        if command_result.status_uninstall == None:
+            status_uninstall = Command_Result()
+            status_uninstall.save()
+            command_result.status_uninstall = status_uninstall
+            command_result.save()
+        else:
+            command_result.status_uninstall.reset()
         try:
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent is not in the database', 404,
-                             infos={'address': address})
+            response = {'address': address}
+            response['error'] = 'This Agent is not in the database'
+            returncode = 404
+            command_result.status_uninstall.response = json.dumps(response)
+            command_result.status_uninstall.returncode = returncode
+            command_result.status_uninstall.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         self.playbook_builder.write_hosts(agent.address)
         self.playbook_builder.write_agent(agent.address)
         with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
-        self.playbook_builder.launch_playbook(
-            'ansible-playbook -i /tmp/openbach_hosts -e '
-            '@/opt/openbach-controller/configs/all -e '
-            '@/tmp/openbach_agents -e '
-            '@/tmp/openbach_extra_vars -e ' 
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password}'
-            ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
-            .format(agent=agent))
-        return {}, 200
+        try:
+            self.playbook_builder.launch_playbook(
+                'ansible-playbook -i /tmp/openbach_hosts -e '
+                '@/opt/openbach-controller/configs/all -e '
+                '@/tmp/openbach_agents -e '
+                '@/tmp/openbach_extra_vars -e ' 
+                'ansible_ssh_user={agent.username} -e '
+                'ansible_sudo_pass={agent.password} -e '
+                'ansible_ssh_pass={agent.password}'
+                ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
+                .format(agent=agent))
+        except BadRequest as e:
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_uninstall.response = json.dumps(response)
+            command_result.status_uninstall.returncode = e.returncode
+            command_result.status_uninstall.save()
+            raise
+
+        result = {}
+        returncode = 200
+        command_result.status_uninstall.response = json.dumps(result)
+        command_result.status_uninstall.returncode = returncode
+        command_result.status_uninstall.save()
+        return result, returncode
 
 
-#    def list_agents(self, update=False):
-#        self.list_agents_view(update)
+#    def list_agents_of(self, update=False):
+#        self.list_agents(update)
 #
 #        return []
 
 
-    def list_agents_view(self, update=False):
+    def list_agents_action(self, update=False):
+        return self.list_agents(update)
+
+
+    def list_agents(self, update=False):
         agents = Agent.objects.all()
         response = {}
         if update:
@@ -427,7 +510,8 @@ class ClientThread(threading.Thread):
             {
                 'address': agent.address,
                 'status': agent.status,
-                'update_status': agent.update_status.astimezone(timezone.get_current_timezone()),
+                'update_status': agent.update_status.astimezone(
+                    timezone.get_current_timezone()),
                 'name': agent.name,
             } for agent in agents]
 
@@ -456,19 +540,46 @@ class ClientThread(threading.Thread):
             agent.save()
 
 
-    def status_agents(self, addresses, update=False):
-        self.status_agents_view(addresses, update)
+    def retrieve_status_agents_of(self, addresses, update=False):
+        self.retrieve_status_agents(addresses, update)
 
         return []
 
 
-    def status_agents_view(self, addresses, update=False):
-        unknown_agents = []
+    def retrieve_status_agents_action(self, addresses, update=False):
+        thread = threading.Thread(
+            target=self.retrieve_status_agents,
+            args=(addresses, update))
+        thread.start()
+
+        return {}, 202
+
+
+    def retrieve_status_agents(self, addresses, update=False):
+        command_results = {}
+        for address in addresses:
+            try:
+                command_result = Agent_Command_Result.objects.get(pk=address)
+            except ObjectDoesNotExist:
+                command_result = Agent_Command_Result(address=address)
+            if command_result.status_retrieve_status_agent == None:
+                status_retrieve_status_agent = Command_Result()
+                status_retrieve_status_agent.save()
+                command_result.status_retrieve_status_agent = status_retrieve_status_agent
+                command_result.save()
+            else:
+                command_result.status_retrieve_status_agent.reset()
+            command_results[address] = command_result
         for agent_ip in addresses:
+            command_result = command_results[agent_ip]
             try:
                 agent = Agent.objects.get(pk=agent_ip)
             except ObjectDoesNotExist:
-                unknown_agents.append(agent_ip)
+                response = {'error': 'Agent unknown'}
+                command_result.status_retrieve_status_agent.response = json.dumps(
+                    response)
+                command_result.status_retrieve_status_agent.returncode = 404
+                command_result.status_retrieve_status_agent.save()
                 continue
             self.playbook_builder.write_hosts(agent.address)
             try:
@@ -480,6 +591,9 @@ class ClientThread(threading.Thread):
                 agent.status = 'Agent unreachable'
                 agent.update_status= timezone.now()
                 agent.save()
+                command_result.status_retrieve_status_agent.response = json.dumps({})
+                command_result.status_retrieve_status_agent.returncode = 200
+                command_result.status_retrieve_status_agent.save()
                 continue
             with self.playbook_builder.playbook_file('status_agent') as playbook:
                 playbook_name = playbook.name
@@ -500,6 +614,9 @@ class ClientThread(threading.Thread):
                 agent.status = 'Agent reachable but connection impossible'
                 agent.update_status= timezone.now()
                 agent.save()
+                command_result.status_retrieve_status_agent.response = json.dumps({})
+                command_result.status_retrieve_status_agent.returncode = 200
+                command_result.status_retrieve_status_agent.save()
                 continue
             agent.reachable = True
             agent.update_reachable = timezone.now()
@@ -513,35 +630,48 @@ class ClientThread(threading.Thread):
                     'ansible_sudo_pass={agent.username} -e '
                     'ansible_ssh_pass={agent.password} {}'
                     .format(playbook.name, agent=agent))
-            except BadRequest:
-                pass
-        if unknown_agents:
-            raise BadRequest('At least one of the Agents isn\'t in the '
-                             'database', 404, {'unknown_agents':
-                                               unknown_agents})
-        response = {}
-        if update:
-            if agent.reachable and agent.update_status < agent.update_reachable:
-                try:
-                    self.update_agent(agent)
-                except BadRequest as e:
-                    response['errors'] = {
-                        'agent_ip': agent.address,
-                        'error': result[3:],
-                    }
-                else:
-                    agent.refresh_from_db()
+            except BadRequest as e:
+                response = e.infos
+                response['error'] = e.reason
+                returncode = 404
+                command_result.status_retrieve_status_agent.response = json.dumps(
+                    response)
+                command_result.status_retrieve_status_agent.returncode = returncode
+                command_result.status_retrieve_status_agent.save()
+                continue
+            if update:
+                if agent.reachable and agent.update_status < agent.update_reachable:
+                    try:
+                        self.update_agent(agent)
+                    except BadRequest as e:
+                        response = e.infos
+                        response['error'] = e.reason
+                        returncode = 404
+                        command_result.status_retrieve_status_agent.response = json.dumps(
+                            response)
+                        command_result.status_retrieve_status_agent.returncode = returncode
+                        command_result.status_retrieve_status_agent.save()
+                        continue
 
-        return response, 200
+        result = {}
+        returncode = 200
+        command_result.status_retrieve_status_agent.response = json.dumps(result)
+        command_result.status_retrieve_status_agent.returncode = returncode
+        command_result.status_retrieve_status_agent.save()
+        return result, returncode
 
 
-    def add_job(self, name, path):
-        self.add_job_view(name, path)
+    def add_job_of(self, name, path):
+        self.add_job(name, path)
 
         return []
 
 
-    def add_job_view(self, name, path):
+    def add_job_action(self, name, path):
+        return self.add_job(name, path)
+
+
+    def add_job(self, name, path):
         config_prefix = os.path.join(path, 'files', name)
         config_file = '{}.yml'.format(config_prefix)
         try:
@@ -617,8 +747,8 @@ class ClientThread(threading.Thread):
                     raise BadRequest('The configuration file of the Job is not '
                                      'well formed', 409, {'configuration file':
                                                           config_file,
-                                                          'warning': 'Old Job has'
-                                                          ' been deleted'})
+                                                          'warning': 'Old Job '
+                                                          'has been deleted'})
                 else:
                     raise BadRequest('The configuration file of the Job is not '
                                      'well formed', 409, {'configuration file':
@@ -688,13 +818,17 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
-    def del_job(self, name):
-        self.del_job_view(name)
+    def del_job_of(self, name):
+        self.del_job(name)
 
         return []
 
 
-    def del_job_view(self, name):
+    def del_job_action(self, name):
+        return self.del_job(name)
+
+
+    def del_job(self, name):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -704,13 +838,17 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
-#    def list_jobs(self, verbosity=0):
-#        self.list_jobs_view(verbosity)
+#    def list_jobs_of(self, verbosity=0):
+#        self.list_jobs(verbosity)
 #
 #        return []
 
 
-    def list_jobs_view(self, verbosity=0):
+    def list_jobs_action(self, verbosity=0):
+        return self.list_jobs(verbosity)
+
+
+    def list_jobs(self, verbosity=0):
         response = {
             'jobs': []
         }
@@ -725,13 +863,17 @@ class ClientThread(threading.Thread):
         return response, 200
 
 
-#    def get_job_stats(self, name, verbosity=0):
-#        self.get_job_stats_view(name, verbosity)
+#    def get_job_stats_of(self, name, verbosity=0):
+#        self.get_job_stats(name, verbosity)
 #
 #        return []
 
 
-    def get_job_stats_view(self, name, verbosity=0):
+    def get_job_stats_action(self, name, verbosity=0):
+        return self.get_job_stats(name, verbosity)
+
+
+    def get_job_stats(self, name, verbosity=0):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -750,13 +892,17 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-#    def get_job_help(self, name):
-#        self.get_job_help_view(name)
+#    def get_job_help_of(self, name):
+#        self.get_job_help(name)
 #
 #        return []
 
 
-    def get_job_help_view(self, name):
+    def get_job_help_action(self, name):
+        return self.get_job_help(name)
+
+
+    def get_job_help(self, name):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -766,28 +912,90 @@ class ClientThread(threading.Thread):
         return {'job_name': name, 'help': job.help}, 200
 
 
-    def install_jobs(self, addresses, names, severity=4, local_severity=4):
-        self.install_jobs_view(addresses, names, severity, local_severity)
+    def install_jobs_of(self, addresses, names, severity=4, local_severity=4):
+        self.install_jobs(addresses, names, severity, local_severity)
 
         return []
 
 
-    def install_jobs_view(self, addresses, names, severity=4, local_severity=4):
+    def install_jobs_action(self, addresses, names, severity=4,
+                            local_severity=4):
+        thread = threading.Thread(
+            target=self.install_jobs,
+            args=(addresses, names, severity, local_severity))
+        thread.start()
+
+        return {}, 202
+
+
+    def install_jobs(self, addresses, names, severity=4, local_severity=4):
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
 
         jobs = Job.objects.filter(pk__in=names)
         no_job = set(names) - set(map(attrgetter('name'), jobs))
 
-        if no_job or no_agent:
-            warning = 'At least one of the Agents or one of the Jobs is unknown'
-            warning += ' to the Controller'
-        else:
-            warning = False
+        for job_name in no_job:
+            for address in addresses:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=address, job_name=job_name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=address, job_name=job_name)
+                if command_result.status_install == None:
+                    status_install = Command_Result()
+                    status_install.save()
+                    command_result.status_install = status_install
+                    command_result.save()
+                else:
+                    command_result.status_install.reset()
+                if address in no_agent:
+                    response = {'error': 'Job and Agent unknown'}
+                else:
+                    response = {'error': 'Job unknown'}
+                command_result.status_install.response = json.dumps(response)
+                command_result.status_install.returncode = 404
+                command_result.status_install.save()
+
+        for agent_ip in no_agent:
+            for job_name in names:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=agent_ip, job_name=job_name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=agent_ip, job_name=job_name)
+                if command_result.status_install == None:
+                    status_install = Command_Result()
+                    status_install.save()
+                    command_result.status_install = status_install
+                    command_result.save()
+                else:
+                    command_result.status_install.reset()
+                if job_name in no_job:
+                    continue
+                response = {'error': 'Agent unknown'}
+                command_result.status_install.response = json.dumps(response)
+                command_result.status_install.returncode = 404
+                command_result.status_install.save()
 
         success = True
         for agent in agents:
             for job in jobs:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=agent.address, job_name=job.name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=agent.address, job_name=job.name)
+                if command_result.status_install == None:
+                    status_install = Command_Result()
+                    status_install.save()
+                    command_result.status_install = status_install
+                    command_result.save()
+                else:
+                    command_result.status_install.reset()
                 self.playbook_builder.write_hosts(agent.address)
                 try:
                     self.playbook_builder.launch_playbook(
@@ -798,8 +1006,13 @@ class ClientThread(threading.Thread):
                         'ansible_ssh_pass={agent.password} '
                         '{job.path}/install_{job.name}.yml'
                         .format(path_src=self.path_src, agent=agent, job=job))
-                except BadRequest:
+                except BadRequest as e:
                     success = False
+                    response['error'] = e.reason
+                    command_result.status_install.response = json.dumps(
+                        response)
+                    command_result.status_install.returncode = e.returncode
+                    command_result.status_install.save()
                 else:
                     installed_job = Installed_Job(
                             agent=agent, job=job,
@@ -810,54 +1023,108 @@ class ClientThread(threading.Thread):
                         installed_job.save()
                     except IntegrityError:
                         pass
+                    command_result.status_install.response = json.dumps({})
+                    command_result.status_install.returncode = 200
+                    command_result.status_install.save()
 
-        if success:
-            if warning:
-                result = {'warning': warning, 'unknown Agents':
-                          list(no_agent), 'unknown Jobs': list(no_job)}, 200
-                return result
-            else:
-                return {}, 200
-        else:
-            if warning:
-                raise BadRequest('At least one of the installation have failed',
-                                 404, infos={ 'warning': warning,
-                                              'unknown Agents': list(no_agent),
-                                              'unknown Jobs': list(no_job) })
-            else:
-                raise BadRequest('At least one of the installation have failed',
-                                 404)
+        if not success:
+            raise BadRequest('At least one of the installation have failed',
+                             404)
 
 
-    def uninstall_jobs(self, addresses, names):
-        self.uninstall_jobs_view(addresses, names)
+    def uninstall_jobs_of(self, addresses, names):
+        self.uninstall_jobs(addresses, names)
 
         return []
 
 
-    def uninstall_jobs_view(self, addresses, names):
+    def uninstall_jobs_action(self, addresses, names):
+        thread = threading.Thread(
+            target=self.uninstall_jobs,
+            args=(addresses, names))
+        thread.start()
+
+        return {}, 202
+
+
+    def uninstall_jobs(self, addresses, names):
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
 
         jobs = Job.objects.filter(pk__in=names)
         no_job = set(names) - set(map(attrgetter('name'), jobs))
 
-        if no_job or no_agent:
-            warning = 'At least one of the Agents or one of the Jobs is unknown to'
-            warning += ' the Controller'
-        else:
-            warning = False
+        for job_name in no_job:
+            for address in addresses:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=address, job_name=job_name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=address, job_name=job_name)
+                if command_result.status_uninstall == None:
+                    status_uninstall = Command_Result()
+                    status_uninstall.save()
+                    command_result.status_uninstall = status_uninstall
+                    command_result.save()
+                else:
+                    command_result.status_install.reset()
+                if address in no_agent:
+                    response = {'error': 'Job and Agent unknown'}
+                else:
+                    response = {'error': 'Job unknown'}
+                command_result.status_uninstall.response = json.dumps(response)
+                command_result.status_uninstall.returncode = 404
+                command_result.status_uninstall.save()
+        
+        for agent_ip in no_agent:
+            for job_name in names:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=agent_ip, job_name=job_name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=agent_ip, job_name=job_name)
+                if command_result.status_uninstall == None:
+                    status_uninstall = Command_Result()
+                    status_uninstall.save()
+                    command_result.status_uninstall = status_uninstall
+                    command_result.save()
+                else:
+                    command_result.status_uninstall.reset()
+                if job_name in no_job:
+                    continue
+                response = {'error': 'Agent unknown'}
+                command_result.status_uninstall.response = json.dumps(response)
+                command_result.status_uninstall.returncode = 404
+                command_result.status_uninstall.save()
 
-        success = True
-        jobs_not_installed = []
         for agent in agents:
             for job in jobs:
+                try:
+                    command_result = Installed_Job_Command_Result.objects.get(
+                        agent_ip=agent.address, job_name=job.name)
+                except ObjectDoesNotExist:
+                    command_result = Installed_Job_Command_Result(
+                        agent_ip=agent.address, job_name=job.name)
+                if command_result.status_uninstall == None:
+                    status_uninstall = Command_Result()
+                    status_uninstall.save()
+                    command_result.status_uninstall = status_uninstall
+                    command_result.save()
+                else:
+                    command_result.status_uninstall.reset()
                 installed_job_name = '{} on {}'.format(job, agent)
                 try:
                     installed_job = Installed_Job.objects.get(agent=agent,
                                                               job=job)
                 except ObjectDoesNotExist:
                     jobs_not_installed.append(installed_job_name)
+                    response = {'msg': 'Job already not installed'}
+                    command_result.status_uninstall.response = json.dumps(
+                        response)
+                    command_result.status_uninstall.returncode = 200
+                    command_result.status_uninstall.save()
                     continue
                 self.playbook_builder.write_hosts(agent.address)
                 try:
@@ -871,36 +1138,27 @@ class ClientThread(threading.Thread):
                         .format(path_src=self.path_src, agent=agent, job=job))
                     installed_job.delete()
                 except BadRequest:
-                    success = False
-
-        if success:
-            if warning:
-                result = {'warning': warning, 'unknown Agents':
-                          list(no_agent), 'unknown Jobs': list(no_job)}, 200
-            else:
-                result = {}, 200
-            if jobs_not_installed:
-                result[0]['msg'] = 'OK but some Jobs were not installed'
-                result[0]['jobs_not_installed'] = jobs_not_installed
-            return result
-        else:
-            if warning:
-                raise BadRequest('At least one of the installation have failed',
-                                 404, infos={ 'warning': warning,
-                                              'unknown Agents': list(no_agent),
-                                              'unknown Jobs': list(no_job) })
-            else:
-                raise BadRequest('At least one of the installation have failed',
-                                 404)
+                    response['error'] = e.reason
+                    command_result.status_uninstall.response = json.dumps(
+                        response)
+                    command_result.status_uninstall.returncode = e.returncode
+                    command_result.status_uninstall.save()
+                command_result.status_uninstall.response = json.dumps({})
+                command_result.status_uninstall.returncode = 200
+                command_result.status_uninstall.save()
 
 
-    def list_installed_jobs(self, address, update=False, verbosity=0):
-        self.list_installed_jobs_view(address, update, verbosity)
+    def list_installed_jobs_of(self, address, update=False, verbosity=0):
+        self.list_installed_jobs(address, update, verbosity)
 
         return []
 
 
-    def list_installed_jobs_view(self, address, update=False, verbosity=0):
+    def list_installed_jobs_action(self, address, update=False, verbosity=0):
+        return self.list_installed_jobs(address, update, verbosity)
+
+
+    def list_installed_jobs(self, address, update=False, verbosity=0):
         try:
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -925,15 +1183,15 @@ class ClientThread(threading.Thread):
             for job in installed_jobs:
                 job_infos = {
                     'name': job.job.name,
-                    'update_status':
-                    job.update_status.astimezone(timezone.get_current_timezone()),
+                    'update_status': job.update_status.astimezone(
+                        timezone.get_current_timezone()),
                 }
                 if verbosity > 0:
                     job_infos['severity'] = job.severity
-                    job_infos['default_stat_policy'] = { 'storage':
+                    job_infos['default_stat_policy'] = {'storage':
                                                         job.default_stat_storage,
                                                         'broadcast':
-                                                        job.default_stat_broadcast }
+                                                        job.default_stat_broadcast}
                 if verbosity > 1:
                     job_infos['local_severity'] = job.local_severity
                     for statistic_instance in job.statistic_instance_set.all():
@@ -1003,21 +1261,44 @@ class ClientThread(threading.Thread):
                              'Controller', 404, {'unknown_jobs': unknown_jobs})
 
 
-    def status_jobs(self, addresses):
-        self.status_jobs_view(addresses)
+    def retrieve_status_jobs_of(self, addresses):
+        self.retrieve_status_jobs(addresses)
 
         return []
 
 
-    def status_jobs_view(self, addresses):
+    def retrieve_status_jobs_action(self, addresses):
+        thread = threading.Thread(
+            target=self.retrieve_status_jobs,
+            args=(addresses,))
+        thread.start()
+
+        return {}, 202
+
+
+    def retrieve_status_jobs(self, addresses):
         error = False
         unknown_agents = []
         for agent_ip in addresses:
             try:
+                command_result = Agent_Command_Result.objects.get(pk=agent_ip)
+            except ObjectDoesNotExist:
+                command_result = Agent_Command_Result(address=agent_ip)
+            if command_result.status_retrieve_status_jobs == None:
+                status_retrieve_status_jobs = Command_Result()
+                status_retrieve_status_jobs.save()
+                command_result.status_retrieve_status_jobs = status_retrieve_status_jobs
+                command_result.save()
+            else:
+                command_result.status_retrieve_status_jobs.reset()
+            try:
                 agent = Agent.objects.get(pk=agent_ip)
             except ObjectDoesNotExist:
-                unknown_agents.append(agent_ip)
-                error = True
+                response = {'error': 'Agent unknown'}
+                command_result.status_retrieve_status_jobs.response = json.dumps(
+                    response)
+                command_result.status_retrieve_status_jobs.returncode = 404
+                command_result.status_retrieve_status_jobs.save()
                 continue
 
             self.playbook_builder.write_hosts(agent.address)
@@ -1029,21 +1310,34 @@ class ClientThread(threading.Thread):
                     'ansible_ssh_user={agent.username} -e '
                     'ansible_ssh_pass={agent.password} {}'
                     .format(playbook.name, agent=agent))
-            except BadRequest:
-                pass
-        if error:
-            raise BadRequest('At least one of the Agents isn\'t in the '
-                             'database', 404, {'addresses': unknown_agents})
-        return {}, 200
+            except BadRequest as e:
+                response = e.infos
+                response['error'] = e.reason
+                command_result.status_retrieve_status_jobs.response = json.dumps(
+                    response)
+                command_result.status_retrieve_status_jobs.returncode = e.returncode
+                command_result.status_retrieve_status_jobs.save()
+            command_result.status_retrieve_status_jobs.response = json.dumps({})
+            command_result.status_retrieve_status_jobs.returncode = 200
+            command_result.status_retrieve_status_jobs.save()
 
 
-    def push_file(self, local_path, remote_path, agent_ip):
-        self.push_file_view(local_path, remote_path, agent_ip)
+    def push_file_of(self, local_path, remote_path, agent_ip):
+        self.push_file(local_path, remote_path, agent_ip)
 
         return []
 
 
-    def push_file_view(self, local_path, remote_path, agent_ip):
+    def push_file_action(self, local_path, remote_path, agent_ip):
+        thread = threading.Thread(
+            target=self.push_file,
+            args=(local_path, remote_path, agent_ip))
+        thread.start()
+
+        return {}, 202
+
+
+    def push_file(self, local_path, remote_path, agent_ip):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
@@ -1089,14 +1383,16 @@ class ClientThread(threading.Thread):
         for arg_name, arg_values in instance_args.items():
             try:
                 argument_instance = Required_Job_Argument_Instance(
-                    argument=job_instance.job.job.required_job_argument_set.filter(name=arg_name)[0],
+                    argument=job_instance.job.job.required_job_argument_set.filter(
+                        name=arg_name)[0],
                     job_instance=job_instance
                 )
                 argument_instance.save()
             except IndexError:
                 try:
                     argument_instance = Optional_Job_Argument_Instance(
-                        argument=job_instance.job.job.optional_job_argument_set.filter(name=arg_name)[0],
+                        argument=job_instance.job.job.optional_job_argument_set.filter(
+                            name=arg_name)[0],
                         job_instance=job_instance
                     )
                     argument_instance.save()
@@ -1111,14 +1407,16 @@ class ClientThread(threading.Thread):
                                      400, {'needed_count':
                                            argument_instance.argument.count})
                 for arg_value in arg_values:
-                    jav = Job_Argument_Value(job_argument_instance=argument_instance)
+                    jav = Job_Argument_Value(
+                        job_argument_instance=argument_instance)
                     try:
                         jav.check_and_set_value(arg_value)
                     except ValueError as e:
                         raise BadRequest(e.args[0], 400)
                     jav.save()
             else:
-                jav = Job_Argument_Value(job_argument_instance=argument_instance)
+                jav = Job_Argument_Value(
+                    job_argument_instance=argument_instance)
                 try:
                     jav.check_and_set_value(arg_values)
                 except ValueError as e:
@@ -1141,7 +1439,8 @@ class ClientThread(threading.Thread):
                 job_instance.start_date = timezone.now()
                 date = 'now'
             else:
-                start_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+                start_date = datetime.fromtimestamp(
+                    date/1000, tz=timezone.get_current_timezone())
                 job_instance.start_date = start_date
             job_instance.periodic = False
             job_instance.save()
@@ -1154,17 +1453,17 @@ class ClientThread(threading.Thread):
         return date
 
 
-    def start_job_instance(self, scenario_instance_id, agent_ip, job_name,
-                           instance_args, ofi, finished_queues, offset=None,
-                           origin=int(timezone.now().timestamp()*1000),
-                           interval=None):
+    def start_job_instance_of(self, scenario_instance_id, agent_ip, job_name,
+                             instance_args, ofi, finished_queues, offset=None,
+                             origin=int(timezone.now().timestamp()*1000),
+                             interval=None):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         date = origin + int(offset)*1000
 
-        result, _ = self.start_job_instance_view(agent_ip, job_name,
-                                                 instance_args, date,
-                                                 interval, scenario_instance_id)
+        result, _ = self.start_job_instance(agent_ip, job_name,
+                                            instance_args, date,
+                                            interval, scenario_instance_id)
 
         job_instance_id = result['job_instance_id']
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
@@ -1172,7 +1471,7 @@ class ClientThread(threading.Thread):
         job_instance.scenario_instance = scenario_instance
         job_instance.save()
 
-        self.watch_job_instance_view(job_instance_id, interval=2)
+        self.watch_job_instance_action(job_instance_id, interval=2)
 
         with WaitingQueueManager() as waiting_queues:
             waiting_queues[job_instance_id] = (scenario_instance_id,
@@ -1192,8 +1491,15 @@ class ClientThread(threading.Thread):
         return []
 
 
-    def start_job_instance_view(self, agent_ip, job_name, instance_args, date=None,
-                                interval=None, scenario_instance_id=0):
+    def start_job_instance_action(self, agent_ip, job_name, instance_args,
+                                  date=None, interval=None,
+                                  scenario_instance_id=0):
+        return self.start_job_instance(agent_ip, job_name, instance_args, date,
+                                       interval, scenario_instance_id, True)
+
+
+    def start_job_instance(self, agent_ip, job_name, instance_args, date=None,
+                           interval=None, scenario_instance_id=0, action=False):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
@@ -1217,7 +1523,8 @@ class ClientThread(threading.Thread):
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
         job_instance.save(force_insert=True)
-        date = self.fill_job_instance(job_instance, instance_args, date, interval)
+        date = self.fill_job_instance(job_instance, instance_args, date,
+                                      interval)
         self.playbook_builder.write_hosts(agent.address)
         args = self.format_args(job_instance)
         with self.playbook_builder.playbook_file(
@@ -1227,6 +1534,33 @@ class ClientThread(threading.Thread):
                     scenario_instance_id,
                     args, date, interval,
                     playbook, extra_vars)
+        if action:
+            thread = threading.Thread(
+                target=self.launch_job_instance,
+                args=(agent, job_instance, playbook, extra_vars))
+            thread.start()
+            return {'job_instance_id': job_instance.id}, 202
+
+        self.launch_job_instance(agent, job_instance, playbook, extra_vars)
+        job_instance.status = "Started"
+        job_instance.update_status = timezone.now()
+        job_instance.save()
+        return {'job_instance_id': job_instance.id}, 200
+
+
+    def launch_job_instance(self, agent, job_instance, playbook, extra_vars):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                pk=job_instance.id)
+        except ObjectDoesNotExist:
+            command_result = Job_Instance_Command_Result(pk=job_instance.id)
+        if command_result.status_start == None:
+            status_start = Command_Result()
+            status_start.save()
+            command_result.status_start = status_start
+            command_result.save()
+        else:
+            command_result.status_start.reset()
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -1235,17 +1569,21 @@ class ClientThread(threading.Thread):
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
                 .format(extra_vars.name, playbook.name, agent=agent))
-        except BadRequest:
+        except BadRequest as e:
             job_instance.delete()
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_start.response = json.dumps(response)
+            command_result.status_start.returncode = e.returncode
+            command_result.status_start.save()
             raise
-        job_instance.status = "Started"
-        job_instance.update_status = timezone.now()
-        job_instance.save()
-        return {'job_instance_id': job_instance.id }, 200
+        command_result.status_start.response = json.dumps({})
+        command_result.status_start.returncode = 200
+        command_result.status_start.save()
 
 
-    def stop_job_instance(self, openbach_function_indexes, scenario_instance, date=None):
-        print(openbach_function_indexes)
+    def stop_job_instance_of(self, openbach_function_indexes, scenario_instance,
+                             date=None):
         job_instance_ids = []
         for openbach_function_id in openbach_function_indexes:
             try:
@@ -1256,32 +1594,70 @@ class ClientThread(threading.Thread):
                 continue
             for job_instance in ofi.job_instance_set.all():
                 job_instance_ids.append(job_instance.id)
-        self.stop_job_instance_view(job_instance_ids, date)
+        self.stop_job_instance(job_instance_ids, date)
 
         return []
 
 
-    def stop_job_instance_view(self, job_instance_ids, date=None):
+    def stop_job_instance_action(self, job_instance_ids, date=None):
+        thread = threading.Thread(
+            target=self.stop_job_instance,
+            args=(job_instance_ids, date))
+        thread.start()
+
+        return {}, 202
+
+
+    def stop_job_instance(self, job_instance_ids, date=None):
         job_instances = Job_Instance.objects.filter(pk__in=job_instance_ids)
-        warnings = []
 
         no_job_instance = set(job_instance_ids) - set(map(attrgetter('id'), job_instances))
-        if no_job_instance:
-            warnings.append({'msg': 'At least one of the Job_Instances is '
-                             'unknown to the Controller', 'unknown_job_instance':
-                             list(no_job_instance)})
+
+        for job_instance_id in no_job_instance:
+            try:
+                command_result = Job_Instance_Command_Result.objects.get(
+                    job_instance_id=job_instance_id)
+            except ObjectDoesNotExist:
+                command_result = Job_Instance_Command_Result(
+                    job_instance_id=job_instance_id)
+            if command_result.status_stop == None:
+                status_stop = Command_Result()
+                status_stop.save()
+                command_result.status_stop = status_stop
+                command_result.save()
+            else:
+                command_result.status_stop.reset()
+            response = {'error': 'Job Instance unknown'}
+            command_result.status_stop.response = json.dumps(response)
+            command_result.status_stop.returncode = 404
+            command_result.status_stop.save()
 
         if not date:
             date = 'now'
             stop_date = timezone.now()
         else:
-            stop_date = datetime.fromtimestamp(date/1000,tz=timezone.get_current_timezone())
+            stop_date = datetime.fromtimestamp(
+                date/1000, tz=timezone.get_current_timezone())
 
-        already_stopped = {'msg': 'Those Job_Instances are already stopped',
-                           'job_instance_ids': []}
         for job_instance in job_instances:
+            try:
+                command_result = Job_Instance_Command_Result.objects.get(
+                    job_instance_id=job_instance.id)
+            except ObjectDoesNotExist:
+                command_result = Job_Instance_Command_Result(
+                    job_instance_id=job_instance.id)
+            if command_result.status_stop == None:
+                status_stop = Command_Result()
+                status_stop.save()
+                command_result.status_stop = status_stop
+                command_result.save()
+            else:
+                command_result.status_stop.reset()
             if job_instance.is_stopped:
-                already_stopped['job_instance_ids'].append(job_instance.id)
+                response = {'msg': 'Job Instance already stopped'}
+                command_result.status_stop.response = json.dumps(response)
+                command_result.status_stop.returncode = 200
+                command_result.status_stop.save()
                 continue
             job_instance.stop_date = stop_date
             job_instance.save()
@@ -1302,39 +1678,68 @@ class ClientThread(threading.Thread):
                     'ansible_ssh_pass={agent.password} {}'
                     .format(playbook.name, agent=agent))
             except BadRequest as e:
-                warnings.append({'msg': e.reason, 'job_instance_id':
-                                 job_instance.id})
+                response = e.infos
+                response['error'] = e.reason
+                command_result.status_stop.response = json.dumps(response)
+                command_result.status_stop.returncode = e.returncode
+                command_result.status_stop.save()
             else:
                 if stop_date <= timezone.now():
                     job_instance.is_stopped = True
                     job_instance.save()
-
-        if already_stopped['job_instance_ids']:
-            warnings.append(already_stopped)
-        response = {}
-        if warnings:
-            response.update({'warning': warnings})
-        return response, 200
+                command_result.status_stop.response = json.dumps({})
+                command_result.status_stop.returncode = 200
+                command_result.status_stop.save()
 
 
-    def restart_job_instance(self, job_instance_id, scenario_instance_id,
+    def restart_job_instance_of(self, job_instance_id, scenario_instance_id,
                              instance_args, date=None, interval=None):
-        self.restart_job_instance_view(job_instance_id, instance_args, date,
-                                       interval, scenario_instance_id)
+        self.restart_job_instance(job_instance_id, instance_args, date,
+                                  interval, scenario_instance_id)
 
         return []
 
 
-    def restart_job_instance_view(self, job_instance_id, instance_args, date=None,
-                                  interval=None, scenario_instance_id=0):
+    def restart_job_instance_action(self, job_instance_id, instance_args,
+                                    date=None, interval=None,
+                                    scenario_instance_id=0):
+        thread = threading.Thread(
+            target=self.restart_job_instance,
+            args=(job_instance_id, instance_args, date, interval,
+                  scenario_instance_id))
+        thread.start()
+
+        return {}, 202
+
+
+    def restart_job_instance(self, job_instance_id, instance_args, date=None,
+                             interval=None, scenario_instance_id=0):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                pk=job_instance_id)
+        except ObjectDoesNotExist:
+            command_result = Job_Instance_Command_Result(address=address)
+        if command_result.status_restart == None:
+            status_restart = Command_Result()
+            status_restart.save()
+            command_result.status_restart = status_restart
+            command_result.save()
+        else:
+            command_result.status_restart.reset()
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job Instance isn\'t in the database', 404,
-                             {'job_instance_id': job_instance_id})
+            response = {'job_instance_id': job_instance_id}
+            response['error'] = 'This Job Instance isn\'t in the database'
+            returncode = 404
+            command_result.status_restart.response = json.dumps(response)
+            command_result.status_restart.returncode = returncode
+            command_result.status_restart.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
 
-        date = self.fill_job_instance(job_instance, instance_args, date, interval,
-                                      True)
+        date = self.fill_job_instance(job_instance, instance_args, date,
+                                      interval, True)
         job = job_instance.job.job
         agent = job_instance.job.agent
         self.playbook_builder.write_hosts(agent.address)
@@ -1352,27 +1757,40 @@ class ClientThread(threading.Thread):
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
-        except BadRequest:
+        except BadRequest as e:
             job_instance.delete()
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_restart.response = json.dumps(response)
+            command_result.status_restart.returncode = e.returncode
+            command_result.status_restart.save()
             raise
         job_instance.is_stopped = False
         job_instance.status = "Restarted"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        return {}, 200
+        command_result.status_restart.response = json.dumps({})
+        command_result.status_restart.returncode = 200
+        command_result.status_restart.save()
 
 
-    def watch_job_instance(self, job_instance_id, date=None, interval=None,
+    def watch_job_instance_of(self, job_instance_id, date=None, interval=None,
                            stop=None):
         #TODO est-ce utile ? toutes les job_instance sont lance avec une watch
         #     dans les scenarios
-        self.watch_job_instance_view(job_instance_id, date, interval, stop)
+        self.watch_job_instance(job_instance_id, date, interval, stop)
 
         return []
 
 
-    def watch_job_instance_view(self, job_instance_id, date=None, interval=None,
-                                stop=None):
+    def watch_job_instance_action(self, job_instance_id, date=None,
+                                  interval=None, stop=None):
+        return self.watch_job_instance(job_instance_id, date, interval, stop,
+                                       True)
+
+
+    def watch_job_instance(self, job_instance_id, date=None, interval=None,
+                           stop=None, action=False):
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
@@ -1407,6 +1825,33 @@ class ClientThread(threading.Thread):
                     job.name, job_instance_id,
                     date, interval, stop,
                     playbook, extra_vars)
+        if action:
+            thread = threading.Thread(
+                target=self.launch_watch,
+                args=(agent, watch, playbook, extra_vars))
+            thread.start()
+            return {}, 202
+
+        self.launch_watch(agent, watch, playbook, extra_vars)
+        if should_delete_watch:
+            watch.delete()
+        return {}, 200
+
+
+    def launch_watch(self, agent, watch, playbook, extra_vars):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                pk=watch.job_instance_id)
+        except ObjectDoesNotExist:
+            command_result = Job_Instance_Command_Result(
+                job_instance_id=watch.job_instance_id)
+        if command_result.status_watch == None:
+            status_watch = Command_Result()
+            status_watch.save()
+            command_result.status_watch = status_watch
+            command_result.save()
+        else:
+            command_result.status_watch.reset()
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -1415,20 +1860,25 @@ class ClientThread(threading.Thread):
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
                 .format(extra_vars.name, playbook.name, agent=agent))
-        except BadRequest:
+        except BadRequest as e:
             watch.delete()
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_watch.response = json.dumps(response)
+            command_result.status_watch.returncode = e.returncode
+            command_result.status_watch.save()
             raise
-
-        if should_delete_watch:
-            watch.delete()
-        return {}, 200
+        command_result.status_watch.response = json.dumps({})
+        command_result.status_watch.returncode = 200
+        command_result.status_watch.save()
 
 
     @staticmethod
     def update_instance(job_instance_id):
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         url = ClientThread.UPDATE_INSTANCE_URL.format(
-                job_instance.job.job.name, job_instance.id, agent=job_instance.job.agent)
+            job_instance.job.job.name, job_instance.id,
+            agent=job_instance.job.agent)
         result = requests.get(url).json()
         try:
             columns = result['results'][0]['series'][0]['columns']
@@ -1450,13 +1900,19 @@ class ClientThread(threading.Thread):
         job_instance.save()
 
 
-#    def status_job_instance(self, job_instance_id, verbosity=0, update=False):
-#        self.status_job_instance_view(job_instance_id, verbosity, update)
+#    def status_job_instance_of(self, job_instance_id, verbosity=0,
+#                               update=False):
+#        self.status_job_instance(job_instance_id, verbosity, update)
 #
 #        return []
 
 
-    def status_job_instance_view(self, job_instance_id, verbosity=0, update=False):
+    def status_job_instance_action(self, job_instance_id, verbosity=0,
+                                   update=False):
+        return self.status_job_instance(job_instance_id, verbosity, update)
+
+
+    def status_job_instance(self, job_instance_id, verbosity=0, update=False):
         error_msg = None
         if update:
             try:
@@ -1487,10 +1943,12 @@ class ClientThread(threading.Thread):
                 timezone.get_current_timezone())
             instance_infos['status'] = job_instance.status
         if verbosity > 1:
-            instance_infos['start_date'] = job_instance.start_date.astimezone(timezone.get_current_timezone())
+            instance_infos['start_date'] = job_instance.start_date.astimezone(
+                timezone.get_current_timezone())
         if verbosity > 2:
             try:
-                instance_infos['stop_date'] = job_instance.stop_date.astimezone(timezone.get_current_timezone())
+                instance_infos['stop_date'] = job_instance.stop_date.astimezone(
+                    timezone.get_current_timezone())
             except AttributeError:
                 instance_infos['stop_date'] = 'Not programmed yet'
         if error_msg is not None:
@@ -1499,13 +1957,17 @@ class ClientThread(threading.Thread):
         return instance_infos, 200
 
 
-#    def list_job_instances(self, addresses, update=False, verbosity=0):
-#        self.list_job_instances_view(addresses, update, verbosity)
+#    def list_job_instances_of(self, addresses, update=False, verbosity=0):
+#        self.list_job_instances(addresses, update, verbosity)
 #
 #        return []
 
 
-    def list_job_instances_view(self, addresses, update=False, verbosity=0):
+    def list_job_instances_action(self, addresses, update=False, verbosity=0):
+        return list_job_instances(addresses, update, verbosity)
+
+
+    def list_job_instances(self, addresses, update=False, verbosity=0):
         if not addresses:
             agents = Agent.objects.all()
         else:
@@ -1514,59 +1976,115 @@ class ClientThread(threading.Thread):
 
         response = { 'instances': [] }
         for agent in agents:
-            job_instances_for_agent = { 'address': agent.address, 'installed_jobs':
-                                      []}
+            job_instances_for_agent = { 'address': agent.address,
+                                        'installed_jobs': [] }
             for job in agent.installed_job_set.all():
-                job_instances_for_job = { 'job_name': job.__str__(), 'instances': [] }
+                job_instances_for_job = { 'job_name': job.__str__(),
+                                          'instances': [] }
                 for job_instance in job.job_instance_set.filter(is_stopped=False):
-                    instance_infos, _ = self.status_job_instance_view(
+                    instance_infos, _ = self.status_job_instance(
                         job_instance.id, verbosity, update)
                     job_instances_for_job['instances'].append(instance_infos)
                 if job_instances_for_job['instances']:
-                    job_instances_for_agent['installed_jobs'].append(job_instances_for_job)
+                    job_instances_for_agent['installed_jobs'].append(
+                        job_instances_for_job)
             if job_instances_for_agent['installed_jobs']:
                 response['instances'].append(job_instances_for_agent)
         return response, 200
 
 
-    def set_job_log_severity(self, address, job_name, severity,
-                             scenario_instance_id, date=None,
-                             local_severity=None):
-        self.set_job_log_severity_view(address, job_name, severity, date,
-                                       local_severity, scenario_instance_id)
+    def set_job_log_severity_of(self, address, job_name, severity,
+                               scenario_instance_id, date=None,
+                               local_severity=None):
+        self.set_job_log_severity(address, job_name, severity, date,
+                                  local_severity, scenario_instance_id)
 
         return []
 
 
-    def set_job_log_severity_view(self, address, job_name, severity, date=None,
-                                  local_severity=None, scenario_instance_id=0):
+    def set_job_log_severity_action(self, address, job_name, severity,
+                                    date=None, local_severity=None,
+                                    scenario_instance_id=0):
+        thread = threading.Thread(
+            target=self.set_job_log_severity,
+            args=(address, job_name, severity, date, local_severity,
+                  scenario_instance_id))
+        thread.start()
+
+        return {}, 202
+
+
+    def set_job_log_severity(self, address, job_name, severity, date=None,
+                             local_severity=None, scenario_instance_id=0):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=job_name)
+        except ObjectDoesNotExist:
+            command_result = Installed_Job_Command_Result(
+                agent_ip=address, job_name=job_name)
+        if command_result.status_log_severity == None:
+            status_log_severity = Command_Result()
+            status_log_severity.save()
+            command_result.status_log_severity = status_log_severity
+            command_result.save()
+        else:
+            command_result.status_log_severity.reset()
         try:
             job = Job.objects.get(name=job_name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404,
-                             infos={'job_name': job_name})
+            response = {'job_name': job_name}
+            response['error'] = 'This Job isn\'t in the database'
+            returncode = 404
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = returncode
+            command_result.status_log_severity.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             agent = Agent.objects.get(address=address)
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent isn\'t in the database', 404,
-                             infos={'agent_ip': address})
+            response = {'agent_ip': address}
+            response['error'] = 'This Agent isn\'t in the database'
+            returncode = 404
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = returncode
+            command_result.status_log_severity.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
-            raise BadRequest('This Installed_Job isn\'t in the database', 404,
-                             infos={'job_name': installed_job})
+            response = {'job_name': installed_job}
+            response['error'] = 'This Installed_Job isn\'t in the database'
+            returncode = 404
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = returncode
+            command_result.status_log_severity.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
 
         try:
             job = Job.objects.get(name='rsyslog_job')
         except ObjectDoesNotExist:
-            raise BadRequest('The Job rsyslog_job isn\'t in the database', 404,
-                             infos={'job_name': 'rsyslog_job'})
+            response = {'job_name': 'rsyslog_job'}
+            response['error'] = 'The Job rsyslog_job isn\'t in the database'
+            returncode = 404
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = returncode
+            command_result.status_log_severity.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             logs_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
-            raise BadRequest('The Installed_Job rsyslog isn\'t in the database',
-                             404, infos={'job_name': 'rsyslog_job on '
-                                         '{}'.format(address)})
+            response = {'job_name': 'rsyslog_job on {}'.format(address)}
+            response['error'] = 'The Installed_Job rsyslog isn\'t in the database'
+            returncode = 404
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = returncode
+            command_result.status_log_severity.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
 
         job_instance = Job_Instance(job=logs_job)
         job_instance.status = "Starting ..."
@@ -1599,7 +2117,8 @@ class ClientThread(threading.Thread):
             print('job_instance_id:', job_instance.id, file=extra_vars)
 
             argument_instance = Optional_Job_Argument_Instance(
-                argument=job_instance.job.job.optional_job_argument_set.filter(name='disable_code')[0],
+                argument=job_instance.job.job.optional_job_argument_set.filter(
+                    name='disable_code')[0],
                 job_instance=job_instance
             )
             argument_instance.save()
@@ -1624,51 +2143,107 @@ class ClientThread(threading.Thread):
                 'ansible_sudo_pass={agent.password} -e '
                 'ansible_ssh_pass={agent.password} {}'
                 .format(playbook.name, agent=agent))
-        except BadRequest:
+        except BadRequest as e:
             job_instance.delete()
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_log_severity.response = json.dumps(response)
+            command_result.status_log_severity.returncode = e.returncode
+            command_result.status_log_severity.save()
             raise
 
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        result = {}
-        return result, 200
+        command_result.status_log_severity.response = json.dumps({})
+        command_result.status_log_severity.returncode = 200
+        command_result.status_log_severity.save()
 
 
-    def set_job_stat_policy(self, address, job_name, scenario_instance_id,
-                            stat_name=None, storage=None, broadcast=None,
-                            date=None):
-        self.set_job_stat_policy_view(address, job_name, stat_name,
-                                      storage, broadcast, date,
-                                      scenario_instance_id)
+    def set_job_stat_policy_of(self, address, job_name, scenario_instance_id,
+                              stat_name=None, storage=None, broadcast=None,
+                              date=None):
+        self.set_job_stat_policy(address, job_name, stat_name,
+                                 storage, broadcast, date,
+                                 scenario_instance_id)
 
         return []
 
 
-    def set_job_stat_policy_view(self, address, job_name, stat_name=None,
-                                 storage=None, broadcast=None, date=None,
-                                 scenario_instance_id=0):
+    def set_job_stat_policy_action(self, address, job_name, stat_name=None,
+                                   storage=None, broadcast=None, date=None,
+                                   scenario_instance_id=0):
+        thread = threading.Thread(
+            target=self.set_job_stat_policy,
+            args=(address, job_name, stat_name, storage, broadcast, date,
+                  scenario_instance_id))
+        thread.start()
+
+        return {}, 202
+
+
+    def set_job_stat_policy(self, address, job_name, stat_name=None,
+                            storage=None, broadcast=None, date=None,
+                            scenario_instance_id=0):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=job_name)
+        except ObjectDoesNotExist:
+            command_result = Installed_Job_Command_Result(
+                agent_ip=address, job_name=job_name)
+        if command_result.status_stat_policy == None:
+            status_stat_policy = Command_Result()
+            status_stat_policy.save()
+            command_result.status_stat_policy = status_stat_policy
+            command_result.save()
+        else:
+            command_result.status_stat_policy.reset()
         try:
             job = Job.objects.get(name=job_name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404,
-                             infos={'job_name': job_name})
+            response = {'job_name': job_name}
+            response['error'] = 'This Job isn\'t in the database'
+            returncode = 404
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = returncode
+            command_result.status_stat_policy.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             agent = Agent.objects.get(address=address)
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent isn\'t in the database', 404,
-                             infos={'agent_ip': address})
+            response = {'agent_ip': address}
+            response['error'] = 'This Agent isn\'t in the database'
+            returncode = 404
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = returncode
+            command_result.status_stat_policy.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
-            raise BadRequest('This Installed_Job isn\'t in the database', 404,
-                             infos={'job_name': installed_job})
+            response = {'job_name': installed_job}
+            response['error'] = 'This Installed_Job isn\'t in the database'
+            returncode = 404
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = returncode
+            command_result.status_stat_policy.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
 
         if stat_name != None:
             statistic = installed_job.job.statistic_set.filter(name=stat_name)
             if not statistic:
-                raise BadRequest('The statistic \'{}\' isn\'t produce by the'
-                                 ' Job \'{}\''.format(stat_name, job_name))
+                response = {'error': 'The statistic \'{}\' isn\'t produce by '
+                            'the Job \'{}\''.format(stat_name, job_name)}
+                returncode = 400
+                command_result.status_stat_policy.response = json.dumps(
+                    response)
+                command_result.status_stat_policy.returncode = returncode
+                command_result.status_stat_policy.save()
+                reason = response.pop('error')
+                raise BadRequest(reason, returncode, infos=response)
             statistic = statistic[0]
             stat = Statistic_Instance.objects.filter(stat=statistic,
                                                      job=installed_job)
@@ -1698,13 +2273,25 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(name='rstats_job')
         except ObjectDoesNotExist:
-            raise BadRequest('The Job rstats_job isn\'t in the database', 404,
-                             infos={'job_name': 'rstats_job'})
+            response = {'job_name': 'rstats_job'}
+            response['error'] = 'The Job rstats_job isn\'t in the database'
+            returncode = 404
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = returncode
+            command_result.status_stat_policy.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         try:
             rstats_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
-            raise BadRequest('The Installed_Job rstats_job isn\'t in the database',
-                             404, infos={'job_name': rstat_job})
+            response = {'job_name': rstat_job}
+            response['error'] = 'The Installed_Job rstats_job isn\'t in the database'
+            returncode = 404
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = returncode
+            command_result.status_stat_policy.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
 
         job_instance = Job_Instance(job=rstats_job)
         job_instance.status = "Starting ..."
@@ -1713,7 +2300,7 @@ class ClientThread(threading.Thread):
         job_instance.periodic = False
         job_instance.save(force_insert=True)
  
-        instance_args = { 'job_name': [job_name], 'job_instance_id': [job_instance.id] }
+        instance_args = {'job_name': [job_name]}
         date = self.fill_job_instance(job_instance, instance_args, date)
 
         rstats_job_path = job_instance.job.job.path
@@ -1748,15 +2335,21 @@ class ClientThread(threading.Thread):
                 .format(playbook.name, agent=agent))
         except BadRequest as e:
             job_instance.delete()
-            return e.reason, 404
+            response = e.infos
+            response['error'] = e.reason
+            command_result.status_stat_policy.response = json.dumps(response)
+            command_result.status_stat_policy.returncode = e.returncode
+            command_result.status_stat_policy.save()
+            raise
         job_instance.status = "Started"
         job_instance.update_status = timezone.now()
         job_instance.save()
-        result = {}
-        return result, 200
+        command_result.status_stat_policy.response = json.dumps({})
+        command_result.status_stat_policy.returncode = 200
+        command_result.status_stat_policy.save()
 
 
-    def of_if(self, condition, openbach_functions_true,
+    def if_of(self, condition, openbach_functions_true,
               openbach_functions_false, table, queues, scenario_instance,
               openbach_function_instance_id):
         thread_list = []
@@ -1842,7 +2435,7 @@ class ClientThread(threading.Thread):
             entry['programmable'] = True
 
 
-    def of_while(self, condition, openbach_functions_while,
+    def while_of(self, condition, openbach_functions_while,
                  openbach_functions_end, table, queues, scenario_instance,
                  openbach_function_instance_id):
         threads = []
@@ -1851,7 +2444,8 @@ class ClientThread(threading.Thread):
             for ofi_id in openbach_functions_while:
                 table[openbach_function_instance_id]['wait_for_launched'].add(
                     int(ofi_id))
-                table[int(ofi_id)]['is_waited_for_launched'].add(openbach_function_instance_id)
+                table[int(ofi_id)]['is_waited_for_launched'].add(
+                    openbach_function_instance_id)
                 # TODO virer les 2 prochains clear et mettre les id qui gene sur
                 # le 1er while
                 #table[int(ofi_id)]['wait_for_launched'].clear()
@@ -1869,7 +2463,8 @@ class ClientThread(threading.Thread):
                     for id_ in table[int(ofi_id)]['while_end']:
                         table[id_]['wait_while_end'].add(int(ofi_id))
                 try:
-                    table[int(ofi_id)]['wait_while'].remove(openbach_function_instance_id)
+                    table[int(ofi_id)]['wait_while'].remove(
+                        openbach_function_instance_id)
                 except KeyError:
                     pass
                 self.check_programmable(int(ofi_id), table)
@@ -1887,8 +2482,8 @@ class ClientThread(threading.Thread):
             if table[openbach_function_instance_id]['programmable']:
                 thread = threading.Thread(
                     target=self.launch_openbach_function_instance,
-                    args=(scenario_instance, openbach_function_instance_id, table,
-                          queues))
+                    args=(scenario_instance, openbach_function_instance_id,
+                          table, queues))
                 thread.do_run = True
                 thread.start()
                 with ThreadManager() as threads:
@@ -1898,7 +2493,8 @@ class ClientThread(threading.Thread):
                 threads.append(thread)
         else:
             for ofi_id in openbach_functions_end:
-                table[int(ofi_id)]['wait_while_end'].remove(openbach_function_instance_id)
+                table[int(ofi_id)]['wait_while_end'].remove(
+                    openbach_function_instance_id)
                 self.check_programmable(int(ofi_id), table)
                 if table[int(ofi_id)]['programmable']:
                     thread = threading.Thread(
@@ -2044,7 +2640,8 @@ class ClientThread(threading.Thread):
             raise BadRequest('This name of Scenario \'{}\' is already'
                              ' used'.format(name), 409)
         try:
-            result = ClientThread.register_scenario_arguments(scenario, scenario_json)
+            result = ClientThread.register_scenario_arguments(scenario,
+                                                              scenario_json)
         except BadRequest:
             scenario.delete()
             raise
@@ -2302,9 +2899,10 @@ class ClientThread(threading.Thread):
                         of_argument = Openbach_Function_Argument.objects.get(
                             name=of_arg, openbach_function=of)
                     except ObjectDoesNotExist:
-                        raise BadRequest('This Openbach_Function doesn\'t have this'
-                                         ' argument', 404, {'name': name,
-                                                            'argument': of_arg})
+                        raise BadRequest('This Openbach_Function doesn\'t have'
+                                         ' this argument', 404, {'name': name,
+                                                                 'argument':
+                                                                 of_arg})
                 ClientThread.check_type(of_argument, of_value,
                                         scenario_arguments, scenario_constants)
         result = {}
@@ -2321,8 +2919,8 @@ class ClientThread(threading.Thread):
             try:
                 sc.save()
             except IntegrityError:
-                raise BadRequest('At least two constants have the same name', 409,
-                                 infos={'name': arg['name']})
+                raise BadRequest('At least two constants have the same name',
+                                 409, infos={'name': arg['name']})
             sai = Scenario_Argument_Instance(argument=sc)
             try:
                 sai.check_and_set_value(value)
@@ -2333,8 +2931,8 @@ class ClientThread(threading.Thread):
             try:
                 sai.save()
             except IntegrityError:
-                raise BadRequest('At least two constants have the same name', 409,
-                                 infos={'name': arg['name']})
+                raise BadRequest('At least two constants have the same name',
+                                 409, infos={'name': arg['name']})
 
         result['scenario_name'] = scenario.name
         return result, 200
@@ -2417,9 +3015,13 @@ class ClientThread(threading.Thread):
             raise BadRequest('Your Scenario is malformed: the tree is wrong')
 
 
-    def create_scenario_view(self, scenario_json):
+    def create_scenario_action(self, scenario_json):
+        return self.create_scenario(scenario_json)
+
+
+    def create_scenario(self, scenario_json):
         if not self.first_check_on_scenario(scenario_json):
-            raise BadRequest('Your Scenario is malformed: the json is marlformed')
+            raise BadRequest('Your Scenario is malformed: the json is malformed')
         name = scenario_json['name']
 
         result = self.register_scenario(scenario_json, name)
@@ -2433,7 +3035,11 @@ class ClientThread(threading.Thread):
         return result
 
 
-    def del_scenario_view(self, scenario_name):
+    def del_scenario_action(self, scenario_name):
+        return self.del_scenario(scenario_name)
+
+
+    def del_scenario(self, scenario_name):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
@@ -2445,7 +3051,11 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
-    def modify_scenario_view(self, scenario_json, scenario_name):
+    def modify_scenario_action(self, scenario_json, scenario_name):
+        return self.modify_scenario(scenario_json, scenario_name)
+
+
+    def modify_scenario(self, scenario_json, scenario_name):
         if not self.first_check_on_scenario(scenario_json):
             raise BadRequest('Your Scenario is malformed')
         name = scenario_json['name']
@@ -2471,7 +3081,11 @@ class ClientThread(threading.Thread):
         return result
 
 
-    def get_scenario_view(self, scenario_name):
+    def get_scenario_action(self, scenario_name):
+        return self.get_scenario(scenario_name)
+
+
+    def get_scenario(self, scenario_name):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
@@ -2481,7 +3095,11 @@ class ClientThread(threading.Thread):
         return json.loads(scenario.scenario), 200
 
 
-    def list_scenarios_view(self, verbosity=0):
+    def list_scenarios_action(self, verbosity=0):
+        return self.list_scenarios(verbosity)
+
+
+    def list_scenarios(self, verbosity=0):
         scenarios = Scenario.objects.all()
         response = { 'scenarios': [] }
         for scenario in scenarios:
@@ -2687,7 +3305,8 @@ class ClientThread(threading.Thread):
                             value = ClientThread.get_value(v, scenario_instance)
                             instance_args[job_arg].append(value)
                     else:
-                        value = ClientThread.get_value(job_value, scenario_instance)
+                        value = ClientThread.get_value(job_value,
+                                                       scenario_instance)
                         instance_args[job_arg] = value
                 ofai = Openbach_Function_Argument_Instance(
                     argument=Openbach_Function_Argument.objects.get(
@@ -2760,7 +3379,8 @@ class ClientThread(threading.Thread):
                 raise BadRequest('Argument \'{}\' don\'t match with'
                                  ' the arguments'.format(arg_name))
             try:
-                scenario_argument.scenario_argument_instance_set.get(scenario_instance=None)
+                scenario_argument.scenario_argument_instance_set.get(
+                    scenario_instance=None)
             except ObjectDoesNotExist:
                 sai = Scenario_Argument_Instance(
                     argument=scenario_argument,
@@ -2933,12 +3553,11 @@ class ClientThread(threading.Thread):
         ofi.save()
         try:
             name = ofi.openbach_function.name
-            if name == 'if' or name == 'while':
-                name = 'of_{}'.format(name)
+            name = '{}_of'.format(name)
             function = getattr(self, name)
         except AttributeError:
-            self.stop_scenario_instance(scenario_instance.id,
-                                        state='Scheduling Error')
+            self.stop_scenario_instance_of(scenario_instance.id,
+                                           state='Scheduling Error')
         arguments = {}
         for arg in ofi.openbach_function_argument_instance_set.all():
             if arg.argument.type == 'json':
@@ -2975,8 +3594,8 @@ class ClientThread(threading.Thread):
         try:
             threads = function(**arguments)
         except BadRequest:
-            self.stop_scenario_instance(scenario_instance.id,
-                                        state='Scheduling Error')
+            self.stop_scenario_instance_of(scenario_instance.id,
+                                           state='Scheduling Error')
         if not t.do_run:
             ofi.status = 'Stopped'
             ofi.status_date = timezone.now()
@@ -2992,18 +3611,6 @@ class ClientThread(threading.Thread):
         ofi.save()
         for thread in threads:
             thread.join()
-
-
-    def start_scenario_instance(self, scenario_name, args, ofi, date=None):
-        result, _ = self.start_scenario_instance_view(scenario_name, args, date)
-
-        scenario_instance_id = result['scenario_instance_id']
-        scenario_instance = Scenario_Instance.objects.get(
-            pk=scenario_instance_id)
-        scenario_instance.openbach_function_instance_master = ofi
-        scenario_instance.save()
-        with ThreadManager() as threads:
-            return [threads[scenario_instance.id][0]]
 
 
     @staticmethod
@@ -3027,7 +3634,23 @@ class ClientThread(threading.Thread):
             scenario_instance.save()
 
 
-    def start_scenario_instance_view(self, scenario_name, args, date=None):
+    def start_scenario_instance_of(self, scenario_name, args, ofi, date=None):
+        result, _ = self.start_scenario_instance(scenario_name, args, date)
+
+        scenario_instance_id = result['scenario_instance_id']
+        scenario_instance = Scenario_Instance.objects.get(
+            pk=scenario_instance_id)
+        scenario_instance.openbach_function_instance_master = ofi
+        scenario_instance.save()
+        with ThreadManager() as threads:
+            return [threads[scenario_instance.id][0]]
+
+
+    def start_scenario_instance_action(self, scenario_name, args, date=None):
+        return self.start_scenario_instance(scenario_name, args, date)
+
+
+    def start_scenario_instance(self, scenario_name, args, date=None):
         try:
             scenario = Scenario.objects.get(pk=scenario_name)
         except ObjectDoesNotExist:
@@ -3063,16 +3686,20 @@ class ClientThread(threading.Thread):
         return { 'scenario_instance_id': scenario_instance.id }, 200
 
 
-    def stop_scenario_instance(self, scenario_instance_id, state='Stopped',
+    def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
                                date=None):
-        self.stop_scenario_instance_view(scenario_instance_id, date)
+        self.stop_scenario_instance(scenario_instance_id, date)
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         scenario_instance.status = state
         scenario_instance.save()
 
 
-    def stop_scenario_instance_view(self, scenario_instance_id, date=None):
+    def stop_scenario_instance_action(self, scenario_instance_id, date=None):
+        return self.stop_scenario_instance(scenario_instance_id, date)
+
+
+    def stop_scenario_instance(self, scenario_instance_id, date=None):
         scenario_instance_id = int(scenario_instance_id)
         try:
             scenario_instance = Scenario_Instance.objects.get(
@@ -3090,9 +3717,9 @@ class ClientThread(threading.Thread):
                     openbach_function_instance_id=ofi_id)
                 for job_instance in ofi.job_instance_set.all():
                     try:
-                        result, returncode = self.stop_job_instance_view(
+                        result, returncode = self.stop_job_instance_action(
                             [job_instance.id])
-                        result, returncode = self.watch_job_instance_view(
+                        result, returncode = self.watch_job_instance_action(
                             job_instance.id, stop='now')
                     except BadRequest:
                         out_of_controll = True
@@ -3107,7 +3734,8 @@ class ClientThread(threading.Thread):
         return {}, 200
 
 
-    def infos_openbach_function_instance(self, openbach_function_instance, verbosity=0):
+    def infos_openbach_function_instance(self, openbach_function_instance,
+                                         verbosity=0):
         infos = {}
         infos['name'] = openbach_function_instance.openbach_function.name
         if (openbach_function_instance.openbach_function.name ==
@@ -3122,7 +3750,7 @@ class ClientThread(threading.Thread):
             if infos['name'] == 'start_job_instance':
                 job_instance = openbach_function_instance.job_instance
                 if job_instance:
-                    info, _ = self.status_job_instance_view(job_instance.id,
+                    info, _ = self.status_job_instance_action(job_instance.id,
                                                             verbosity=1)
                     infos[job_instance.job.__str__()] = info
         if verbosity > 1:
@@ -3135,9 +3763,11 @@ class ClientThread(threading.Thread):
             infos['wait'] = {'time': openbach_function_instance.time,
                              'launched_indexes': [], 'finished_indexes': []}
             for wfl in openbach_function_instance.wait_for_launched_set.all():
-                infos['wait']['launched_indexes'].append(wfl.openbach_function_instance_id_waited)
+                infos['wait']['launched_indexes'].append(
+                    wfl.openbach_function_instance_id_waited)
             for wff in openbach_function_instance.wait_for_finished_set.all():
-                infos['wait']['finished_indexes'].append(wff.job_instance_id_waited)
+                infos['wait']['finished_indexes'].append(
+                    wff.job_instance_id_waited)
         return infos
 
 
@@ -3162,7 +3792,11 @@ class ClientThread(threading.Thread):
         return infos
 
 
-    def list_scenario_instances_view(self, scenario_names=[], verbosity=0):
+    def list_scenario_instances_action(self, scenario_names=[], verbosity=0):
+        return self.list_scenario_instances(scenario_names, verbosity)
+
+
+    def list_scenario_instances(self, scenario_names=[], verbosity=0):
         if not scenario_names:
             scenarios = Scenario.objects.all()
         else:
@@ -3179,7 +3813,12 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def status_scenario_instance_view(self, scenario_instance_id, verbosity=0):
+    def status_scenario_instance_action(self, scenario_instance_id,
+                                        verbosity=0):
+        return self.status_scenario_instance(scenario_instance_id, verbosity)
+
+
+    def status_scenario_instance(self, scenario_instance_id, verbosity=0):
         try:
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
@@ -3193,24 +3832,165 @@ class ClientThread(threading.Thread):
         return result, 200
 
 
-    def kill_all_view(self, date=None):
+    def kill_all_action(self, date=None):
+        return self.kill_all(date)
+
+
+    def kill_all(self, date=None):
         for scenario_instance in Scenario_Instance.objects.all():
             if not scenario_instance.is_stopped:
-                self.stop_scenario_instance_view(scenario_instance.id)
+                self.stop_scenario_instance_action(scenario_instance.id)
         job_instance_ids = []
         for job_instance in Job_Instance.objects.all():
             if not job_instance.is_stopped:
                 job_instance_ids.append(job_instance.id)
-        result, returncode = self.stop_job_instance_view(job_instance_ids)
+        result, returncode = self.stop_job_instance_action(job_instance_ids)
         for watch in Watch.objects.all():
             try:
-                result, returncode = self.watch_job_instance_view(
+                result, returncode = self.watch_job_instance_action(
                     watch.job_instance.id, stop='now')
             except BadRequest:
                 #TODO mieux gerer les erreurs !
                 pass
 
         return {}, 200
+
+
+    def status_install_agent_action(self, address):
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_install == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_install.get_json()}, 200
+
+
+    def status_uninstall_agent_action(self, address):
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_uninstall == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_uninstall.get_json()}, 200
+
+
+    def status_retrieve_status_agent_action(self, address):
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_retrieve_status_agent == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_retrieve_status_agent.get_json()}, 200
+
+
+    def status_install_jobs_action(self, address, name):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_install == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_install.get_json()}, 200
+
+
+    def status_uninstall_jobs_action(self, address, name):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_uninstall == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_uninstall.get_json()}, 200
+
+
+    def status_retrieve_status_jobs_action(self, address):
+        try:
+            command_result = Agent_Command_Result.objects.get(pk=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_retrieve_status_jobs == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_retrieve_status_jobs.get_json()}, 200
+
+
+    def status_set_job_log_severity_action(self, address, name):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_log_severity == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_log_severity.get_json()}, 200
+
+
+    def status_set_job_stat_policy_action(self, address, name):
+        try:
+            command_result = Installed_Job_Command_Result.objects.get(
+                agent_ip=address, job_name=name)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_stat_policy == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_stat_policy.get_json()}, 200
+
+
+    def status_push_file_action(self, filename, remote_path, address):
+        try:
+            command_result = File_Command_Result.objects.get(
+                filename=filename, remote_path=remote_path, address=address)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.get_json()}, 200
+
+
+    def status_start_job_instance_action(self, job_instance_id):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                job_instance_id=job_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_start == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_start.get_json()}, 200
+
+
+    def status_stop_job_instance_action(self, job_instance_id):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                job_instance_id=job_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_stop == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_stop.get_json()}, 200
+
+
+    def status_restart_job_instance_action(self, job_instance_id):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                job_instance_id=job_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_restart == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_restart.get_json()}, 200
+
+
+    def status_watch_job_instance_action(self, job_instance_id):
+        try:
+            command_result = Job_Instance_Command_Result.objects.get(
+                job_instance_id=job_instance_id)
+        except ObjectDoesNotExist:
+            raise BadRequest('Action never asked', 404)
+        if command_result.status_watch == None:
+            raise BadRequest('Action never asked', 404)
+        return { 'result': command_result.status_watch.get_json()}, 200
 
 
     def run(self):
@@ -3226,7 +4006,8 @@ class ClientThread(threading.Thread):
         else:
             result['returncode'] = returncode
         finally:
-            self.clientsocket.send(json.dumps(result, cls=DjangoJSONEncoder).encode())
+            self.clientsocket.send(json.dumps(result,
+                                              cls=DjangoJSONEncoder).encode())
             self.clientsocket.close()
 
 

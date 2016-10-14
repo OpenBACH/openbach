@@ -37,3 +37,4 @@ django_version: 1.9.7
 psycopg2_version: 2.6.2
 parse_version: 1.6.6
 apscheduler_version: 3.2.0
+uwsgi_version: 2.0.14

@@ -74,6 +74,19 @@ class ContentTyped(models.Model):
 else self)
 
 
+class Command_Result(models.Model):
+    response = models.TextField(default='{"state": "Running"}')
+    returncode = models.IntegerField(default=202)
+
+    def reset(self):
+        self.response = '{"state": "Running"}'
+        self.returncode = 202
+        self.save()
+
+    def get_json(self):
+        return {'response': self.response, 'returncode': self.returncode}
+
+
 class Agent(models.Model):
     name = models.CharField(max_length=20, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
@@ -95,6 +108,29 @@ class Agent(models.Model):
 
     def __str__(self):
         return self.address
+
+
+class Agent_Command_Result(models.Model):
+    address = models.GenericIPAddressField(primary_key=True)
+    status_install = models.ForeignKey(Command_Result, null=True, blank=True,
+                                       related_name='status_install')
+    status_uninstall = models.ForeignKey(Command_Result, null=True, blank=True,
+                                         related_name='status_uninstall')
+    status_retrieve_status_agent = models.ForeignKey(
+        Command_Result, null=True, blank=True,
+        related_name='status_retrieve_status_agent')
+    status_retrieve_status_jobs = models.ForeignKey(
+        Command_Result, null=True, blank=True,
+        related_name='status_retrieve_status_jobs')
+
+
+class File_Command_Result(Command_Result):
+    filename = models.CharField(max_length=50)
+    remote_path = models.CharField(max_length=100)
+    address = models.GenericIPAddressField()
+
+    class Meta:
+        unique_together = ('filename', 'address', 'remote_path')
 
 
 class Job_Keyword(models.Model):
@@ -277,6 +313,24 @@ class Installed_Job(models.Model):
         return '{0.job} on {0.agent}'.format(self)
 
 
+class Installed_Job_Command_Result(models.Model):
+    agent_ip = models.GenericIPAddressField()
+    job_name = models.CharField(max_length=200)
+    status_install = models.ForeignKey(Command_Result, null=True, blank=True,
+                                       related_name='status_install_job')
+    status_uninstall = models.ForeignKey(Command_Result, null=True, blank=True,
+                                         related_name='status_uninstall_job')
+    status_log_severity = models.ForeignKey(Command_Result, null=True,
+                                            blank=True,
+                                            related_name='status_log_severity')
+    status_stat_policy = models.ForeignKey(Command_Result, null=True,
+                                           blank=True,
+                                           related_name='status_stat_policy')
+
+    class Meta:
+        unique_together = ('agent_ip', 'job_name')
+
+
 class Statistic_Instance(models.Model):
     stat = models.ForeignKey(Statistic, on_delete=models.CASCADE)
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
@@ -298,11 +352,25 @@ class Job_Instance(models.Model):
     stop_date = models.DateTimeField(null=True, blank=True)
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
-    openbach_function_instance = models.ForeignKey("Openbach_Function_Instance", null=True, blank=True)
-    scenario_instance = models.ForeignKey("Scenario_Instance", null=True, blank=True)
+    openbach_function_instance = models.ForeignKey("Openbach_Function_Instance",
+                                                   null=True, blank=True)
+    scenario_instance = models.ForeignKey("Scenario_Instance", null=True,
+                                          blank=True)
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
+
+
+class Job_Instance_Command_Result(models.Model):
+    job_instance_id = models.IntegerField(primary_key=True)
+    status_start = models.ForeignKey(Command_Result, null=True, blank=True,
+                                     related_name='status_start')
+    status_stop = models.ForeignKey(Command_Result, null=True, blank=True,
+                                    related_name='status_stop')
+    status_restart = models.ForeignKey(Command_Result, null=True, blank=True,
+                                       related_name='status_restart')
+    status_watch = models.ForeignKey(Command_Result, null=True, blank=True,
+                                     related_name='status_watch')
 
 
 class Job_Argument_Instance(models.Model):
@@ -310,7 +378,8 @@ class Job_Argument_Instance(models.Model):
 
 
 class Required_Job_Argument_Instance(Job_Argument_Instance):
-    argument = models.ForeignKey(Required_Job_Argument, on_delete=models.CASCADE)
+    argument = models.ForeignKey(Required_Job_Argument,
+                                 on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -320,7 +389,8 @@ class Required_Job_Argument_Instance(Job_Argument_Instance):
                 values = '\"{}\"'.format(job_argument_value)
             else:
                 values = '{},\"{}\"'.format(values, job_argument_value)
-        return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
+        return 'Argument {} of Job Instance {} with values [{}]'.format(
+            self.argument.name, self.job_instance.id, values)
 
 
 class Optional_Job_Argument_Instance(Job_Argument_Instance):
@@ -334,15 +404,16 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
                 values = '\"{}\"'.format(job_argument_value)
             else:
                 values = '{},\"{}\"'.format(values, job_argument_value)
-        return 'Argument {} of Job Instance {} with values [{}]'.format(self.argument.name, self.job_instance.id, values)
+        return 'Argument {} of Job Instance {} with values [{}]'.format(
+            self.argument.name, self.job_instance.id, values)
 
 
 class Argument_Value(models.Model):
     argument_value_id = models.AutoField(primary_key=True)
     value = models.CharField(max_length=200)
 
-    ACCEPTED_BOOLS = frozenset({'True', 'true', 'TRUE', 'T', 't', 'False', 'false',
-                                'FALSE', 'F', 'f'})
+    ACCEPTED_BOOLS = frozenset({'True', 'true', 'TRUE', 'T', 't', 'False',
+                                'false', 'FALSE', 'F', 'f'})
 
     def _check_type_internal(self, type, value):
         if type == 'int':
@@ -390,7 +461,8 @@ class Argument_Value(models.Model):
 
 
 class Job_Argument_Value(Argument_Value):
-    job_argument_instance = models.ForeignKey(Job_Argument_Instance, on_delete=models.CASCADE)
+    job_argument_instance = models.ForeignKey(Job_Argument_Instance,
+                                              on_delete=models.CASCADE)
 
     def check_and_set_value(self, value):
         type = self.job_argument_instance.argument.type
@@ -415,7 +487,8 @@ class Watch(models.Model):
     interval = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
-        return 'Watch of Job Instance {0.job_instance_id} of {0.job}'.format(self)
+        return 'Watch of Job Instance {0.job_instance_id} of {0.job}'.format(
+            self)
 
 
 class Openbach_Function(models.Model):

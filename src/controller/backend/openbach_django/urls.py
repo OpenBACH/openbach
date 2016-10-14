@@ -42,10 +42,20 @@ from . import views
 app_name = 'openbach_django'
 urlpatterns = [
     url(r'^agent/status/?$',
-        views.StatusView.as_view(status_type='status_agents'),
+        views.StatusView.as_view(status_type='agents'),
         name='status_agents'),
-    url(r'^job/status/?$', views.StatusView.as_view(status_type='status_jobs'),
+    url(r'^job/status/?$', views.StatusView.as_view(status_type='jobs'),
         name='status_jobs'),
+    url(r'^job/(?P<name>[^/]+)/status/?$',
+        views.StatusView.as_view(status_type='job'), name='status_job'),
+    url(r'^file/status/?$', views.StatusView.as_view(status_type='file'),
+        name='status_file'),
+    url(r'^job_instance/status/?$',
+        views.StatusView.as_view(status_type='job_instances'),
+        name='status_job_instances'),
+    url(r'^job_instance/(?P<id>\d+)/status/?$',
+        views.StatusView.as_view(status_type='job_instance'),
+        name='status_job_instance'),
 
     url(r'^agent/?$', views.AgentsView.as_view(), name='agents_view'),
     url(r'^agent/(?P<address>[^/]+)/?$', views.AgentView.as_view(),

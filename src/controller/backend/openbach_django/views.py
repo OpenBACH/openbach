@@ -118,16 +118,209 @@ class GenericView(base.View):
 class StatusView(GenericView):
     status_type = None
 
-    def get(self, request):
+    def get(self, request, id=None, name=None):
         """compute status of agents or jobs on it"""
 
-        update = 'update' in request.GET
-        assert self.status_type is not None
+        try:
+            function = getattr(self, '_status_' + self.status_type)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown status_type'
+                    ' {}'.format(self.status_type)}, 400
 
-        data = { 'addresses': request.GET.getlist('address'), 'command':
-                 self.status_type }
-        if update:
-            data['update'] = update
+        if self.status_type == 'job':
+            return function(request, name)
+        if self.status_type == 'job_instance':
+            return function(request, id)
+        return function(request)
+
+
+    def _status_agents(self, request):
+        try:
+            action = request.GET['action']
+            address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(address)
+
+
+    def _status_jobs(self, request):
+        try:
+            action = request.GET['action']
+            if action != 'status_retrieve_status':
+                name = request.GET['name']
+            address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        if action == 'status_retrieve_status':
+            return function(address)
+        return function(address, name)
+
+
+    def _status_job(self, request, name):
+        try:
+            action = request.GET['action']
+            address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(address, name)
+
+
+    def _status_file(self, request):
+        try:
+            filename = request.GET['filename']
+            remote_path = request.GET['path']
+            address = request.GET['agent_ip']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        data = { 'address': address, 'command': 'status_push_file',
+                 'remote_path': remoth_path, 'filename': filename }
+
+        return self.conductor_execute(data)
+
+
+    def _status_job_instances(self, request):
+        try:
+            action = request.GET['action']
+            job_instance_id = request.GET['job_instance_id']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(job_instance_id)
+
+
+    def _status_job_instance(self, request, id):
+        try:
+            action = request.GET['action']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(id)
+
+
+    def _action_install(self, address):
+        """Return the status of the installation of the Agent"""
+        data = { 'address': address, 'command': 'status_install_agent' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_uninstall(self, address):
+        """Return the status of the uninstallation of the Agent"""
+        data = { 'address': address, 'command': 'status_uninstall_agent' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_retrieve_status(self, address):
+        """Return the status of the retrievement of the status of the Agent"""
+        data = { 'address': address, 'command':
+                 'status_retrieve_status_agent' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_status_install(self, address, name):
+        """Return the status of the installation of a Job on an Agent"""
+        data = { 'address': address, 'name': name,  'command':
+                 'status_install_jobs' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_status_uninstall(self, address, name):
+        """Return the status of the uninstallation of a Job on an Agent"""
+        data = { 'address': address, 'name': name,  'command':
+                 'status_uninstall_jobs' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_status_retrieve_status(self, address):
+        """Return the status of the retrievement of the list of installed Jobs"""
+        data = { 'address': address, 'command':
+                 'status_retrieve_status_jobs' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_log_severity(self, address, name):
+        """Return the status of the setting of a now log severity"""
+        data = { 'address': address, 'name': name, 'command':
+                 'status_set_job_log_severity' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_stat_policy(self, address, name):
+        """Return the status of the setting of a now stats policy"""
+        data = { 'address': address, 'name': name, 'command':
+                 'status_set_job_stat_policy' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_start(self, job_instance_id):
+        """Return the status of the starting of a Job Instance"""
+        data = { 'job_instance_id': job_instance_id, 'command':
+                 'status_start_job_instance' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_stop(self, job_instance_id):
+        """Return the status of the stopping of one or more job instance"""
+        data = {'job_instance_id': job_instance_id, 'command':
+                'status_stop_job_instance'}
+
+        return self.conductor_execute(data)
+
+
+    def _action_restart(self, id):
+        """Return the status of the restarting of a Job Instance"""
+        data = { 'job_instance_id': id, 'command':
+                 'status_restart_job_instance' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_watch(self, id):
+        """Return the status of the starting of a watch"""
+        data = { 'job_instance_id': id, 'command':
+                 'status_watch_job_instance' }
 
         return self.conductor_execute(data)
 
@@ -135,14 +328,22 @@ class StatusView(GenericView):
 class BaseAgentView(GenericView):
     """Abstract base class used to factorize agent creation"""
 
-    list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
-
     def _create_agent(self, address, username, collector, name, password):
         """Helper function to factorize out the agent creation code"""
 
         data = { 'address': address, 'collector': collector, 'username':
                 username, 'password': password, 'name': name, 'command':
                 'install_agent' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_retrieve_status(self, addresses, update):
+        """Retrieve the status of an Agent"""
+
+        data = { 'addresses': addresses, 'command': 'retrieve_status_agents' }
+        if update:
+            data['update'] = update
 
         return self.conductor_execute(data)
 
@@ -162,13 +363,30 @@ class AgentsView(BaseAgentView):
     def post(self, request):
         """create a new agent"""
 
-        required_parameters = ('address', 'username', 'collector', 'name', 'password')
         try:
-            parameters = {k: request.JSON[k] for k in required_parameters}
-        except KeyError as e:
-            return {'msg': 'Missing parameter {}'.format(e)}, 400
+            action = request.JSON['action']
+        except KeyError:
+            # Create a new Agent
+            required_parameters = ('address', 'username', 'collector', 'name', 'password')
+            try:
+                parameters = {k: request.JSON[k] for k in required_parameters}
+            except KeyError as e:
+                return {'msg': 'Missing parameter {}'.format(e)}, 400
 
-        return self._create_agent(**parameters)
+            return self._create_agent(**parameters)
+        else:
+            update = 'update' in request.JSON
+            try:
+                function = getattr(self, '_action_' + action)
+            except KeyError:
+                return {'msg': 'POST data malformed: unknown action '
+                        '\'{}\' for this route'.format(action)}, 400
+            try:
+                addresses = request.JSON['addresses']
+            except KeyError as e:
+                return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+            return function(addresses, update)
 
 
 class AgentView(BaseAgentView):
@@ -211,6 +429,14 @@ class BaseJobView(GenericView):
         return self.conductor_execute(data)
 
 
+    def _action_retrieve_status(self, addresses):
+        """Retrieve the list of installed jobs on an Agent (or multiple Agents)"""
+
+        data = { 'addresses': addresses, 'command': 'retrieve_status_jobs' }
+
+        return self.conductor_execute(data)
+
+
 class JobsView(BaseJobView):
     """Manage actions for jobs without an ID"""
 
@@ -228,7 +454,6 @@ class JobsView(BaseJobView):
             return self._get_all_jobs(verbosity)
         else:
             update = 'update' in request.GET
-            data = { 'command': 'list_agents', 'update': update }
             return self._get_installed_jobs(address, verbosity, update)
 
 
@@ -266,7 +491,8 @@ class JobsView(BaseJobView):
         else:
             # Execute (un)installation of several jobs
             try:
-                names = request.JSON['names']
+                if action != 'retrieve_status':
+                    names = request.JSON['names']
                 addresses = request.JSON['addresses']
             except KeyError as e:
                 return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
@@ -277,11 +503,14 @@ class JobsView(BaseJobView):
                 return {'msg': 'POST data malformed: unknown action '
                         '\'{}\' for this route'.format(action)}, 400
 
-            if not isinstance(names, list):
-                names = [names]
+            if action != 'retrieve_status':
+                if not isinstance(names, list):
+                    names = [names]
             if not isinstance(addresses, list):
                 addresses = [addresses]
 
+            if action == 'retrieve_status':
+                return function(addresses)
             return function(names, addresses)
 
 

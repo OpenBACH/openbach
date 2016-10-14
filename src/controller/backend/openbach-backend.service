@@ -4,7 +4,8 @@ Requires=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /opt/openbach-controller/backend/openbach-backend.py runserver 0.0.0.0:8000
+WorkingDirectory=/opt/openbach-controller/backend/
+ExecStart=/usr/local/bin/uwsgi --http :8000 --module backend.wsgi
 
 [Install]
 WantedBy=multi-user.target

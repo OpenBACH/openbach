@@ -47,7 +47,7 @@ except OSError:
 
 _register_stat = rstats.rstats_register_stat
 _register_stat.restype = ctypes.c_uint
-_register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+_register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_char_p]
 
 _send_stat = rstats.rstats_send_stat
 _send_stat.restype = ctypes.c_char_p
@@ -71,12 +71,14 @@ _get_configs.restype = ctypes.c_char_p
 _get_configs.argtypes = []
 
 
-def register_stat(config_file, job_name, prefix=None):
+def register_stat(config_file, job_name, job_instance_id, scenario_instance_id, prefix=None):
     if prefix is None:
         prefix = ''
     return _register_stat(
             config_file.encode(),
             job_name.encode(),
+            job_instance_id,
+            scenario_instance_id,
             prefix.encode())
 
 

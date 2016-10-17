@@ -42,9 +42,9 @@ try:
 except ImportError:
     import json
 import sys
+import os
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
-from os import listdir
 
 
 def send_stats(path, filename, connection_id):
@@ -61,13 +61,15 @@ def send_stats(path, filename, connection_id):
 def main(job_name, date):
     path = '/var/openbach_stats/'
     d = datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S.%f')
-    l = listdir('{}{}'.format(path, job_name))
+    l = os.listdir('{}{}'.format(path, job_name))
 
     conffile = "/opt/openbach-jobs/send_stats/send_stats_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
     if l:
-        connection_id = rstats.register_stat(conffile, 'send_stats')
+        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+        connection_id = rstats.register_stat(conffile, 'send_stats', job_instance_id, scenario_instance_id)
         if connection_id == 0:
             quit()
 
@@ -84,12 +86,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('job_name', help='Name of the Job')
     parser.add_argument('date', nargs=2, help='Date of the execution')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
 
     # get args
     args = parser.parse_args()

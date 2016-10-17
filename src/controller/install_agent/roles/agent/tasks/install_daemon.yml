@@ -50,9 +50,12 @@
 - name: Upgrade setuptools
   pip: name=setuptools extra_args='--upgrade' executable=pip3
 
+- name: Install PSUtil
+  pip: name=psutil state=present executable=pip3
+  
 - name: Install python3-yaml
   apt: pkg=python3-yaml state=installed update_cache=false
-  
+
 - name: Create openbach-agent repository
   file: path=/opt/openbach-agent state=directory mode=0755
   

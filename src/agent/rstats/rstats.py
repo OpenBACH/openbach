@@ -61,33 +61,42 @@ class BadRequest(ValueError):
 
 
 class StatsManager:
-    __shared_state = {}
+    __shared_state = {'stats': {}, 'lookup': {}, 'mutex': threading.Lock(), 'id': 0}
 
-    def __init__(self, init=False):
+    def __init__(self):
         self.__dict__ = self.__class__.__shared_state
 
-        if init:
-            self.stats = {}
-            self.mutex = threading.Lock()
-            self.id = 0
+    def statistic_lookup(self, instance_id, scenario_id):
+        id = self.lookup.get((instance_id, scenario_id))
+        if id is None:
+            with self.mutex:
+                self.id += 1
+                self.lookup[(instance_id, scenario_id)] = id = self.id
+        return id
 
-    def __enter__(self):
-        self.mutex.acquire()
-        return self.stats
+    def __getitem__(self, id):
+        return self.stats[id]
 
-    def __exit__(self, t, v, tb):
-        self.mutex.release()
+    def __setitem__(self, id, statistic):
+        with self.mutex:
+            self.stats[id] = statistic
 
-    def increment_id(self):
-        self.id += 1
-        return self.id
+    def __delitem__(self, id):
+        with self.mutex:
+            del self.stats[id]
+
+    def __iter__(self):
+        with self.mutex:
+            yield from self.stats.items()
 
 
 class Rstats:
     def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
-                 prefix=None, id=None, job_name=None):
+                 prefix=None, id=None, job_name=None, instance=0, scenario=0):
         self._mutex = threading.Lock()
         self.conf = conf
+        self.job_instance_id = instance
+        self.scenario_instance_id = scenario
         self.job_name = 'rstats' if job_name is None else job_name
         self.prefix = self.conf.prefix if prefix is None else prefix
 
@@ -165,10 +174,13 @@ class Rstats:
         time = str(stats['time'])
         del stats['time']
 
-        stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(
-            stat_name_with_prefix, time, flag)
-        stats_to_log = '"stat_name": "{}", "time": {}, "flag":{}'.format(
-            stat_name, time, flag)
+        template = '"stat_name": "{}", "time": {}, "flag": {}, "job_instance_id": {}, "scenario_instance_id": {}'
+        stats_to_send = template.format(
+                stat_name_with_prefix, time, flag,
+                self.job_instance_id, self.scenario_instance_id)
+        stats_to_log = template.format(
+            stat_name, time, flag,
+            self.job_instance_id, self.scenario_instance_id)
         statistics = ''
         for k, v in stats.items():
             try:
@@ -261,7 +273,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(3, 4), (6, None), (2, 2), (1, 1)]
+        bounds = [(5, 6), (6, None), (2, 2), (1, 1)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -273,21 +285,34 @@ class ClientThread(threading.Thread):
             raise BadRequest(
                     'KO Message not formed well. Too much arguments.')
 
-        if request_type == 2:
+        if request_type == 1:  # create stats
+            try:
+                # convert job_instance_id
+                data_received[3] = int(data_received[3])
+                # convert scenario_instance_id
+                data_received[4] = int(data_received[4])
+            except ValueError:
+                raise BadRequest(
+                        'KO Message not formed well. Third and '
+                        'forth arguments should be integers.')
+        if request_type == 2:  # send stats
             if length % 2:
                 raise BadRequest(
                         'KO Message not formed well. '
                         'Arguments should come in pairs.')
             else:
                 try:
+                    # convert stat id
                     data_received[1] = int(data_received[1])
+                    # convert timestamp
                     data_received[3] = int(data_received[3])
                 except ValueError:
                     raise BadRequest(
                             'KO Message not formed well. Second and '
-                            'forth argument should be integers.')
-        elif request_type == 3:
+                            'forth arguments should be integers.')
+        elif request_type == 3:  # reload stat
             try:
+                # convert stat id
                 data_received[1] = int(data_received[1])
             except ValueError:
                 raise BadRequest(
@@ -297,34 +322,38 @@ class ClientThread(threading.Thread):
         data_received[0] = request_type
         return data_received
 
-    def create_stat(self, confpath, job, *prefix):
-        id = StatsManager().increment_id()
-        prefix = None if not prefix else prefix[0]
+    def create_stat(self, confpath, job, job_instance_id, scenario_instance_id, *prefix):
+        manager = StatsManager()
+        id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
-        # creer le rstatsclient
-        stats_client = Rstats(
-                confpath=confpath,
-                job_name=job,
-                prefix=prefix,
-                id=id,
-                conf=self.conf)
+        try:
+            stats_client = manager[id]
+        except KeyError:
+            prefix = None if not prefix else prefix[0]
 
-        # ajouter le rstatsclient au dict
-        with StatsManager() as stats:
-            stats[id] = stats_client
+            # creer le rstatsclient
+            stats_client = Rstats(
+                    confpath=confpath,
+                    job_name=job,
+                    prefix=prefix,
+                    id=id,
+                    instance=job_instance_id,
+                    scenario=scenario_instance_id,
+                    conf=self.conf)
+
+            manager[id] = stats_client
 
         # envoyer OK
         return id
 
     def send_stat(self, id, stat, time, *extra_stats):
         # recuperer le rstatsclient et son mutex
-        with StatsManager() as stats:
-            try:
-                stats_client = stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            stats_client = StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
 
         # recuperer les stats
         stats = {key: value for key, value in grouper(extra_stats, 2)}
@@ -334,36 +363,32 @@ class ClientThread(threading.Thread):
 
     def reload_stat(self, id):
         # recuperer le rstatsclient et son mutex
-        with StatsManager() as stats:
-            try:
-                stats_client = stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            stats_client = StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
         # reload la conf
         stats_client.reload_conf()
 
     def remove_stat(self, id):
-        with StatsManager() as stats:
-            try:
-                del stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            del StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
 
     def reload_stats(self):
-        with StatsManager() as stats:
-            for stats_client in stats.values():
-                # reload la conf
-                stats_client.reload_conf()
+        for _, stats_client in StatsManager():
+            # reload la conf
+            stats_client.reload_conf()
 
     def get_config(self):
         configs = defaultdict(set)
-        with StatsManager() as stats:
-            for job_config in stats.values():
-                configs[job_config.job_name].add(job_config._confpath)
+        for _, job_config in StatsManager():
+            configs[job_config.job_name].add(job_config._confpath)
         return json.dumps({name: list(paths) for name, paths in configs.items()})
 
     def execute_request(self, data): 
@@ -401,7 +426,6 @@ if __name__ == '__main__':
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind(('', 1111))
 
-    StatsManager(init=True)
     conf = Conf('/opt/rstats/rstats.cfg')
 
     while True:

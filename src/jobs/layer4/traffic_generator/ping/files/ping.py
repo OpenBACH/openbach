@@ -39,11 +39,12 @@ import subprocess
 import argparse
 import time
 import sys
+import os
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
-def main(job_instance_id, scenario_instance_id, destination_ip, count, interval,
+def main(destination_ip, count, interval,
          interface, packetsize, ttl, duration):
     conffile = "/opt/openbach-jobs/ping/ping_rstats_filter.conf"
 
@@ -66,15 +67,14 @@ def main(job_instance_id, scenario_instance_id, destination_ip, count, interval,
     if p.returncode:
         stat_name = 'ping'
         # Connexion au service de collecte de l'agent
-        connection_id = rstats.register_stat(conffile, 'ping')
+        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+        connection_id = rstats.register_stat(conffile, 'ping', job_instance_id, scenario_instance_id)
         if connection_id == 0:
             quit()
         # Envoie de la stat au collecteur
         timestamp = int(round(time.time() * 1000))
-        if not scenario_instance_id:
-            scenario_instance_id = 0
-        statistics = { 'status': 'Error', 'job_instance_id': job_instance_id,
-                       'scenario_instance_id': scenario_instance_id }
+        statistics = {'status': 'Error'}
         r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
 
 
@@ -83,12 +83,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('destination_ip', metavar='destination_ip', type=str,
                         help='')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-c', '--count', type=int,
                         help='')
     parser.add_argument('-i', '--interval', type=int,
@@ -104,8 +100,6 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     destination_ip = args.destination_ip
     count = args.count
     interval = args.interval
@@ -114,6 +108,4 @@ if __name__ == "__main__":
     ttl = args.ttl
     duration = args.duration
 
-    main(job_instance_id, scenario_instance_id, destination_ip, count, interval,
-         interface, packetsize, ttl, duration)
-
+    main(destination_ip, count, interval, interface, packetsize, ttl, duration)

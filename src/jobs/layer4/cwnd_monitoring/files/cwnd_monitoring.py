@@ -71,7 +71,7 @@ def watch(fn):
             time.sleep(0.5)
             # TODO: (Piste1) Ne plus l'indiquer
  
-def main(job_instance_id, scenario_instance_id, path, port, interval):
+def main(path, port, interval):
     # Mise en place du monitoring
     cmd = "insmod /opt/openbach-jobs/cwnd_monitoring/tcp_probe_new_fix.ko"
     cmd += " port=" + str(port) + " full=1 > /dev/null 2>&1"
@@ -88,7 +88,9 @@ def main(job_instance_id, scenario_instance_id, path, port, interval):
     conffile = "/opt/openbach-jobs/cwnd_monitoring/cwnd_monitoring_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile, 'cwnd_monitoring')
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'cwnd_monitoring', job_instance_id, scenario_instance_id)
     if connection_id == 0:
         quit()
 
@@ -104,8 +106,7 @@ def main(job_instance_id, scenario_instance_id, path, port, interval):
                 cwnd = data[6]
                 try:
                     # Envoie de la stat au collecteur
-                    statistics = { 'value': cwnd, 'job_instance_id': job_instance_id,
-                                   'scenario_instance_id': scenario_instance_id }
+                    statistics = {'value': cwnd}
                     r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
                 except Exception as ex: 
                     print "Erreur: %s" % ex
@@ -118,12 +119,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='Active/Deactive cwnd monitoring.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('port', metavar='port', type=int, nargs=1,
                         help='Port to monitor')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-p', '--path', type=str,
                         default='/tmp/tcpprobe.out',
                         help='path to result file')
@@ -132,11 +129,9 @@ if __name__ == "__main__":
     
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     port = args.port[0]
     path = args.path
     interval = args.interval
     
-    main(job_instance_id, scenario_instance_id, path, port, interval)
+    main(path, port, interval)
 

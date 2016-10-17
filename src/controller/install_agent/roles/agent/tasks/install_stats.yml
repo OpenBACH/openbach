@@ -39,6 +39,9 @@
 - name: Create Rstats repository
   file: path=/opt/rstats state=directory mode=0755
 
+- name: Packs Rstats client sources
+  local_action: command tar -cvzf ../src_agent/rstats/client_api.tar.gz ../src_agent/rstats/client_api/
+
 - name: Install Rstats client sources
   unarchive: src=../src_agent/rstats/client_api.tar.gz dest=/opt/rstats/
 
@@ -50,13 +53,10 @@
 
 - name: Build Rstats client library
   make:
-    chdir: /opt/rstats/client_api/
+    chdir: /opt/rstats/agent/rstats/client_api/
     target: install
     params:
-      DESTDIR: /opt/rstats/
-
-- name: Copy the lib to the appropriate path
-  copy: src=/opt/rstats/librstats.so dest=/usr/lib/ remote_src=true
+      DESTDIR: /usr/
 
 - name: Install Rstats
   copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755

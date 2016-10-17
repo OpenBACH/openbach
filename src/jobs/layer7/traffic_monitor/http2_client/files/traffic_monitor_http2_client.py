@@ -43,6 +43,7 @@ import argparse
 import sys
 import signal
 import syslog
+import os
 from subprocess import call
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
@@ -59,22 +60,19 @@ signal.signal(signal.SIGTERM, signal_term_handler)
 syslog.openlog("traffic_monitor_http2_client", syslog.LOG_PID, syslog.LOG_USER)
 
 
-def worker_loop(q, job_instance_id, scenario_instance_id, server_address,
-                simu_name, page, connection_id):
+def worker_loop(q, server_address, simu_name, page, connection_id):
     try:
         while Running:
             try:
                 q.get(timeout=1)
-                get_url(job_instance_id, scenario_instance_id, server_address,
-                        simu_name, page, connection_id)
+                get_url(server_address, simu_name, page, connection_id)
             except Empty:
                 pass
     except:
         pass
 
 
-def get_url(job_instance_id, scenario_instance_id, server_address, simu_name,
-            page, connection_id):
+def get_url(server_address, simu_name, page, connection_id):
     try:
         start_time = time.time()
         if page == 0:
@@ -87,8 +85,7 @@ def get_url(job_instance_id, scenario_instance_id, server_address, simu_name,
         syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Delai = " + str(conntime))
         try:
             # Envoie de la stat au collecteur
-            statistics = { 'value': conntime, 'job_instance_id': job_instance_id,
-                           'scenario_instance_id': scenario_instance_id }
+            statistics = {'value': conntime}
             r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
         except Exception as ex: 
             print "Erreur: %s" % ex
@@ -96,11 +93,12 @@ def get_url(job_instance_id, scenario_instance_id, server_address, simu_name,
     except:
         pass
 
-def main(job_instance_id, scenario_instance_id, server_address, simu_name,
-         lambd, sim_t, n_req, page):
+def main(server_address, simu_name, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-jobs.traffic_monitor_http2_client/traffic_monitor_http2_client_rstats_filter.conf"
-    connection_id = rstats.register_stat(conffile, 'traffic_monitor_http2_client')
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'traffic_monitor_http2_client', job_instance_id, scenario_instance_id)
     if connection_id == 0:
         quit()
 
@@ -111,10 +109,7 @@ def main(job_instance_id, scenario_instance_id, server_address, simu_name,
     # start workers
     thread_pool = []
     for i in range(N_workers):
-        t = Thread(target=worker_loop,args=(q, job_instance_id,
-                                            scenario_instance_id,
-                                            server_address, simu_name, page,
-                                            connection_id))
+        t = Thread(target=worker_loop,args=(q, server_address, simu_name, page, connection_id))
         t.start()
         thread_pool.append(t)
 
@@ -141,12 +136,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('server-address', metavar='server-address', type=str,
                         help='The IP address of the server')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-s', '--simu-name', type=str,
                         default='traffic_monitor_http2_client',
                         help='Name of the generated statistic')
@@ -161,8 +152,6 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     server_address = args.server_address
     simu_name = args.simu_name
     lambd = args.lambd
@@ -170,6 +159,4 @@ if __name__ == "__main__":
     n_req = args.n_req
     page = args.page
 
-    main(job_instance_id, scenario_instance_id, server_address, simu_name,
-         lambd, sim_t, n_req, page)
-
+    main(server_address, simu_name, lambd, sim_t, n_req, page)

@@ -39,12 +39,12 @@ import subprocess
 import json
 import argparse
 import sys
+import os
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
-def main(job_instance_id, scenario_instance_id, collector, port, begin, end,
-         simu_name, database_name, username, password):
+def main(collector, port, begin, end, simu_name, database_name, username, password):
     conffile = "/opt/openbach-jobs/post_processing_tcp_pep/post_processing_tcp_pep_rstats_filter.conf"
 
     cmd = "curl -G 'http://" + collector + ":" + str(port) + "/query' --data-url"
@@ -95,14 +95,14 @@ def main(job_instance_id, scenario_instance_id, collector, port, begin, end,
         print cpt
         stat_name = test['results'][0]['series'][0]['name']
         
-        connection_id = rstats.register_stat(conffile, 'post_processing_tcp_pep', database_name)
+        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+        connection_id = rstats.register_stat(conffile, 'post_processing_tcp_pep', job_instance_id, scenario_instance_id)
         if connection_id == 0:
             print "Connection to rstats failed"
             exit()
         
-        statistics = { 'mean': mean, 'compteur': cpt, 'job_instance_id':
-                       job_instance_id, 'scenario_instance_id':
-                       scenario_instance_id }
+        statistics = {'mean': mean, 'compteur': cpt}
         rstats.send_stat(connection_id, stat_name, str(finished[i]), **statistics)
         #cmd = "curl -X POST 'http://" + collector + ":" + str(port) + "/write?d"
         #cmd += "b=" + database_name + "&precision=" + 'ms' + "&u=" + username
@@ -117,12 +117,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='Calculation of mean interval for the simulation.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('collector', metavar='collector', type=str, nargs=1,
                          help='IP address of the collector')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-p', '--port', type=int, default=8086,
                         help='port of the collector')
     parser.add_argument('-b', '--begin', type=int, default=0,
@@ -140,8 +136,6 @@ if __name__ == "__main__":
     
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     collector = args.collector[0]
     port = args.port
     begin = args.begin
@@ -151,6 +145,4 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
     
-    main(job_instance_id, scenario_instance_id, collector, port, begin, end,
-         simu_name, database_name, username, password)
-
+    main(collector, port, begin, end, simu_name, database_name, username, password)

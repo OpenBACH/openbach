@@ -42,6 +42,7 @@ import threading
 import syslog
 import signal
 import sys
+import os
 from apscheduler.schedulers.blocking import BlockingScheduler
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
@@ -82,8 +83,7 @@ def monitor():
     mutex.release()
 
     # Envoie de la stat au collecteur
-    statistics = { 'rate': rate, 'job_instance_id': job_instance_id,
-                   'scenario_instance_id': scenario_instance_id }
+    statistics = {'rate': rate}
     r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
 
     # Mise a jour des vieilles stats pour le prochain calcul de debit
@@ -93,7 +93,7 @@ def monitor():
     mutex.release()
 
 
-def main(job_instance_id, scenario_instance_id, rule, interval):
+def main(rule, interval):
     global chain
     global connection_id
     global mutex
@@ -103,7 +103,9 @@ def main(job_instance_id, scenario_instance_id, rule, interval):
     conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile, 'rate_monitoring')
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'rate_monitoring', job_instance_id, scenario_instance_id)
     if connection_id == 0:
         quit()
 
@@ -126,14 +128,10 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('interval', metavar='interval', type=int, nargs=1,
                         help='Time interval (in sec) use to calculate rate')
     parser.add_argument('chain', metavar='chain', type=str, nargs=1,
                         help='Chain to use (INPUT or FORWARD)')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-j', '--jump', type=str, nargs=1,
                         help='target')
     parser.add_argument('-s', '--source', type=str, nargs=1,
@@ -153,8 +151,6 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     interval = args.interval[0]
     chain_name = args.chain[0]
     if type(args.jump) == list:
@@ -232,5 +228,5 @@ if __name__ == "__main__":
     else:
         rule.create_target("")
 
-    main(job_instance_id, scenario_instance_id, rule, interval)
+    main(rule, interval)
 

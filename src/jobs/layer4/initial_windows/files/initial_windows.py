@@ -50,8 +50,6 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('network', type=str, help='The destination network')
     parser.add_argument('gw', type=str, help='The next hop of the route')
     parser.add_argument('interface', type=str,
@@ -59,8 +57,6 @@ if __name__ == "__main__":
     parser.add_argument('initcwnd', type=int, help='Initial congestion window')
     parser.add_argument('initrwnd', type=int,
                         help='Initial congestion receipt window')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
 
     # get args
     args = parser.parse_args()

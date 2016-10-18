@@ -22,6 +22,11 @@ os:
 
 arguments:
   required:
+    - name:        job_instance_id
+      type:        'int'
+      count:       1
+      description: >
+          The id of the Job Instance
     - name:        job_name
       type:        'str'
       count:       1

@@ -81,12 +81,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('sat_network', type=str,
                         help='The network of the satellite link')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-p', '--pep-port', type=int, default=5002,
                         help='The port to use')
 

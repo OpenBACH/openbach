@@ -62,8 +62,6 @@ if __name__ == "__main__":
     parser.add_argument('job_name', metavar='job_name', type=str,
                         help='The name of the Job you want to change the logs'
                         ' policy')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
 
     # get args
     args = parser.parse_args()

@@ -62,14 +62,10 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('rate', type=int, help='Tcp initial spreading minimal'
                         ' rate')
     parser.add_argument('interfaces', type=str, nargs='+', help='The interfaces'
                         ' where the initial spreading fq is set')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-d', '--disable-pacing', action='store_true',
                         help='Disable pacing')
 

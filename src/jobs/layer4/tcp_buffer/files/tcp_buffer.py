@@ -50,8 +50,6 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('name', type=str,
                         help='The name of the tcp buffer to set')
     parser.add_argument('min_size', type=int,
@@ -59,8 +57,6 @@ if __name__ == "__main__":
     parser.add_argument('size', type=int, help='The size of the buffer')
     parser.add_argument('max_size', type=int,
                         help='The maximum size of the buffer')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
 
     # get args
     args = parser.parse_args()

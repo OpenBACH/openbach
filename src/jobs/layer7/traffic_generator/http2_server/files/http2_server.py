@@ -53,12 +53,8 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     parser.add_argument('port', metavar='port', type=int,
                         help='Port where the server id available')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-n', '--no-tls', action='store_true',
                         help='Disable SSL/TLS')
 

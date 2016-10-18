@@ -39,8 +39,7 @@ import argparse
 import requests
 
 
-def main(job_instance_id, scenario_instance_id, influxdb_port, database,
-         username, password):
+def main(influxdb_port, database, username, password):
     url = 'http://localhost:{0}/query?db={1}&epoch=ms&q=DROP DATABASE' \
           ' {1}'.format(influxdb_port, database)
     requests.get(url)
@@ -57,10 +56,6 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-p', '--port', type=int, default=8086,
                         help='port of InfluxDB')
     parser.add_argument('-d', '--database', type=str, default='openbach',
@@ -72,13 +67,10 @@ if __name__ == "__main__":
     
     # get args
     args = parser.parse_args()
-    job_instance_id = args.job_instance_id
-    scenario_instance_id = args.scenario_instance_id
     port = args.port
     database = args.database_name
     username = args.username
     password = args.password
     
-    main(job_instance_id, scenario_instance_id, port, database, username,
-         password)
+    main(port, database, username, password)
 

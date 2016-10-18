@@ -60,15 +60,11 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', metavar='job_instance_id', type=int,
-                        help='The Id of the Job Instance')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-s', '--server', action='store_true',
                        help='Run in server mode')
     group.add_argument('-c', '--client', type=str,
                        help='Run in client mode')
-    parser.add_argument('-sii', '--scenario-instance-id', type=int,
-                        help='The Id of the Scenario Instance')
     parser.add_argument('-i', '--interval', type=int,
                         help='Pause *interval* seconds between periodic'
                         ' bandwidth reports')

@@ -52,7 +52,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 
 import psutil
-import rstats_client as rstats
+import rstats_api as rstats
 
 try:
     # Try importing unix stuff

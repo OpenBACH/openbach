@@ -36,7 +36,7 @@
 
 
 import argparse
-from frontend import uninstall_agent, pretty_print
+from frontend import uninstall_agent, status_uninstall_agent, wait_for_success
 
 
 if __name__ == "__main__":
@@ -49,5 +49,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     agent_ip = args.agent_ip
 
-    pretty_print(uninstall_agent)(agent_ip)
+    uninstall_agent(agent_ip)
+    wait_for_success(status_uninstall_agent, address=agent_ip)
 

@@ -5,6 +5,7 @@ Requires=rstats.service
 
 [Service]
 Type=simple
+Environment=PYTHONPATH=/opt/rstats
 ExecStartPre=/bin/mkdir -p /var/run/openbach
 ExecStart=/usr/bin/python3 /opt/openbach-agent/openbach-agent.py
 ExecReload=/opt/openbach-agent/openbach-agent.status

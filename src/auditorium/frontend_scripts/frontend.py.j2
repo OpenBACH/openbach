@@ -38,6 +38,7 @@
 import requests
 import datetime
 import pprint
+from time import sleep
 from urllib.parse import urlencode
 from functools import partial, wraps
 
@@ -48,6 +49,15 @@ except ImportError:
 
 
 _URL = "http://{{ controller_ip }}:8000/{}/"
+
+
+def wait_for_success(status_function, **kwargs):
+    while True:
+        response = status_function(**kwargs).json()
+        returncode = response['result']['returncode']
+        if returncode != 202:
+            exit(returncode != 200)
+        sleep(1)
 
 
 def _request_message(entry_point, verb, **kwargs):
@@ -75,7 +85,7 @@ def pretty_print(function):
         print(response)
         pprint.pprint(response.json())
         if 400 <= response.status_code < 600:
-        	exit(1)
+            exit(1)
     return wrapper
 
 

@@ -35,7 +35,7 @@
 
 
 import argparse
-from frontend import del_collector, pretty_print
+from frontend import del_collector, status_del_collector, wait_for_success
 
 
 if __name__ == "__main__":
@@ -48,5 +48,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     collector_ip = args.collector_ip
 
-    pretty_print(del_collector)(collector_ip)
+    del_collector(collector_ip)
+    wait_for_success(status_del_collector, address=collector_ip)
 

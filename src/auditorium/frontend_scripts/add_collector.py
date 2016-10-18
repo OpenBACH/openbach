@@ -35,7 +35,7 @@
 
 
 import argparse
-from frontend import add_collector, pretty_print
+from frontend import add_collector, status_add_collector, wait_for_success
 
 
 if __name__ == "__main__":
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     logs_port = args.logs_port
     stats_port = args.stats_port
 
-    pretty_print(add_collector)(collector_ip, username, password, name,
-                                logs_port, stats_port)
+    add_collector(collector_ip, username, password, name, logs_port, stats_port)
+    wait_for_success(status_add_collector, address=collector_ip)
 

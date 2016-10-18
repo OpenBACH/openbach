@@ -34,13 +34,13 @@
 ---
 
 - name: Install Collector
-  shell: /opt/openbach-auditorium/frontend_scripts/add_collector.py {{ item.ip }} {{ item.ip }} {{ item.username }} {{ item.password }} {{ item.name }}
+  shell: /opt/openbach-auditorium/frontend_scripts/add_collector.py {{ item.ip }} {{ item.username }} {{ item.password }} {{ item.name }}
   with_items: "{{ collector }}"
 
 - name: Install Agent on the Controller
   shell: /opt/openbach-auditorium/frontend_scripts/install_agent.py {{ item.ip }} {{ collector_ip }} {{ item.username }} {{ item.password }} {{ item.name }}
   with_items: "{{ controller }}"
-  when: "{{ controller_ip }}" != "{{ collector_ip }}"
+  when: "'{{ controller_ip }}' != '{{ collector_ip }}'"
 
 - name: Install Collector admin Jobs
   shell: /opt/openbach-auditorium/frontend_scripts/install_jobs.py -a {{ collector_ip }} -j {{ item }}

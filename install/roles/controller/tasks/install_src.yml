@@ -160,11 +160,32 @@
     - { name: 'restart_job_instance_agent.yml', mode: '0644' }
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
+- name: Packs Rstats client sources
+  local_action: command tar -cvzf src/agent/rstats/client_api.tar.gz src/agent/rstats/client_api/
+  become: no
+
+- name: Create the repository for the src of the Agents
+  file: path=/opt/openbach-controller/src_agent state=directory
+
 - name: Copy the src of the Agents
-  copy: src=../src/agent/ dest=/opt/openbach-controller/src_agent
+  copy: src=../src/agent/{{ item.src }} dest=/opt/openbach-controller/src_agent/{{ item.dest }}
+  with_items:
+    - {'src': 'openbach-agent/', 'dest': 'openbach-agent/'}
+    - {'src': 'rstats/client_api.tar.gz', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats_api.py', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats.cfg.j2', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats.py', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats_service', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats.service', 'dest': 'rstats/'}
 
 - name: Copy the installation of the Agents
   copy: src=../src/controller/install_agent dest=/opt/openbach-controller/
+
+- name: Copy the src of the Collectors
+  copy: src=../src/collector/ dest=/opt/openbach-controller/src_collector
+
+- name: Copy the installation of the Collectors
+  copy: src=../src/controller/install_collector dest=/opt/openbach-controller/
 
 - name: Copy the src of APScheduler
   copy: src=../src/controller/apscheduler dest=/opt/openbach-controller/src_agent
@@ -211,7 +232,7 @@
   when: ansible_distribution_version == "16.04"
 
 - name: Start openbach-conductor
-  service: name=openbach-conductor state=started
+  service: name=openbach-conductor state=restarted
 
 - name: Create status-manager service
   copy: src=../src/controller/status-manager/status-manager dest=/etc/init.d/ mode=0755
@@ -222,7 +243,7 @@
   when: ansible_distribution_version == "16.04"
 
 - name: Start status-manager
-  service: name=status-manager state=started
+  service: name=status-manager state=restarted
 
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend dest=/etc/init.d/ mode=0755
@@ -233,5 +254,5 @@
   when: ansible_distribution_version == "16.04"
 
 - name: Start openbach-backend
-  service: name=openbach-backend state=started
+  service: name=openbach-backend state=restarted
 

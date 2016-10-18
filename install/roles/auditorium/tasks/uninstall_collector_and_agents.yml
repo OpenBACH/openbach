@@ -38,7 +38,7 @@
 
 - name: Uninstall Agent on the Collector
   shell: /opt/openbach-auditorium/frontend_scripts/uninstall_agent.py {{ collector_ip }}
-  when: "{{ controller_ip }}" != "{{ collector_ip }}"
+  when: "{{ controller_ip }} != {{ collector_ip }}"
 
 - name: Uninstall Collector
   shell: /opt/openbach-auditorium/frontend_scripts/del_collector.py {{ collector_ip }}

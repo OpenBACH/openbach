@@ -84,6 +84,38 @@ def date_to_timestamp(date, fmt='%Y-%m-%d %H:%M:%S.%f'):
     return int(timestamp * 1000)
 
 
+def add_collector(collector_ip, username, password, name, logs_port=None,
+                  stats_port=None):
+    action = _request_message
+    if logs_port is not None:
+        action = partial(action, logs_port=logs_port)
+    if stats_port is not None:
+        action = partial(action, stats_port=stats_port)
+    return action('collector', 'POST', username=username, password=password,
+                  address=collector_ip, name=name)
+
+
+def modify_collector(collector_ip, logs_port=None, stats_port=None):
+    action = _request_message
+    if logs_port is not None:
+        action = partial(action, logs_port=logs_port)
+    if stats_port is not None:
+        action = partial(action, stats_port=stats_port)
+    return action('collector/{}'.format(collector_ip), 'PUT')
+
+
+def del_collector(collector_ip):
+    return _request_message('collector/{}'.format(collector_ip), 'DELETE')
+
+
+def get_collector(collector_ip):
+    return _request_message('collector/{}'.format(collector_ip), 'GET')
+
+
+def list_collectors():
+    return _request_message('collector', 'GET')
+
+
 def install_agent(agent_ip, collector_ip, username, password, name):
     return _request_message('agent', 'POST', address=agent_ip,
                             username=username, password=password,
@@ -209,6 +241,11 @@ def retrieve_status_agents(agent_ips, update=False):
         action = partial(action, update='')
     return action('agent', 'POST', action='retrieve_status',
                   addresses=agent_ips)
+
+
+def assign_collector(address, collector_ip):
+    return _request_message('agent/{}'.format(address), 'POST',
+                            collector_ip=collector_ip)
 
 
 def watch_job_instance(job_instance_id, date=None, interval=None, stop=None):
@@ -338,6 +375,20 @@ def kill_all(date=None):
     return action('job_instance', 'POST', action='kill')
 
 
+def status_add_collector(address):
+    return _request_message('collector/status', 'GET', address=address)
+
+
+def status_modify_collector(address):
+    return _request_message('collector/{}/status'.format(address), 'GET',
+                            action='modify')
+
+
+def status_del_collector(address):
+    return _request_message('collector/{}/status'.format(address), 'GET',
+                            address=address, action='del')
+
+
 def status_install_agent(address):
     return _request_message('agent/status', 'GET', address=address,
                             action='install')
@@ -349,8 +400,13 @@ def status_uninstall_agent(address):
 
 
 def status_retrieve_status_agents(address):
-    return _request_message('agent/status', 'GET', address=address,
+    return _request_message('agent/{}/status'.format(address), 'GET',
                             action='retrieve_status')
+
+
+def status_assign_collector(address):
+    return _request_message('agent/{}/status'.format(address), 'GET',
+                            action='assign')
 
 
 def status_install_jobs(address, name):

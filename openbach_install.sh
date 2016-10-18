@@ -148,11 +148,8 @@ do
     fi
 done
 
-echo -e "agents:\n  - { 'ip': '$controller_address', 'username': '$controller_username', 'password': '$controller_password', 'name': '$controller_name' }" >> /tmp/openbach_extra_vars2
-if [ $controller_address != $collector_address ]
-then
-    echo "  - { 'ip': '$collector_address', 'username': '$collector_username', 'password': '$collector_password', 'name': '$collector_name' }" >> /tmp/openbach_extra_vars2
-fi
+echo -e "controller:\n  - { 'ip': '$controller_address', 'username': '$controller_username', 'password': '$controller_password', 'name': '$controller_name' }" >> /tmp/openbach_extra_vars2
+echo -e "collector:\n  - { 'ip': '$collector_address', 'username': '$collector_username', 'password': '$collector_password', 'name': '$collector_name' }" >> /tmp/openbach_extra_vars2
 
 
 echo -e "[Controller]\n$controller_address\n" > /tmp/openbach_hosts

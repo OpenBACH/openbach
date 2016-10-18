@@ -43,7 +43,7 @@
   changed_when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
 
 - name: Download InfluxDB (64bits)
-  copy: src=../src/collector/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
+  copy: src=../src_collector/influxdb/influxdb_{{ influxdb_version }}_amd64.deb \
     dest=/tmp/
   when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
     

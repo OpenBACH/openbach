@@ -118,7 +118,7 @@ class GenericView(base.View):
 class StatusView(GenericView):
     status_type = None
 
-    def get(self, request, id=None, name=None):
+    def get(self, request, id=None, name=None, address=None):
         """compute status of agents or jobs on it"""
 
         try:
@@ -131,13 +131,56 @@ class StatusView(GenericView):
             return function(request, name)
         if self.status_type == 'job_instance':
             return function(request, id)
+        if self.status_type in ('collector', 'agent'):
+            return function(request, address)
         return function(request)
+
+
+    def _status_collectors(self, request):
+        try:
+            address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        data = {'address': address, 'command': 'status_add_collector'}
+
+        return self.conductor_execute(data)
+
+
+    def _status_collector(self, request, address):
+        try:
+            action = request.GET['action']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(address)
 
 
     def _status_agents(self, request):
         try:
             action = request.GET['action']
             address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action'
+                    ' {}'.format(action)}, 400
+
+        return function(address)
+
+
+    def _status_agent(self, request, address):
+        try:
+            action = request.GET['action']
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
@@ -231,6 +274,20 @@ class StatusView(GenericView):
         return function(id)
 
 
+    def _action_modify(self, address):
+        """Return the status of the modification of the Collector"""
+        data = {'address': address, 'command': 'status_modify_collector'}
+
+        return self.conductor_execute(data)
+
+
+    def _action_del(self, address):
+        """Return the status of the deletion of the Collector"""
+        data = {'address': address, 'command': 'status_del_collector'}
+
+        return self.conductor_execute(data)
+
+
     def _action_install(self, address):
         """Return the status of the installation of the Agent"""
         data = { 'address': address, 'command': 'status_install_agent' }
@@ -249,6 +306,13 @@ class StatusView(GenericView):
         """Return the status of the retrievement of the status of the Agent"""
         data = { 'address': address, 'command':
                  'status_retrieve_status_agent' }
+
+        return self.conductor_execute(data)
+
+
+    def _action_assign(self, address):
+        """Return the status of the assignation of the Collector to the Agent"""
+        data = { 'address': address, 'command': 'status_assign_collector' }
 
         return self.conductor_execute(data)
 
@@ -325,13 +389,73 @@ class StatusView(GenericView):
         return self.conductor_execute(data)
 
 
+class CollectorsView(GenericView):
+    """Manage actions for agents without an ID"""
+
+    def get(self, request):
+        """list all collectors"""
+
+        data = {'command': 'list_collectors'}
+
+        return self.conductor_execute(data)
+
+
+    def post(self, request):
+        """create a new collector"""
+
+        required_parameters = ('address', 'username', 'name', 'password')
+        try:
+            data = {k: request.JSON[k] for k in required_parameters}
+        except KeyError as e:
+            return {'msg': 'Missing parameter {}'.format(e)}, 400
+
+        data['command'] = 'add_collector'
+        if 'logs_port' in request.JSON:
+            data['logs_port'] = request.JSON['logs_port']
+        if 'stats_port' in request.JSON:
+            data['stats_port'] = request.JSON['stats_port']
+
+        return self.conductor_execute(data)
+
+
+class CollectorView(GenericView):
+    """Manage actions on specific agents"""
+
+    def get(self, request, address):
+        """get the informations of this collector"""
+
+        data = {'address': address, 'command': 'get_collector'}
+
+        return self.conductor_execute(data)
+
+
+    def delete(self, request, address):
+        """remove a collector from the database"""
+
+        data = {'command': 'del_collector', 'address': address}
+
+        return self.conductor_execute(data)
+
+    
+    def put(self, request, address):
+        """modify a collector"""
+
+        data = {'command': 'modify_collector', 'address': address}
+        if 'logs_port' in request.JSON:
+            data['logs_port'] = request.JSON['logs_port']
+        if 'stats_port' in request.JSON:
+            data['stats_port'] = request.JSON['stats_port']
+
+        return self.conductor_execute(data)
+
+
 class BaseAgentView(GenericView):
     """Abstract base class used to factorize agent creation"""
 
-    def _create_agent(self, address, username, collector, name, password):
+    def _create_agent(self, address, username, collector_ip, name, password):
         """Helper function to factorize out the agent creation code"""
 
-        data = { 'address': address, 'collector': collector, 'username':
+        data = { 'address': address, 'collector_ip': collector_ip, 'username':
                 username, 'password': password, 'name': name, 'command':
                 'install_agent' }
 
@@ -367,7 +491,8 @@ class AgentsView(BaseAgentView):
             action = request.JSON['action']
         except KeyError:
             # Create a new Agent
-            required_parameters = ('address', 'username', 'collector', 'name', 'password')
+            required_parameters = ('address', 'username', 'collector_ip',
+                                   'name', 'password')
             try:
                 parameters = {k: request.JSON[k] for k in required_parameters}
             except KeyError as e:
@@ -391,6 +516,19 @@ class AgentsView(BaseAgentView):
 
 class AgentView(BaseAgentView):
     """Manage actions on specific agents"""
+
+    def post(self, request, address):
+        """assign a collector to the agent"""
+
+        try:
+            collector_ip = request.JSON['collector_ip']
+        except KeyError as e:
+            return {'msg': 'Missing parameter {}'.format(e)}, 400
+
+        data = {'command': 'assign_collector', 'address': address,
+                'collector_ip': collector_ip}
+
+        return self.conductor_execute(data)
 
     def delete(self, request, address):
         """remove an agent from the database"""

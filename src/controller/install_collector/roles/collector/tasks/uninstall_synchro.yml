@@ -26,36 +26,17 @@
 #   
 #   
 #   
-#   @file     install_synchro.yml
-#   @brief    Tasks that install the tools need to synchronize the Collector
+#   @file     uninstall_synchro.yml
+#   @brief    Tasks that uninstall the tools need to synchronize the Collector
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Install ntp and ntpdate
-  apt: pkg={{ item }} state=installed update_cache=true
+- name: Uninstall ntp and ntpdate
+  apt: pkg={{ item }} state=absent update_cache=false
   with_items:
     - ntp
     - ntpdate
-  when: inventory_hostname not in groups['Controller']
-
-- name: Start Ntp server
-  service: name=ntp state=started
-  when: inventory_hostname not in groups['Controller']
-
-- name: Delete all ntp source servers
-  lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
-  when: inventory_hostname not in groups['Controller']
-
-- name: Add Controller as the ntp source server
-  lineinfile: dest=/etc/ntp.conf state=present line={{ item }}
-  with_items:
-    - "\n# Controller ntp server"
-    - "server {{ controller_ip }}"
-  when: inventory_hostname not in groups['Controller']
-  
-- name: Restart Ntp server
-  service: name=ntp state=restarted
-  when: inventory_hostname not in groups['Controller']
+  when: inventory_hostname != '{{ controller_ip }}'
 

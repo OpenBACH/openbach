@@ -9,6 +9,7 @@ class AdminInstances(admin.ModelAdmin):
 class AdminAgent(admin.ModelAdmin):
     exclude = ('password',)
 
+admin.site.register(Collector)
 admin.site.register(Agent, AdminAgent)
 admin.site.register(Job_Keyword)
 admin.site.register(Job)
@@ -47,6 +48,7 @@ admin.site.register(Wait_For_Finished)
 admin.site.register(Openbach_Function_Argument_Instance)
 admin.site.register(Command_Result)
 admin.site.register(Agent_Command_Result)
+admin.site.register(Collector_Command_Result)
 admin.site.register(File_Command_Result)
 admin.site.register(Installed_Job_Command_Result)
 admin.site.register(Job_Instance_Command_Result)

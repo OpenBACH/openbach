@@ -87,6 +87,25 @@ class Command_Result(models.Model):
         return {'response': self.response, 'returncode': self.returncode}
 
 
+class Collector(models.Model):
+    address = models.GenericIPAddressField(primary_key=True)
+    logs_port = models.IntegerField(default=10514)
+    stats_port = models.IntegerField(default=2222)
+
+    def __str__(self):
+        return self.address
+
+
+class Collector_Command_Result(models.Model):
+    address = models.GenericIPAddressField(primary_key=True)
+    status_add = models.ForeignKey(Command_Result, null=True, blank=True,
+                                   related_name='status_add')
+    status_modify = models.ForeignKey(Command_Result, null=True, blank=True,
+                                      related_name='status_mofidy')
+    status_del = models.ForeignKey(Command_Result, null=True, blank=True,
+                                   related_name='status_del')
+
+
 class Agent(models.Model):
     name = models.CharField(max_length=20, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
@@ -96,7 +115,7 @@ class Agent(models.Model):
     update_reachable = models.DateTimeField(null=True, blank=True)
     username = models.CharField(max_length=200)
     password = models.CharField(max_length=200)
-    collector = models.GenericIPAddressField()
+    collector = models.ForeignKey(Collector)
 
     def set_password(self, raw_password):
         # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
@@ -107,7 +126,7 @@ class Agent(models.Model):
         return hashers.check_password(raw_password, self.password)
 
     def __str__(self):
-        return self.address
+        return '{} ({})'.format(self.name, self.address)
 
 
 class Agent_Command_Result(models.Model):
@@ -119,6 +138,8 @@ class Agent_Command_Result(models.Model):
     status_retrieve_status_agent = models.ForeignKey(
         Command_Result, null=True, blank=True,
         related_name='status_retrieve_status_agent')
+    status_assign = models.ForeignKey(Command_Result, null=True, blank=True,
+                                      related_name='status_assign_collector')
     status_retrieve_status_jobs = models.ForeignKey(
         Command_Result, null=True, blank=True,
         related_name='status_retrieve_status_jobs')

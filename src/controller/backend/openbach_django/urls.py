@@ -41,9 +41,18 @@ from . import views
 
 app_name = 'openbach_django'
 urlpatterns = [
+    url(r'^collector/status/?$',
+        views.StatusView.as_view(status_type='collectors'),
+        name='status_collectors'),
+    url(r'^collector/(?P<address>[^/]+)/status/?$',
+        views.StatusView.as_view(status_type='collector'),
+        name='status_collector'),
     url(r'^agent/status/?$',
         views.StatusView.as_view(status_type='agents'),
         name='status_agents'),
+    url(r'^agent/(?P<address>[^/]+)/status/?$',
+        views.StatusView.as_view(status_type='agent'),
+        name='status_agent'),
     url(r'^job/status/?$', views.StatusView.as_view(status_type='jobs'),
         name='status_jobs'),
     url(r'^job/(?P<name>[^/]+)/status/?$',
@@ -56,6 +65,11 @@ urlpatterns = [
     url(r'^job_instance/(?P<id>\d+)/status/?$',
         views.StatusView.as_view(status_type='job_instance'),
         name='status_job_instance'),
+
+    url(r'^collector/?$', views.CollectorsView.as_view(),
+        name='collectors_view'),
+    url(r'^collector/(?P<address>[^/]+)/?$', views.CollectorView.as_view(),
+        name='collector_view'),
 
     url(r'^agent/?$', views.AgentsView.as_view(), name='agents_view'),
     url(r'^agent/(?P<address>[^/]+)/?$', views.AgentView.as_view(),

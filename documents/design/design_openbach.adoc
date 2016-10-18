@@ -570,26 +570,44 @@ the object/component they concern to, i.e. the Agents, the Jobs, the Job instanc
 image::functions.png[align="center"]
 {nbsp} +
 
-First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
+
+First the group 1 of openbach-functions allowing to install, delete, list and modify the available Collectors
 
 .group 1
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
-| Function                      | Method      | url              | Input contents (JSON or Query sting)                                       | Description
-| install_agent                 | POST        | /agent           | *address*, *username*, *password*, *collector*, *name*, *action='install'* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
-| status_install_agent          | GET         | /agent/status    | *address*, *action='install'*                                              | Return the status of the installation of the Agent.
-| uninstall_agent               | DELETE      | /agent/*address* |                                                                            | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
-| status_uninstall_agent        | GET         | /agent/status    | *address*, *action='uninstall'*                                            | Return the status of the uninstallation of the Agent.
-| list_agents                   | GET         | /agent           | update                                                                     | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
-| retrieve_status_agents        | POST        | /agent           | *addresses*, *action='retrieve_status'*, update                            | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
-| status_retrieve_status_agents | GET         | /agent/status    | *address*, *action='retrieve_status'*                                      | Return the status of the retrievement of the status of the Agent
+| Function                      | Method      | url                         | Input contents (JSON or Query sting)                                 | Description
+| add_collector                 | POST        | /collector                  | *address*, *username*, *password*, *name*, logs_port, stats_port     | Add a new Collector (and install an Agent on it)
+| status_add_collector          | GET         | /collector/status           | *address*                                                            | Return the status of the installation of the new Collector
+| modify_collector              | PUT         | /collector/*address*        | logs_port, stats_port                                                | Modify the Collector (and all the associated Agents)
+| status_modify_collector       | GET         | /collector/*address*/status | *action='modify'*                                                    | Return the status of the modification of the Collector
+| del_collector                 | DELETE      | /collector/*address*        |                                                                      | Remove a Collector (but do not uninstall the Agent on it)
+| status_del_collector          | GET         | /collector/*address*/status | *action='del'*                                                       | Return the status of the deletion of the Collector
+| get_collector                 | GET         | /collector/*address*        |                                                                      | Return the informations of this Collector
+| list_collectors               | GET         | /collector                  |                                                                      | Return the list of Collectors available
 |===
 
-
-Second the group 2 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
-if a user develops a new Job (or takes a new developed Job from someone) and includes it in the list of possible Jobs to be installed.
+Second the group 2 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
 
 .group 2
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function                      | Method      | url                     | Input contents (JSON or Query sting)                                          | Description
+| install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name*, *action='install'* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
+| status_install_agent          | GET         | /agent/status           | *address*, *action='install'*                                                 | Return the status of the installation of the Agent.
+| uninstall_agent               | DELETE      | /agent/*address*        |                                                                               | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
+| status_uninstall_agent        | GET         | /agent/*address*/status | *action='uninstall'*                                                          | Return the status of the uninstallation of the Agent.
+| list_agents                   | GET         | /agent                  | update                                                                        | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
+| retrieve_status_agents        | POST        | /agent                  | *addresses*, *action='retrieve_status'*, update                               | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
+| status_retrieve_status_agents | GET         | /agent/status           | *address*, *action='retrieve_status'*                                         | Return the status of the retrievement of the status of the Agent
+| assign_collector              | POST        | /agent/*address*        | *collector_ip*                                                                | Assign this Collector to the Agent
+| status_assign_collector       | GET         | /agent/*address*/status | *action='assign'*                                                             | Return the status of the assignement of this Collector to the Agent
+|===
+
+Then group 3 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
+if a user develops a new Job (or takes a new developed Job from someone) and includes it in the list of possible Jobs to be installed.
+
+.group 3
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function           | Method          | url              | Input contents (JSON or Query string)      | Description
@@ -600,9 +618,9 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 | get_job_help       | GET             | /job/*job_name*  | *type=help*                                | Return the help of the Job
 |===
 
-Then the group 3 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
+Then the group 4 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
 
-.group 3
+.group 4
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function                    | Method        | url                    | Input contents (JSON or Query string)                                               | Description
@@ -621,9 +639,9 @@ Then the group 3 of openbach-functions allowing to install/uninstall a Job in a 
 | status_push_file            | GET           | /file/status           | *filename*, *path*, *agent_ip*                                                      | Return the status of the push of a file on the Agent.
 |===
 
-The group 4 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
+The group 5 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
 
-.group 4
+.group 5
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function                    | Method        | url                       | Input contents (JSON or Query string)                                     | Description
@@ -640,9 +658,9 @@ The group 4 of openbach-functions allowing to start/schedule/stop a Job instance
 | kill_all                    | POST          | /job_instance             | *action=kill*, date                                                       | Stop all the scenario instance, job instances and watchs.
 |===
 
-The group 5 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.
+The group 6 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.
 
-.group 5
+.group 6
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function            | Method        | url               | Input contents (JSON or Query string) | Description
@@ -653,9 +671,9 @@ The group 5 of openbach-functions allowing to create/delete/show/modify a scenar
 | list_scenarios      | GET           | /scenario         | verbosity                             | List all available scenarios.
 |===
 
-And finally, the group 6 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
+And finally, the group 7 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
 
-.group 6
+.group 7
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function                      | Method        | url                                          | Input contents (JSON or Query string) | Description

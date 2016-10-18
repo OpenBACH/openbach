@@ -42,6 +42,7 @@ import shlex
 import os.path
 import time
 from configparser import ConfigParser
+import yaml
 from collections import namedtuple, defaultdict
 try:
     import simplejson as json
@@ -238,13 +239,14 @@ def grouper(iterable, n):
 
 
 class Conf:
-    def __init__(self, conf_path='config.ini'):
+    def __init__(self, conf_path, collector_conf):
         config = ConfigParser()
         config.read(conf_path)
-        self.host = config.get('logstash', 'host')
-        self.port = config.get('logstash', 'port')
         self.mode = config.get('logstash', 'mode')
         self.prefix = config.get('agent', 'prefix')
+        content = yaml.load(collector_conf)
+        self.host = content['address']
+        self.port = content['stats']['port']
 
 
 class RstatsRule(namedtuple('RstatsRule', 'name storage broadcast')):
@@ -426,7 +428,7 @@ if __name__ == '__main__':
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind(('', 1111))
 
-    conf = Conf('/opt/rstats/rstats.cfg')
+    conf = Conf('/opt/rstats/rstats.cfg', '/opt/openbach-agent/collector.yml')
 
     while True:
         data, remote = udp_socket.recvfrom(2048)

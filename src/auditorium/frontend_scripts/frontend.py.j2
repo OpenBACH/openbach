@@ -53,11 +53,11 @@ _URL = "http://{{ controller_ip }}:8000/{}/"
 
 def wait_for_success(status_function, **kwargs):
     while True:
+        sleep(1)
         response = status_function(**kwargs).json()
         returncode = response['result']['returncode']
         if returncode != 202:
             exit(returncode != 200)
-        sleep(1)
 
 
 def _request_message(entry_point, verb, **kwargs):

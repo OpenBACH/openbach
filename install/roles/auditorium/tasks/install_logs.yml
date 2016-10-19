@@ -58,6 +58,10 @@
   copy: src=kibana.service dest=/etc/systemd/system/ mode=0644
   when: ansible_distribution_version == "16.04"
 
+- name: Reload systemd
+  shell: systemctl daemon-reload
+  when: ansible_distribution_version == "16.04"
+
 - name: Start Kibana
   service: name=kibana state=started
 

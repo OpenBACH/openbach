@@ -231,9 +231,6 @@
   template: src=../src/controller/openbach-conductor/openbach-conductor.service.j2 dest=/etc/systemd/system/openbach-conductor.service mode=0644
   when: ansible_distribution_version == "16.04"
 
-- name: Start openbach-conductor
-  service: name=openbach-conductor state=restarted
-
 - name: Create status-manager service
   copy: src=../src/controller/status-manager/status-manager dest=/etc/init.d/ mode=0755
   when: ansible_distribution_version != "16.04"
@@ -242,9 +239,6 @@
   copy: src=../src/controller/status-manager/status-manager.service dest=/etc/systemd/system/ mode=0644
   when: ansible_distribution_version == "16.04"
 
-- name: Start status-manager
-  service: name=status-manager state=restarted
-
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend dest=/etc/init.d/ mode=0755
   when: ansible_distribution_version != "16.04"
@@ -252,6 +246,16 @@
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend.service dest=/etc/systemd/system/ mode=0644
   when: ansible_distribution_version == "16.04"
+
+- name: Reload systemd
+  shell: systemctl daemon-reload
+  when: ansible_distribution_version == "16.04"
+
+- name: Start status-manager
+  service: name=status-manager state=restarted
+
+- name: Start openbach-conductor
+  service: name=openbach-conductor state=restarted
 
 - name: Start openbach-backend
   service: name=openbach-backend state=restarted

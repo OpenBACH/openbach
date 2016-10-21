@@ -35,6 +35,7 @@
 
 
 import argparse
+import json
 from frontend import modify_project, pretty_print
 
 

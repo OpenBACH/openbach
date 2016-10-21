@@ -378,8 +378,8 @@ def add_project(project_json):
 
 
 def modify_project(project_name, project_json):
-    return _request_project('project/{}'.format(project_name), 'PUT',
-                            project_json=project_json)
+    return _request_message('project/{}'.format(project_name), 'PUT',
+                            **project_json)
 
 
 def del_project(project_name):

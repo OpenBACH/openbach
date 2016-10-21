@@ -58,7 +58,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
 
 from django.utils import timezone
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
@@ -1022,113 +1022,103 @@ class ClientThread(threading.Thread):
         except OSError:
             help = ''
 
-        deleted = False
-        try:
-            job = Job.objects.get(pk=name)
-            job.delete()
-            deleted = True
-        except ObjectDoesNotExist:
-            pass
+        with transaction.atomic():
+            try:
+                job = Job.objects.get(pk=name)
+                job.delete()
+            except ObjectDoesNotExist:
+                pass
 
-        job = Job(
-            name=name,
-            path=path,
-            help=help,
-            job_version=job_version,
-            description=description,
-            job_conf=job_conf
-        )
-        job.save()
-
-        for keyword in keywords:
-            job_keyword = Job_Keyword(
-                name=keyword
+            job = Job(
+                name=name,
+                path=path,
+                help=help,
+                job_version=job_version,
+                description=description,
+                job_conf=job_conf
             )
-            job_keyword.save()
-            job.keywords.add(job_keyword)
+            job.save()
 
-        if type(statistics) == list:
-            try:
-                for statistic in statistics:
-                    Statistic(
-                        name=statistic['name'],
-                        job=job,
-                        description=statistic['description'],
-                        frequency=statistic['frequency']
-                    ).save()
-            except IntegrityError:
-                job.delete()
-                if deleted:
-                    raise BadRequest('The configuration file of the Job is not '
-                                     'well formed', 409, {'configuration file':
-                                                          config_file,
-                                                          'warning': 'Old Job '
-                                                          'has been deleted'})
-                else:
+            for keyword in keywords:
+                job_keyword = Job_Keyword(
+                    name=keyword
+                )
+                job_keyword.save()
+                job.keywords.add(job_keyword)
+
+            if type(statistics) == list:
+                try:
+                    for statistic in statistics:
+                        Statistic(
+                            name=statistic['name'],
+                            job=job,
+                            description=statistic['description'],
+                            frequency=statistic['frequency']
+                        ).save()
+                except IntegrityError:
+                    job.delete()
                     raise BadRequest('The configuration file of the Job is not '
                                      'well formed', 409, {'configuration file':
                                                           config_file})
-        elif statistics == None:
-            pass
-        else:
-            job.delete()
-            if deleted:
-                raise BadRequest('The configuration file of the Job is not '
-                                 'well formed', 409, {'configuration file':
-                                                      config_file, 'warning':
-                                                      'Old Job has been '
-                                                      'deleted'})
+            elif statistics == None:
+                pass
             else:
-                raise BadRequest('The configuration file of the Job is not well'
-                                 ' formed', 409, {'configuration file':
-                                                  config_file})
-
-        rank = 0
-        for required_arg in required_args:
-            try:
-                Required_Job_Argument(
-                    name=required_arg['name'],
-                    description=required_arg['description'],
-                    type=required_arg['type'],
-                    count=required_arg['count'],
-                    rank=rank,
-                    job=job
-                ).save()
-                rank += 1
-            except IntegrityError:
-                job.delete()
-                if deleted:
-                    raise BadRequest('The configuration file of the Job is not '
-                                     'well formed', 409, {'configuration file':
-                                                          config_file, 'warning':
-                                                          'Old Job has been '
-                                                          'deleted'})
-                else:
-                    raise BadRequest('The configuration file of the Job is not '
-                                     'well formed', 409, {'configuration file':
-                                                          config_file})
-            except BadRequest:
-                job.delete()
-                raise
-
-        for optional_arg in optional_args:
-            try:
-                Optional_Job_Argument(
-                    name=optional_arg['name'],
-                    flag=optional_arg['flag'],
-                    type=optional_arg['type'],
-                    count=optional_arg['count'],
-                    description=optional_arg['description'],
-                    job=job
-                ).save()
-            except IntegrityError:
                 job.delete()
                 raise BadRequest('The configuration file of the Job is not well'
                                  ' formed', 409, {'configuration file':
                                                   config_file})
-            except BadRequest:
-                job.delete()
-                raise
+
+            rank = 0
+            for required_arg in required_args:
+                try:
+                    Required_Job_Argument(
+                        name=required_arg['name'],
+                        description=required_arg['description'],
+                        type=required_arg['type'],
+                        count=required_arg['count'],
+                        rank=rank,
+                        job=job
+                    ).save()
+                    rank += 1
+                except IntegrityError:
+                    job.delete()
+                    if deleted:
+                        raise BadRequest('The configuration file of the Job is not '
+                                         'well formed', 409, {'configuration file':
+                                                              config_file, 'warning':
+                                                              'Old Job has been '
+                                                              'deleted'})
+                    else:
+                        raise BadRequest('The configuration file of the Job is not '
+                                         'well formed', 409, {'configuration file':
+                                                              config_file})
+                except BadRequest:
+                    job.delete()
+                    raise
+
+            for optional_arg in optional_args:
+                try:
+                    Optional_Job_Argument(
+                        name=optional_arg['name'],
+                        flag=optional_arg['flag'],
+                        type=optional_arg['type'],
+                        count=optional_arg['count'],
+                        description=optional_arg['description'],
+                        job=job
+                    ).save()
+                except IntegrityError:
+                    job.delete()
+                    raise BadRequest('The configuration file of the Job is not well'
+                                     ' formed', 409, {'configuration file':
+                                                      config_file})
+                except KeyError:
+                    job.delete()
+                    raise BadRequest('The configuration file of the Job is not well'
+                                     ' formed', 409, {'configuration file':
+                                                      config_file})
+                except BadRequest:
+                    job.delete()
+                    raise
 
         return {}, 200
 
@@ -2488,13 +2478,11 @@ class ClientThread(threading.Thread):
                                                      job=installed_job)
             if not stat:
                 stat = Statistic_Instance(stat=statistic, job=installed_job)
+                stat.save()
             else:
                 stat = stat[0]
             if storage == None and broadcast == None:
-                try:
-                    stat.delete()
-                except AssertionError:
-                    pass
+                stat.delete()
             else:
                 if broadcast != None:
                     stat.broadcast = broadcast
@@ -3300,20 +3288,22 @@ class ClientThread(threading.Thread):
         else:
             project = None
 
-        try:
-            scenario = Scenario.objects.get(name=scenario_name, project=project)
-        except ObjectDoesNotExist:
-            pass
-        else:
-            scenario.delete()
+        with transaction.atomic():
+            try:
+                scenario = Scenario.objects.get(name=scenario_name,
+                                                project=project)
+            except ObjectDoesNotExist:
+                pass
+            else:
+                scenario.delete()
 
-        result = self.register_scenario(scenario_json, name, project)
-        scenario = Scenario.objects.get(name=name)
-        try:
-            self.check_scenario(scenario)
-        except BadRequest:
-            scenario.delete()
-            raise
+            result = self.register_scenario(scenario_json, name, project)
+            scenario = Scenario.objects.get(name=name)
+            try:
+                self.check_scenario(scenario)
+            except BadRequest:
+                scenario.delete()
+                raise
 
         return result
 
@@ -4160,7 +4150,6 @@ class ClientThread(threading.Thread):
         networks = project_json['network']
         if not self.first_check_on_network(networks):
             project.delete()
-            print('coco')
             raise BadRequest('Your Project is malformed: the json is'
                              ' malformed')
         for network in networks:
@@ -4173,7 +4162,6 @@ class ClientThread(threading.Thread):
         for machine in machines:
             if not self.first_check_on_machine(machine):
                 project.delete()
-                print('toto')
                 raise BadRequest('Your Project is malformed: the json is'
                                  ' malformed')
             try:
@@ -4202,7 +4190,20 @@ class ClientThread(threading.Thread):
         return self.modify_project(project_name, project_json)
 
     def modify_project(self, project_name, project_json):
-        pass
+        if not self.first_check_on_project(project_json):
+            raise BadRequest('Your Project is malformed: the json is malformed')
+        if project_name != project_json['name']:
+            raise BadRequest('Your Project is malformed: the name given does '
+                             'not correpond to the name in the json')
+        with transaction.atomic():
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                pass
+            else:
+                project.delete()
+            self.register_project(project_json)
+        return {}, 200
 
     def del_project_action(self, project_name):
         return self.del_project(project_name)

@@ -282,10 +282,6 @@ class PlaybookBuilder():
     def build_assign_collector(self, collector, playbook_file, extra_vars_file):
         print('    - name: Assign new Collector', file=playbook_file)
         print('      template: src=/opt/openbach-controller/src_agent/openbach-agent/collector.yml.j2 dest=/opt/openbach-agent/collector.yml', file=playbook_file)
-#        print('        ',
-#              file=playbook_file)
-#        print('        ',
-#              file=playbook_file)
         print('      become: yes', file=playbook_file)
         variables = {
             'collector_ip:': collector.address,
@@ -961,7 +957,8 @@ class ClientThread(threading.Thread):
                 'ansible-playbook -i /tmp/openbach_hosts -e '
                 '@{} -e '
                 'ansible_ssh_user={agent.username} -e '
-                'ansible_ssh_pass={agent.password} {}'
+                'ansible_ssh_pass={agent.password} -e '
+                'ansible_sudo_pass={agent.password} {}'
                 .format(extra_vars.name, playbook.name, agent=agent))
         except BadRequest as e:
             response = e.infos

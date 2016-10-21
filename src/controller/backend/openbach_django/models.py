@@ -192,6 +192,11 @@ class Agent_Command_Result(models.Model):
         else:
             result_json['retrieve_status_agent'] = {'error': 'Action never '
                                                     'asked', 'returncode': 404}
+        if self.status_assign:
+            result_json['assign'] = self.status_assign.get_json()
+        else:
+            result_json['assign'] = {'error': 'Action never '
+                                     'asked', 'returncode': 404}
         if self.status_retrieve_status_jobs:
             result_json['retrieve_status_jobs'] = self.status_retrieve_status_jobs.get_json()
         else:

@@ -29,24 +29,26 @@
    
    
    
-   @file     status_modify_collector.py
-   @brief    Call the openbach-function status_modify_collector
+   @file     state_push_file.py
+   @brief    Call the openbach-function state_push_file
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_modify_collector, pretty_print
+from frontend import state_push_file, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - ',
+    parser = argparse.ArgumentParser(description='OpenBach -',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('collector_ip', help='IP address of the Collector')
+    parser.add_argument('filename', help='Name of the file')
+    parser.add_argument('path', help='Path where the file is')
+    parser.add_argument('agent_ip', help='IP address of the Agent')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_modify_collector)(args.collector_ip)
+    pretty_print(state_push_file)(args.filename, args.path, args.agent_ip)
 

@@ -53,13 +53,10 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('scenario_names', nargs='+', help='Names of the '
                         'Scenarios')
-    parser.add_argument("-v", "--verbosity", action="count",
-                        help="Increase output verbosity")
 
     # get args
     args = parser.parse_args()
     scenario_names = args.scenario_names
-    verbosity = args.verbosity
 
-    pretty_print(list_scenario_instances)(scenario_names, verbosity)
+    pretty_print(list_scenario_instances)(scenario_names)
 

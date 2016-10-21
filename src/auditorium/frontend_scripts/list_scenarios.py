@@ -42,12 +42,9 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - List all Scenarios',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-v", "--verbosity", action="count",
-        help="Increase output verbosity")
 
     # get args
     args = parser.parse_args()
-    verbosity = args.verbosity
 
-    pretty_print(list_scenarios)(verbosity)
+    pretty_print(list_scenarios)()
 

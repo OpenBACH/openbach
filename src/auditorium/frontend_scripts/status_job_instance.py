@@ -45,13 +45,10 @@ if __name__ == "__main__":
     parser.add_argument('job_instance_id', help='Id of the Instance')
     parser.add_argument('-u', '--update', action='store_true',
                         help='Use only the last status present on the collector')
-    parser.add_argument("-v", "--verbosity", action="count",
-                        help="Increase output verbosity")
 
     # get args
     args = parser.parse_args()
     job_instance_id = args.job_instance_id
     update = args.update
-    verbosity = args.verbosity
 
-    pretty_print(status_job_instance)(job_instance_id, update, verbosity)
+    pretty_print(status_job_instance)(job_instance_id, update)

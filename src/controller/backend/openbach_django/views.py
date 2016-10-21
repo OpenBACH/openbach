@@ -42,11 +42,12 @@ import os
 
 from django.views.generic import base
 from django.http import JsonResponse
+import traceback
 
 class GenericView(base.View):
     """Base class for our own class-based views"""
 
-    def dispatch(self, request, *args, **kwargs):
+    def _dispatch(self, request, *args, **kwargs):
         """Wraps every response from the various calls into a
         JSON response.
         """
@@ -63,20 +64,34 @@ class GenericView(base.View):
             except ValueError:
                 return JsonResponse(
                         status=400,
-                        data={'msg': 'API error: data should be sent as JSON in the request body'})
+                        data={'error': 'API error: data should be sent as JSON in the request body'})
         else:
             request.JSON = {}
 
-        response = super().dispatch(request, *args, **kwargs)
+        try:
+            response = super().dispatch(request, *args, **kwargs)
+        except Exception:
+            return JsonResponse(
+                    status=500,
+                    data={'error': traceback.format_exc()})
         try:
             message, status = response
         except ValueError:
-            return JsonResponse(
-                    status=500,
-                    data={'msg': 'Programming error: method does not return expected value'})
+            return response
         else:
-            return JsonResponse(data=message, status=status)
+            return JsonResponse(data=message, status=status, safe=False)
 
+    def dispatch(self, request, *args, **kwargs):
+        response = self._dispatch(request, *args, **kwargs)
+        response['Access-Control-Allow-Credentials'] = True
+        response['Access-Control-Allow-Origin'] = '*'
+        try:
+            access_control = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
+        except KeyError:
+            pass
+        else:
+            response['Access-Control-Allow-Headers'] = access_control
+        return response
 
     @staticmethod
     def conductor_execute(command):
@@ -89,14 +104,14 @@ class GenericView(base.View):
         result = json.loads(recv.decode())
         returncode = result.pop('returncode')
         conductor.close()
-        return result, returncode
+        return result['response'], returncode
 
 
     def _install_jobs(self, addresses, names, severity=4, local_severity=4):
         """Helper function used to create an agent or a job"""
 
-        data = { 'addresses': addresses, 'names': names, 'severity': severity,
-                 'local_severity': local_severity, 'command': 'install_jobs' }
+        data = {'addresses': addresses, 'names': names, 'severity': severity,
+                'local_severity': local_severity, 'command': 'install_jobs'}
 
         return self.conductor_execute(data)
 
@@ -115,121 +130,49 @@ class GenericView(base.View):
         return {'msg': 'Route is created but no logic is associated'}, 200
 
 
-class StatusView(GenericView):
-    status_type = None
+class StateView(GenericView):
+    state_type = None
 
     def get(self, request, id=None, name=None, address=None):
         """compute status of agents or jobs on it"""
 
         try:
-            function = getattr(self, '_status_' + self.status_type)
+            function = getattr(self, '_state_' + self.state_type)
         except AttributeError:
-            return {'msg': 'POST data malformed: unknown status_type'
-                    ' {}'.format(self.status_type)}, 400
+            return {'msg': 'POST data malformed: unknown state_type'
+                    ' {}'.format(self.state_type)}, 400
 
-        if self.status_type == 'job':
+        if self.state_type == 'job':
             return function(request, name)
-        if self.status_type == 'job_instance':
+        if self.state_type == 'job_instance':
             return function(request, id)
-        if self.status_type in ('collector', 'agent'):
+        if self.state_type in ('collector', 'agent'):
             return function(request, address)
         return function(request)
 
 
-    def _status_collectors(self, request):
-        try:
-            address = request.GET['address']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        data = {'address': address, 'command': 'status_add_collector'}
+    def _state_collector(self, request, address):
+        """Return the status of the last commands on the Collector"""
+        data = {'address': address, 'command': 'state_collector'}
 
         return self.conductor_execute(data)
 
 
-    def _status_collector(self, request, address):
-        try:
-            action = request.GET['action']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+    def _state_agent(self, request, address):
+        """Return the status of the last commands on the Agent"""
+        data = {'address': address, 'command': 'state_agent'}
 
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(address)
+        return self.conductor_execute(data)
 
 
-    def _status_agents(self, request):
-        try:
-            action = request.GET['action']
-            address = request.GET['address']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+    def _state_job(self, request, name):
+        """Return the status of the last commands on the Job"""
+        data = {'address': address, 'command': 'state_job'}
 
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(address)
+        return self.conductor_execute(data)
 
 
-    def _status_agent(self, request, address):
-        try:
-            action = request.GET['action']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(address)
-
-
-    def _status_jobs(self, request):
-        try:
-            action = request.GET['action']
-            if action != 'status_retrieve_status':
-                name = request.GET['name']
-            address = request.GET['address']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        if action == 'status_retrieve_status':
-            return function(address)
-        return function(address, name)
-
-
-    def _status_job(self, request, name):
-        try:
-            action = request.GET['action']
-            address = request.GET['address']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(address, name)
-
-
-    def _status_file(self, request):
+    def _state_file(self, request):
         try:
             filename = request.GET['filename']
             remote_path = request.GET['path']
@@ -237,154 +180,16 @@ class StatusView(GenericView):
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
-        data = { 'address': address, 'command': 'status_push_file',
-                 'remote_path': remoth_path, 'filename': filename }
+        data = {'address': address, 'command': 'state_push_file',
+                'remote_path': remote_path, 'filename': filename}
 
         return self.conductor_execute(data)
 
 
-    def _status_job_instances(self, request):
-        try:
-            action = request.GET['action']
-            job_instance_id = request.GET['job_instance_id']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(job_instance_id)
-
-
-    def _status_job_instance(self, request, id):
-        try:
-            action = request.GET['action']
-        except KeyError as e:
-            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-        try:
-            function = getattr(self, '_action_' + action)
-        except AttributeError:
-            return {'msg': 'POST data malformed: unknown action'
-                    ' {}'.format(action)}, 400
-
-        return function(id)
-
-
-    def _action_modify(self, address):
-        """Return the status of the modification of the Collector"""
-        data = {'address': address, 'command': 'status_modify_collector'}
-
-        return self.conductor_execute(data)
-
-
-    def _action_del(self, address):
-        """Return the status of the deletion of the Collector"""
-        data = {'address': address, 'command': 'status_del_collector'}
-
-        return self.conductor_execute(data)
-
-
-    def _action_install(self, address):
-        """Return the status of the installation of the Agent"""
-        data = { 'address': address, 'command': 'status_install_agent' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_uninstall(self, address):
-        """Return the status of the uninstallation of the Agent"""
-        data = { 'address': address, 'command': 'status_uninstall_agent' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_retrieve_status(self, address):
-        """Return the status of the retrievement of the status of the Agent"""
-        data = { 'address': address, 'command':
-                 'status_retrieve_status_agent' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_assign(self, address):
-        """Return the status of the assignation of the Collector to the Agent"""
-        data = { 'address': address, 'command': 'status_assign_collector' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_status_install(self, address, name):
-        """Return the status of the installation of a Job on an Agent"""
-        data = { 'address': address, 'name': name,  'command':
-                 'status_install_jobs' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_status_uninstall(self, address, name):
-        """Return the status of the uninstallation of a Job on an Agent"""
-        data = { 'address': address, 'name': name,  'command':
-                 'status_uninstall_jobs' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_status_retrieve_status(self, address):
-        """Return the status of the retrievement of the list of installed Jobs"""
-        data = { 'address': address, 'command':
-                 'status_retrieve_status_jobs' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_log_severity(self, address, name):
-        """Return the status of the setting of a now log severity"""
-        data = { 'address': address, 'name': name, 'command':
-                 'status_set_job_log_severity' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_stat_policy(self, address, name):
-        """Return the status of the setting of a now stats policy"""
-        data = { 'address': address, 'name': name, 'command':
-                 'status_set_job_stat_policy' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_start(self, job_instance_id):
-        """Return the status of the starting of a Job Instance"""
-        data = { 'job_instance_id': job_instance_id, 'command':
-                 'status_start_job_instance' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_stop(self, job_instance_id):
-        """Return the status of the stopping of one or more job instance"""
+    def _state_job_instance(self, request, id):
+        """Return the state of the commands on the Job_Instance"""
         data = {'job_instance_id': job_instance_id, 'command':
-                'status_stop_job_instance'}
-
-        return self.conductor_execute(data)
-
-
-    def _action_restart(self, id):
-        """Return the status of the restarting of a Job Instance"""
-        data = { 'job_instance_id': id, 'command':
-                 'status_restart_job_instance' }
-
-        return self.conductor_execute(data)
-
-
-    def _action_watch(self, id):
-        """Return the status of the starting of a watch"""
-        data = { 'job_instance_id': id, 'command':
-                 'status_watch_job_instance' }
+                'state_job_instance'}
 
         return self.conductor_execute(data)
 
@@ -455,9 +260,9 @@ class BaseAgentView(GenericView):
     def _create_agent(self, address, username, collector_ip, name, password):
         """Helper function to factorize out the agent creation code"""
 
-        data = { 'address': address, 'collector_ip': collector_ip, 'username':
+        data = {'address': address, 'collector_ip': collector_ip, 'username':
                 username, 'password': password, 'name': name, 'command':
-                'install_agent' }
+                'install_agent'}
 
         return self.conductor_execute(data)
 
@@ -465,7 +270,7 @@ class BaseAgentView(GenericView):
     def _action_retrieve_status(self, addresses, update):
         """Retrieve the status of an Agent"""
 
-        data = { 'addresses': addresses, 'command': 'retrieve_status_agents' }
+        data = {'addresses': addresses, 'command': 'retrieve_status_agents'}
         if update:
             data['update'] = update
 
@@ -479,7 +284,7 @@ class AgentsView(BaseAgentView):
         """list all agents"""
 
         update = 'update' in request.GET
-        data = { 'command': 'list_agents', 'update': update }
+        data = {'command': 'list_agents', 'update': update}
 
         return self.conductor_execute(data)
 
@@ -533,7 +338,7 @@ class AgentView(BaseAgentView):
     def delete(self, request, address):
         """remove an agent from the database"""
 
-        data = { 'command': 'uninstall_agent', 'address': address }
+        data = {'command': 'uninstall_agent', 'address': address}
 
         return self.conductor_execute(data)
 
@@ -544,7 +349,7 @@ class BaseJobView(GenericView):
     def _create_job(self, job_name, job_path):
         """Helper function to factorize out the job creation code"""
 
-        data = { 'command': 'add_job', 'name': job_name, 'path': job_path }
+        data = {'command': 'add_job', 'name': job_name, 'path': job_path}
 
         return self.conductor_execute(data)
 
@@ -561,8 +366,8 @@ class BaseJobView(GenericView):
     def _action_uninstall(self, names, addresses):
         """Uninstall jobs from some agents"""
 
-        data = { 'command': 'uninstall_jobs', 'names': names, 'addresses':
-                 addresses }
+        data = {'command': 'uninstall_jobs', 'names': names, 'addresses':
+                addresses}
 
         return self.conductor_execute(data)
 
@@ -570,7 +375,7 @@ class BaseJobView(GenericView):
     def _action_retrieve_status(self, addresses):
         """Retrieve the list of installed jobs on an Agent (or multiple Agents)"""
 
-        data = { 'addresses': addresses, 'command': 'retrieve_status_jobs' }
+        data = {'addresses': addresses, 'command': 'retrieve_status_jobs'}
 
         return self.conductor_execute(data)
 
@@ -582,32 +387,27 @@ class JobsView(BaseJobView):
         """list all jobs"""
 
         try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
-        try:
             address = request.GET['address']
         except KeyError:
-            return self._get_all_jobs(verbosity)
+            return self._get_all_jobs()
         else:
             update = 'update' in request.GET
-            return self._get_installed_jobs(address, verbosity, update)
+            return self._get_installed_jobs(address, update)
 
 
-    def _get_all_jobs(self, verbosity):
+    def _get_all_jobs(self):
         """list all the Jobs available on the benchmark"""
 
-        data = { 'command': 'list_jobs', 'verbosity': verbosity }
+        data = {'command': 'list_jobs'}
 
         return self.conductor_execute(data)
 
 
-    def _get_installed_jobs(self, address, verbosity, update):
+    def _get_installed_jobs(self, address, update):
         """list all the Jobs installed on an Agent"""
 
-        data = { 'command': 'list_installed_jobs', 'address': address,
-                 'verbosity': verbosity, 'update': update }
+        data = {'command': 'list_installed_jobs', 'address': address,
+                'update': update}
 
         return self.conductor_execute(data)
 
@@ -669,7 +469,7 @@ class JobView(BaseJobView):
     def _status_help(self, name):
         """compute help status for the given job"""
 
-        data = { 'command': 'get_job_help', 'name': name }
+        data = {'command': 'get_job_help', 'name': name}
 
         return self.conductor_execute(data)
 
@@ -677,14 +477,7 @@ class JobView(BaseJobView):
     def _status_stats(self, name):
         """compute statistics status for the given job"""
 
-        try:
-            verbosity = int(self.request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
-
-        data = { 'command': 'get_job_stats', 'name': name, 'verbosity':
-                 verbosity }
+        data = {'command': 'get_job_stats', 'name': name}
 
         return self.conductor_execute(data)
 
@@ -692,7 +485,7 @@ class JobView(BaseJobView):
     def delete(self, request, name):
         """remove a job from the database"""
 
-        data = { 'command': 'del_job', 'name': name }
+        data = {'command': 'del_job', 'name': name}
 
         return self.conductor_execute(data)
 
@@ -731,8 +524,8 @@ class JobView(BaseJobView):
         except KeyError:
             return {'msg': 'POST data malformed: \'severity\' missing'}, 400
 
-        data = { 'command': 'set_job_log_severity', 'address': address,
-                 'job_name': name, 'severity': severity }
+        data = {'command': 'set_job_log_severity', 'address': address,
+                'job_name': name, 'severity': severity}
 
         local_severity = self.request.JSON.get('local_severity', None)
         if local_severity:
@@ -754,8 +547,8 @@ class JobView(BaseJobView):
             return {'msg': 'POST data malformed: \'addresses\' should '
                     'contain 1 item for action \'stat_policy\''}, 404
 
-        data = { 'command': 'set_job_stat_policy', 'address': address,
-                 'job_name': name }
+        data = {'command': 'set_job_stat_policy', 'address': address,
+                'job_name': name}
 
         request_data = self.request.JSON
         if 'stat_name' in request_data:
@@ -776,7 +569,7 @@ class BaseJobInstanceView(GenericView):
     def _action_stop(self, ids):
         """stop the given job instances"""
 
-        data = { 'job_instance_ids': ids, 'command': 'stop_job_instance' }
+        data = {'job_instance_ids': ids, 'command': 'stop_job_instance'}
         request_data = self.request.JSON
         if 'date' in request_data:
             data['date'] = request_data['date']
@@ -800,16 +593,10 @@ class JobInstancesView(BaseJobInstanceView):
     def get(self, request):
         """list all job instances"""
 
-        try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
         update = 'update' in request.GET
 
-        data = { 'addresses': request.GET.getlist('address'), 'update':
-                 update, 'verbosity': verbosity, 'command': 'list_job_instances'
-               }
+        data = {'addresses': request.GET.getlist('address'), 'update':
+                update, 'command': 'list_job_instances'}
 
         return self.conductor_execute(data)
 
@@ -848,8 +635,8 @@ class JobInstancesView(BaseJobInstanceView):
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
-        data = { 'command': 'start_job_instance', 'agent_ip': agent_ip,
-                 'job_name': job_name, 'instance_args': instance_args  }
+        data = {'command': 'start_job_instance', 'agent_ip': agent_ip,
+                'job_name': job_name, 'instance_args': instance_args}
 
         request_data = self.request.JSON
         if 'date' in request_data:
@@ -863,7 +650,7 @@ class JobInstancesView(BaseJobInstanceView):
     def _action_kill(self):
         """stop all the scenario instances, job instances and watchs"""
 
-        data = { 'command': 'kill_all' }
+        data = {'command': 'kill_all'}
 
         request_data = self.request.JSON
         if 'date' in request_data:
@@ -878,15 +665,10 @@ class JobInstanceView(BaseJobInstanceView):
     def get(self, request, id):
         """compute status of a job instance"""
 
-        try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
         update = 'update' in request.GET
 
-        data = { 'command': 'status_job_instance', 'job_instance_id': id,
-                 'verbosity': verbosity, 'update': update }
+        data = {'command': 'status_job_instance', 'job_instance_id': id,
+                'update': update}
 
         return self.conductor_execute(data)
 
@@ -919,8 +701,8 @@ class JobInstanceView(BaseJobInstanceView):
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
-        data = { 'command': 'restart_job_instance', 'job_instance_id': id,
-                 'instance_args': instance_args }
+        data = {'command': 'restart_job_instance', 'job_instance_id': id,
+                'instance_args': instance_args}
 
         if 'date' in request_data:
             data['date'] = request_data['date']
@@ -942,13 +724,7 @@ class ScenariosView(GenericView):
     def get(self, request):
         """list all scenarios"""
 
-        try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
-
-        data = { 'command': 'list_scenarios', 'verbosity': verbosity }
+        data = {'command': 'list_scenarios'}
 
         return self.conductor_execute(data)
 
@@ -970,7 +746,7 @@ class ScenarioView(GenericView):
     def get(self, request, name):
         """get a scenario"""
 
-        data = { 'command': 'get_scenario', 'scenario_name': name }
+        data = {'command': 'get_scenario', 'scenario_name': name}
 
         return self.conductor_execute(data)
 
@@ -990,7 +766,7 @@ class ScenarioView(GenericView):
     def delete(self, request, name):
         """remove a scenario from the database"""
 
-        data = { 'command': 'del_scenario', 'scenario_name': name }
+        data = {'command': 'del_scenario', 'scenario_name': name}
 
         return self.conductor_execute(data)
 
@@ -1001,14 +777,9 @@ class ScenarioInstancesView(GenericView):
     def get(self, request):
         """list all scenario instances"""
 
-        try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
         scenario_names = request.GET.getlist('scenario_name')
-        data = { 'command': 'list_scenario_instances', 'scenario_names':
-                 scenario_names, 'verbosity': verbosity }
+        data = {'command': 'list_scenario_instances', 'scenario_names':
+                scenario_names}
 
         return self.conductor_execute(data)
 
@@ -1028,13 +799,8 @@ class ScenarioInstanceView(GenericView):
     def get(self, request, id):
         """compute status of a scenario instance"""
 
-        try:
-            verbosity = int(request.GET.get('verbosity', 0))
-        except ValueError:
-            return {'msg': 'Query string malformed: \'verbosity\' should be an'
-                    ' int' }, 400
-        data = { 'command': 'status_scenario_instance', 'scenario_instance_id':
-                 id, 'verbosity': verbosity }
+        data = {'command': 'status_scenario_instance', 'scenario_instance_id':
+                id}
 
         return self.conductor_execute(data)
 
@@ -1042,10 +808,57 @@ class ScenarioInstanceView(GenericView):
     def post(self, request, id):
         """stop a scenario instance"""
 
-        data = { 'command': 'stop_scenario_instance', 'scenario_instance_id': id }
+        data = {'command': 'stop_scenario_instance', 'scenario_instance_id': id}
         date = self.request.JSON.get('date', None)
         if date:
             data['date'] = date
+
+        return self.conductor_execute(data)
+
+
+class ProjectsView(GenericView):
+    """Manage actions on projects without an ID"""
+
+    def get(self, request):
+        """list all projects"""
+
+        data = {'command': 'list_projects'}
+
+        return self.conductor_execute(data)
+
+
+    def post(self, request):
+        """create a new project"""
+
+        data = {'command': 'add_project', 'project_json': request.JSON}
+
+        return self.conductor_execute(data)
+
+
+class ProjectView(GenericView):
+    """Manage action on specific project"""
+
+    def get(self, request, name):
+        """get a project"""
+
+        data = {'command': 'get_project', 'project_name': name}
+
+        return self.conductor_execute(data)
+
+
+    def put(self, request, name):
+        """modify a project"""
+
+        data = {'command': 'modify_project', 'project_json': request.JSON,
+                'project_name': name}
+
+        return self.conductor_execute(data)
+
+
+    def delete(self, request, name):
+        """remove a project from the database"""
+
+        data = {'command': 'del_project', 'project_name': name}
 
         return self.conductor_execute(data)
 
@@ -1066,8 +879,8 @@ def push_file(request):
         for chunk in uploaded_file.chunks():
             f.write(chunk)
 
-    data = { 'command': 'push_file', 'local_path': path, 'remote_path':
-             remote_path, 'agent_ip': address }
+    data = {'command': 'push_file', 'local_path': path, 'remote_path':
+            remote_path, 'agent_ip': address}
 
     result = GenericView.conductor_execute(data)
     os.remove(path)

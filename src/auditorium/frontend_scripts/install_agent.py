@@ -35,7 +35,7 @@
 
 
 import argparse
-from frontend import install_agent, status_install_agent, wait_for_success
+from frontend import install_agent, state_agent, wait_for_success
 
 
 if __name__ == "__main__":
@@ -57,5 +57,5 @@ if __name__ == "__main__":
     name = args.name
 
     install_agent(agent_ip, collector_ip, username, password, name)
-    wait_for_success(status_install_agent, address=agent_ip)
+    wait_for_success(state_agent, status='install', address=agent_ip)
 

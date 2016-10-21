@@ -243,7 +243,8 @@ def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
             # TODO: Voir si il faudrait pas l'ajouter aussi pour les jobs non
             # persistents
             if job['persistent']:
-                job['set_id'].add(job_instance_id)
+                job['instances'][job_instance_id] = {'args': arguments, 'type':
+                                                     'date', 'date': date}
     return date, True
 
 
@@ -254,7 +255,7 @@ def schedule_job_instance_stop(job_name, job_instance_id, date_value,
     with JobManager(job_name) as job:
         try:
             command_stop = job['command_stop']
-            args = job['instances'][job_instance_id]['args']
+            arguments = job['instances'][job_instance_id]['args']
         except KeyError:
             raise BadRequest('OK job {} with id {} is already '
                              'stopped'.format(job_name, job_instance_id))
@@ -457,7 +458,7 @@ class ClientThread(threading.Thread):
                         'is already programmed'.format(name, job_instance_id))
 
         with JobManager(name) as job:
-            job['instances'][instance_id] = {
+            job['instances'][job_instance_id] = {
                 'args': arguments,
                 'type': date_type,
                 'date': date,

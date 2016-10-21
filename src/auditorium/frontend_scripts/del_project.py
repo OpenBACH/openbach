@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,24 +28,25 @@
    
    
    
-   @file     status_assign_collector.py
-   @brief    Call the openbach-function status_assign_collector
+   @file     del_project.py
+   @brief    Call the openbach-function del_project
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_assign_collector, pretty_print
+from frontend import del_project, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - ',
+    parser = argparse.ArgumentParser(description='OpenBach - Del Project',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('address', help='IP address of the Agent')
+    parser.add_argument('project_name', help='Name of the project')
 
     # get args
     args = parser.parse_args()
+    project_name = args.project_name
 
-    pretty_print(status_assign_collector)(args.address)
+    pretty_print(del_project)(project_name)
 

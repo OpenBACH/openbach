@@ -29,25 +29,24 @@
    
    
    
-   @file     status_set_job_stat_policy.py
-   @brief    Call the openbach-function status_set_job_stat_policy
+   @file     state_agent.py
+   @brief    Call the openbach-function state_agent
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_set_job_stat_policy, pretty_print
+from frontend import state_agent, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - State Agent',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('address', help='IP address of the Agent')
-    parser.add_argument('job_name', help='Name of the Job')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_set_job_stat_policy)(args.address, args.job_name)
+    pretty_print(state_agent)(args.address)
 

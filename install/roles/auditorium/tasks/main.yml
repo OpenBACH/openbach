@@ -54,6 +54,9 @@
     - install
 
 # Uninstall
+- include: del_services_to_boot.yml
+  tags:
+    - uninstall
 - include: uninstall_collector_and_agents.yml
   tags:
     - uninstall
@@ -64,9 +67,6 @@
   tags:
     - uninstall
 - include: uninstall_frontend_scripts.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
   tags:
     - uninstall
 

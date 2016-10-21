@@ -29,24 +29,25 @@
    
    
    
-   @file     status_add_collector.py
-   @brief    Call the openbach-function status_add_collector
+   @file     state_job_instance.py
+   @brief    Call the openbach-function state_job_instance
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_add_collector, pretty_print
+from frontend import state_job_instance, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - ',
+    parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('collector_ip', help='IP address of the Collector')
+    parser.add_argument('job_instance_id', type=int, help='Id of the Job'
+                        ' Instance')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_add_collector)(args.collector_ip)
+    pretty_print(state_job_instance)(args.job_instance_id)
 

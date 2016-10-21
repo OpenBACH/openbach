@@ -44,13 +44,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='OpenBach - Display Job Stats',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('job_name', help='Name of the Job')
-    parser.add_argument("-v", "--verbosity", action="count",
-        help="Increase output verbosity")
     
     # get args
     args = parser.parse_args()
     job_name = args.job_name
-    verbosity = args.verbosity
 
-    pretty_print(get_job_stats)(job_name, verbosity)
+    pretty_print(get_job_stats)(job_name)
 

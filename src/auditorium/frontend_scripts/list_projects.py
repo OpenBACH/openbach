@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,24 +28,23 @@
    
    
    
-   @file     status_install_agent.py
-   @brief    Call the openbach-function status_install_agent
+   @file     list_projects.py
+   @brief    Call the openbach-function list_projects
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_install_agent, pretty_print
+from frontend import list_projects, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='OpenBach - Status Agent',
+    parser = argparse.ArgumentParser(description='OpenBach - List Projects',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('address', help='IP address of the Agent')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_install_agent)(args.address)
+    pretty_print(list_projects)()
 

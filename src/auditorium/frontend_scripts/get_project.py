@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -29,25 +28,25 @@
    
    
    
-   @file     status_restart_job_instance.py
-   @brief    Call the openbach-function status_restart_job_instance
+   @file     get_project.py
+   @brief    Call the openbach-function get_project
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_restart_job_instance, pretty_print
+from frontend import get_project, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - Get Project',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('job_instance_id', type=int, help='Id of the Job'
-                        ' Instance')
+    parser.add_argument('project_name', help='Name of the Project')
 
     # get args
     args = parser.parse_args()
+    project_name = args.project_name
 
-    pretty_print(status_restart_job_instance)(args.job_instance_id)
+    pretty_print(get_project)(project_name)
 

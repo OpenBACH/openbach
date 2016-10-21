@@ -41,6 +41,7 @@ import ipaddress
 import json
 import requests
 from .utils import BadRequest
+from django.utils import timezone
 
 
 class ContentTyped(models.Model):
@@ -77,6 +78,7 @@ else self)
 class Command_Result(models.Model):
     response = models.TextField(default='{"state": "Running"}')
     returncode = models.IntegerField(default=202)
+    date = models.DateTimeField(default=timezone.now)
 
     def reset(self):
         self.response = '{"state": "Running"}'
@@ -84,7 +86,8 @@ class Command_Result(models.Model):
         self.save()
 
     def get_json(self):
-        return {'response': self.response, 'returncode': self.returncode}
+        return {'response': json.loads(self.response), 'returncode':
+                self.returncode, 'date': self.date}
 
 
 class Collector(models.Model):
@@ -105,17 +108,37 @@ class Collector_Command_Result(models.Model):
     status_del = models.ForeignKey(Command_Result, null=True, blank=True,
                                    related_name='status_del')
 
+    def get_json(self):
+        result_json = {}
+        if self.status_add:
+            result_json['add'] = self.status_add.get_json()
+        else:
+            result_json['add'] = {'error': 'Action never asked', 'returncode':
+                                  404}
+        if self.status_modify:
+            result_json['modify'] = self.status_modify.get_json()
+        else:
+            result_json['modify'] = {'error': 'Action never asked',
+                                     'returncode': 404}
+        if self.status_del:
+            result_json['del'] = self.status_del.get_json()
+        else:
+            result_json['del'] = {'error': 'Action never asked', 'returncode':
+                                  404}
+        return result_json
+
 
 class Agent(models.Model):
-    name = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=500, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
-    status = models.CharField(max_length=200, null=True, blank=True)
+    status = models.CharField(max_length=500, null=True, blank=True)
     update_status = models.DateTimeField(null=True, blank=True)
     reachable = models.BooleanField()
     update_reachable = models.DateTimeField(null=True, blank=True)
-    username = models.CharField(max_length=200)
-    password = models.CharField(max_length=200)
+    username = models.CharField(max_length=500)
+    password = models.CharField(max_length=500)
     collector = models.ForeignKey(Collector)
+    networks = models.ManyToManyField('Network')
 
     def set_password(self, raw_password):
         # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
@@ -127,6 +150,14 @@ class Agent(models.Model):
 
     def __str__(self):
         return '{} ({})'.format(self.name, self.address)
+
+    def get_json(self):
+        return {
+            'address': self.address,
+            'name': self.name,
+            'username': self.username,
+            'collector': self.collector.address
+        }
 
 
 class Agent_Command_Result(models.Model):
@@ -144,10 +175,34 @@ class Agent_Command_Result(models.Model):
         Command_Result, null=True, blank=True,
         related_name='status_retrieve_status_jobs')
 
+    def get_json(self):
+        result_json = {}
+        if self.status_install:
+            result_json['install'] = self.status_install.get_json()
+        else:
+            result_json['install'] = {'error': 'Action never asked',
+                                      'returncode': 404}
+        if self.status_uninstall:
+            result_json['uninstall'] = self.status_uninstall.get_json()
+        else:
+            result_json['uninstall'] = {'error': 'Action never asked',
+                                        'returncode': 404}
+        if self.status_retrieve_status_agent:
+            result_json['retrieve_status_agent'] = self.status_retrieve_status_agent.get_json()
+        else:
+            result_json['retrieve_status_agent'] = {'error': 'Action never '
+                                                    'asked', 'returncode': 404}
+        if self.status_retrieve_status_jobs:
+            result_json['retrieve_status_jobs'] = self.status_retrieve_status_jobs.get_json()
+        else:
+            result_json['retrieve_status_jobs'] = {'error': 'Action never '
+                                                   'asked', 'returncode': 404}
+        return result_json
+
 
 class File_Command_Result(Command_Result):
-    filename = models.CharField(max_length=50)
-    remote_path = models.CharField(max_length=100)
+    filename = models.CharField(max_length=500)
+    remote_path = models.CharField(max_length=500)
     address = models.GenericIPAddressField()
 
     class Meta:
@@ -155,29 +210,30 @@ class File_Command_Result(Command_Result):
 
 
 class Job_Keyword(models.Model):
-    name = models.CharField(max_length=200, primary_key=True)
+    name = models.CharField(max_length=500, primary_key=True)
 
     def __str__(self):
         return self.name
 
 
 class Job(models.Model):
-    name = models.CharField(max_length=200, primary_key=True)
+    name = models.CharField(max_length=500, primary_key=True)
     path = models.FilePathField(
             path="/opt/openbach-controller/jobs", recursive=True,
             allow_folders=True, allow_files=False)
     help = models.TextField(null=True, blank=True)
-    job_version = models.CharField(max_length=200, null=True, blank=True)
+    job_version = models.CharField(max_length=500, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     keywords = models.ManyToManyField(Job_Keyword)
     has_uncertain_required_arg = models.BooleanField(default=False)
+    job_conf = models.TextField()
 
     def __str__(self):
         return self.name
 
 
 class Statistic(models.Model):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=500)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
     frequency = models.TextField(null=True, blank=True)
@@ -214,7 +270,7 @@ class Argument(models.Model):
         default=NONE,
     )
     count = models.CharField(max_length=11, null=True, blank=True)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=500)
     description = models.TextField(null=True, blank=True)
 
     class Meta:
@@ -286,7 +342,7 @@ class Required_Job_Argument(Argument):
 
 class Optional_Job_Argument(Argument):
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
-    flag = models.CharField(max_length=200)
+    flag = models.CharField(max_length=500)
 
     def save(self, *args, **kwargs):
         if self.count == '*' or self.count == '+':
@@ -336,7 +392,7 @@ class Installed_Job(models.Model):
 
 class Installed_Job_Command_Result(models.Model):
     agent_ip = models.GenericIPAddressField()
-    job_name = models.CharField(max_length=200)
+    job_name = models.CharField(max_length=500)
     status_install = models.ForeignKey(Command_Result, null=True, blank=True,
                                        related_name='status_install_job')
     status_uninstall = models.ForeignKey(Command_Result, null=True, blank=True,
@@ -347,6 +403,30 @@ class Installed_Job_Command_Result(models.Model):
     status_stat_policy = models.ForeignKey(Command_Result, null=True,
                                            blank=True,
                                            related_name='status_stat_policy')
+
+    def get_json(self):
+        result_json = {}
+        if self.status_install:
+            result_json['install'] = self.status_install.get_json()
+        else:
+            result_json['install'] = {'error': 'Action never asked',
+                                      'returncode': 404}
+        if self.status_uninstall:
+            result_json['uninstall'] = self.status_uninstall.get_json()
+        else:
+            result_json['uninstall'] = {'error': 'Action never asked',
+                                        'returncode': 404}
+        if self.status_log_severity:
+            result_json['log_severity'] = self.status_log_severity.get_json()
+        else:
+            result_json['log_severity'] = {'error': 'Action never asked',
+                                           'returncode': 404}
+        if self.status_stat_policy:
+            result_json['stat_policy'] = self.status_stat_policy.get_json()
+        else:
+            result_json['stat_policy'] = {'error': 'Action never asked',
+                                          'returncode': 404}
+        return result_json
 
     class Meta:
         unique_together = ('agent_ip', 'job_name')
@@ -367,7 +447,7 @@ class Statistic_Instance(models.Model):
 
 class Job_Instance(models.Model):
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
-    status = models.CharField(max_length=200)
+    status = models.CharField(max_length=500)
     update_status = models.DateTimeField()
     start_date = models.DateTimeField()
     stop_date = models.DateTimeField(null=True, blank=True)
@@ -392,6 +472,30 @@ class Job_Instance_Command_Result(models.Model):
                                        related_name='status_restart')
     status_watch = models.ForeignKey(Command_Result, null=True, blank=True,
                                      related_name='status_watch')
+
+    def get_json(self):
+        result_json = {}
+        if self.status_start:
+            result_json['start'] = self.status_start.get_json()
+        else:
+            result_json['start'] = {'error': 'Action never asked',
+                                    'returncode': 404}
+        if self.status_stop:
+            result_json['stop'] = self.status_stop.get_json()
+        else:
+            result_json['stop'] = {'error': 'Action never asked',
+                                      'returncode': 404}
+        if self.status_restart:
+            result_json['restart'] = self.status_restart.get_json()
+        else:
+            result_json['restart'] = {'error': 'Action never asked',
+                                      'returncode': 404}
+        if self.status_watch:
+            result_json['watch'] = self.status_watch.get_json()
+        else:
+            result_json['watch'] = {'error': 'Action never asked',
+                                    'returncode': 404}
+        return result_json
 
 
 class Job_Argument_Instance(models.Model):
@@ -431,7 +535,7 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
 
 class Argument_Value(models.Model):
     argument_value_id = models.AutoField(primary_key=True)
-    value = models.CharField(max_length=200)
+    value = models.CharField(max_length=500)
 
     ACCEPTED_BOOLS = frozenset({'True', 'true', 'TRUE', 'T', 't', 'False',
                                 'false', 'FALSE', 'F', 'f'})
@@ -513,7 +617,7 @@ class Watch(models.Model):
 
 
 class Openbach_Function(models.Model):
-    name = models.CharField(max_length=200, primary_key=True)
+    name = models.CharField(max_length=500, primary_key=True)
 
     def __str__(self):
         return self.name
@@ -527,12 +631,19 @@ class Openbach_Function_Argument(Argument):
 
 
 class Scenario(models.Model):
-    name = models.CharField(max_length=20, primary_key=True)
-    description = models.CharField(max_length=200, null=True, blank=True)
+    name = models.CharField(max_length=500)
+    description = models.TextField(null=True, blank=True)
     scenario = models.TextField()
+    project = models.ForeignKey('Project', null=True, blank=True)
+
+    class Meta:
+        unique_together = (('name', 'project'))
 
     def __str__(self):
         return self.name
+
+    def get_json(self):
+        return json.loads(self.scenario)
 
 
 class Scenario_Argument(Argument):
@@ -546,13 +657,19 @@ class Scenario_Argument(Argument):
                 return False
         return True
 
+    def save(self, *args, **kwargs):
+        if self.type is 'None':
+            raise BadRequest('This Scenario_Argument \'{}\' is unused'.format(
+                self.name))
+        super(Argument, self).save(*args, **kwargs)
+
     class Meta:
         unique_together = (('name', 'scenario'))
 
 
 class Scenario_Instance(models.Model):
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
-    status = models.CharField(max_length=200, null=True, blank=True)
+    status = models.CharField(max_length=500, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
     is_stopped = models.BooleanField(default=False)
     openbach_function_instance_master = models.ForeignKey(
@@ -607,9 +724,9 @@ class Operand(ContentTyped):
 
 
 class Operand_Database(Operand):
-    name = models.CharField(max_length=20)
-    key = models.CharField(max_length=20)
-    attribute = models.CharField(max_length=20)
+    name = models.CharField(max_length=500)
+    key = models.CharField(max_length=500)
+    attribute = models.CharField(max_length=500)
 
     def get_value(self):
         model = globals()[self.name]
@@ -621,7 +738,7 @@ class Operand_Value(Operand):
     TRUE = frozenset({'True', 'true', 'TRUE'})
     FALSE = frozenset({'False', 'false', 'FALSE'})
 
-    value = models.CharField(max_length=200)
+    value = models.CharField(max_length=500)
 
     def get_value(self):
         value = self.value
@@ -638,8 +755,8 @@ class Operand_Value(Operand):
 
 class Operand_Statistic(Operand):
     UPDATE_STAT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("{stat.field}")+FROM+"{stat.measurement}"'
-    measurmement = models.CharField(max_length=200)
-    field = models.CharField(max_length=200)
+    measurmement = models.CharField(max_length=500)
+    field = models.CharField(max_length=500)
 
     def get_value(self, agent):
         url = self.UPDATE_STAT_URL.format(agent=agent, stat=self)
@@ -771,7 +888,7 @@ class Openbach_Function_Instance(models.Model):
     condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
-    status = models.CharField(max_length=200, null=True, blank=True)
+    status = models.CharField(max_length=500, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
     time = models.IntegerField(default=0)
 
@@ -829,4 +946,69 @@ class Openbach_Function_Argument_Instance(Argument_Value):
 
     def __str__(self):
         return self.value
+
+
+class Project(models.Model):
+    name = models.CharField(max_length=500, primary_key=True)
+    description = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_json(self):
+        info_json = {
+            'name': self.name,
+            'description': self.description,
+            'machine': [],
+            'scenario': [],
+            'network': []
+        }
+        for machine in self.machine_set.all():
+            info_json['machine'].append(machine.get_json())
+        for network in self.network_set.all():
+            info_json['network'].append(network.get_json())
+        for scenario in self.scenario_set.all():
+            info_json['scenario'].append(scenario.get_json())
+        return info_json
+
+
+class Network(models.Model):
+    name = models.CharField(max_length=500)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (('name', 'project'))
+
+    def __str__(self):
+        return '{} for Project {}'.format(self.name, self.project.name)
+
+    def get_json(self):
+        return self.name
+
+
+class Machine(models.Model):
+    name = models.CharField(max_length=500)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    description = models.TextField(null=True, blank=True)
+    agent = models.ForeignKey(Agent, null=True, blank=True)
+    networks = models.ManyToManyField(Network)
+
+    class Meta:
+        unique_together = (('name', 'project'))
+
+    def __str__(self):
+        return '{} for Project {}'.format(self.name, self.project.name)
+
+    def get_json(self):
+        info_json = {
+            'name': self.name,
+            'description': self.description,
+            'agent': None,
+            'networks': []
+        }
+        for network in self.networks.all():
+            info_json['networks'].append(network.get_json())
+        if self.agent:
+            info_json['agent'] = self.agent.get_json()
+        return info_json
 

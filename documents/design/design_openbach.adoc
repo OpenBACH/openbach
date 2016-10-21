@@ -578,13 +578,11 @@ First the group 1 of openbach-functions allowing to install, delete, list and mo
 |===
 | Function                      | Method      | url                         | Input contents (JSON or Query sting)                                 | Description
 | add_collector                 | POST        | /collector                  | *address*, *username*, *password*, *name*, logs_port, stats_port     | Add a new Collector (and install an Agent on it)
-| status_add_collector          | GET         | /collector/status           | *address*                                                            | Return the status of the installation of the new Collector
 | modify_collector              | PUT         | /collector/*address*        | logs_port, stats_port                                                | Modify the Collector (and all the associated Agents)
-| status_modify_collector       | GET         | /collector/*address*/status | *action='modify'*                                                    | Return the status of the modification of the Collector
 | del_collector                 | DELETE      | /collector/*address*        |                                                                      | Remove a Collector (but do not uninstall the Agent on it)
-| status_del_collector          | GET         | /collector/*address*/status | *action='del'*                                                       | Return the status of the deletion of the Collector
 | get_collector                 | GET         | /collector/*address*        |                                                                      | Return the informations of this Collector
 | list_collectors               | GET         | /collector                  |                                                                      | Return the list of Collectors available
+| state_collector               | GET         | /collector/*address*/state  |                                                                      | Return the status of the last commands on the Collector
 |===
 
 Second the group 2 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
@@ -592,16 +590,13 @@ Second the group 2 of openbach-functions allowing to install, delete, list and u
 .group 2
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
-| Function                      | Method      | url                     | Input contents (JSON or Query sting)                                          | Description
-| install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name*, *action='install'* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
-| status_install_agent          | GET         | /agent/status           | *address*, *action='install'*                                                 | Return the status of the installation of the Agent.
-| uninstall_agent               | DELETE      | /agent/*address*        |                                                                               | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
-| status_uninstall_agent        | GET         | /agent/*address*/status | *action='uninstall'*                                                          | Return the status of the uninstallation of the Agent.
-| list_agents                   | GET         | /agent                  | update                                                                        | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
-| retrieve_status_agents        | POST        | /agent                  | *addresses*, *action='retrieve_status'*, update                               | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
-| status_retrieve_status_agents | GET         | /agent/status           | *address*, *action='retrieve_status'*                                         | Return the status of the retrievement of the status of the Agent
-| assign_collector              | POST        | /agent/*address*        | *collector_ip*                                                                | Assign this Collector to the Agent
-| status_assign_collector       | GET         | /agent/*address*/status | *action='assign'*                                                             | Return the status of the assignement of this Collector to the Agent
+| Function                      | Method      | url                     | Input contents (JSON or Query sting)                      | Description
+| install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
+| uninstall_agent               | DELETE      | /agent/*address*        |                                                           | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
+| list_agents                   | GET         | /agent                  | update                                                    | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
+| retrieve_status_agents        | POST        | /agent                  | *addresses*, *action='retrieve_status'*, update           | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
+| assign_collector              | POST        | /agent/*address*        | *collector_ip*                                            | Assign this Collector to the Agent
+| state_agent                   | GET         | /agent/*address*/state  |                                                           | Return the status of the last commands on the Agent
 |===
 
 Then group 3 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
@@ -613,8 +608,8 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 | Function           | Method          | url              | Input contents (JSON or Query string)      | Description
 | add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list
 | del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
-| list_jobs          | GET             | /job             | verbosity                                  | Return the Jobs list.  verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
-| get_job_stats      | GET             | /job/*job_name*  | *type=stats*, verbosity                    | Return the statistics produced by a Job. verbosity = 0 for no verbosity and verbosity = 1 for more verbosity.
+| list_jobs          | GET             | /job             |                                            | Return the Jobs list. 
+| get_job_stats      | GET             | /job/*job_name*  | *type=stats*                               | Return the statistics produced by a Job.
 | get_job_help       | GET             | /job/*job_name*  | *type=help*                                | Return the help of the Job
 |===
 
@@ -625,18 +620,14 @@ Then the group 4 of openbach-functions allowing to install/uninstall a Job in a 
 |===
 | Function                    | Method        | url                    | Input contents (JSON or Query string)                                               | Description
 | install_jobs                | POST          | /job                   | *addresses*, *names*, *action=’install’*, severity, local_severity                  | Install one or more Jobs (identified by name) in one or more network entities (identified by IP address)
-| status_install_jobs         | GET           | /job/status            | *address*, *name*, *action=’status_install’*                                        | Return the status of the installation of a Job on an Agent
 | uninstall_jobs              | POST          | /job                   | *addresses*, *names*, *action=’uninstall’*                                          | Uninstall one or more Jobs (identified by name) from one or more network entities (identified by IP address)
-| status_uninstall_jobs       | GET           | /job/status            | *address*, *name*, *action=’status_uninstall’*                                      | Return the status of the uninstallation of a Job on an Agent
 | retrieve_status_jobs        | POST          | /job                   | *addresses*, *action=’retrieve_status'*                                             | Request the agent to send all installed jobs to the Collector.
-| status_retrieve_status_jobs | GET           | /job/status            | *address*, *action=’status_retrieve_status'*                                        | Return the status of the retrievement of the list of installed Jobs
-| list_installed_jobs         | GET           | /job                   | *address*, update, verbosity                                                        | List all the installed Job for a network entity (identified by IP address). If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database. Verbosity: 0-2.
+| list_installed_jobs         | GET           | /job                   | *address*, update                                                                   | List all the installed Job for a network entity (identified by IP address). If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database.
 | set_job_log_severity        | POST          | /job/*job_name*        | *address*, *severity*, *action='log_severity'*, local_severity, date                | Set a new log severity to the Job.
-| status_set_job_log_severity | GET           | /job/*job_name*/status | *address*, *action='log_severity'*                                                  | Return the status of the setting of a now log severity
 | set_job_stat_policy         | POST          | /job/*job_name*        | *address*, *severity*, *action='stat_policy'*, stat_name, storage, broadcast, date  | Set the policy for the stats generated by this Job on an Agent (if storage=True, the Collector will store the data in the database, if broadcast=True, the Collector will broadcast the data to the Auditorium).
-| status_set_job_stat_policy  | GET           | /job/*job_name*/status | *address*, *action='stat_policy'*                                                   | Return the status of the setting of a now stats policy
+| state_job                   | GET           | /job/*job_name*/state  | *address*                                                                           | Return the status of the commands on the Installed_Job
 | push_file                   | POST          | /file                  | *file*, *path*, *agent_ip*                                                          | Push a file on the Agent.
-| status_push_file            | GET           | /file/status           | *filename*, *path*, *agent_ip*                                                      | Return the status of the push of a file on the Agent.
+| state_push_file             | GET           | /file/state            | *filename*, *path*, *agent_ip*                                                      | Return the status of the push of a file on the Agent.
 |===
 
 The group 5 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
@@ -646,15 +637,12 @@ The group 5 of openbach-functions allowing to start/schedule/stop a Job instance
 |===
 | Function                    | Method        | url                       | Input contents (JSON or Query string)                                     | Description
 | start_job_instance          | POST          | /job_instance             | *agent_ip*, *job_name*, *instance_args*, *action='start'*, date, interval | Start a Job instance of the Job on the Agent.
-| status_start_job_instance   | GET           | /job_instance/status      | *job_instance_id*, *action='start'*                                       | Return the status of the starting of a Job Instance
 | stop_job_instance           | POST          | /job_instance             | *ids*, *action=’stop’*, date                                              | Stop one or more job instances using their instance id.
-| status_stop_job_instance    | GET           | /job_instance/status      | *job_instance_id*, *action=’stop’*                                        | Return the status of the stopping of one or more job instance
 | restart_job_instance        | POST          | /job_instance/*id*        | *instance_args*, *action=’restart’*, date, interval                       | Stop then start an Instance. If instance_args is an empty list, the new Job instance will have the same arguments as the old one.
-| status_restart_job_instance | GET           | /job_instance/*id*/status | *action=’restart’*                                                        | Return the status of the restarting of a Job Instance
 | watch_job_instance          | POST          | /job_instance/*id*        | *action='watch'*, date, interval, stop                                    | Request the agent to send the status of a Job instance (scheduled, running or not running) to the Collector.
-| status_watch_job_instance   | GET           | /job_instance/*id*/status | *action='watch'*                                                          | Return the status of the starting of a watch
-| list_job_instances          | GET           | /job_instance             | *address* (but can be multiple), update, verbosity                        | Return the list of the Job instances for the Agent. If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database. Verbosity: 0-3.
-| status_job_instance         | GET           | /job_instance/*id*        | update, verbosity                                                         | Return the information of a Job Instance. If update=False or none, the status is by default retrieved from the backend database. If update=true, this function pulls the last status from Collector database. Verbosity: 0-3.
+| list_job_instances          | GET           | /job_instance             | *address* (but can be multiple), update                                   | Return the list of the Job instances for the Agent. If update=False or none, the list is by default retrieved from the backend database. If update=true, this function pulls the last information status from Collector database.
+| status_job_instance         | GET           | /job_instance/*id*        | update                                                                    | Return the information of a Job Instance. If update=False or none, the status is by default retrieved from the backend database. If update=true, this function pulls the last status from Collector database.
+| state_job_instance          | GET           | /job_instance/*id*/state  |                                                                           | Return the state of the commands on the Job_Instance
 | kill_all                    | POST          | /job_instance             | *action=kill*, date                                                       | Stop all the scenario instance, job instances and watchs.
 |===
 
@@ -664,14 +652,14 @@ The group 6 of openbach-functions allowing to create/delete/show/modify a scenar
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function            | Method        | url               | Input contents (JSON or Query string) | Description
-| create_scenario     | POST          | /scenario         | *scenario_json*                       | Create OpenBACH scenario.
+| create_scenario     | POST          | /scenario         | *scenario_json*, project_name         | Create OpenBACH scenario.
 | del_scenario        | DELETE        | /scenario/*name*  |                                       | Delete OpenBACH scenario.
-| modify_scenario     | PUT           | /scenario/*name*  | *scenario_json*                       | Replace the json of the scenario identifed by the given id.
+| modify_scenario     | PUT           | /scenario/*name*  | *scenario_json*, project_name         | Replace the json of the scenario identifed by the given id.
 | get_scenario        | GET           | /scenario/*name*  |                                       | Return the json of the scenario identified by the given id.
-| list_scenarios      | GET           | /scenario         | verbosity                             | List all available scenarios.
+| list_scenarios      | GET           | /scenario         |                                       | List all available scenarios.
 |===
 
-And finally, the group 7 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
+The group 7 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
 
 .group 7
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
@@ -679,8 +667,21 @@ And finally, the group 7 of openbach-functions allowing to start/stop a scenario
 | Function                      | Method        | url                                          | Input contents (JSON or Query string) | Description
 | start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *args*, date         | Start a scenario instance.
 | stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                  | Stop a scenario instance.
-| list_scenario_instances       | GET           | /scenario_instance                           | scenario_names, verbosity             | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
-| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    | verbosity                             | Return the status of the scenario instance
+| list_scenario_instances       | GET           | /scenario_instance                           | scenario_names                        | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
+| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    |                                       | Return the status of the scenario instance
+|===
+
+And finally, the group 8 of openbach-functions allowing to 
+
+.group 8
+[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+|===
+| Function                      | Method        | url                                | Input contents (JSON or Query string) | Description
+| add_project                   | POST          | /project                           | *project_json*                        | Add a new Project
+| modify_project                | PUT           | /project/*name*                    | *project_json*                        | Modify an existant Project
+| del_project                   | DELETE        | /project/*name*                    |                                       | Delete a Project
+| get_project                   | GET           | /project/*name*                    |                                       | Get a specific Project
+| list_projects                 | GET           | /project/                          |                                       | Get all Projects
 |===
 
 

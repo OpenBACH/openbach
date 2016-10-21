@@ -244,7 +244,8 @@ class Conf:
         config.read(conf_path)
         self.mode = config.get('logstash', 'mode')
         self.prefix = config.get('agent', 'prefix')
-        content = yaml.load(collector_conf)
+        with open(collector_conf) as stream:
+            content = yaml.load(stream)
         self.host = content['address']
         self.port = content['stats']['port']
 

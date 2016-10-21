@@ -75,23 +75,11 @@
     - uninstall_agent.py
     - uninstall_jobs.py
     - watch_job_instance.py
-    - status_add_collector.py
-    - status_del_collector.py
-    - status_modify_collector.py
-    - status_install_agent.py
-    - status_uninstall_agent.py
-    - status_retrieve_status_agents.py
-    - status_assign_collector.py
-    - status_install_jobs.py
-    - status_uninstall_jobs.py
-    - status_retrieve_status_jobs.py
-    - status_set_job_log_severity.py
-    - status_set_job_stat_policy.py
-    - status_push_file.py
-    - status_start_job_instance.py
-    - status_stop_job_instance.py
-    - status_restart_job_instance.py
-    - status_watch_job_instance.py
+    - state_collector.py
+    - state_agent.py
+    - state_job.py
+    - state_push_file.py
+    - state_job_instance.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

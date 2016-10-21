@@ -29,24 +29,25 @@
    
    
    
-   @file     status_uninstall_agent.py
-   @brief    Call the openbach-function status_uninstall_agent
+   @file     state_job.py
+   @brief    Call the openbach-function state_job
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
 
 import argparse
-from frontend import status_uninstall_agent, pretty_print
+from frontend import state_job, pretty_print
 
 
 if __name__ == "__main__":
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
+    parser = argparse.ArgumentParser(description='OpenBach - ',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('address', help='IP address of the Agent')
+    parser.add_argument('name', help='Name of the Job')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(status_uninstall_agent)(args.address)
+    pretty_print(state_job)(args.address, args.name)
 

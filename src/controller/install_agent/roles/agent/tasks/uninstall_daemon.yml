@@ -33,6 +33,9 @@
 
 ---
 
+- name: Install python3-pip
+  apt: pkg=python3-pip state=present update_cache=false
+  
 - name: Stop the service
   service: name=openbach-agent state=stopped
     

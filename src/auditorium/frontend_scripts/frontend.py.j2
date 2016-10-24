@@ -51,15 +51,17 @@ except ImportError:
 _URL = "http://{{ controller_ip }}:8000/{}/"
 
 
-def wait_for_success(state_function, status=None, valid_statuses=(200,), **kwargs):
+def wait_for_success(state_function, status=None, valid_statuses=(200, 204),
+                     **kwargs):
     while True:
         sleep(1)
         response = state_function(**kwargs).json()
         if status:
-            returncode = response['result'][status]['returncode']
-        else:
-            returncode = response['result']['returncode']
+            response = response[status]
+        returncode = response['returncode']
         if returncode != 202:
+            print('Returncode:', returncode)
+            pprint.pprint(response['response'])
             exit(returncode not in valid_statuses)
 
 
@@ -86,7 +88,8 @@ def pretty_print(function):
     def wrapper(*args, **kwargs):
         response = function(*args, **kwargs)
         print(response)
-        pprint.pprint(response.json())
+        if response.status_code != 204:
+            pprint.pprint(response.json())
         if 400 <= response.status_code < 600:
             exit(1)
     return wrapper
@@ -403,7 +406,7 @@ def state_agent(address):
 
 
 def state_job(address, name):
-    return _request_message('job/{}/state'.format(job_name), 'GET',
+    return _request_message('job/{}/state'.format(name), 'GET',
                             address=address,)
 
 

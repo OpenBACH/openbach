@@ -13,7 +13,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/rsyslog_job/rsyslog_job.sh'
+    command:       '/opt/openbach-jobs/rsyslog_job/rsyslog_job.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'

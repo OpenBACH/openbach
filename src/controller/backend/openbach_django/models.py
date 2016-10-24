@@ -87,7 +87,7 @@ class Command_Result(models.Model):
 
     def get_json(self):
         return {'response': json.loads(self.response), 'returncode':
-                self.returncode, 'date': self.date}
+                self.returncode, 'last_operation_date': self.date}
 
 
 class Collector(models.Model):
@@ -112,19 +112,10 @@ class Collector_Command_Result(models.Model):
         result_json = {}
         if self.status_add:
             result_json['add'] = self.status_add.get_json()
-        else:
-            result_json['add'] = {'error': 'Action never asked', 'returncode':
-                                  404}
         if self.status_modify:
             result_json['modify'] = self.status_modify.get_json()
-        else:
-            result_json['modify'] = {'error': 'Action never asked',
-                                     'returncode': 404}
         if self.status_del:
             result_json['del'] = self.status_del.get_json()
-        else:
-            result_json['del'] = {'error': 'Action never asked', 'returncode':
-                                  404}
         return result_json
 
 
@@ -156,7 +147,7 @@ class Agent(models.Model):
             'address': self.address,
             'name': self.name,
             'username': self.username,
-            'collector': self.collector.address
+            'collector_ip': self.collector.address
         }
 
 
@@ -179,29 +170,14 @@ class Agent_Command_Result(models.Model):
         result_json = {}
         if self.status_install:
             result_json['install'] = self.status_install.get_json()
-        else:
-            result_json['install'] = {'error': 'Action never asked',
-                                      'returncode': 404}
         if self.status_uninstall:
             result_json['uninstall'] = self.status_uninstall.get_json()
-        else:
-            result_json['uninstall'] = {'error': 'Action never asked',
-                                        'returncode': 404}
         if self.status_retrieve_status_agent:
             result_json['retrieve_status_agent'] = self.status_retrieve_status_agent.get_json()
-        else:
-            result_json['retrieve_status_agent'] = {'error': 'Action never '
-                                                    'asked', 'returncode': 404}
         if self.status_assign:
             result_json['assign'] = self.status_assign.get_json()
-        else:
-            result_json['assign'] = {'error': 'Action never '
-                                     'asked', 'returncode': 404}
         if self.status_retrieve_status_jobs:
             result_json['retrieve_status_jobs'] = self.status_retrieve_status_jobs.get_json()
-        else:
-            result_json['retrieve_status_jobs'] = {'error': 'Action never '
-                                                   'asked', 'returncode': 404}
         return result_json
 
 
@@ -413,24 +389,12 @@ class Installed_Job_Command_Result(models.Model):
         result_json = {}
         if self.status_install:
             result_json['install'] = self.status_install.get_json()
-        else:
-            result_json['install'] = {'error': 'Action never asked',
-                                      'returncode': 404}
         if self.status_uninstall:
             result_json['uninstall'] = self.status_uninstall.get_json()
-        else:
-            result_json['uninstall'] = {'error': 'Action never asked',
-                                        'returncode': 404}
         if self.status_log_severity:
             result_json['log_severity'] = self.status_log_severity.get_json()
-        else:
-            result_json['log_severity'] = {'error': 'Action never asked',
-                                           'returncode': 404}
         if self.status_stat_policy:
             result_json['stat_policy'] = self.status_stat_policy.get_json()
-        else:
-            result_json['stat_policy'] = {'error': 'Action never asked',
-                                          'returncode': 404}
         return result_json
 
     class Meta:
@@ -482,24 +446,12 @@ class Job_Instance_Command_Result(models.Model):
         result_json = {}
         if self.status_start:
             result_json['start'] = self.status_start.get_json()
-        else:
-            result_json['start'] = {'error': 'Action never asked',
-                                    'returncode': 404}
         if self.status_stop:
             result_json['stop'] = self.status_stop.get_json()
-        else:
-            result_json['stop'] = {'error': 'Action never asked',
-                                      'returncode': 404}
         if self.status_restart:
             result_json['restart'] = self.status_restart.get_json()
-        else:
-            result_json['restart'] = {'error': 'Action never asked',
-                                      'returncode': 404}
         if self.status_watch:
             result_json['watch'] = self.status_watch.get_json()
-        else:
-            result_json['watch'] = {'error': 'Action never asked',
-                                    'returncode': 404}
         return result_json
 
 

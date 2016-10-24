@@ -41,7 +41,7 @@ import socket
 import os
 
 from django.views.generic import base
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 import traceback
 
 class GenericView(base.View):
@@ -79,6 +79,8 @@ class GenericView(base.View):
         except ValueError:
             return response
         else:
+            if message is None:
+                return HttpResponse(status=status)
             return JsonResponse(data=message, status=status, safe=False)
 
     def dispatch(self, request, *args, **kwargs):
@@ -167,7 +169,12 @@ class StateView(GenericView):
 
     def _state_job(self, request, name):
         """Return the status of the last commands on the Job"""
-        data = {'address': address, 'command': 'state_job'}
+        try:
+            address = request.GET['address']
+        except KeyError as e:
+            return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+
+        data = {'address': address, 'job_name': name, 'command': 'state_job'}
 
         return self.conductor_execute(data)
 
@@ -188,8 +195,7 @@ class StateView(GenericView):
 
     def _state_job_instance(self, request, id):
         """Return the state of the commands on the Job_Instance"""
-        data = {'job_instance_id': job_instance_id, 'command':
-                'state_job_instance'}
+        data = {'job_instance_id': id, 'command': 'state_job_instance'}
 
         return self.conductor_execute(data)
 

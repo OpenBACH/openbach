@@ -55,7 +55,7 @@
   when: ansible_distribution_version != "16.04"
 
 - name: Create Kibana Service
-  copy: src=kibana.service dest=/etc/systemd/system/ mode=0644
+  copy: src=kibana.service dest=/lib/systemd/system/ mode=0644
   when: ansible_distribution_version == "16.04"
 
 - name: Reload systemd

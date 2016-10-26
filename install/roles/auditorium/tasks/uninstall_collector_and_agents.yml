@@ -33,8 +33,13 @@
 
 ---
 
+- name: Check if uninstall file exists
+  stat: path=/opt/openbach-auditorium/frontend_scripts/del_collector.py
+  register: delfile_status
+
 - name: Uninstall Collector
   shell: /opt/openbach-auditorium/frontend_scripts/del_collector.py {{ collector_ip }}
+  when: delfile_status.stat.exists
 
 - name: Uninstall Agent on the Controller
   shell: /opt/openbach-auditorium/frontend_scripts/uninstall_agent.py {{ controller_ip }}

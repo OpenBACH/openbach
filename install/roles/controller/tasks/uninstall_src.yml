@@ -35,6 +35,13 @@
 
 - name: Stop openbach-conductor
   service: name=openbach-conductor state=stopped
+  ignore_errors: true
+  register: service_conductor_status
+  
+- name: Debug message 
+  debug: msg="openbach-conductor cannot be stopped because it might not be running"
+  when: service_conductor_status | failed
+
 
 - name: Remove openbach-conductor service
   file: path=/etc/init.d/openbach-conductor state=absent
@@ -46,6 +53,12 @@
 
 - name: Stop openbach-backend
   service: name=openbach-backend state=stopped
+  ignore_errors: true
+  register: service_backend_status
+
+- name: Debug message
+  debug: msg="openbach-backend cannot be stopped because it might not be running"
+  when: service_conductor_status | failed
 
 - name: Remove openbach-backend service
   file: path=/etc/init.d/openbach-backend state=absent
@@ -57,6 +70,12 @@
 
 - name: Stop status-manager
   service: name=status-manager state=stopped
+  ignore_errors: true
+  register: service_manager_status
+
+- name: Debug message
+  debug: msg="status-manager cannot be stopped because it might not be running"
+  when: service_conductor_status | failed
 
 - name: Remove status-manager service
   file: path=/etc/init.d/status-manager state=absent
@@ -68,6 +87,12 @@
 
 - name: Uninstall Django
   pip: name=django state=absent executable=pip3
+  ignore_errors: true
+  register: django_status
+
+- name: Debug message
+  debug: msg="Django cannot be uninstalled because it might not be installed"
+  when: django_status | failed
 
 - name: Uninstall python3-pip
   apt: pkg=python3-pip state=absent

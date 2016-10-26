@@ -4041,7 +4041,7 @@ class ClientThread(threading.Thread):
     def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
                                   date=None, scenario_name=None,
                                   project_name=None):
-        self.stop_scenario_instance(scenario_instance_id, date scenario_name,
+        self.stop_scenario_instance(scenario_instance_id, date, scenario_name,
                                     project_name)
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
@@ -4082,11 +4082,11 @@ class ClientThread(threading.Thread):
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
         if scenario is not None:
-            if scenario_instance.scenario.scenario = scenario
+            if scenario_instance.scenario.scenario == scenario:
                 raise BadRequest('This Scenario_Instance does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
-                                  'scenario_name': scenario_name})
+                                 'scenario_name': scenario_name})
         out_of_controll = False
         with ThreadManager() as threads:
             scenario_threads = threads[scenario_instance_id]
@@ -4225,7 +4225,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Scenario_Instance does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
-                                  'scenario_name': scenario_name})
+                                 'scenario_name': scenario_name})
         result = self.infos_scenario_instance(scenario_instance)
         result['scenario_name'] = scenario_instance.scenario.name
 

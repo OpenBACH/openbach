@@ -55,7 +55,7 @@
   replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)bind-address = ":8086"(\s+.*)?$' replace='\1bind-address = ":{{ influxdb_port }}"\2' backup=yes
 
 - name: Start InfluxDB
-  service: name=influxdb state=started
+  service: name=influxdb state=restarted
   
 - name: Wait a little
   wait_for: port={{ influxdb_port }} timeout=10

@@ -61,7 +61,7 @@
   when: ansible_distribution_version != "16.04"
 
 - name: Start ElasticSearch
-  service: name=elasticsearch state=started
+  service: name=elasticsearch state=restarted
 
 - name: Check if LogStash is installed
   shell: dpkg-query -W -f='${Version}\n' logstash | sed 's/^[0-9]\+://'
@@ -86,5 +86,5 @@
   lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin' backup=yes
 
 - name: Start LogStash
-  service: name=logstash state=started
+  service: name=logstash state=restarted
 

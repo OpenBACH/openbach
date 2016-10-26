@@ -355,8 +355,8 @@ class ClientThread(threading.Thread):
         self.playbook_builder.write_hosts(address, 'Collector')
         with open('/tmp/openbach_extra_vars', 'w') as extra_vars:
             print('collector_ip:', address, file=extra_vars)
-            print('logstash_logs_port:', logs_port, file=extra_vars)
-            print('logstash_stats_port:', stats_port, file=extra_vars)
+            print('logstash_logs_port:', collector.logs_port, file=extra_vars)
+            print('logstash_stats_port:', collector.stats_port, file=extra_vars)
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i /tmp/openbach_hosts -e '
@@ -980,6 +980,7 @@ class ClientThread(threading.Thread):
         self.launch_assign_collector(agent)
 
     def launch_assign_collector(self, agent, collector):
+        command_result = Agent_Command_Result.objects.get(pk=agent.address)
         self.playbook_builder.write_hosts(agent.address)
         with self.playbook_builder.playbook_file(
             'assign_collector') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:

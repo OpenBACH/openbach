@@ -40,10 +40,6 @@
     - ntpdate
   when: inventory_hostname != '{{ controller_ip }}'
 
-- name: Start Ntp server
-  service: name=ntp state=started
-  when: inventory_hostname != '{{ controller_ip }}'
-
 - name: Delete all ntp source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
   when: inventory_hostname != '{{ controller_ip }}'

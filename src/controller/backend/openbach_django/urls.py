@@ -75,7 +75,7 @@ urlpatterns = [
     url(r'^file/?$', views.push_file, name='push_file'),
 
     url(r'^scenario/?$', views.ScenariosView.as_view(), name='scenarios_view'),
-    url(r'^scenario/(?P<name>[^/]+)/?$', views.ScenarioView.as_view(),
+    url(r'^scenario/(?P<scenario_name>[^/]+)/?$', views.ScenarioView.as_view(),
         name='scenario_view'),
 
     url(r'^scenario_instance/?$', views.ScenarioInstancesView.as_view(),
@@ -85,7 +85,17 @@ urlpatterns = [
 
     url(r'^project/?$', views.ProjectsView.as_view(),
         name='projects_view'),
-    url(r'^project/(?P<name>[^/]+)/?$',
+    url(r'^project/(?P<project_name>[^/]+)/?$',
         views.ProjectView.as_view(), name='project_view'),
+    url(r'^project/(?P<project_name>[^/]+)/scenario/?$',
+        views.ScenariosView.as_view(), name='project_scenarios_view'),
+    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/?$',
+        views.ScenarioView.as_view(), name='project_scenario_view'),
+    url(r'^project/(?P<project_name>[^/]+)/scenario_instance/?$',
+        views.ScenarioInstancesView.as_view(),
+        name='project_scenario_instance_view'),
+    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
+        views.ScenarioInstanceView.as_view(),
+        name='project_scenario_instance_view2'),
 ]
 

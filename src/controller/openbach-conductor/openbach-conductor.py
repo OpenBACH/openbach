@@ -2833,51 +2833,62 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def first_check_on_scenario(scenario_json):
-        required_parameters = ('name', 'description', 'arguments', 'constants',
-                               'openbach_functions')
-        try:
-            for k in required_parameters:
-                scenario_json[k]
-        except KeyError:
+        if 'name' not in scenario_json:
             return False
         if not isinstance(scenario_json['name'], str):
             return False
-        if not isinstance(scenario_json['description'], str):
-            return False
-        if not isinstance(scenario_json['arguments'], dict):
-            return False
-        for argument, description in scenario_json['arguments'].items():
-            if not isinstance(argument, str):
+        if 'description' in scenario_json:
+            if not isinstance(scenario_json['description'], str):
                 return False
-            if not isinstance(description, str):
+        if 'arguments' in scenario_json:
+            if not isinstance(scenario_json['arguments'], dict):
                 return False
-        if not isinstance(scenario_json['constants'], dict):
-            return False
-        for constant, _ in scenario_json['constants'].items():
-            if not isinstance(constant, str):
-                return False
-        if not isinstance(scenario_json['openbach_functions'], list):
-            return False
-        known = { 'wait' }
-        for openbach_function in scenario_json['openbach_functions']:
-            if not isinstance(openbach_function['wait'], dict):
-                return False
-            other = [ k for k in openbach_function if k not in known ]
-            if len(other) != 1:
-                return False
-            if not isinstance(openbach_function[other[0]], dict):
-                return False
-            try:
-                if not isinstance(openbach_function['wait']['time'], int):
+            for argument, description in scenario_json['arguments'].items():
+                if not isinstance(argument, str):
                     return False
-                if not isinstance(openbach_function['wait']['finished_indexes'],
-                                  list):
+                if not isinstance(description, str):
                     return False
-                if not isinstance(openbach_function['wait']['launched_indexes'],
-                                  list):
-                    return False
-            except KeyError:
+        if 'constants' in scenario_json:
+            if not isinstance(scenario_json['constants'], dict):
                 return False
+            for constant, _ in scenario_json['constants'].items():
+                if not isinstance(constant, str):
+                    return False
+        if 'openbach_functions' in scenario_json:
+            if not isinstance(scenario_json['openbach_functions'], list):
+                return False
+            known = {'wait'}
+            for openbach_function in scenario_json['openbach_functions']:
+                if 'wait' in openbach_function:
+                    if not isinstance(openbach_function['wait'], dict):
+                        return False
+                    at_least_one = False
+                    try:
+                        if not isinstance(openbach_function['wait']['time'],
+                                          int):
+                            return False
+                        at_least_one = True
+                    except KeyError:
+                        pass
+                    try:
+                        if not isinstance(openbach_function['wait']['finished_indexes'],
+                                          list):
+                            return False
+                        at_least_one = True
+                    except KeyError:
+                        pass
+                    try:
+                        if not isinstance(openbach_function['wait']['launched_indexes'],
+                                          list):
+                            return False
+                    except KeyError:
+                        if not at_least_one:
+                            return False
+                other = [k for k in openbach_function if k not in known]
+                if len(other) != 1:
+                    return False
+                if not isinstance(openbach_function[other[0]], dict):
+                    return False
         return True
 
     @staticmethod
@@ -2942,20 +2953,25 @@ class ClientThread(threading.Thread):
                                                                scenario_arg})
 
     @staticmethod
-    def register_scenario(scenario_json, name, project=None):
+    def register_scenario(scenario_json, name, project=None, scenario=None):
         try:
             description = scenario_json['description']
         except KeyError:
             description = None
         scenario_string = json.dumps(scenario_json)
 
-        scenario = Scenario(name=name, description=description,
-                            scenario=scenario_string, project=project)
-        try:
-            scenario.save(force_insert=True)
-        except IntegrityError:
-            raise BadRequest('This name of Scenario \'{}\' is already'
-                             ' used'.format(name), 409)
+        if scenario is None:
+            scenario = Scenario(name=name, description=description,
+                                scenario=scenario_string, project=project)
+            try:
+                scenario.save(force_insert=True)
+            except IntegrityError:
+                raise BadRequest('This name of Scenario \'{}\' is already'
+                                 ' used'.format(name), 409)
+        else:
+            scenario.scenario = scenario_string
+            scenario.description = description
+            scenario.save()
         try:
             result = ClientThread.register_scenario_arguments(scenario,
                                                               scenario_json)
@@ -3104,7 +3120,7 @@ class ClientThread(threading.Thread):
             scenario_constants[const_name] = { 'value': const_value,
                                                'scenario_constant': sa }
         for openbach_function in scenario_json['openbach_functions']:
-            wait = openbach_function.pop('wait')
+            openbach_function.pop('wait', None)
             (name, args), = openbach_function.items()
             try:
                 of = Openbach_Function.objects.get(pk=name)
@@ -3117,7 +3133,7 @@ class ClientThread(threading.Thread):
                     offset = args.pop('offset')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name':
+                                     ' are malformed', 400, {'name':
                                                              'start_job_instance'})
                 of_argument = of.openbach_function_argument_set.get(
                     name='agent_ip')
@@ -3131,7 +3147,7 @@ class ClientThread(threading.Thread):
                     (job_name, job_args), = args.items()
                 except ValueError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name':
+                                     ' are malformed', 400, {'name':
                                                              'start_job_instance'})
                 try:
                     job = Job.objects.get(name=job_name)
@@ -3168,10 +3184,10 @@ class ClientThread(threading.Thread):
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name': 'if'})
+                                     ' are malformed', 400, {'name': 'if'})
                 if args:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name': 'if'})
+                                     ' are malformed', 400, {'name': 'if'})
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_true')
                 ClientThread.check_type(of_argument,
@@ -3192,10 +3208,10 @@ class ClientThread(threading.Thread):
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name': 'while'})
+                                     ' are malformed', 400, {'name': 'while'})
                 if args:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 404, {'name': 'while'})
+                                     ' are malformed', 400, {'name': 'while'})
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_while')
                 ClientThread.check_type(of_argument,
@@ -3338,7 +3354,8 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project is not in the database', 404)
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
         else:
             project = None
 
@@ -3352,15 +3369,24 @@ class ClientThread(threading.Thread):
 
         return result
 
-    def del_scenario_action(self, scenario_name):
-        return self.del_scenario(scenario_name)
+    def del_scenario_action(self, scenario_name, project_name=None):
+        return self.del_scenario(scenario_name, project_name)
 
-    def del_scenario(self, scenario_name):
+    def del_scenario(self, scenario_name, project_name=None):
+        if project_name is not None:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+        else:
+            project = None
         try:
-            scenario = Scenario.objects.get(pk=scenario_name)
+            scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
             raise BadRequest('This Scenario is not in the database', 404,
-                             infos={'scenario_name': scenario_name})
+                             infos={'scenario_name': scenario_name,
+                                    'project_name': project_name})
 
         scenario.delete()
 
@@ -3382,7 +3408,8 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project is not in the database', 404)
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
         else:
             project = None
 
@@ -3391,37 +3418,46 @@ class ClientThread(threading.Thread):
                 scenario = Scenario.objects.get(name=scenario_name,
                                                 project=project)
             except ObjectDoesNotExist:
-                pass
-            else:
-                scenario.delete()
+                raise BadRequest('This Scenario does not exist', 404)
+            self.register_scenario(scenario_json, name, project, scenario)
+            self.check_scenario(scenario)
 
-            result = self.register_scenario(scenario_json, name, project)
-            scenario = Scenario.objects.get(name=name)
+        return None, 204
+
+    def get_scenario_action(self, scenario_name, project_name=None):
+        return self.get_scenario(scenario_name, project_name)
+
+    def get_scenario(self, scenario_name, project_name=None):
+        if project_name:
             try:
-                self.check_scenario(scenario)
-            except BadRequest:
-                scenario.delete()
-                raise
-
-        return result
-
-    def get_scenario_action(self, scenario_name):
-        return self.get_scenario(scenario_name)
-
-    def get_scenario(self, scenario_name):
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+        else:
+            project = None
         try:
-            scenario = Scenario.objects.get(pk=scenario_name)
+            scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
             raise BadRequest('This Scenario is not in the database', 404,
-                             infos={'scenario_name': scenario_name})
+                             infos={'scenario_name': scenario_name,
+                                    'project_name': project_name})
 
         return scenario.get_json(), 200
 
-    def list_scenarios_action(self):
-        return self.list_scenarios()
+    def list_scenarios_action(self, project_name=None):
+        return self.list_scenarios(project_name)
 
-    def list_scenarios(self):
-        scenarios = Scenario.objects.all()
+    def list_scenarios(self, project_name=None):
+        if project_name:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+            scenarios = Scenario.objects.filter(project=project)
+        else:
+            scenarios = Scenario.objects.all()
         response = []
         for scenario in scenarios:
             response.append(scenario.get_json())
@@ -3584,7 +3620,7 @@ class ClientThread(threading.Thread):
         scenario_json = json.loads(scenario_instance.scenario.scenario)
         openbach_function_id = 1
         for openbach_function in scenario_json['openbach_functions']:
-            wait = openbach_function.pop('wait')
+            wait = openbach_function.pop('wait', None)
             (name, args), = openbach_function.items()
             of = Openbach_Function.objects.get(pk=name)
             ofi = Openbach_Function_Instance(openbach_function=of,
@@ -3660,16 +3696,17 @@ class ClientThread(threading.Thread):
                 for arg_name, arg_value in args.items():
                     ClientThread.register_openbach_function_argument_instance(
                         arg_name, arg_value, ofi, scenario_instance)
-            ofi.time = wait['time']
-            ofi.save()
-            for index in wait['launched_indexes']:
-                wfl = Wait_For_Launched(openbach_function_instance=ofi,
-                                        openbach_function_instance_id_waited=index)
-                wfl.save()
-            for index in wait['finished_indexes']:
-                wff = Wait_For_Finished(openbach_function_instance=ofi,
-                                        job_instance_id_waited=index)
-                wff.save()
+            if wait is not None:
+                ofi.time = wait['time']
+                ofi.save()
+                for index in wait['launched_indexes']:
+                    wfl = Wait_For_Launched(openbach_function_instance=ofi,
+                                            openbach_function_instance_id_waited=index)
+                    wfl.save()
+                for index in wait['finished_indexes']:
+                    wff = Wait_For_Finished(openbach_function_instance=ofi,
+                                            job_instance_id_waited=index)
+                    wff.save()
             openbach_function_id += 1
 
     @staticmethod
@@ -3834,7 +3871,8 @@ class ClientThread(threading.Thread):
         launch_queues = [ queues[id] for id in entry['is_waited_for_launched'] ]
         finished_queues = tuple([ queues[id] for id in
                                  entry['is_waited_for_finished'] ])
-        waited_ids = entry['wait_for_launched'].union(entry['wait_for_finished'])
+        waited_ids = entry['wait_for_launched'].union(
+            entry['wait_for_finished'])
         ofi = scenario_instance.openbach_function_instance_set.get(
             openbach_function_instance_id=ofi_id)
         ofi.status = 'Waiting ...'
@@ -3937,8 +3975,10 @@ class ClientThread(threading.Thread):
             scenario_instance.status_date = timezone.now()
             scenario_instance.save()
 
-    def start_scenario_instance_of(self, scenario_name, args, ofi, date=None):
-        result, _ = self.start_scenario_instance(scenario_name, args, date)
+    def start_scenario_instance_of(self, scenario_name, args, ofi, date=None,
+                                   project_name=None):
+        result, _ = self.start_scenario_instance(scenario_name, args, date,
+                                                 project_name)
 
         scenario_instance_id = result['scenario_instance_id']
         scenario_instance = Scenario_Instance.objects.get(
@@ -3948,15 +3988,27 @@ class ClientThread(threading.Thread):
         with ThreadManager() as threads:
             return [threads[scenario_instance.id][0]]
 
-    def start_scenario_instance_action(self, scenario_name, args, date=None):
-        return self.start_scenario_instance(scenario_name, args, date)
+    def start_scenario_instance_action(self, scenario_name, args, date=None,
+                                       project_name=None):
+        return self.start_scenario_instance(scenario_name, args, date,
+                                            project_name)
 
-    def start_scenario_instance(self, scenario_name, args, date=None):
+    def start_scenario_instance(self, scenario_name, args, date=None,
+                                project_name=None):
+        if project_name:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+        else:
+            project = None
         try:
-            scenario = Scenario.objects.get(pk=scenario_name)
+            scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
             raise BadRequest('This Scenario is not in the database', 404,
-                             infos={'scenario_name': scenario_name})
+                             infos={'scenario_name': scenario_name,
+                                    'project_name': project_name})
         scenario_instance = self.register_scenario_instance(scenario, args)
         table = self.build_table(scenario_instance)
         # lance les openbach function possible
@@ -3987,17 +4039,40 @@ class ClientThread(threading.Thread):
         return {'scenario_instance_id': scenario_instance.id}, 200
 
     def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
-                               date=None):
-        self.stop_scenario_instance(scenario_instance_id, date)
+                                  date=None, scenario_name=None,
+                                  project_name=None):
+        self.stop_scenario_instance(scenario_instance_id, date scenario_name,
+                                    project_name)
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         scenario_instance.status = state
         scenario_instance.save()
 
-    def stop_scenario_instance_action(self, scenario_instance_id, date=None):
-        return self.stop_scenario_instance(scenario_instance_id, date)
+    def stop_scenario_instance_action(self, scenario_instance_id, date=None,
+                                      scenario_name=None, project_name=None):
+        return self.stop_scenario_instance(scenario_instance_id, date,
+                                           scenario_name, project_name)
 
-    def stop_scenario_instance(self, scenario_instance_id, date=None):
+    def stop_scenario_instance(self, scenario_instance_id, date=None,
+                               scenario_name=None, project_name=None):
+        if project_name is not None:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+        else:
+            project = None
+        if scenario_name is not None:
+            try:
+                scenario = Scenario.objects.get(name=scenario_name,
+                                                project=project)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Scenario is not in the database', 404,
+                                 infos={'scenario_name': scenario_name,
+                                        'project_name': project_name})
+        else:
+            scenario = None
         scenario_instance_id = int(scenario_instance_id)
         try:
             scenario_instance = Scenario_Instance.objects.get(
@@ -4006,6 +4081,12 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario_Instance does not exist in the '
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
+        if scenario is not None:
+            if scenario_instance.scenario.scenario = scenario
+                raise BadRequest('This Scenario_Instance does not match the'
+                                 ' specified Scenario', 400,
+                                 {'scenario_instance_id': scenario_instance_id,
+                                  'scenario_name': scenario_name})
         out_of_controll = False
         with ThreadManager() as threads:
             scenario_threads = threads[scenario_instance_id]
@@ -4078,28 +4159,60 @@ class ClientThread(threading.Thread):
             infos['openbach_functions'].append(info)
         return infos
 
-    def list_scenario_instances_action(self, scenario_names=[]):
-        return self.list_scenario_instances(scenario_names)
+    def list_scenario_instances_action(self, scenario_name=None,
+                                       project_name=None):
+        return self.list_scenario_instances(scenario_name, project_name)
 
-    def list_scenario_instances(self, scenario_names=[]):
-        if not scenario_names:
-            scenarios = Scenario.objects.all()
+    def list_scenario_instances(self, scenario_name=None, project_name=None):
+        if project_name is not None:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+            scenarios = Scenario.objects.filter(project=project)
         else:
-            scenarios = Scenario.objects.filter(pk__in=scenario_names)
+            scenarios = Scenario.objects.all()
+        if scenario_name is not None:
+            scenarios = scenarios.filter(name=scenario_name)
 
-        result = {}
+        result = []
         for scenario in scenarios:
-            result[scenario.name] = []
             for scenario_instance in scenario.scenario_instance_set.all():
                 infos = self.infos_scenario_instance(scenario_instance)
-                result[scenario.name].append(infos)
+                infos['scenario_name'] = scenario.name
+                if scenario.project is not None:
+                    infos['project_name'] = scenario.project.name
+                else:
+                    infos['project_name'] = None
+                result.append(infos)
 
         return result, 200
 
-    def status_scenario_instance_action(self, scenario_instance_id):
-        return self.status_scenario_instance(scenario_instance_id)
+    def status_scenario_instance_action(self, scenario_instance_id,
+                                        project_name=None):
+        return self.status_scenario_instance(scenario_instance_id, project_name)
 
-    def status_scenario_instance(self, scenario_instance_id):
+    def status_scenario_instance(self, scenario_instance_id, scenario_name=None,
+                                 project_name=None):
+        if project_name is not None:
+            try:
+                project = Project.objects.get(name=project_name)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Project does not exist', 404,
+                                 {'project_name': project_name})
+        else:
+            project = None
+        if scenario_name is not None:
+            try:
+                scenario = Scenario.objects.get(name=scenario_name,
+                                                project=project)
+            except ObjectDoesNotExist:
+                raise BadRequest('This Scenario is not in the database', 404,
+                                 infos={'scenario_name': scenario_name,
+                                        'project_name': project_name})
+        else:
+            scenario = None
         try:
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
@@ -4107,6 +4220,12 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario_Instance does not exist in the '
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
+        if project is not None:
+            if scenario_instance.scenario.project != project:
+                raise BadRequest('This Scenario_Instance does not match the'
+                                 ' specified Scenario', 400,
+                                 {'scenario_instance_id': scenario_instance_id,
+                                  'scenario_name': scenario_name})
         result = self.infos_scenario_instance(scenario_instance)
         result['scenario_name'] = scenario_instance.scenario.name
 
@@ -4237,14 +4356,16 @@ class ClientThread(threading.Thread):
         except IntegrityError:
             raise BadRequest('This name of Network is already used')
 
-    def register_project(self, project_json):
+    def register_project(self, project_json, project=None):
         name = project_json['name']
-        project = Project(name=name, description=project_json['description'])
-        try:
-            project.save(force_insert=True)
-        except IntegrityError:
-            raise BadRequest('This name of Project \'{}\' is already'
-                             ' used'.format(name), 409)
+        if project is None:
+            project = Project(name=name,
+                              description=project_json['description'])
+            try:
+                project.save(force_insert=True)
+            except IntegrityError:
+                raise BadRequest('This name of Project \'{}\' is already'
+                                 ' used'.format(name), 409)
         networks = project_json['network']
         if not self.first_check_on_network(networks):
             project.delete()
@@ -4297,10 +4418,8 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                pass
-            else:
-                project.delete()
-            self.register_project(project_json)
+                raise BadRequest('This Project does not exist', 404)
+            self.register_project(project_json, project)
         return None, 204
 
     def del_project_action(self, project_name):

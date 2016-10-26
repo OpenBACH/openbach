@@ -88,6 +88,12 @@ class GenericView(base.View):
         response['Access-Control-Allow-Credentials'] = True
         response['Access-Control-Allow-Origin'] = '*'
         try:
+            response['Access-Control-Allow-Methods'] = response['Allow']
+        except KeyError:
+            pass
+        else:
+            response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, HEAD, OPTIONS'
+        try:
             access_control = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
         except KeyError:
             pass
@@ -727,21 +733,25 @@ class JobInstanceView(BaseJobInstanceView):
 class ScenariosView(GenericView):
     """Manage actions on scenarios without an ID"""
 
-    def get(self, request):
+    def get(self, request, project_name=None):
         """list all scenarios"""
 
         data = {'command': 'list_scenarios'}
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
 
-    def post(self, request):
+    def post(self, request, project_name=None):
         """create a new scenario"""
 
         data = {
             'command': 'create_scenario',
             'scenario_json': request.JSON,
         }
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
@@ -749,30 +759,36 @@ class ScenariosView(GenericView):
 class ScenarioView(GenericView):
     """Manage action on specific scenario"""
 
-    def get(self, request, name):
+    def get(self, request, scenario_name, project_name=None):
         """get a scenario"""
 
-        data = {'command': 'get_scenario', 'scenario_name': name}
+        data = {'command': 'get_scenario', 'scenario_name': scenario_name}
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
 
-    def put(self, request, name):
+    def put(self, request, scenario_name, project_name=None):
         """modify a scenario"""
 
         data = {
             'command': 'modify_scenario',
             'scenario_json': request.JSON,
-            'scenario_name': name,
+            'scenario_name': scenario_name,
         }
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
 
-    def delete(self, request, name):
+    def delete(self, request, scenario_name, project_name=None):
         """remove a scenario from the database"""
 
-        data = {'command': 'del_scenario', 'scenario_name': name}
+        data = {'command': 'del_scenario', 'scenario_name': scenario_name}
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
@@ -780,21 +796,27 @@ class ScenarioView(GenericView):
 class ScenarioInstancesView(GenericView):
     """Manage actions on scenarios without an ID"""
 
-    def get(self, request):
+    def get(self, request, scenario_name=None, project_name=None):
         """list all scenario instances"""
 
-        scenario_names = request.GET.getlist('scenario_name')
-        data = {'command': 'list_scenario_instances', 'scenario_names':
-                scenario_names}
+        data = {'command': 'list_scenario_instances'}
+        if scenario_name:
+            data['scenario_name'] = scenario_name
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
 
-    def post(self, request):
+    def post(self, request, scenario_name=None, project_name=None):
         """start a new scenario instance"""
 
         data = request.JSON
         data['command'] = 'start_scenario_instance'
+        if scenario_name:
+            data['scenario_name'] = scenario_name
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
@@ -802,22 +824,30 @@ class ScenarioInstancesView(GenericView):
 class ScenarioInstanceView(GenericView):
     """Manage action on specific scenario"""
 
-    def get(self, request, id):
+    def get(self, request, id, scenario_name=None, project_name=None):
         """compute status of a scenario instance"""
 
         data = {'command': 'status_scenario_instance', 'scenario_instance_id':
                 id}
+        if scenario_name:
+            data['scenario_name'] = scenario_name
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
 
-    def post(self, request, id):
+    def post(self, request, id, scenario_name=None, project_name=None):
         """stop a scenario instance"""
 
         data = {'command': 'stop_scenario_instance', 'scenario_instance_id': id}
         date = self.request.JSON.get('date', None)
         if date:
             data['date'] = date
+        if scenario_name:
+            data['scenario_name'] = scenario_name
+        if project_name:
+            data['project_name'] = project_name
 
         return self.conductor_execute(data)
 
@@ -844,27 +874,27 @@ class ProjectsView(GenericView):
 class ProjectView(GenericView):
     """Manage action on specific project"""
 
-    def get(self, request, name):
+    def get(self, request, project_name):
         """get a project"""
 
-        data = {'command': 'get_project', 'project_name': name}
+        data = {'command': 'get_project', 'project_name': project_name}
 
         return self.conductor_execute(data)
 
 
-    def put(self, request, name):
+    def put(self, request, project_name):
         """modify a project"""
 
         data = {'command': 'modify_project', 'project_json': request.JSON,
-                'project_name': name}
+                'project_name': project_name}
 
         return self.conductor_execute(data)
 
 
-    def delete(self, request, name):
+    def delete(self, request, project_name):
         """remove a project from the database"""
 
-        data = {'command': 'del_project', 'project_name': name}
+        data = {'command': 'del_project', 'project_name': project_name}
 
         return self.conductor_execute(data)
 

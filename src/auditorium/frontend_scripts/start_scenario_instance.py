@@ -56,6 +56,7 @@ if __name__ == "__main__":
     parser.add_argument('path', help='Path to the args of the scenario instance') 
     parser.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
+    parser.add_argument('-p', '--project-name', help='Name of the Project')
 
     # get args
     args = parser.parse_args()
@@ -64,6 +65,7 @@ if __name__ == "__main__":
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
     with open(path, 'r') as f:
         args_json = json.loads(f.read())
+    project_name = args.project_name
 
-    pretty_print(start_scenario_instance)(name, args_json, date)
+    pretty_print(start_scenario_instance)(name, args_json, date, project_name)
 

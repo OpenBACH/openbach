@@ -43,15 +43,17 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Modify a Scenario',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('name', help='Name of the scenario') 
+    parser.add_argument('scenario_name', help='Name of the scenario') 
     parser.add_argument('path', help='Path of the scenario') 
+    parser.add_argument('-p', '--project-name', help='Name of the Project')
 
     # get args
     args = parser.parse_args()
-    name = args.name
+    scenario_name = args.scenario_name
     path = args.path
+    project_name = args.project_name
     with open(path, 'r') as f:
         scenario_json = json.loads(f.read())
 
-    pretty_print(modify_scenario)(name, scenario_json)
+    pretty_print(modify_scenario)(scenario_name, scenario_json, project_name)
 

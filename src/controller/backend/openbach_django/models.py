@@ -35,7 +35,7 @@
 """
 
 
-from django.db import models
+from django.db import models, IntegrityError
 from django.contrib.auth import hashers
 import ipaddress
 import json
@@ -602,6 +602,15 @@ class Scenario(models.Model):
     def get_json(self):
         return json.loads(self.scenario)
 
+    def save(self, *args, **kwargs):
+        if self.project is None:
+            qs = Scenario.objects.filter(name=self.name, project=None)
+            if hasattr(self, 'pk'):
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise IntegrityError()
+        super().save(*args, **kwargs)
+
 
 class Scenario_Argument(Argument):
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
@@ -916,16 +925,13 @@ class Project(models.Model):
         info_json = {
             'name': self.name,
             'description': self.description,
-            'machine': [],
-            'scenario': [],
-            'network': []
+            'machine': [machine.get_json() for machine in
+                        self.machine_set.order_by('name')],
+            'scenario': [scenario.get_json() for scenario in
+                         self.scenario_set.order_by('name')],
+            'network': [network.get_json() for network in
+                        self.network_set.order_by('name')]
         }
-        for machine in self.machine_set.all():
-            info_json['machine'].append(machine.get_json())
-        for network in self.network_set.all():
-            info_json['network'].append(network.get_json())
-        for scenario in self.scenario_set.all():
-            info_json['scenario'].append(scenario.get_json())
         return info_json
 
 

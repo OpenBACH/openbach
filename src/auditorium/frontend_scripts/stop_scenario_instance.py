@@ -55,11 +55,16 @@ if __name__ == "__main__":
                         ' instance to stop') 
     parser.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
+    parser.add_argument('-s', '--scenario-name', help='Name of the Scenario')
+    parser.add_argument('-p', '--project-name', help='Name of the Project')
 
     # get args
     args = parser.parse_args()
     scenario_instance_id = args.scenario_instance_id
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
+    scenario_name = args.scenario_name
+    project_name = args.project_name
 
-    pretty_print(stop_scenario_instance)(scenario_instance_id, date)
+    pretty_print(stop_scenario_instance)(scenario_instance_id, date,
+                                         scenario_name, project_name)
 

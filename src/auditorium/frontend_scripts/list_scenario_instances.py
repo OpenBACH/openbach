@@ -38,25 +38,18 @@ import argparse
 from frontend import list_scenario_instances, pretty_print
 
 
-class DateMetavarHelper:
-    def __init__(self):
-        self.first = False
-
-    def __repr__(self):
-        self.first = not self.first
-        return 'DATE' if self.first else 'TIME'
-
-
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Start a Scenario',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('scenario_names', nargs='+', help='Names of the '
-                        'Scenarios')
+    parser.add_argument('-s', '--scenario-name', help='Name of the Scenario')
+    parser.add_argument('-p', '--project-name', help='Name of the Project')
+
 
     # get args
     args = parser.parse_args()
-    scenario_names = args.scenario_names
+    scenario_name = args.scenario_name
+    project_name = args.project_name
 
-    pretty_print(list_scenario_instances)(scenario_names)
+    pretty_print(list_scenario_instances)(scenario_name, project_name)
 

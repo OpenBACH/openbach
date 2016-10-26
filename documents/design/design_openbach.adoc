@@ -653,9 +653,9 @@ The group 6 of openbach-functions allowing to create/delete/show/modify a scenar
 |===
 | Function            | Method        | url               | Input contents (JSON or Query string) | Description
 | create_scenario     | POST          | /scenario         | *scenario_json*, project_name         | Create OpenBACH scenario.
-| del_scenario        | DELETE        | /scenario/*name*  |                                       | Delete OpenBACH scenario.
+| del_scenario        | DELETE        | /scenario/*name*  |                                       | Delete OpenBACH scenario. The Scenario deleted is the one that is not associated to a Project, use the other route otherwise.
 | modify_scenario     | PUT           | /scenario/*name*  | *scenario_json*, project_name         | Replace the json of the scenario identifed by the given id.
-| get_scenario        | GET           | /scenario/*name*  |                                       | Return the json of the scenario identified by the given id.
+| get_scenario        | GET           | /scenario/*name*  |                                       | Return the json of the scenario identified by the given id. The Scenario getted is the one that is not associated to a Project, use the other route otherwise.
 | list_scenarios      | GET           | /scenario         |                                       | List all available scenarios.
 |===
 
@@ -665,9 +665,9 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function                      | Method        | url                                          | Input contents (JSON or Query string) | Description
-| start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *args*, date         | Start a scenario instance.
+| start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *args*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
 | stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                  | Stop a scenario instance.
-| list_scenario_instances       | GET           | /scenario_instance                           | scenario_names                        | List all the scenario instances of one or more specific scenarios or all scenarios (and their scenario instances) if no scenario id is given
+| list_scenario_instances       | GET           | /scenario_instance                           |                                       | List all the scenario instances.
 | status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    |                                       | Return the status of the scenario instance
 |===
 
@@ -676,12 +676,22 @@ And finally, the group 8 of openbach-functions allowing to
 .group 8
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
-| Function                      | Method        | url                                | Input contents (JSON or Query string) | Description
-| add_project                   | POST          | /project                           | *project_json*                        | Add a new Project
-| modify_project                | PUT           | /project/*name*                    | *project_json*                        | Modify an existant Project
-| del_project                   | DELETE        | /project/*name*                    |                                       | Delete a Project
-| get_project                   | GET           | /project/*name*                    |                                       | Get a specific Project
-| list_projects                 | GET           | /project/                          |                                       | Get all Projects
+| Function                      | Method        | url                                                                                       | Input contents (JSON or Query string) | Description
+| add_project                   | POST          | /project                                                                                  | *project_json*                        | Add a new Project
+| modify_project                | PUT           | /project/*project_name*                                                                   | *project_json*                        | Modify an existant Project
+| del_project                   | DELETE        | /project/*project_name*                                                                   |                                       | Delete a Project
+| get_project                   | GET           | /project/*project_name*                                                                   |                                       | Get a specific Project
+| list_projects                 | GET           | /project/                                                                                 |                                       | Get all Projects
+| create_scenario               | POST          | /project/*project_name*/scenario                                                          | *scenario_json*                       | Create OpenBACH scenario for this Project.
+| del_scenario                  | DELETE        | /project/*project_name*/scenario/*scenario_name*                                          |                                       | Delete OpenBACH scenario of this Project.
+| modify_scenario               | PUT           | /project/*project_name*/scenario/*scenario_name*                                          | *scenario_json*                       | Replace the json of the scenario identifed by the given id.
+| get_scenario                  | GET           | /project/*project_name*/scenario/*scenario_name*                                          |                                       | Return the json of the scenario identified by the given id.
+| list_scenarios                | GET           | /project/*project_name*/scenario                                                          |                                       | List all available scenarios for this Project.
+| list_scenario_instances       | GET           | /project/*project_name*/scenario_instance                                                 |                                       | List all the scenario instances of this Project
+| start_scenario_instance       | POST          | /project/*project_name*/scenario/*scenario_name*/scenario_instance                        | *args*, date                          | Start a scenario instance.
+| stop_scenario_instance        | POST          | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* | date                                  | Stop a scenario instance.
+| list_scenario_instances       | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance                        |                                       | List all the scenario instances of this Scenario
+| status_scenario_instance      | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* |                                       | Return the status of the scenario instance
 |===
 
 

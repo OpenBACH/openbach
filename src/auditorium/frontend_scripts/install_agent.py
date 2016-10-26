@@ -35,6 +35,7 @@
 
 
 import argparse
+import pprint
 from frontend import install_agent, state_agent, wait_for_success
 
 
@@ -56,6 +57,10 @@ if __name__ == "__main__":
     password = args.password
     name = args.name
 
-    install_agent(agent_ip, collector_ip, username, password, name)
+    response = install_agent(agent_ip, collector_ip, username, password, name)
+    if 400 <= response.status_code < 600:
+        print(response)
+        pprint.pprint(response.json())
+        exit(1)
     wait_for_success(state_agent, status='install', address=agent_ip)
 

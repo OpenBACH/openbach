@@ -320,52 +320,96 @@ def set_job_stat_policy(
             stat_name=stat_name, addresses=[agent_ip])
 
 
-def create_scenario(scenario_json):
-    return _request_message('scenario', 'POST', **scenario_json)
+def create_scenario(scenario_json, project_name=None):
+    if project_name is not None:
+        return _request_message('project/{}/scenario'.format(project_name),
+                                'POST', **scenario_json)
+    else:
+        return _request_message('scenario', 'POST', **scenario_json)
 
 
-def del_scenario(scenario_name):
-    return _request_message('scenario/{}'.format(scenario_name), 'DELETE')
+def del_scenario(scenario_name, project_name=None):
+    if project_name is not None:
+        return _request_message('project/{}/scenario/{}'.format(project_name,
+                                                                scenario_name),
+                                'DELETE')
+    else:
+        return _request_message('scenario/{}'.format(scenario_name), 'DELETE')
 
 
-def modify_scenario(scenario_name, scenario_json):
-    return _request_message('scenario/{}'.format(scenario_name), 'PUT',
-                            **scenario_json)
+def modify_scenario(scenario_name, scenario_json, project_name=None):
+    if project_name is not None:
+        return _request_message('project/{}/scenario/{}'.format(project_name,
+                                                                scenario_name),
+                                'PUT', **scenario_json)
+    else:
+        return _request_message('scenario/{}'.format(scenario_name), 'PUT',
+                                **scenario_json)
 
 
-def get_scenario(scenario_name):
-    return _request_message('scenario/{}'.format(scenario_name), 'GET')
+def get_scenario(scenario_name, project_name=None):
+    if project_name is not None:
+        return _request_message('project/{}/scenario/{}'.format(project_name,
+                                                                scenario_name),
+                                'GET')
+    else:
+        return _request_message('scenario/{}'.format(scenario_name), 'GET')
 
 
-def list_scenarios():
-    return _request_message('scenario', 'GET')
+def list_scenarios(project_name=None):
+    if project_name is not None:
+        return _request_message('project/{}/scenario'.format(project_name),
+                                'GET')
+    else:
+        return _request_message('scenario', 'GET')
 
 
-def start_scenario_instance(name, args, date=None):
+def start_scenario_instance(name, args, date=None, project_name=None):
+    action = _request_message
+    if date is not None:
+        action = partial(action, date=date)
+    if project_name is not None:
+        return action('scenario_instance', 'POST', scenario_name=name,
+                      args=args)
+    else:
+        return action('project/{}/scenario/{}/scenario_instance'.format(
+            project_name, name), 'POST', args=args)
+
+
+def stop_scenario_instance(scenario_instance_id, date=None, scenario_name=None,
+                           project_name=None):
     action = _request_message
     if date is not None:
         action = partial(action, date=date)
 
-    return action('scenario_instance', 'POST', scenario_name=name, args=args)
+    if project_name is not None and scenario_name is not None:
+        return action('project/{}/scenario/{}/scenario_instance/{}'.format(
+            project_name, scenario_name, scenario_instance_id), 'POST')
+    else:
+        return action('scenario_instance/{}'.format(scenario_instance_id),
+                      'POST')
 
 
-def stop_scenario_instance(scenario_instance_id, date=None):
-    action = _request_message
-    if date is not None:
-        action = partial(action, date=date)
-
-    return action('scenario_instance/{}'.format(scenario_instance_id), 'POST')
-
-
-def list_scenario_instances(scenario_names=[]):
-    query_string = [('scenario_name', name) for name in scenario_names]
-    return requests.get(_URL.format('scenario_instance'),
-                        params=urlencode(query_string))
+def list_scenario_instances(scenario_name=None, project_name=None):
+    if project_name is not None:
+        if scenario_name is not None:
+            return _request_message('project/{}/scenario/{}/scenario_instance'.format(
+                project_name, scenario_name), 'GET')
+        else:
+            return _request_message('project/{}/scenario_instance'.format(
+                project_name), 'GET')
+    else:
+        return _request_message('scenario_instance', 'GET')
 
 
-def status_scenario_instance(scenario_instance_id):
-    return _request_message('scenario_instance/{}'.format(scenario_instance_id),
-                            'GET')
+def status_scenario_instance(scenario_instance_id, scenario_name=None,
+                             project_name=None):
+    if project_name is not None and scenario_name is not None:
+        return _request_message('project/{}/scenario/{}/scenario_instance/{}'.format(
+            project_name, scenario_name, scenario_instance_id), 'GET')
+    else:
+        return _request_message('scenario_instance/{}'.format(
+            scenario_instance_id), 'GET')
 
 
 def kill_all(date=None):

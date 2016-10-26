@@ -42,9 +42,10 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - List all Scenarios',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-p', '--project-name', help='Name of the Project')
 
     # get args
     args = parser.parse_args()
 
-    pretty_print(list_scenarios)()
+    pretty_print(list_scenarios)(args.project_name)
 

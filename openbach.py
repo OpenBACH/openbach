@@ -47,8 +47,8 @@ from functools import partial
 def parse_command_line():
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
-            '--controller-ip', metavar='ADDRESS', default='127.0.0.1',
-            help='IP Address of the controller [default: localhost]')
+            '--controller-ip', metavar='ADDRESS', default=None,
+            help='IP Address of the controller [default: IP of first (not lo) interface]')
     parser.add_argument(
             '--controller-username', metavar='NAME', default='opensand',
             help='username to connect to the controller [default: opensand]')
@@ -90,7 +90,16 @@ def parse_command_line():
     subparser.add_parser('uninstall', help='uninstall previously installed OpenBach machines')
 
     args = parser.parse_args()
-
+    
+    #If Controller IP is not specififed, the script takes the first interface IP    
+    
+    if args.controller_ip is None:        
+        try:
+            ips_list = subprocess.check_output(['hostname', '-I'])
+        except subprocess.CalledProcessError:
+            ips_list = subprocess.check_output(['hostname', '-i'])
+        args.controller_ip = ips_list.decode().split()[0] 
+    
     if args.action is None:
         parser.error('missing action')
 
@@ -119,7 +128,7 @@ def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
         '-e', '@configs/ips', '-e', '@configs/all',
         '-e', '@{}'.format(extra_vars.name)
     ]
-
+    
     if extra_vars_name is not None:
         arguments.extend(['-e', '@{}'.format(extra_vars_name)])
 

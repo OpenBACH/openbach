@@ -4494,10 +4494,10 @@ class ClientThread(threading.Thread):
         else:
             result = {'response': response, 'returncode': returncode}
         finally:
-            msg = json.dumps(result, cls=DjangoJSONEncoder)
+            msg = json.dumps(result, cls=DjangoJSONEncoder).encode()
             if len(msg) % 4096:
-                msg += ' '
-            self.clientsocket.send(msg.encode())
+                msg += b' '
+            self.clientsocket.send(msg)
             self.clientsocket.close()
 
 

@@ -1087,14 +1087,12 @@ class ClientThread(threading.Thread):
                             frequency=statistic['frequency']
                         ).save()
                 except IntegrityError:
-                    job.delete()
                     raise BadRequest('The configuration file of the Job is not '
                                      'well formed', 409, {'configuration file':
                                                           config_file})
             elif statistics == None:
                 pass
             else:
-                job.delete()
                 raise BadRequest('The configuration file of the Job is not well'
                                  ' formed', 409, {'configuration file':
                                                   config_file})
@@ -1112,20 +1110,9 @@ class ClientThread(threading.Thread):
                     ).save()
                     rank += 1
                 except IntegrityError:
-                    job.delete()
-                    if deleted:
-                        raise BadRequest('The configuration file of the Job is not '
-                                         'well formed', 409, {'configuration file':
-                                                              config_file, 'warning':
-                                                              'Old Job has been '
-                                                              'deleted'})
-                    else:
-                        raise BadRequest('The configuration file of the Job is not '
-                                         'well formed', 409, {'configuration file':
-                                                              config_file})
-                except BadRequest:
-                    job.delete()
-                    raise
+                    raise BadRequest('The configuration file of the Job is not '
+                                     'well formed', 409, {'configuration file':
+                                                          config_file})
 
             for optional_arg in optional_args:
                 try:
@@ -1138,18 +1125,13 @@ class ClientThread(threading.Thread):
                         job=job
                     ).save()
                 except IntegrityError:
-                    job.delete()
                     raise BadRequest('The configuration file of the Job is not well'
                                      ' formed', 409, {'configuration file':
                                                       config_file})
                 except KeyError:
-                    job.delete()
                     raise BadRequest('The configuration file of the Job is not well'
                                      ' formed', 409, {'configuration file':
                                                       config_file})
-                except BadRequest:
-                    job.delete()
-                    raise
 
         return None, 204
 
@@ -4512,8 +4494,10 @@ class ClientThread(threading.Thread):
         else:
             result = {'response': response, 'returncode': returncode}
         finally:
-            self.clientsocket.send(json.dumps(result,
-                                              cls=DjangoJSONEncoder).encode())
+            msg = json.dumps(result, cls=DjangoJSONEncoder)
+            if len(msg) % 4096:
+                msg += ' '
+            self.clientsocket.send(msg.encode())
             self.clientsocket.close()
 
 

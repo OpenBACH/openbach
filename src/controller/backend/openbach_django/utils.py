@@ -45,3 +45,13 @@ class BadRequest(Exception):
         else:
             self.infos = {}
 
+
+def recv_all(socket):
+    def receiver():
+        while True:
+            msg = socket.recv(4096)
+            yield msg
+            if len(msg) < 4096:
+                break
+    return b''.join(receiver())
+

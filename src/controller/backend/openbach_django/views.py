@@ -43,6 +43,7 @@ import os
 from django.views.generic import base
 from django.http import JsonResponse, HttpResponse
 import traceback
+from .utils import recv_all
 
 class GenericView(base.View):
     """Base class for our own class-based views"""
@@ -108,7 +109,7 @@ class GenericView(base.View):
         conductor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conductor.connect(('localhost', 1113))
         conductor.send(json.dumps(command).encode())
-        recv = conductor.recv(9999)
+        recv = recv_all(conductor)
         result = json.loads(recv.decode())
         returncode = result.pop('returncode')
         conductor.close()

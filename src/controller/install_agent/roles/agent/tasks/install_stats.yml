@@ -50,7 +50,7 @@
 
 - name: Build Rstats client library
   make:
-    chdir: /opt/rstats/src/agent/rstats/client_api/
+    chdir: /opt/rstats/client_api/
     target: install
     params:
       DESTDIR: /usr/
@@ -80,5 +80,5 @@
   service: name=rstats state=started
 
 - name: Delete Rstats sources
-  file: path=/opt/rstats/src state=absent
+  file: path=/opt/rstats/client_api state=absent
 

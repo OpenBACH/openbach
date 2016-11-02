@@ -19,7 +19,7 @@ start)
     printf "%-50s" "Starting $NAME..."
     mkdir $PIDFOLDER > /dev/null 2>&1
     cd $DAEMON_PATH
-    PID=`$DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
+    PID=`PYTHONPATH=/opt/rstats $DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
     if [ -z $PID ]; then
         printf "%s\n" "Fail"
         exit 1

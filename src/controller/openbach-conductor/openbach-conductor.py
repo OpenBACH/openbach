@@ -4159,16 +4159,15 @@ class ClientThread(threading.Thread):
         if scenario_name is not None:
             scenarios = scenarios.filter(name=scenario_name)
 
-        result = []
+        result = {}
         for scenario in scenarios:
-            for scenario_instance in scenario.scenario_instance_set.all():
-                infos = self.infos_scenario_instance(scenario_instance)
-                infos['scenario_name'] = scenario.name
-                if scenario.project is not None:
-                    infos['project_name'] = scenario.project.name
-                else:
-                    infos['project_name'] = None
-                result.append(infos)
+            project_name = getattr(scenario.project, 'name', '')
+            scenario_instances = [
+                self.infos_scenario_instance(scenario_instance)
+                for scenario_instance in scenario.scenario_instance_set.all()
+            ]
+            if scenario_instances:
+                result.setdefault(project_name, {})[scenario.name] = scenario_instances
 
         return result, 200
 

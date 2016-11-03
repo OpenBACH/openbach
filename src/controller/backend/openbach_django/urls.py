@@ -94,8 +94,11 @@ urlpatterns = [
     url(r'^project/(?P<project_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
         name='project_scenario_instance_view'),
+    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/?$',
+        views.ScenarioInstancesView.as_view(),
+        name='project_scenario_instance_view2'),
     url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
         views.ScenarioInstanceView.as_view(),
-        name='project_scenario_instance_view2'),
+        name='project_scenario_instance_view3'),
 ]
 

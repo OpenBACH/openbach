@@ -108,6 +108,8 @@ class ClientThread(threading.Thread):
         type_= None
         if status == 'Not Running':
             type_ = 'Finished'
+        elif status == 'Finished':
+            type_ = 'Finished'
         elif status == 'Error':
             type_ = 'Error'
         if type_ != None:
@@ -117,9 +119,11 @@ class ClientThread(threading.Thread):
             except socket.error as serr:
                 print('Connexion with the Conductor')
                 return
-            message = { 'type': type_, 'scenario_instance_id':
-                        scenario_instance_id, 'job_instance_id': job_instance_id
-                      }
+            message = {
+                'type': type_,
+                'scenario_instance_id': scenario_instance_id,
+                'job_instance_id': job_instance_id
+            }
             sock.send(json.dumps(message).encode())
             sock.close()
             scheduler = ScenarioManager().scheduler

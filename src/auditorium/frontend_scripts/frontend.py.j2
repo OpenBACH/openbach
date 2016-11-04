@@ -369,7 +369,7 @@ def start_scenario_instance(name, args, date=None, project_name=None):
     action = _request_message
     if date is not None:
         action = partial(action, date=date)
-    if project_name is not None:
+    if project_name is None:
         return action('scenario_instance', 'POST', scenario_name=name,
                       args=args)
     else:

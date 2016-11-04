@@ -140,9 +140,6 @@
   shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(10, chars))" | python3
   register: password
 
-- name: Set up settings
-  template: src=settings.py.j2 dest=/opt/openbach-controller/backend/backend/settings.py
-
 - name: Set up local settings
   template: src=local_settings.py.j2 dest=/opt/openbach-controller/backend/backend/local_settings.py
 
@@ -161,7 +158,7 @@
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
 - name: Packs Rstats client sources
-  local_action: command tar -cvzf ../src/agent/rstats/client_api.tar.gz ../src/agent/rstats/client_api/
+  local_action: command tar -cvzf src/agent/rstats/client_api.tar.gz src/agent/rstats/client_api/
   become: no
 
 - name: Create the repository for the src of the Agents
@@ -222,6 +219,15 @@
 - name: Create a default superuser on the database
   shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/openbach-backend.py shell
   ignore_errors: yes
+
+- name: Create IHM repository (temporary here, soon on the Auditorium)
+  file: path=/opt/openbach-controller/backend/static state=directory
+
+- name: Install of the IHM (temporary here, soon on the Auditorium)
+  copy: src=../src/auditorium/ihm/ dest=/opt/openbach-controller/backend/static/
+
+- name: Deployement of static files
+  shell: yes yes | /opt/openbach-controller/backend/openbach-backend.py collectstatic -l
 
 - name: Create openbach-conductor service
   copy: src=../src/controller/openbach-conductor/openbach-conductor dest=/etc/init.d/ mode=0755

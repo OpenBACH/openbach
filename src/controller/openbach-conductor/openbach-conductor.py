@@ -1181,6 +1181,37 @@ class ClientThread(threading.Thread):
             response.append(json.loads(job.job_conf))
         return response, 200
 
+    def get_job_json_action(self, name):
+        return self.get_job_json(name)
+
+    def get_job_json(self, name):
+        try:
+            job = Job.objects.get(pk=name)
+        except ObjectDoesNotExists:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             {'job_name': name})
+
+        result = json.loads(job.job_conf)
+        result['job_name'] = name
+        return result, 200
+
+
+    def get_job_keywords_action(self, name):
+        return self.get_job_keywords(name)
+
+    def get_job_keywords(self, name):
+        try:
+            job = Job.objects.get(pk=name)
+        except ObjectDoesNotExists:
+            raise BadRequest('This Job isn\'t in the database', 404,
+                             {'job_name': name})
+
+        result = {'job_name': name, 'keywords': [
+            keyword.name for keyword in job.keywords.all()
+        ]}
+        return result, 200
+
+
 #    def get_job_stats_of(self, name):
 #        self.get_job_stats(name)
 #

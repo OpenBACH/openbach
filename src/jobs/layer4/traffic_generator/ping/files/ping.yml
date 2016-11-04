@@ -70,4 +70,8 @@ arguments:
           Duration of the ping
 
 statistics:
-
+    - name:         rtt
+      description: >
+          The Round trip time ICMP packets
+      frequency: 'every *count* send packet'
+    

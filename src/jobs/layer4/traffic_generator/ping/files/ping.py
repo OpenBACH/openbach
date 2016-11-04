@@ -32,23 +32,33 @@
    @file     rate_monitoring.py
    @brief    Sources of the Job rate_monitoring
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+             David PRADAS <david.pradas@toulouse.viveris.com>
 """
 
 
 import subprocess
+import shlex
 import argparse
 import time
 import sys
 import os
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
+from subprocess import Popen, PIPE, STDOUT
+
+def get_simple_cmd_output(cmd, stderr=STDOUT):
+    """
+    Execute a simple external command and get its output.
+    """
+    args = shlex.split(cmd)
+    return Popen(args, stdout=PIPE, stderr=stderr).communicate()[0]
 
 
 def main(destination_ip, count, interval,
          interface, packetsize, ttl, duration):
     conffile = "/opt/openbach-jobs/ping/ping_rstats_filter.conf"
 
-    cmd = 'ping {}'.format(destination_ip)
+    cmd = 'fping {}'.format(destination_ip)
     if count:
         cmd = '{} -c {}'.format(cmd, count)
     if interval:
@@ -61,20 +71,27 @@ def main(destination_ip, count, interval,
         cmd = '{} -t {}'.format(cmd, ttl)
     if duration:
         cmd = '{} -w {}'.format(cmd, duration)
-
-    p = subprocess.Popen(cmd, shell=True)
-    p.wait()
-    if p.returncode:
-        stat_name = 'ping'
-        # Connexion au service de collecte de l'agent
-        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-        connection_id = rstats.register_stat(conffile, 'ping', job_instance_id, scenario_instance_id)
-        if connection_id == 0:
-            quit()
-        # Envoie de la stat au collecteur
-        timestamp = int(round(time.time() * 1000))
-        statistics = {'status': 'Error'}
+        
+    stat_name = 'ping'
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'ping', job_instance_id, scenario_instance_id)
+    if connection_id == 0:
+        quit()
+    
+    while True:
+        try:
+            rtt_data = get_simple_cmd_output(cmd).strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
+        
+        except Exception as ex:
+            rtt_data = "0"
+            timestamp = int(round(time.time() * 1000))
+            statistics = {'status': 'Error'}
+            r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+            syslog.syslog(syslog.LOG_ERROR, "ERROR: %s" % ex)
+    
+        timestamp = int(round(time.time() * 1000))   
+        statistics = {'rtt': rtt_data}
         r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
 
 

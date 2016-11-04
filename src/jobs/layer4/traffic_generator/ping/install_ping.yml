@@ -42,6 +42,10 @@
     apt: name=iputils-ping state=present
     become: yes
     
+  - name: Install Fping
+    apt: name=fping state=present
+    become: yes
+    
   - name: Create Ping repository
     file: path=/opt/openbach-jobs/ping state=directory mode=0755
     become: yes

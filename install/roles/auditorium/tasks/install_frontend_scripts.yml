@@ -80,6 +80,11 @@
     - state_job.py
     - state_push_file.py
     - state_job_instance.py
+    - add_project.py
+    - del_project.py
+    - get_project.py
+    - list_projects.py
+    - modify_project.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

@@ -471,26 +471,11 @@ class JobView(BaseJobView):
     def get(self, request, name):
         """compute status of a job"""
 
-        type_ = request.GET.get('type', 'stats')
-        try:
-            function = getattr(self, '_status_' + type_)
-        except AttributeError:
+        type_ = request.GET.get('type', 'json')
+        if type_ not in {'json', 'stats', 'help', 'keywords'}:
             return {'msg': 'Data malformed: unknown type {}'.format(type_)}, 400
 
-        return function(name)
-
-    def _status_help(self, name):
-        """compute help status for the given job"""
-
-        data = {'command': 'get_job_help', 'name': name}
-
-        return self.conductor_execute(data)
-
-
-    def _status_stats(self, name):
-        """compute statistics status for the given job"""
-
-        data = {'command': 'get_job_stats', 'name': name}
+        data = {'command': 'get_job_' + type_, 'name': name}
 
         return self.conductor_execute(data)
 

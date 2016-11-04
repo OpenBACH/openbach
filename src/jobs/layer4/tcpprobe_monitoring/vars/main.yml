@@ -29,7 +29,7 @@
 #   @file     main.yml
 #   @brief    File that containts all the variable needed for the playbooks
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
-
+#             David PRADAS <david.pradas@toulouse.viveris.com>
 
 ---
 

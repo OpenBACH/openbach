@@ -1335,13 +1335,6 @@ class ClientThread(threading.Thread):
         return []
 
     def uninstall_jobs_action(self, addresses, names):
-        for address in addresses:
-            try:
-                command_result = Installed_Job_Command_Result.objects.get(
-                    agent_ip=address, job_name=job_name)
-            except DataError:
-                raise BadRequest('You must give an ip address for all the'
-                                 ' Agents')
         thread = threading.Thread(
             target=self.uninstall_jobs,
             args=(addresses, names))

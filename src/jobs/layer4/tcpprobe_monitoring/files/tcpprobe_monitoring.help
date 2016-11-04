@@ -1,0 +1,14 @@
+This Job collects different measurements of TCP connections by means of tcpprobe.
+
+Required Arguments:
+  port : the TCP port the Job will monitor the congestion window
+
+Optionnal Arguments:
+  -i interval : there are a lot of TCP segment in a connexion. In order to not overload the computer, only 1 packet every *interval* packet is consider (default=10)
+  -p path : path to a temporary results file (default=/tcp/tcpprobe.out)
+
+Statistics: it only produces on statistic. The name of the stats begins with 'cwnd_monitoring.' and ends with the port the Job monitor. The only value there is in the stats is named 'value' and is produced every *interval* packets received
+
+Example:
+  - Measure the congestion window of the TCP connexion on port 5001 considering 1-in-20 packet: -a "port 5001" "interval 20"
+

@@ -154,10 +154,16 @@ class PlaybookBuilder():
             print(address, file=hosts)
         return host_filename
 
-    def write_agent(self, address, agent_filename='/tmp/openbach_agents'):
+    def write_agent(self, address, agent_filename=None):
+        if agent_filename is None:
+            agent_filename = '/tmp/openbach_agents'
+        else:
+            agent_filename = '/tmp/openbach_agents_{}'.format(agent_filename)
+        agent_filename = '{}_{}'.format(agent_filename, address)
         with open(agent_filename, 'w') as agents:
             print('agents:', file=agents)
             print('  -', address, file=agents)
+        return agent_filename
 
     @contextmanager
     def playbook_file(self, filename):
@@ -360,23 +366,24 @@ class ClientThread(threading.Thread):
         collector.save()
         host_filename = self.playbook_builder.write_hosts(
             address, 'add_collector', 'Collector')
-        with open('/tmp/openbach_extra_vars', 'w') as extra_vars:
+        with self.playbook_builder.extra_vars_file(
+            'add_collector_{}'.format(address)) as extra_vars:
             print('collector_ip:', address, file=extra_vars)
             print('logstash_logs_port:', collector.logs_port, file=extra_vars)
             print('logstash_stats_port:', collector.stats_port, file=extra_vars)
         try:
             self.playbook_builder.launch_playbook(
-                'ansible-playbook -i {} -e '
+                'ansible-playbook -i {0} -e '
                 '@/opt/openbach-controller/configs/ips -e '
-                'collector_ip={0} -e '
+                'collector_ip={1} -e '
                 '@/opt/openbach-controller/configs/all '
-                '-e @/tmp/openbach_extra_vars '
-                '-e ansible_ssh_user={1} -e '
-                'ansible_sudo_pass={2} -e '
-                'ansible_ssh_pass={2} '
+                '-e @{2} '
+                '-e ansible_ssh_user="{3}" -e '
+                'ansible_sudo_pass="{4}" -e '
+                'ansible_ssh_pass="{4}" '
                 '/opt/openbach-controller/install_collector/collector.yml'
                 ' --tags install'
-                .format(host_filename, address, username, password))
+                .format(host_filename, address, extra_vars.name, username, password))
         except BadRequest as e:
             collector.delete()
             response = e.infos
@@ -517,13 +524,13 @@ class ClientThread(threading.Thread):
             address, 'del_collector', 'Collector')
         try:
             self.playbook_builder.launch_playbook(
-                'ansible-playbook -i {} -e '
+                'ansible-playbook -i {0} -e '
                 '@/opt/openbach-controller/configs/ips -e '
-                'collector_ip={0} -e '
+                'collector_ip={1} -e '
                 '@/opt/openbach-controller/configs/all '
-                '-e ansible_ssh_user={1} -e '
-                'ansible_sudo_pass={2} -e '
-                'ansible_ssh_pass={2} '
+                '-e ansible_ssh_user="{2}" -e '
+                'ansible_sudo_pass="{3}" -e '
+                'ansible_ssh_pass="{3}" '
                 '/opt/openbach-controller/install_collector/collector.yml'
                 ' --tags uninstall'
                 .format(host_filename, address, agent.username, agent.password))
@@ -636,7 +643,8 @@ class ClientThread(threading.Thread):
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'install_agent')
-        self.playbook_builder.write_agent(agent.address)
+        agent_filename = self.playbook_builder.write_agent(agent.address,
+                                                           'install')
         with self.playbook_builder.extra_vars_file(
             'install_agent_{}'.format(agent.address)) as extra_vars:
             print('collector_ip:', collector.address, file=extra_vars)
@@ -647,14 +655,14 @@ class ClientThread(threading.Thread):
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e '
-                '@/tmp/openbach_agents -e '
+                '@{} -e '
                 '@/opt/openbach-controller/configs/ips -e '
-                '@/tmp/openbach_extra_vars -e @/opt/openbach-controller/configs'
-                '/all -e ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} '
+                '@{} -e @/opt/openbach-controller/configs'
+                '/all -e ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" '
                 '/opt/openbach-controller/install_agent/agent.yml --tags install'
-                .format(host_filename, agent=agent))
+                .format(host_filename, agent_filename, extra_vars.name, agent=agent))
         except BadRequest as e:
             agent.delete()
             response = e.infos
@@ -734,7 +742,8 @@ class ClientThread(threading.Thread):
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'uninstall_agent')
-        self.playbook_builder.write_agent(agent.address)
+        agent_filename = self.playbook_builder.write_agent(agent.address,
+                                                           'uninstall')
         with self.playbook_builder.extra_vars_file(
             'uninstall_agent_{}'.format(agent.address)) as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
@@ -742,13 +751,12 @@ class ClientThread(threading.Thread):
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e '
                 '@/opt/openbach-controller/configs/all -e '
-                '@/tmp/openbach_agents -e '
-                '@/tmp/openbach_extra_vars -e ' 
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password}'
+                '@{} -e @{} -e ' 
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}"'
                 ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
-                .format(host_filename, agent=agent))
+                .format(host_filename, agent_filename, extra_vars.name, agent=agent))
         except BadRequest as e:
             agent.status = 'Uninstall failed'
             agent.update_status = timezone.now()
@@ -885,8 +893,8 @@ class ClientThread(threading.Thread):
             try:
                 self.playbook_builder.launch_playbook(
                     'ansible-playbook -i {} -e '
-                    'ansible_ssh_user={agent.username} -e '
-                    'ansible_ssh_pass={agent.password} {}'
+                    'ansible_ssh_user="{agent.username}" -e '
+                    'ansible_ssh_pass="{agent.password}" {}'
                     .format(host_filename, playbook_name, agent=agent))
             except BadRequest:
                 agent.reachable = False
@@ -906,11 +914,11 @@ class ClientThread(threading.Thread):
                 self.playbook_builder.build_status_agent(playbook) 
             try:
                 self.playbook_builder.launch_playbook(
-                    'ansible-playbook -i /tmp/openbach_hosts -e '
-                    'ansible_ssh_user={agent.username} -e '
-                    'ansible_sudo_pass={agent.username} -e '
-                    'ansible_ssh_pass={agent.password} {}'
-                    .format(playbook.name, agent=agent))
+                    'ansible-playbook -i {} -e '
+                    'ansible_ssh_user="{agent.username}" -e '
+                    'ansible_sudo_pass="{agent.username}" -e '
+                    'ansible_ssh_pass="{agent.password}" {}'
+                    .format(host_filename, playbook.name, agent=agent))
             except BadRequest as e:
                 response = e.infos
                 response['error'] = e.reason
@@ -1004,9 +1012,9 @@ class ClientThread(threading.Thread):
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_ssh_pass={agent.password} -e '
-                'ansible_sudo_pass={agent.password} {}'
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_ssh_pass="{agent.password}" -e '
+                'ansible_sudo_pass="{agent.password}" {}'
                 .format(host_filename, extra_vars.name, playbook.name,
                         agent=agent))
         except BadRequest as e:
@@ -1192,7 +1200,6 @@ class ClientThread(threading.Thread):
                              {'job_name': name})
 
         result = json.loads(job.job_conf)
-        result['job_name'] = name
         return result, 200
 
 
@@ -1347,9 +1354,9 @@ class ClientThread(threading.Thread):
                     self.playbook_builder.launch_playbook(
                         'ansible-playbook -i {} -e '
                         'path_src={path_src} -e '
-                        'ansible_ssh_user={agent.username} -e '
-                        'ansible_sudo_pass={agent.password} -e '
-                        'ansible_ssh_pass={agent.password} '
+                        'ansible_ssh_user="{agent.username}" -e '
+                        'ansible_sudo_pass="{agent.password}" -e '
+                        'ansible_ssh_pass="{agent.password}" '
                         '{job.path}/install_{job.name}.yml'
                         .format(host_filename, path_src=self.path_src,
                                 agent=agent, job=job))
@@ -1474,9 +1481,9 @@ class ClientThread(threading.Thread):
                     self.playbook_builder.launch_playbook(
                         'ansible-playbook -i {} -e '
                         'path_src={path_src} -e '
-                        'ansible_ssh_user={agent.username} -e '
-                        'ansible_sudo_pass={agent.password} -e '
-                        'ansible_ssh_pass={agent.password} '
+                        'ansible_ssh_user="{agent.username}" -e '
+                        'ansible_sudo_pass="{agent.password}" -e '
+                        'ansible_ssh_pass="{agent.password}" '
                         '{job.path}/uninstall_{job.name}.yml'
                         .format(host_filename, path_src=self.path_src,
                                 agent=agent, job=job))
@@ -1651,8 +1658,8 @@ class ClientThread(threading.Thread):
             try:
                 self.playbook_builder.launch_playbook(
                     'ansible-playbook -i {} -e '
-                    'ansible_ssh_user={agent.username} -e '
-                    'ansible_ssh_pass={agent.password} {}'
+                    'ansible_ssh_user="{agent.username}" -e '
+                    'ansible_ssh_pass="{agent.password}" {}'
                     .format(host_filename, playbook.name, agent=agent))
             except BadRequest as e:
                 response = e.infos
@@ -1694,9 +1701,9 @@ class ClientThread(threading.Thread):
                     local_path, remote_path, playbook)
         self.playbook_builder.launch_playbook(
             'ansible-playbook -i {} -e '
-            'ansible_ssh_user={agent.username} -e '
-            'ansible_sudo_pass={agent.password} -e '
-            'ansible_ssh_pass={agent.password} {}'
+            'ansible_ssh_user="{agent.username}" -e '
+            'ansible_sudo_pass="{agent.password}" -e '
+            'ansible_ssh_pass="{agent.password}" {}'
             .format(host_filename, playbook.name, agent=agent))
         return None, 204
 
@@ -1905,9 +1912,9 @@ class ClientThread(threading.Thread):
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
                 .format(host_filename, extra_vars.name, playbook.name,
                         agent=agent))
         except BadRequest as e:
@@ -2010,12 +2017,12 @@ class ClientThread(threading.Thread):
                         playbook, extra_vars)
             try:
                 self.playbook_builder.launch_playbook(
-                    'ansible-playbook -i {} -e '
-                    '@/tmp/openbach_extra_vars -e '
-                    'ansible_ssh_user={agent.username} -e '
-                    'ansible_sudo_pass={agent.password} -e '
-                    'ansible_ssh_pass={agent.password} {}'
-                    .format(host_filename, playbook.name, agent=agent))
+                    'ansible-playbook -i {} -e @{} -e '
+                    'ansible_ssh_user="{agent.username}" -e '
+                    'ansible_sudo_pass="{agent.password}" -e '
+                    'ansible_ssh_pass="{agent.password}" {}'
+                    .format(host_filename, extra_vars.name, playbook.name,
+                            agent=agent))
             except BadRequest as e:
                 response = e.infos
                 response['error'] = e.reason
@@ -2088,12 +2095,12 @@ class ClientThread(threading.Thread):
                     args, date, interval, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
-                'ansible-playbook -i {} -e '
-                '@/tmp/openbach_extra_vars -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
-                .format(host_filename, playbook.name, agent=agent))
+                'ansible-playbook -i {} -e @{} -e '
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
+                .format(host_filename, extra_vars.name, playbook.name,
+                        agent=agent))
         except BadRequest as e:
             job_instance.delete()
             response = e.infos
@@ -2189,9 +2196,9 @@ class ClientThread(threading.Thread):
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
                 .format(host_filename, extra_vars.name, playbook.name,
                         agent=agent))
         except BadRequest as e:
@@ -2475,13 +2482,13 @@ class ClientThread(threading.Thread):
                     date, None, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
-                'ansible-playbook -i {} -e '
-                '@/tmp/openbach_extra_vars -e '
+                'ansible-playbook -i {} -e @{} -e '
                 '@/opt/openbach-controller/configs/all -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
-                .format(host_filename, playbook.name, agent=agent))
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
+                .format(host_filename, extra_vars.name, playbook.name,
+                        agent=agent))
         except BadRequest as e:
             job_instance.delete()
             response = e.infos
@@ -2687,13 +2694,13 @@ class ClientThread(threading.Thread):
                     date, None, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
-                'ansible-playbook -i {} -e '
-                '@/tmp/openbach_extra_vars -e '
+                'ansible-playbook -i {} -e @{} -e '
                 '@/opt/openbach-controller/configs/all -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
-                .format(host_filename, playbook.name, agent=agent))
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
+                .format(host_filename, extra_vars.name, playbook.name,
+                        agent=agent))
         except BadRequest as e:
             job_instance.delete()
             response = e.infos
@@ -4599,9 +4606,9 @@ def handle_message_from_status_manager(clientsocket):
         try:
             playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e '
-                'ansible_ssh_user={agent.username} -e '
-                'ansible_sudo_pass={agent.password} -e '
-                'ansible_ssh_pass={agent.password} {}'
+                'ansible_ssh_user="{agent.username}" -e '
+                'ansible_sudo_pass="{agent.password}" -e '
+                'ansible_ssh_pass="{agent.password}" {}'
                 .format(host_filename, extra_vars.name, playbook.name,
                         agent=agent))
         except BadRequest:

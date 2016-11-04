@@ -118,7 +118,6 @@ def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
         ansible_sudo_pass: {{a.{0}_password}}""").format(agent)
     # We need to close the file so ansible can read it, so use delete=False
     with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
-        #print('---\n', file=extra_vars)
         print(template.format(a=args), file=extra_vars)
         if agent == 'auditorium':
             print('collector_ip:', args.collector_ip, file=extra_vars)
@@ -137,7 +136,6 @@ def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
     if skip:
         arguments.extend(['--skip-tag', 'only-controller'])
 
-    print(arguments)
     result = subprocess.run(arguments)
     os.remove(extra_vars.name)
     result.check_returncode()

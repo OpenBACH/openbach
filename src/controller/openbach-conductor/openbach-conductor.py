@@ -4017,9 +4017,9 @@ class ClientThread(threading.Thread):
             scenario_instance.status_date = timezone.now()
             scenario_instance.save()
 
-    def start_scenario_instance_of(self, scenario_name, args, ofi, date=None,
+    def start_scenario_instance_of(self, scenario_name, arguments, ofi, date=None,
                                    project_name=None):
-        result, _ = self.start_scenario_instance(scenario_name, args, date,
+        result, _ = self.start_scenario_instance(scenario_name, arguments, date,
                                                  project_name)
 
         scenario_instance_id = result['scenario_instance_id']
@@ -4030,12 +4030,12 @@ class ClientThread(threading.Thread):
         with ThreadManager() as threads:
             return [threads[scenario_instance.id][0]]
 
-    def start_scenario_instance_action(self, scenario_name, args, date=None,
+    def start_scenario_instance_action(self, scenario_name, arguments, date=None,
                                        project_name=None):
-        return self.start_scenario_instance(scenario_name, args, date,
+        return self.start_scenario_instance(scenario_name, arguments, date,
                                             project_name)
 
-    def start_scenario_instance(self, scenario_name, args, date=None,
+    def start_scenario_instance(self, scenario_name, arguments, date=None,
                                 project_name=None):
         if project_name:
             try:
@@ -4051,7 +4051,7 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
-        scenario_instance = self.register_scenario_instance(scenario, args)
+        scenario_instance = self.register_scenario_instance(scenario, arguments)
         table = self.build_table(scenario_instance)
         # lance les openbach function possible
         queues = { id: Queue() for id in table }
@@ -4397,16 +4397,15 @@ class ClientThread(threading.Thread):
         except IntegrityError:
             raise BadRequest('This name of Network is already used')
 
-    def register_project(self, project_json, project=None):
+    def register_project(self, project_json):
         name = project_json['name']
-        if project is None:
-            project = Project(name=name,
-                              description=project_json['description'])
-            try:
-                project.save(force_insert=True)
-            except IntegrityError:
-                raise BadRequest('This name of Project \'{}\' is already'
-                                 ' used'.format(name), 409)
+        project = Project(name=name,
+                          description=project_json['description'])
+        try:
+            project.save(force_insert=True)
+        except IntegrityError:
+            raise BadRequest('This name of Project \'{}\' is already'
+                             ' used'.format(name), 409)
         networks = project_json['network']
         if not self.first_check_on_network(networks):
             project.delete()
@@ -4460,7 +4459,8 @@ class ClientThread(threading.Thread):
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
                 raise BadRequest('This Project does not exist', 404)
-            self.register_project(project_json, project)
+            project.delete()
+            self.register_project(project_json)
         return None, 204
 
     def del_project_action(self, project_name):

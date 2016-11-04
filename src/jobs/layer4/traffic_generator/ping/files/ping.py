@@ -42,6 +42,7 @@ import argparse
 import time
 import sys
 import os
+import syslog
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 from subprocess import Popen, PIPE, STDOUT
@@ -80,17 +81,14 @@ def main(destination_ip, count, interval,
         quit()
     
     while True:
+        timestamp = int(round(time.time() * 1000))
         try:
             rtt_data = get_simple_cmd_output(cmd).strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
-        
         except Exception as ex:
-            rtt_data = "0"
-            timestamp = int(round(time.time() * 1000))
             statistics = {'status': 'Error'}
             r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
-            syslog.syslog(syslog.LOG_ERROR, "ERROR: %s" % ex)
-    
-        timestamp = int(round(time.time() * 1000))   
+            syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % ex)
+            return
         statistics = {'rtt': rtt_data}
         r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
 

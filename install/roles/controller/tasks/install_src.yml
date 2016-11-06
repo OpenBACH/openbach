@@ -158,7 +158,7 @@
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
 - name: Packs Rstats client sources
-  local_action: command tar -cvzf src/agent/rstats/client_api.tar.gz src/agent/rstats/client_api/
+  local_action: command tar -cvzf ../src/agent/rstats/client_api.tar.gz ../src/agent/rstats/client_api/
   become: no
 
 - name: Create the repository for the src of the Agents

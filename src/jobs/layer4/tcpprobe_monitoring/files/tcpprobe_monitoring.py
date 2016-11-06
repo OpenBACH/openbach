@@ -1,7 +1,7 @@
-#!/usr/bin/env python3 
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -52,7 +52,7 @@ def signal_term_handler(signal, frame):
     cmd = "rmmod tcp_probe_new_fix > /dev/null 2>&1"
     os.system(cmd)
     sys.exit(0)
-                 
+
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 
@@ -63,7 +63,7 @@ def watch(fn):
         # TODO: (Piste 2) Indiquer la ligne en cour de lecture
         # Once all lines are read this just returns ''
         # until the file changes and a new line appears
-                                        
+
         if new:
             yield new
         else:
@@ -82,7 +82,6 @@ def main(path, port, interval):
         syslog.syslog(syslog.LOG_ERROR, "ERROR: %s" % exe_error)
         exit("tcp_probe_new_fix.ko can not be executed")
 
-
     cmd = "chmod 444 /proc/net/tcpprobe"
     os.system(cmd)
     cmd = "PID=`cat /proc/net/tcpprobe > " + path + " & echo $!`; echo $PID >"
@@ -92,21 +91,21 @@ def main(path, port, interval):
     # Build stat names 
     stats_list = ["cwnd_monitoring", "ssthresh_monitoring",
                   "sndwnd_monitoring", "rtt_monitoring", "rcvwnd_monitoring"]
-   
+
     measurement_name = "tcpprobe_monitoring"
     conffile = "/opt/openbach-jobs/tcpprobe_monitoring/tcpprobe_monitoring_rstats_filter.conf"
-                      
+
     syslog.syslog(syslog.LOG_DEBUG, "DEBUG: the following stats have been built --> %s" % stats_list)
-    
+
     # Connect to the Agent collecting service
     job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
     scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-    
+
     connection_id = rstats.register_stat(conffile,"tcpprobe_monitoring",
                                                   job_instance_id,
                                                   scenario_instance_id)
     if connection_id == 0:
-            quit()
+        quit()
 
     i = 1
     for row in watch(path):
@@ -134,10 +133,10 @@ def main(path, port, interval):
                     for nstats in range(len(stats_list)):
                         # Send stats to Collector
                         statistics[stats_list[nstats]] = stat[nstats]
-                    
+
                     r = rstats.send_stat(connection_id, measurement_name,
                                          int(timestamp), **statistics)
-                except Exception as connection_err: 
+                except Exception as connection_err:
                     #print("timestamp : %s " % timestamp)
                     #print("Connection Error: %s" % connection_err)
                     syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % connection_err)
@@ -159,12 +158,12 @@ if __name__ == "__main__":
                         help='path to result file')
     parser.add_argument('-i', '--interval', type=int, default=10,
                         help='get the cwnd of 1/interval packet')
-    
+
     # get args
     args = parser.parse_args()
     port = args.port[0]
     path = args.path
     interval = args.interval
-    
+
     main(path, port, interval)
 

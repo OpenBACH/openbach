@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -55,8 +55,7 @@ def get_simple_cmd_output(cmd, stderr=STDOUT):
     return Popen(args, stdout=PIPE, stderr=stderr).communicate()[0]
 
 
-def main(destination_ip, count, interval,
-         interface, packetsize, ttl, duration):
+def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     conffile = "/opt/openbach-jobs/ping/ping_rstats_filter.conf"
 
     cmd = 'fping {}'.format(destination_ip)
@@ -72,25 +71,26 @@ def main(destination_ip, count, interval,
         cmd = '{} -t {}'.format(cmd, ttl)
     if duration:
         cmd = '{} -w {}'.format(cmd, duration)
-        
+
     stat_name = 'ping'
     job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
     scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-    connection_id = rstats.register_stat(conffile, 'ping', job_instance_id, scenario_instance_id)
+    connection_id = rstats.register_stat(conffile, 'ping', job_instance_id,
+                                         scenario_instance_id)
     if connection_id == 0:
         quit()
-    
+
     while True:
         timestamp = int(round(time.time() * 1000))
         try:
             rtt_data = get_simple_cmd_output(cmd).strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
         except Exception as ex:
             statistics = {'status': 'Error'}
-            r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+            rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
             syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % ex)
             return
         statistics = {'rtt': rtt_data}
-        r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+        rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
 
 
 if __name__ == "__main__":

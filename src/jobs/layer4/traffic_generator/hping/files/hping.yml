@@ -45,16 +45,16 @@ arguments:
       flag:        "-S"
       description: >
           In order to send a SYN TCP
-  optional: 
+  optional:
     - name:        interval
       type:        'int'
       count:       1
       flag:        '-i'
       description: >
           Wait interval seconds between sending each packet.
- 
+
 statistics:
-    - name:         rtt
+    - name:        rtt
       description: >
             The Round trip time of tcp connection (SYN)
-      frequency: 'every *count* send packet'
+      frequency:   'every *count* send packet'

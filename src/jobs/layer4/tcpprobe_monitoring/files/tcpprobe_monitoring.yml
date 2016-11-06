@@ -24,7 +24,7 @@ arguments:
       type:        'int'
       count:       1
       description: >
-          The TCP port where the Job will monitor the TCP connections 
+          The TCP port where the Job will monitor the TCP connections
   optional:
     - name:        interval
       type:        'int'
@@ -45,25 +45,21 @@ statistics:
   - name:          cwnd_monitoring.*port*
     description: >
         The congestion windows of a TCP connection
-    frequency: 'every *interval* received packet'
- 
+    frequency:     'every *interval* received packet'
   - name:          ssthresh_monitoring.*port*
     description: >
         The Slow-Start Threshold of a TCP connection
-    frequency: 'every *interval* received packet'
-    
+    frequency:     'every *interval* received packet'
   - name:          sndwnd_monitoring.*port*
     description: >
         The sent TCP window size 
-    frequency: 'every *interval* received packet'
-    
+    frequency:     'every *interval* received packet'
   - name:          rtt_monitoring.*port*
     description: >
         The Round-Trip Time of a TCP connection
-    frequency: 'every *interval* received packet'
-    
+    frequency:     'every *interval* received packet'
   - name:          rcvwnd_monitoring.*port*
     description: >
         The received TCP window size
-    frequency: 'every *interval* received packet'
+    frequency:     'every *interval* received packet'
 

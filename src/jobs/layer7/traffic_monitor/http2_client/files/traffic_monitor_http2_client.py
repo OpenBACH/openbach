@@ -45,7 +45,6 @@ import signal
 import syslog
 import os
 from subprocess import call
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
@@ -86,7 +85,7 @@ def get_url(server_address, simu_name, page, connection_id):
         try:
             # Envoie de la stat au collecteur
             statistics = {'value': conntime}
-            r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+            r = rstats.send_stat(connection_id, timestamp, **statistics)
         except Exception as ex: 
             print "Erreur: %s" % ex
 

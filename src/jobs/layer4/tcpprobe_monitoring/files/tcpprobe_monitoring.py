@@ -71,7 +71,7 @@ def watch(fn):
             # processus
             time.sleep(0.5)
             # TODO: (Piste1) Ne plus l'indiquer
- 
+
 def main(path, port, interval):
     # Monitoring setup
     cmd = "insmod /opt/openbach-jobs/tcpprobe_monitoring/tcp_probe_new_fix/tcp_probe_new_fix.ko"
@@ -92,7 +92,6 @@ def main(path, port, interval):
     stats_list = ["cwnd_monitoring", "ssthresh_monitoring",
                   "sndwnd_monitoring", "rtt_monitoring", "rcvwnd_monitoring"]
 
-    measurement_name = "tcpprobe_monitoring"
     conffile = "/opt/openbach-jobs/tcpprobe_monitoring/tcpprobe_monitoring_rstats_filter.conf"
 
     syslog.syslog(syslog.LOG_DEBUG, "DEBUG: the following stats have been built --> %s" % stats_list)
@@ -122,20 +121,15 @@ def main(path, port, interval):
                 stat.append(data[8]) # sndwnd
                 stat.append(data[9]) # srtt
                 stat.append(data [10]) # rcvwnd
-                #print("results: %s and %s and %s and %s and %s" % (stat[0],
-                #                                                   stat[1],
-                #                                                   stat[2],
-                #                                                   stat[3],
-                #                                                   stat[4]))
-                
+
                 try:
                     statistics = {"port": port}
                     for nstats in range(len(stats_list)):
                         # Send stats to Collector
                         statistics[stats_list[nstats]] = stat[nstats]
 
-                    r = rstats.send_stat(connection_id, measurement_name,
-                                         int(timestamp), **statistics)
+                    r = rstats.send_stat(connection_id, int(timestamp),
+                                         **statistics)
                 except Exception as connection_err:
                     #print("timestamp : %s " % timestamp)
                     #print("Connection Error: %s" % connection_err)

@@ -62,9 +62,6 @@ def monitor():
     global previous_bytes_count
     global previous_timestamp
 
-    # Contruction du nom de la stat
-    stat_name = "rate_monitoring"
-
     # Refresh de la table (pour avoir des stats a jour)
     table = iptc.Table(iptc.Table.FILTER)
     table.refresh()
@@ -84,7 +81,7 @@ def monitor():
 
     # Envoie de la stat au collecteur
     statistics = {'rate': rate}
-    r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+    r = rstats.send_stat(connection_id, timestamp, **statistics)
 
     # Mise a jour des vieilles stats pour le prochain calcul de debit
     mutex.acquire()

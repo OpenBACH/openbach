@@ -53,7 +53,7 @@ _register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint,
 _send_stat = rstats.rstats_send_stat
 _send_stat.restype = ctypes.c_char_p
 _send_stat.argtypes = [
-        ctypes.c_uint, ctypes.c_char_p, ctypes.c_longlong, ctypes.c_char_p]
+        ctypes.c_uint, ctypes.c_longlong, ctypes.c_char_p]
 
 _reload_stat = rstats.rstats_reload_stat
 _reload_stat.restype = ctypes.c_char_p
@@ -85,13 +85,12 @@ def register_stat(config_file, job_name, job_instance_id, scenario_instance_id,
             prefix.encode())
 
 
-def send_stat(id, stat_name, timestamp, **kwargs):
+def send_stat(id, timestamp, **kwargs):
     stats = ' '.join(
             '"{}" "{}"'.format(k, v)
             for k, v in kwargs.items())
     return _send_stat(
-            id, stat_name.encode(),
-            timestamp, stats.encode()).decode(errors='replace')
+            id, timestamp, stats.encode()).decode(errors='replace')
 
 
 def reload_stat(id):

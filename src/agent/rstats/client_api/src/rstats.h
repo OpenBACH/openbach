@@ -35,7 +35,6 @@ namespace rstats {
    */
   DLL_PUBLIC std::string send_stat(
       unsigned int id,
-      const std::string& stat_name,
       long long timestamp,
       const std::unordered_map<std::string, std::string>& stats);
 
@@ -79,7 +78,6 @@ extern "C" DLL_PUBLIC unsigned int rstats_register_stat(
   char* prefix);
 extern "C" DLL_PUBLIC char* rstats_send_stat(
   unsigned int id,
-  char* stat_name,
   long long timestamp,
   char* stats);
 extern "C" DLL_PUBLIC char* rstats_reload_stat(unsigned int id);

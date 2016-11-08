@@ -103,12 +103,11 @@ unsigned int register_stat(
  */
 std::string send_stat(
     unsigned int id,
-    const std::string& stat_name,
     long long timestamp,
     const std::unordered_map<std::string, std::string>& stats) {
   // Format the message
   std::stringstream command;
-  command << "2 " << id << " \"" << stat_name << "\" " << timestamp;
+  command << "2 " << id << " " << timestamp;
 
   for (auto& stat : stats) {
     command << " \"" << stat.first << "\" \"" << stat.second << "\"";
@@ -131,12 +130,11 @@ std::string send_stat(
  */
 std::string send_prepared_stat(
     unsigned int id,
-    const std::string& stat_name,
     long long timestamp,
     const std::string& stat_values) {
   // Format the message
   std::stringstream command;
-  command << "2 " << id << " \"" << stat_name << "\" " << timestamp;
+  command << "2 " << id << " " << timestamp;
   if (stat_values != "") {
     command << " " << stat_values;
   }
@@ -252,10 +250,9 @@ unsigned int rstats_register_stat(
  */
 char* rstats_send_stat(
     unsigned int id,
-    char* stat_name,
     long long timestamp,
     char* stats) {
-  return convert_std_string_to_char(rstats::send_prepared_stat(id, stat_name, timestamp, stats));
+  return convert_std_string_to_char(rstats::send_prepared_stat(id, timestamp, stats));
 }
 
 /*

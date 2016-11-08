@@ -54,9 +54,9 @@ def command_line_flag_for_argument(argument, flag):
         yield argument
 
 
-def handle_exception(exception, connection_id, measurement_name, timestamp):
+def handle_exception(exception, connection_id, timestamp):
     statistics = {'status': 'Error'}
-    rstats.send_stat(connection_id, measurement_name, timestamp, **statistics)
+    rstats.send_stat(connection_id, timestamp, **statistics)
     syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % exception)
 
 
@@ -71,7 +71,6 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     cmd.extend(command_line_flag_for_argument(ttl, '-t'))
     cmd.extend(command_line_flag_for_argument(duration, '-w'))
 
-    measurement_name = 'fping'
     job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
     scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
     connection_id = rstats.register_stat(conffile, 'fping', job_instance_id,
@@ -86,16 +85,15 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
         except subprocess.CalledProcessError as ex:
             if ex.returncode in (-15, -9):
                 continue
-            handle_exception(ex, connection_id, measurement_name, timestamps)
+            handle_exception(ex, connection_id, timestamps)
             return
         try:
             rtt_data = output.strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
         except IndexError as ex:
-            handle_exception(ex, connection_id, measurement_name, timestamps)
+            handle_exception(ex, connection_id, timestamps)
             return
         statistics = {'rtt': rtt_data}
-        rstats.send_stat(connection_id, measurement_name, timestamp,
-                         **statistics)
+        rstats.send_stat(connection_id, timestamp, **statistics)
 
 
 if __name__ == "__main__":

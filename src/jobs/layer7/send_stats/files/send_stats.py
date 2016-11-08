@@ -62,11 +62,11 @@ def send_stats(path, filename):
             if connection_id is None:
                 # Connexion au service de collecte de l'agent
                 connection_id = rstats.register_stat(
-                    conffile, 'send_stats', job_instance_id,
+                    conffile, stat_name, job_instance_id,
                     scenario_instance_id, new=True)
                 if connection_id == 0:
                     quit()
-            rstats.send_stat(connection_id, stat_name, timestamp, **line_json)
+            rstats.send_stat(connection_id, timestamp, **line_json)
 
 
 def main(job_name, date):

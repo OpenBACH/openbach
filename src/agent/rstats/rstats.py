@@ -161,16 +161,16 @@ class Rstats:
         except socket.error as msg:
             raise BadRequest('Error code: {}, Message {}'.format(*msg))
 
-    def send_stat(self, stat_name, stats):
+    def send_stat(self, stats):
         self._mutex.acquire()
         flag = 0
-        if not self._is_storage_denied(stat_name):
+        if not self._is_storage_denied(self.job_name):
             flag += 1
-        if not self._is_broadcast_denied(stat_name):
+        if not self._is_broadcast_denied(self.job_name):
             flag += 2
         stat_name_with_prefix = '{}.{}.{}.{}'.format(self.scenario_instance_id,
                                                      self.job_instance_id,
-                                                     self.prefix, stat_name)
+                                                     self.prefix, self.job_name)
 
         # recuperation des stats
         time = str(stats['time'])
@@ -180,7 +180,7 @@ class Rstats:
         stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(
             stat_name_with_prefix, time, flag)
         stats_to_log = template.format(
-            stat_name, time, flag,
+            self.job_name, time, flag,
             self.job_instance_id, self.scenario_instance_id)
         statistics = ''
         for k, v in stats.items():
@@ -276,7 +276,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(5, 6), (6, None), (2, 2), (1, 1)]
+        bounds = [(5, 7), (5, None), (2, 2), (1, 1)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -299,7 +299,7 @@ class ClientThread(threading.Thread):
                         'KO Message not formed well. Third and '
                         'forth arguments should be integers.')
         if request_type == 2:  # send stats
-            if length % 2:
+            if not length % 2:
                 raise BadRequest(
                         'KO Message not formed well. '
                         'Arguments should come in pairs.')
@@ -308,7 +308,7 @@ class ClientThread(threading.Thread):
                     # convert stat id
                     data_received[1] = int(data_received[1])
                     # convert timestamp
-                    data_received[3] = int(data_received[3])
+                    data_received[2] = int(data_received[2])
                 except ValueError:
                     raise BadRequest(
                             'KO Message not formed well. Second and '
@@ -350,7 +350,7 @@ class ClientThread(threading.Thread):
         # envoyer OK
         return id
 
-    def send_stat(self, id, stat, time, *extra_stats):
+    def send_stat(self, id, time, *extra_stats):
         # recuperer le rstatsclient et son mutex
         try:
             stats_client = StatsManager()[id]
@@ -363,7 +363,7 @@ class ClientThread(threading.Thread):
         stats = {key: value for key, value in grouper(extra_stats, 2)}
         stats['time'] = time
         # send les stats
-        stats_client.send_stat(stat, stats)
+        stats_client.send_stat(stats)
 
     def reload_stat(self, id):
         # recuperer le rstatsclient et son mutex

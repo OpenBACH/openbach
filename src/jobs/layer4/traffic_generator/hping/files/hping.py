@@ -42,7 +42,6 @@ import time
 import sys
 import os
 import syslog
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 from subprocess import Popen, PIPE, STDOUT
 
@@ -67,7 +66,6 @@ def main(destination_ip, count, interval, destport, tcpmode):
     if tcpmode:
         cmd = '{} -S'.format(cmd)
 
-    stat_name = 'hping'
     job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
     scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
     connection_id = rstats.register_stat(conffile, 'hping', job_instance_id, scenario_instance_id)
@@ -81,12 +79,12 @@ def main(destination_ip, count, interval, destport, tcpmode):
 
         except Exception as ex:
             statistics = {'status': 'Error'}
-            r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+            r = rstats.send_stat(connection_id, timestamp, **statistics)
             syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % ex)
             return
 
         statistics = {'rtt': rtt_data}
-        r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+        r = rstats.send_stat(connection_id, timestamp, **statistics)
 
 
 if __name__ == "__main__":

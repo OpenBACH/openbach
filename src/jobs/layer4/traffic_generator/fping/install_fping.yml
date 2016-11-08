@@ -50,6 +50,10 @@
     file: path=/opt/openbach-jobs/fping state=directory mode=0755
     become: yes
 
+  - name: Create Fping stats repository
+    file: path=/var/openbach_stats/fping state=directory mode=0755
+    become: yes
+
   - name: Install Fping Job
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/fping/ mode={{ item.mode }}
     with_items:

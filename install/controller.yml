@@ -53,5 +53,6 @@
 - hosts: Controller
   roles:
     - controller
+  environment: "{{ proxy_env }}"
   become: yes
 

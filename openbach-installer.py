@@ -50,11 +50,11 @@ def parse_command_line():
             '--controller-ip', metavar='ADDRESS', default=None,
             help='IP Address of the controller [default: IP of first (not lo) interface]')
     parser.add_argument(
-            '--controller-username', metavar='NAME', default='opensand',
-            help='username to connect to the controller [default: opensand]')
+            '--controller-username', metavar='NAME', default='openbach',
+            help='username to connect to the controller [default: openbach]')
     parser.add_argument(
-            '--controller-password', metavar='PASSWORD', default='opensand',
-            help='plain-text password to connect to the controller [default: opensand]')
+            '--controller-password', metavar='PASSWORD', default='openbach',
+            help='plain-text password to connect to the controller [default: openbach]')
     parser.add_argument(
             '--controller-name', metavar='NAME', default='Controller',
             help='name given to the controller machine [default: Controller]')
@@ -111,7 +111,7 @@ def set_default(args, arg_name, default_value):
         setattr(args, arg_name, default_value)
 
 
-def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
+def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=False):
     template = textwrap.dedent("""\
         ansible_ssh_user: {{a.{0}_username}}
         ansible_ssh_pass: {{a.{0}_password}}
@@ -125,7 +125,8 @@ def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
     arguments = [
         'ansible-playbook', '-i', hosts_name,
         '-e', '@configs/ips', '-e', '@configs/all',
-        '-e', '@{}'.format(extra_vars.name)
+        '-e', '@{}'.format(extra_vars.name),
+        '-e', '@{}'.format(proxy_vars_name)
     ]
     
     if extra_vars_name is not None:
@@ -135,6 +136,7 @@ def run_command(extra_vars_name, hosts_name, agent, args, skip=False):
 
     if skip:
         arguments.extend(['--skip-tag', 'only-controller'])
+    print(arguments)
 
     result = subprocess.run(arguments)
     os.remove(extra_vars.name)
@@ -153,12 +155,16 @@ if __name__ == '__main__':
     set_default(args, 'auditorium_name', args.controller_name)
 
     if args.action == 'install':
+        proxy_vars_name = 'configs/proxy'
+        with open(proxy_vars_name, 'w') as extra_vars:
+            print('---\n', file=extra_vars)
+            print('proxy_env:', file=extra_vars)
+            if args.proxy is not None:
+                print('  http_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
+                print('  https_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
+
         with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
             print('---\n', file=extra_vars)
-
-            if args.proxy is not None:
-                print('proxy_env:', file=extra_vars)
-                print('  ', args.proxy, sep='', file=extra_vars)
 
             template = ("controller:\n"
                         "  - {{ 'ip': '{a.controller_ip}',"
@@ -191,8 +197,8 @@ if __name__ == '__main__':
     skip = args.controller_ip in process_output.decode().split()
 
     commands = [
-        partial(run_command, extra_vars_name, hosts.name, 'controller', args, skip),
-        partial(run_command, extra_vars_name, hosts.name, 'auditorium', args),
+        partial(run_command, extra_vars_name, proxy_vars_name, hosts.name, 'controller', args, skip),
+        partial(run_command, extra_vars_name, proxy_vars_name, hosts.name, 'auditorium', args),
     ]
     if args.action == 'uninstall':
         commands = reversed(commands)
@@ -202,6 +208,7 @@ if __name__ == '__main__':
             command()
     finally:
         os.remove('configs/ips')
+        os.remove('configs/proxy')
         os.remove(hosts.name)
         if extra_vars_name:
             os.remove(extra_vars_name)

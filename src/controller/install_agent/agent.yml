@@ -46,5 +46,6 @@
 - hosts: Agents 
   roles:
     - agent
+  environment: "{{proxy_env}}"
   become: yes
 

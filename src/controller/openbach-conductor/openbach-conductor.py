@@ -376,7 +376,8 @@ class ClientThread(threading.Thread):
                 'ansible-playbook -i {0} -e '
                 '@/opt/openbach-controller/configs/ips -e '
                 'collector_ip={1} -e '
-                '@/opt/openbach-controller/configs/all '
+                '@/opt/openbach-controller/configs/all -e '
+                '@/opt/openbach-controller/configs/proxy '
                 '-e @{2} '
                 '-e ansible_ssh_user="{3}" -e '
                 'ansible_sudo_pass="{4}" -e '
@@ -527,7 +528,8 @@ class ClientThread(threading.Thread):
                 'ansible-playbook -i {0} -e '
                 '@/opt/openbach-controller/configs/ips -e '
                 'collector_ip={1} -e '
-                '@/opt/openbach-controller/configs/all '
+                '@/opt/openbach-controller/configs/all -e '
+                '@/opt/openbach-controller/configs/proxy '
                 '-e ansible_ssh_user="{2}" -e '
                 'ansible_sudo_pass="{3}" -e '
                 'ansible_ssh_pass="{3}" '
@@ -657,6 +659,7 @@ class ClientThread(threading.Thread):
                 'ansible-playbook -i {} -e '
                 '@{} -e '
                 '@/opt/openbach-controller/configs/ips -e '
+                '@/opt/openbach-controller/configs/proxy -e '
                 '@{} -e @/opt/openbach-controller/configs'
                 '/all -e ansible_ssh_user="{agent.username}" -e '
                 'ansible_sudo_pass="{agent.password}" -e '
@@ -751,6 +754,7 @@ class ClientThread(threading.Thread):
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e '
                 '@/opt/openbach-controller/configs/all -e '
+                '@/opt/openbach-controller/configs/proxy -e '
                 '@{} -e @{} -e ' 
                 'ansible_ssh_user="{agent.username}" -e '
                 'ansible_sudo_pass="{agent.password}" -e '
@@ -1353,6 +1357,7 @@ class ClientThread(threading.Thread):
                 try:
                     self.playbook_builder.launch_playbook(
                         'ansible-playbook -i {} -e '
+                        '@/opt/openbach-controller/configs/proxy -e '
                         'path_src={path_src} -e '
                         'ansible_ssh_user="{agent.username}" -e '
                         'ansible_sudo_pass="{agent.password}" -e '

@@ -44,6 +44,10 @@ import syslog
 import rstats_api as rstats
 
 
+# Configure logger
+syslog.openlog('fping', syslog.LOG_PID, syslog.LOG_USER)
+
+
 def command_line_flag_for_argument(argument, flag):
     if argument is not None:
         yield flag

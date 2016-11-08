@@ -26,12 +26,25 @@
 #   
 #   
 #   
-#   @file     main.yml
-#   @brief    File that containts all the variable needed for the playbooks
+#   @file     uninstall_fping.yml
+#   @brief    Playbook that uninstall the Job fping
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-job_name: ping
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
 
+  tasks:
+  - name: Uninstall Fping Job
+    file: path=/opt/openbach-jobs/fping state=absent
+    become: yes
+    
+  - name: Informe Agent that Fping is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
+    become: yes
+    
+  - include: '{{ path_src }}/del_job.yml'
+  

@@ -1,0 +1,3 @@
+Example:
+  - Ping 172.20.0.83 : -a "destination_ip 172.20.0.83"
+  - Ping 172.20.0.83 with packets of size 100 bytes : -a "destination_ip 172.20.0.83" "packetsize 100"

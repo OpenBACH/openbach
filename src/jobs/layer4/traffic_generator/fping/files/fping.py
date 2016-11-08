@@ -29,8 +29,8 @@
    
    
    
-   @file     rate_monitoring.py
-   @brief    Sources of the Job rate_monitoring
+   @file     fping.py
+   @brief    Sources of the Job fping
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
              David PRADAS <david.pradas@toulouse.viveris.com>
 """
@@ -43,7 +43,6 @@ import time
 import sys
 import os
 import syslog
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 from subprocess import Popen, PIPE, STDOUT
 
@@ -56,7 +55,7 @@ def get_simple_cmd_output(cmd, stderr=STDOUT):
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
-    conffile = "/opt/openbach-jobs/ping/ping_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs/fping/fping_rstats_filter.conf"
 
     cmd = 'fping {}'.format(destination_ip)
     if count:
@@ -72,10 +71,10 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     if duration:
         cmd = '{} -w {}'.format(cmd, duration)
 
-    stat_name = 'ping'
+    measurement_name = 'fping'
     job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
     scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-    connection_id = rstats.register_stat(conffile, 'ping', job_instance_id,
+    connection_id = rstats.register_stat(conffile, 'fping', job_instance_id,
                                          scenario_instance_id)
     if connection_id == 0:
         quit()
@@ -86,11 +85,11 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
             rtt_data = get_simple_cmd_output(cmd).strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
         except Exception as ex:
             statistics = {'status': 'Error'}
-            rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+            rstats.send_stat(connection_id, measurement_name, timestamp, **statistics)
             syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % ex)
             return
         statistics = {'rtt': rtt_data}
-        rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+        rstats.send_stat(connection_id, measurement_name, timestamp, **statistics)
 
 
 if __name__ == "__main__":
@@ -101,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument('destination_ip', metavar='destination_ip', type=str,
                         help='')
     parser.add_argument('-c', '--count', type=int,
-                        help='')
+                        help='', default=3)
     parser.add_argument('-i', '--interval', type=int,
                         help='')
     parser.add_argument('-I', '--interface', type=str,

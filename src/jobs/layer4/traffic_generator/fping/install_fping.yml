@@ -26,8 +26,8 @@
 #   
 #   
 #   
-#   @file     uninstall_ping.yml
-#   @brief    Playbook that uninstall the Job ping
+#   @file     install_fping.yml
+#   @brief    Playbook that install the Job fping
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
@@ -38,13 +38,29 @@
     - vars/main.yml
 
   tasks:
-  - name: Uninstall Ping Job
-    file: path=/opt/openbach-jobs/ping state=absent
+  - name: Install Ping
+    apt: name=iputils-ping state=present
+    become: yes
+
+  - name: Install Fping
+    apt: name=fping state=present
+    become: yes
+
+  - name: Create Fping repository
+    file: path=/opt/openbach-jobs/fping state=directory mode=0755
+    become: yes
+
+  - name: Install Fping Job
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/fping/ mode={{ item.mode }}
+    with_items:
+      - { file: 'fping.py', mode: '0755' }
+      - { file: 'fping.help', mode: '0644' }
+      - { file: 'fping_rstats_filter.conf', mode: '0644' }
+    become: yes
+
+  - name: Inform Agent that Fping Job is installed
+    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
     
-  - name: Informe Agent that Ping is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
-    become: yes
-    
-  - include: '{{ path_src }}/del_job.yml'
-  
+  - include: '{{ path_src }}/add_job.yml'
+

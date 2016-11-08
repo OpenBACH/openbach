@@ -26,41 +26,12 @@
 #   
 #   
 #   
-#   @file     install_ping.yml
-#   @brief    Playbook that install the Job ping
+#   @file     main.yml
+#   @brief    File that containts all the variable needed for the playbooks
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+job_name: fping
 
-  tasks:
-  - name: Install Ping
-    apt: name=iputils-ping state=present
-    become: yes
-    
-  - name: Install Fping
-    apt: name=fping state=present
-    become: yes
-    
-  - name: Create Ping repository
-    file: path=/opt/openbach-jobs/ping state=directory mode=0755
-    become: yes
-  
-  - name: Install Ping Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ping/ mode={{ item.mode }}
-    with_items:
-      - { file: 'ping.py', mode: '0755' }
-      - { file: 'ping.help', mode: '0644' }
-      - { file: 'ping_rstats_filter.conf', mode: '0644' }
-    become: yes
-  
-  - name: Inform Agent that Ping Job is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
-  

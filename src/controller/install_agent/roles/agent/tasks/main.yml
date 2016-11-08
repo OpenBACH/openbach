@@ -34,6 +34,9 @@
 ---
 
 # Install
+- include: install_stats.yml
+  tags:
+    - install
 - include: install_daemon.yml
   tags:
     - install
@@ -41,9 +44,6 @@
   tags:
     - install
 - include: install_logs.yml
-  tags:
-    - install
-- include: install_stats.yml
   tags:
     - install
 - include: install_ssh_key.yml
@@ -57,6 +57,9 @@
     - install
 
 # Uninstall
+- include: del_services_to_boot.yml
+  tags:
+    - uninstall
 - include: uninstall_synchro.yml
   tags:
     - uninstall
@@ -70,9 +73,6 @@
   tags:
     - uninstall
 - include: uninstall_ssh_key.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
   tags:
     - uninstall
 

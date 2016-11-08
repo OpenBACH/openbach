@@ -34,17 +34,28 @@
 ---
 
 - name: Install python3-pip
-  apt: pkg=python3-pip state=installed update_cache=true
+  apt: pkg=python3-pip state=installed
   
-- name: Install apscheduler
-  pip: name=apscheduler state=present executable=pip3
+- name: Download APScheduler
+  copy: src=../src_agent/apscheduler/ dest=/tmp/apscheduler
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--download-cache /tmp/apscheduler/'
+  when: ansible_distribution_version != "16.04"
+
+- name: Install APScheduler
+  pip: name=apscheduler executable=pip3 version={{ apscheduler_version }} extra_args='--no-index --find-links=file:///tmp/apscheduler/'
+  when: ansible_distribution_version == "16.04"
 
 - name: Upgrade setuptools
   pip: name=setuptools extra_args='--upgrade' executable=pip3
 
+- name: Install PSUtil
+  pip: name=psutil state=present executable=pip3
+  
 - name: Install python3-yaml
   apt: pkg=python3-yaml state=installed update_cache=false
-  
+
 - name: Create openbach-agent repository
   file: path=/opt/openbach-agent state=directory mode=0755
   
@@ -68,4 +79,23 @@
   
 - name: Create the service
   template: src=../src_agent/openbach-agent/openbach-agent.j2 dest=/etc/init.d/openbach-agent mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create the service
+  copy: src=../src_agent/openbach-agent/openbach-agent.service dest=/etc/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
+
+- name: Install the daemon (part 2)
+  template: src=../src_agent/openbach-agent/openbach-agent.status.j2 dest=/opt/openbach-agent/openbach-agent.status mode=0755
+  when: ansible_distribution_version == "16.04"
+
+- name: Copy information about the collector
+  template: src=../src_agent/openbach-agent/collector.yml.j2 dest=/opt/openbach-agent/collector.yml mode=0644
+
+- name: Reload systemd
+  shell: systemctl daemon-reload
+  when: ansible_distribution_version == "16.04"
+
+- name: Start openbach-agent
+  service: name=openbach-agent state=started
 

@@ -46,14 +46,11 @@ if __name__ == "__main__":
     parser.add_argument('agents_ip', nargs='+', help='IP addresses of the Agents')
     parser.add_argument('-u', '--update', action='store_true',
                         help='Use only the last status present on the collector')
-    parser.add_argument("-v", "--verbosity", action="count",
-        help="Increase output verbosity")
     
     # get args
     args = parser.parse_args()
     agents_ip = args.agents_ip
     update = args.update
-    verbosity = args.verbosity
 
-    pretty_print(list_job_instances)(agents_ip, update, verbosity)
+    pretty_print(list_job_instances)(agents_ip, update)
 

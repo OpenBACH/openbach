@@ -39,27 +39,52 @@
 - name: Install frontend scripts
   copy: src=../src/auditorium/frontend_scripts/{{ item }} dest=/opt/openbach-auditorium/frontend_scripts/ mode=0755
   with_items:
+    - add_collector.py
+    - assign_collector.py
+    - del_collector.py
+    - get_collector.py
+    - list_collectors.py
+    - modify_collector.py
     - add_job.py
+    - create_scenario.py
     - del_job.py
+    - del_scenario.py
     - get_job_help.py
     - get_job_stats.py
+    - get_scenario.py
     - install_agent.py
     - install_jobs.py
+    - kill_all.py
     - list_agents.py
     - list_installed_jobs.py
     - list_job_instances.py
     - list_jobs.py
+    - list_scenario_instances.py
+    - list_scenarios.py
+    - modify_scenario.py
     - push_file.py
     - restart_job_instance.py
     - set_job_log_severity.py
     - set_job_stat_policy.py
     - start_job_instance.py
-    - status_agents.py
+    - start_scenario_instance.py
     - status_job_instance.py
-    - status_jobs.py
+    - status_scenario_instance.py
     - stop_job_instance.py
+    - stop_scenario_instance.py
     - uninstall_agent.py
     - uninstall_jobs.py
+    - watch_job_instance.py
+    - state_collector.py
+    - state_agent.py
+    - state_job.py
+    - state_push_file.py
+    - state_job_instance.py
+    - add_project.py
+    - del_project.py
+    - get_project.py
+    - list_projects.py
+    - modify_project.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

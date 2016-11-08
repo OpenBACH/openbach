@@ -33,29 +33,24 @@
 
 ---
 
+
+
+
 - hosts: localhost
   connection: local
   tasks:
-    - name: Make sure the known hosts file exists
-      file: path=/etc/ssh/ssh_known_hosts state=touch
+  
+    - name: Create .ssh/ 
+      file: path={{ ansible_env.HOME }}/.ssh state=directory
       tags:
         - install
         - uninstall
 
-    - name: Check host name availability
-      shell: ssh-keygen -f /etc/ssh/ssh_known_hosts -F {{ item }}
+
+    - name: Scan Auditorium public key
+      known_hosts: name='{{ item }}' key="{{ lookup('pipe', 'ssh-keyscan -t rsa {{ item }}') }}"
       with_items:
         - '{{ auditorium_ip }}'
-      register: ssh_known_host_results
-      ignore_errors: yes
-      tags:
-        - install
-        - uninstall
-      
-    - name: Scan Collector public key
-      shell: ssh-keyscan -H -T 10 {{ item.item }} >> /etc/ssh/ssh_known_hosts
-      with_items: '{{ssh_known_host_results.results}}'
-      when: item.stdout == ""
       tags:
         - install
         - uninstall

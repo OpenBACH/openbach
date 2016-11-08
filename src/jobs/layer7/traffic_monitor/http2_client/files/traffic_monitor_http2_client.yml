@@ -23,37 +23,43 @@ arguments:
   required:
     - name:        server_address
       type:        'ip'
+      count:       1
       description: >
           The IP address of the server 
   optional:
     - name:        simu_name
       type:        'str'
-      flag:        ''
+      count:       1
+      flag:        '-s'
       description: >
           Name of the generated statistic (default=traffic_monitor_http2_client)
     - name:        lambd
-      type:        'int'
-      flag:        ''
+      type:        'float'
+      count:       1
+      flag:        '-l'
       description: >
           Exponential law lambda (default=1.0)
     - name:        sim_t
-      type:        'int'
-      flag:        ''
+      type:        'float'
+      count:       1
+      flag:        '--sim-t'
       description: >
           Simulation time in seconds (default=60)
     - name:        n_req
       type:        'int'
-      flag:        ''
+      count:       1
+      flag:        '-n'
       description: >
           Number of connections (default=0)
     - name:        page
       type:        'int'
-      flag:        ''
+      count:       1
+      flag:        '-p'
       description: >
           Page number (default=1)
 
 statistics:
-  - name:          *simu_name*
+  - name:          simu_name
     description: >
         Time to load the page
     frequency:     'each time a page is loaded'

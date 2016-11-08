@@ -52,6 +52,15 @@
 
 - name: Create Kibana Service
   copy: src=kibana_service dest=/etc/init.d/kibana mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create Kibana Service
+  copy: src=kibana.service dest=/lib/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
+
+- name: Reload systemd
+  shell: systemctl daemon-reload
+  when: ansible_distribution_version == "16.04"
 
 - name: Start Kibana
   service: name=kibana state=started

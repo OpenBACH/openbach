@@ -1,0 +1,11 @@
+[Unit]
+Description=Startup script for Kibana
+Requires=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/kibana/bin/kibana
+
+[Install]
+WantedBy=multi-user.target
+

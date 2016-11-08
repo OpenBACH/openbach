@@ -1,18 +1,28 @@
-FLAGS=-pthread -std=c++11 -pedantic
+BUILD_FLAGS=$(CXXFLAGS) -pthread -std=c++11 -pedantic -fPIC -DGENERATE_LIB
 ASIO_FLAGS=-DASIO_STANDALONE -I./dependencies/asio-1.10.6/include
-BUILD_FLAGS=-fPIC -DGENERATE_LIB
+LIBS_FLAGS=-pthread $(LDLIBS)
+
+DESTINATION=$(if ${DESTDIR}, ${DESTDIR}, /usr/)
 
 all: build/librstats.so
 
 build/rstats.o: ./src/rstats.cpp ./src/rstats.h ./src/syslog.h
-	g++ ${FLAGS} ${ASIO_FLAGS} ${BUILD_FLAGS} -c $< -o $@
+	@mkdir -p build
+	g++ $(CPPFLAGS) ${BUILD_FLAGS} ${ASIO_FLAGS} -c $< -o $@
 
 build/librstats.so: ./build/rstats.o
-	g++ -shared ${FLAGS} -o $@ $<
- 
+	@mkdir -p build
+	g++ -o $@ $< $(LDFLAGS) -shared ${LIBS_FLAGS}
+
 install: all
-	cp build/librstats.so src/*.h $(if ${DESTDIR}, ${DESTDIR}, .)
+	mkdir -p ${DESTINATION}/{lib,include}/
+	cp build/librstats.so ${DESTINATION}/lib/
+	cp src/rstats.h src/lib_export.h ${DESTINATION}/include/
 
 clean:
-	@rm -f *.o
-	@rm -f *.so
+	@rm -f build/*.o
+	@rm -f build/*.so
+
+uninstall:
+	@rm -f ${DESTINATION}/lib/librstats.so
+	@rm -f ${DESTINATION}/include/{rstats,lib_export}.h

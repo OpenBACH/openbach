@@ -48,13 +48,13 @@
     - install
 
 # Uninstall
+- include: del_services_to_boot.yml
+  tags:
+    - uninstall
 - include: uninstall_synchro.yml
   tags:
     - uninstall
 - include: uninstall_src.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
   tags:
     - uninstall
 - include: uninstall_ansible.yml

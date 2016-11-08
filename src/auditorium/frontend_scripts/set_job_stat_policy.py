@@ -53,7 +53,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('agent_ip', help='IP Address of the Agent')
     parser.add_argument('job_name', help='Name of the Job')
-    parser.add_argument('-n', '--stat-name', default='default', help='')
+    parser.add_argument('-n', '--stat-name', default=None, help='')
     parser.add_argument('-s', '--storage', action='store_true', help='')
     parser.add_argument('-b', '--broadcast', action='store_true', help='')
     parser.add_argument('-de', '--delete', action='store_true', help='')

@@ -39,12 +39,12 @@ import subprocess
 import json
 import argparse
 import sys
+import os
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
-def main(collector, port, begin, end, simu_name, database_name, username,
-         password):
+def main(collector, port, begin, end, simu_name, database_name, username, password):
     conffile = "/opt/openbach-jobs/post_processing_tcp_pep/post_processing_tcp_pep_rstats_filter.conf"
 
     cmd = "curl -G 'http://" + collector + ":" + str(port) + "/query' --data-url"
@@ -95,12 +95,15 @@ def main(collector, port, begin, end, simu_name, database_name, username,
         print cpt
         stat_name = test['results'][0]['series'][0]['name']
         
-        connection_id = rstats.register_stat(conffile, 'post_processing_tcp_pep', database_name)
+        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+        connection_id = rstats.register_stat(conffile, 'post_processing_tcp_pep', job_instance_id, scenario_instance_id)
         if connection_id == 0:
             print "Connection to rstats failed"
             exit()
         
-        rstats.send_stat(connection_id, stat_name, str(finished[i]), mean=mean, compteur=cpt)
+        statistics = {'mean': mean, 'compteur': cpt}
+        rstats.send_stat(connection_id, stat_name, str(finished[i]), **statistics)
         #cmd = "curl -X POST 'http://" + collector + ":" + str(port) + "/write?d"
         #cmd += "b=" + database_name + "&precision=" + 'ms' + "&u=" + username
         #cmd += "&p=" + password +  "' --data-binary '" + stat_name + " mean="
@@ -142,6 +145,4 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
     
-    main(collector, port, begin, end, simu_name, database_name, username,
-         password)
-
+    main(collector, port, begin, end, simu_name, database_name, username, password)

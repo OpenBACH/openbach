@@ -1,0 +1,14 @@
+This Job principaly launch the hping command for monitoring TCP RTT. It sends syslog in case of error.
+
+Required Arguments:
+  - dest : it is the IP destination you want to ping
+
+Optionnal Arguments:
+  all the arguments of the ping command are accepted
+
+Statistics: it doesn't produce any statistic
+
+Example:
+  - Ping 172.20.0.83 : -a "destination_ip 172.20.0.83"
+  - Ping 172.20.0.83 with packets of size 100 bytes : -a "destination_ip 172.20.0.83" "packetsize 100"
+

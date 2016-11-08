@@ -48,7 +48,7 @@
     copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/pep/{{ item.name }} mode={{ item.mode }}
     become: yes
     with_items:
-      - { name: 'set_pep.sh', mode: '0755' }
+      - { name: 'set_pep.py', mode: '0755' }
       - { name: 'unset_pep.sh', mode: '0755' }
       - { name: 'pep.help', mode: '0644' }
       - { name: 'pep_rstats_filter.conf', mode: '0644' }

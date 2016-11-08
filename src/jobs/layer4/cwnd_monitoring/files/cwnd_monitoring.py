@@ -88,7 +88,9 @@ def main(path, port, interval):
     conffile = "/opt/openbach-jobs/cwnd_monitoring/cwnd_monitoring_rstats_filter.conf"
 
     # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile, 'cwnd_monitoring')
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'cwnd_monitoring', job_instance_id, scenario_instance_id)
     if connection_id == 0:
         quit()
 
@@ -104,7 +106,8 @@ def main(path, port, interval):
                 cwnd = data[6]
                 try:
                     # Envoie de la stat au collecteur
-                    r = rstats.send_stat(connection_id, stat_name, timestamp, value=cwnd)
+                    statistics = {'value': cwnd}
+                    r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
                 except Exception as ex: 
                     print "Erreur: %s" % ex
             i = 1

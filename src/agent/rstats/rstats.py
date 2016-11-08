@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
 """ 
    OpenBACH is a generic testbed able to control/configure multiple
@@ -41,6 +42,7 @@ import shlex
 import os.path
 import time
 from configparser import ConfigParser
+import yaml
 from collections import namedtuple, defaultdict
 try:
     import simplejson as json
@@ -60,33 +62,42 @@ class BadRequest(ValueError):
 
 
 class StatsManager:
-    __shared_state = {}
+    __shared_state = {'stats': {}, 'lookup': {}, 'mutex': threading.Lock(), 'id': 0}
 
-    def __init__(self, init=False):
+    def __init__(self):
         self.__dict__ = self.__class__.__shared_state
 
-        if init:
-            self.stats = {}
-            self.mutex = threading.Lock()
-            self.id = 0
+    def statistic_lookup(self, instance_id, scenario_id):
+        id = self.lookup.get((instance_id, scenario_id))
+        if id is None:
+            with self.mutex:
+                self.id += 1
+                self.lookup[(instance_id, scenario_id)] = id = self.id
+        return id
 
-    def __enter__(self):
-        self.mutex.acquire()
-        return self.stats
+    def __getitem__(self, id):
+        return self.stats[id]
 
-    def __exit__(self, t, v, tb):
-        self.mutex.release()
+    def __setitem__(self, id, statistic):
+        with self.mutex:
+            self.stats[id] = statistic
 
-    def increment_id(self):
-        self.id += 1
-        return self.id
+    def __delitem__(self, id):
+        with self.mutex:
+            del self.stats[id]
+
+    def __iter__(self):
+        with self.mutex:
+            yield from self.stats.items()
 
 
 class Rstats:
     def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
-                 prefix=None, id=None, job_name=None):
+                 prefix=None, id=None, job_name=None, instance=0, scenario=0):
         self._mutex = threading.Lock()
         self.conf = conf
+        self.job_instance_id = instance
+        self.scenario_instance_id = scenario
         self.job_name = 'rstats' if job_name is None else job_name
         self.prefix = self.conf.prefix if prefix is None else prefix
 
@@ -98,7 +109,7 @@ class Rstats:
         logfile = os.path.join(logpath, '{0}/{0}_{1}.stats'.format(self.job_name, date))
         try:
             fhd = logging.FileHandler(logfile, mode='a')
-            fhd.setFormatter(logging.Formatter('{asctime} | {levelname} | {message}', style='{'))
+            fhd.setFormatter(logging.Formatter('{message}', style='{'))
             self._logger.addHandler(fhd)
         except:  # [Mathias] except What?
             pass
@@ -158,45 +169,46 @@ class Rstats:
         if not self._is_broadcast_denied(stat_name):
             flag += 2
         if self.prefix:
-            stat_name = '{}.{}'.format(self.prefix, stat_name)
+            stat_name_with_prefix = '{}.{}'.format(self.prefix, stat_name)
 
         # recuperation des stats
         time = str(stats['time'])
         del stats['time']
-        formatted_header_log = [
-                'Stat{{0}}{}'.format(stat_name),
-                'Time{{0}}{}'.format(time),
-        ]
-        formatted_stats = ['{}{{0}}"{}"'.format(k, v) for k, v in stats.items()]
-        logs = ', '.join(formatted_header_log).format(': ') + ', ' + ', '.join(formatted_stats).format(': ')
-        self._logger.info(logs)
 
-        if flag != 0:
-            stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(stat_name, time, flag)
-            for k, v in stats.items():
-                try:
-                    float(v)
-                    stats_to_send = '{}, "{}": {}'.format(stats_to_send, k, v)
-                except ValueError:
-                    # TODO: Gerer les vrais booleens dans influxdb (voir avec la
-                    #       conf de logstash aussi)
-                    if v in BOOLEAN_TRUE:
-                        stats_to_send = '{}, "{}": "true"'.format(stats_to_send, k)
-                    elif v in BOOLEAN_FALSE:
-                        stats_to_send = '{}, "{}": "false"'.format(stats_to_send, k)
-                    else:
-                        stats_to_send = '{}, "{}": "{}"'.format(stats_to_send, k, v)
-            stats_to_send = '{}{}{}'.format('{', stats_to_send, '}')
+        template = '"stat_name": "{}", "time": {}, "flag": {}, "job_instance_id": {}, "scenario_instance_id": {}'
+        stats_to_send = template.format(
+                stat_name_with_prefix, time, flag,
+                self.job_instance_id, self.scenario_instance_id)
+        stats_to_log = template.format(
+            stat_name, time, flag,
+            self.job_instance_id, self.scenario_instance_id)
+        statistics = ''
+        for k, v in stats.items():
             try:
-                send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
-            except KeyError:
-                raise BadRequest('Mode not known')
+                float(v)
+                statistics = '{}, "{}": {}'.format(statistics, k, v)
+            except ValueError:
+                # TODO: Gerer les vrais booleens dans influxdb (voir avec la
+                #       conf de logstash aussi)
+                if v in BOOLEAN_TRUE:
+                    statistics = '{}, "{}": "true"'.format(statistics, k)
+                elif v in BOOLEAN_FALSE:
+                    statistics = '{}, "{}": "false"'.format(statistics, k)
+                else:
+                    statistics = '{}, "{}": "{}"'.format(statistics, k, v)
+        stats_to_send = '{}{}{}{}'.format('{', stats_to_send, statistics, '}')
+        stats_to_log = '{}{}{}{}'.format('{', stats_to_log, statistics, '}')
+        try:
+            send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
+        except KeyError:
+            raise BadRequest('Mode not known')
+        if flag != 0:
             send_function(stats_to_send)
+        self._logger.info(stats_to_log)
         self._mutex.release()
 
     def reload_conf(self):
         self._mutex.acquire()
-        self._logger.info('Load new configuration:')
 
         self._default_storage = RstatsRule.ACCEPT
         self._default_broadcast = RstatsRule.ACCEPT
@@ -218,8 +230,6 @@ class Rstats:
         except Exception:
             pass
 
-        for rule in self._rules:
-            self._logger.info('    {}', rule)
         self._mutex.release()
 
 
@@ -229,13 +239,15 @@ def grouper(iterable, n):
 
 
 class Conf:
-    def __init__(self, conf_path='config.ini'):
+    def __init__(self, conf_path, collector_conf):
         config = ConfigParser()
         config.read(conf_path)
-        self.host = config.get('logstash', 'host')
-        self.port = config.get('logstash', 'port')
         self.mode = config.get('logstash', 'mode')
         self.prefix = config.get('agent', 'prefix')
+        with open(collector_conf) as stream:
+            content = yaml.load(stream)
+        self.host = content['address']
+        self.port = content['stats']['port']
 
 
 class RstatsRule(namedtuple('RstatsRule', 'name storage broadcast')):
@@ -251,9 +263,10 @@ class RstatsRule(namedtuple('RstatsRule', 'name storage broadcast')):
 
 
 class ClientThread(threading.Thread):
-    def __init__(self, client_socket, conf):
+    def __init__(self, data, client_addr, conf):
         super().__init__()
-        self.socket = client_socket
+        self.data = data
+        self.client = client_addr
         self.conf = conf
 
     def parse_and_check(self, data):
@@ -263,7 +276,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(3, 4), (6, None), (2, 2), (1, 1)]
+        bounds = [(5, 6), (6, None), (2, 2), (1, 1)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -275,21 +288,34 @@ class ClientThread(threading.Thread):
             raise BadRequest(
                     'KO Message not formed well. Too much arguments.')
 
-        if request_type == 2:
+        if request_type == 1:  # create stats
+            try:
+                # convert job_instance_id
+                data_received[3] = int(data_received[3])
+                # convert scenario_instance_id
+                data_received[4] = int(data_received[4])
+            except ValueError:
+                raise BadRequest(
+                        'KO Message not formed well. Third and '
+                        'forth arguments should be integers.')
+        if request_type == 2:  # send stats
             if length % 2:
                 raise BadRequest(
                         'KO Message not formed well. '
                         'Arguments should come in pairs.')
             else:
                 try:
+                    # convert stat id
                     data_received[1] = int(data_received[1])
+                    # convert timestamp
                     data_received[3] = int(data_received[3])
                 except ValueError:
                     raise BadRequest(
                             'KO Message not formed well. Second and '
-                            'forth argument should be integers.')
-        elif request_type == 3:
+                            'forth arguments should be integers.')
+        elif request_type == 3:  # reload stat
             try:
+                # convert stat id
                 data_received[1] = int(data_received[1])
             except ValueError:
                 raise BadRequest(
@@ -299,34 +325,38 @@ class ClientThread(threading.Thread):
         data_received[0] = request_type
         return data_received
 
-    def create_stat(self, confpath, job, *prefix):
-        id = StatsManager().increment_id()
-        prefix = None if not prefix else prefix[0]
+    def create_stat(self, confpath, job, job_instance_id, scenario_instance_id, *prefix):
+        manager = StatsManager()
+        id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
-        # creer le rstatsclient
-        stats_client = Rstats(
-                confpath=confpath,
-                job_name=job,
-                prefix=prefix,
-                id=id,
-                conf=self.conf)
+        try:
+            stats_client = manager[id]
+        except KeyError:
+            prefix = None if not prefix else prefix[0]
 
-        # ajouter le rstatsclient au dict
-        with StatsManager() as stats:
-            stats[id] = stats_client
+            # creer le rstatsclient
+            stats_client = Rstats(
+                    confpath=confpath,
+                    job_name=job,
+                    prefix=prefix,
+                    id=id,
+                    instance=job_instance_id,
+                    scenario=scenario_instance_id,
+                    conf=self.conf)
+
+            manager[id] = stats_client
 
         # envoyer OK
         return id
 
     def send_stat(self, id, stat, time, *extra_stats):
         # recuperer le rstatsclient et son mutex
-        with StatsManager() as stats:
-            try:
-                stats_client = stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            stats_client = StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
 
         # recuperer les stats
         stats = {key: value for key, value in grouper(extra_stats, 2)}
@@ -336,37 +366,33 @@ class ClientThread(threading.Thread):
 
     def reload_stat(self, id):
         # recuperer le rstatsclient et son mutex
-        with StatsManager() as stats:
-            try:
-                stats_client = stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            stats_client = StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
         # reload la conf
         stats_client.reload_conf()
 
     def remove_stat(self, id):
-        with StatsManager() as stats:
-            try:
-                del stats[id]
-            except KeyError:
-                raise BadRequest(
-                        'KO The given id doesn\'t '
-                        'represent an open connection')
+        try:
+            del StatsManager()[id]
+        except KeyError:
+            raise BadRequest(
+                    'KO The given id doesn\'t '
+                    'represent an open connection')
 
     def reload_stats(self):
-        with StatsManager() as stats:
-            for stats_client in stats.values():
-                # reload la conf
-                stats_client.reload_conf()
+        for _, stats_client in StatsManager():
+            # reload la conf
+            stats_client.reload_conf()
 
     def get_config(self):
         configs = defaultdict(set)
-        with StatsManager() as stats:
-            for job_config in stats.values():
-                configs[job_config.job_name].add(job_config._confpath)
-        return json.dumps({name: list(paths) for name, paths in configs.items())
+        for _, job_config in StatsManager():
+            configs[job_config.job_name].add(job_config._confpath)
+        return json.dumps({name: list(paths) for name, paths in configs.items()})
 
     def execute_request(self, data): 
         request, *args = self.parse_and_check(data)
@@ -381,33 +407,31 @@ class ClientThread(threading.Thread):
         return functions[request-1](*args)
 
     def run(self):
-        data = self.socket.recv(2048)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            result = self.execute_request(data.decode())
+            result = self.execute_request(self.data.decode())
         except BadRequest as e:
-            self.socket.send(e.reason.encode())
-        except UnicodeError:
-            self.socket.send(b'KO The message couldn\'t be decyphered')
+            sock.sendto(e.reason.encode(), self.client)
+        except Exception as e:
+            msg = 'KO: An error occured: {}\0'.format(e)
+            sock.sendto(msg.encode(), self.client)
         else:
             if result is None:
-                self.socket.send(b'OK')
+                sock.sendto(b'OK\0', self.client)
             else:
-                msg = 'OK {}'.format(result)
-                self.socket.send(msg.encode())
+                msg = 'OK {}\0'.format(result)
+                sock.sendto(msg.encode(), self.client)
         finally:
-            self.socket.close()
+            sock.close()
 
 
 if __name__ == '__main__':
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_socket.bind(('', 1111))
-    tcp_socket.listen(1000)
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.bind(('', 1111))
 
-    StatsManager(init=True)
-    conf = Conf('rstats.cfg')
+    conf = Conf('/opt/rstats/rstats.cfg', '/opt/openbach-agent/collector.yml')
 
     while True:
-        client, _ = tcp_socket.accept()
-        ClientThread(client, conf).start()
+        data, remote = udp_socket.recvfrom(2048)
+        ClientThread(data, remote, conf).start()
 

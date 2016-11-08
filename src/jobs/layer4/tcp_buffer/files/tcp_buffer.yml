@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/tcp_buffer/tcp_buffer.sh'
+    command:       '/opt/openbach-jobs/tcp_buffer/tcp_buffer.py'
     command_stop:
   windows:
     requirements:  'Windows 2010'
@@ -22,18 +22,22 @@ arguments:
   required:
     - name:        name
       type:        'str'
+      count:       1
       description: >
           The name of the tcp buffer to set
     - name:        min_size
       type:        'int'
+      count:       1
       description: >
           The minial size of the buffer
     - name:        size
       type:        'int'
+      count:       1
       description: >
           The size of the buffer
     - name:        max_size
       type:        'int'
+      count:       1
       description: >
           The maximum size of the buffer
   optional:

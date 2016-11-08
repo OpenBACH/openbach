@@ -24,6 +24,8 @@ namespace rstats {
   DLL_PUBLIC unsigned int register_stat(
       const std::string& config_file,
       const std::string& job_name,
+      unsigned int job_instance_id,
+      unsigned int scenario_instance_id,
       const std::string& prefix);
 
   /*
@@ -70,6 +72,8 @@ namespace rstats {
 extern "C" DLL_PUBLIC unsigned int rstats_register_stat(
   char* config_file,
   char* job_name,
+  unsigned int job_instance_id,
+  unsigned int scenario_instance_id,
   char* prefix);
 extern "C" DLL_PUBLIC char* rstats_send_stat(
   unsigned int id,

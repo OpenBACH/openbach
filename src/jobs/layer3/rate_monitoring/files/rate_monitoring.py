@@ -42,16 +42,16 @@ import threading
 import syslog
 import signal
 import sys
+import os
 from apscheduler.schedulers.blocking import BlockingScheduler
 sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
-
 def signal_term_handler(signal, frame):
     chain.delete_rule(rule)
     sys.exit(0)
-              
+
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 
@@ -61,30 +61,31 @@ def monitor():
     global mutex
     global previous_bytes_count
     global previous_timestamp
-    
+
     # Contruction du nom de la stat
     stat_name = "rate_monitoring"
-    
+
     # Refresh de la table (pour avoir des stats a jour)
     table = iptc.Table(iptc.Table.FILTER)
     table.refresh()
-    
+
     # Recuperation de la rule (Attention, il faut qu'elle soit en 1ere position)
     rule = chain.rules[0]
-    
+
     # Recuperation des stats
     timestamp = int(round(time.time() * 1000))
     bytes_count = rule.get_counters()[1]
-    
+
     # Calcul du debit
     mutex.acquire()
     diff_timestamp = float(timestamp - previous_timestamp) / 1000 # in seconds
     rate = float(bytes_count - previous_bytes_count)/diff_timestamp
     mutex.release()
-    
+
     # Envoie de la stat au collecteur
-    r = rstats.send_stat(connection_id, stat_name, timestamp, rate=rate)
-    
+    statistics = {'rate': rate}
+    r = rstats.send_stat(connection_id, stat_name, timestamp, **statistics)
+
     # Mise a jour des vieilles stats pour le prochain calcul de debit
     mutex.acquire()
     previous_bytes_count = bytes_count
@@ -98,23 +99,24 @@ def main(rule, interval):
     global mutex
     global previous_bytes_count
     global previous_timestamp
-    
+
     conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
-    
+
     # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile, 'rate_monitoring')
+    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
+    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
+    connection_id = rstats.register_stat(conffile, 'rate_monitoring', job_instance_id, scenario_instance_id)
     if connection_id == 0:
         quit()
-    
 
     # On insere la règle
     chain.insert_rule(rule)
-    
+
     # On enregistre les premieres stats pour le calcul du debit
     mutex = threading.Lock()
     previous_timestamp = int(round(time.time() * 1000))
     previous_bytes_count = rule.get_counters()[1]
-    
+
     # On monitor
     sched = BlockingScheduler()
     sched.add_job(monitor, 'interval', seconds=interval)
@@ -146,7 +148,7 @@ if __name__ == "__main__":
                         help='destination port')
     parser.add_argument('--sport', type=str, nargs=1,
                         help='source port')
-    
+
     # get args
     args = parser.parse_args()
     interval = args.interval[0]
@@ -186,7 +188,7 @@ if __name__ == "__main__":
 
     # Recuperation de la Table (ce sera toujours 'filter')
     table = iptc.Table(iptc.Table.FILTER)
-    
+
     # Recuperation de la Chain
     chain = None
     for c in table.chains:
@@ -199,7 +201,7 @@ if __name__ == "__main__":
 
     # Creation de la Rule
     rule = iptc.Rule(chain=chain)
-    
+
     # Ajout des Matchs
     if source != None:
        rule.src = source 
@@ -227,4 +229,4 @@ if __name__ == "__main__":
         rule.create_target("")
 
     main(rule, interval)
-    
+

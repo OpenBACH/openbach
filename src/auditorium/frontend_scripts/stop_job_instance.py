@@ -51,14 +51,14 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='OpenBach - Stop Instance',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('instance_ids', nargs='+', type=int, help='Id of the instance')
+    parser.add_argument('job_instance_ids', nargs='+', type=int, help='Id of the instance')
     parser.add_argument('-d', '--date', metavar=DateMetavarHelper(),
                         nargs=2, help='Date of the execution')
     
     # get args
     args = parser.parse_args()
-    instance_ids = args.instance_ids
+    job_instance_ids = args.job_instance_ids
     date = date_to_timestamp('{} {}'.format(*args.date)) if args.date else None
 
-    pretty_print(stop_job_instance)(instance_ids, date)
+    pretty_print(stop_job_instance)(job_instance_ids, date)
 

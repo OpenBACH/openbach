@@ -36,7 +36,8 @@
 
 
 import argparse
-from frontend import uninstall_agent, pretty_print
+import pprint
+from frontend import uninstall_agent, state_agent, wait_for_success
 
 
 if __name__ == "__main__":
@@ -49,5 +50,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     agent_ip = args.agent_ip
 
-    pretty_print(uninstall_agent)(agent_ip)
+    response = uninstall_agent(agent_ip)
+    if 400 <= response.status_code < 600:
+        print(response)
+        pprint.pprint(response.json())
+        exit(1)
+    wait_for_success(state_agent, status='uninstall', address=agent_ip)
 

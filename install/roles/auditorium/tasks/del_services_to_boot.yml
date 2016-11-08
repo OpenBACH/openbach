@@ -33,9 +33,47 @@
 
 ---
 
-- name: Delete Kibana to boot
-  shell: update-rc.d -f kibana remove
+ 
+# For Ubuntu 16.04 (systemd)
 
-- name: Delete Grafana to boot
+- name: Check if Kibana service exists
+  stat: path=/lib/systemd/system/kibana.service
+  register: kibana_status
+  when: ansible_distribution_version == "16.04"
+ 
+- name: Delete Kibana service to boot
+  shell: systemctl disable kibana
+  when: (ansible_distribution_version == "16.04") and kibana_status.stat.exists
+ 
+- name: Check if Grafana service exists
+  stat: path=/lib/systemd/system/grafana.service
+  register: grafana_status
+  when: ansible_distribution_version == "16.04"
+      
+- name: Delete Grafana service to boot
+  shell: systemctl disable grafana
+  when: (ansible_distribution_version == "16.04") and grafana_status.stat.exists
+
+
+# For Ubuntu 14.04 
+
+- name: Check if Kibana service exists
+  stat: path=/etc/init.d/kibana
+  register: kibana_status2
+  when: ansible_distribution_version != "16.04"
+ 
+- name: Delete Kibana service to boot
+  shell: update-rc.d -f kibana remove
+  when: (ansible_distribution_version != "16.04") and kibana_status2.stat.exists
+
+- name: Check if Grafana service exists
+  stat: path=/etc/init.d/grafana-server
+  register: grafana_status2
+  when: ansible_distribution_version != "16.04"
+      
+- name: Delete Grafana service to boot
   shell: update-rc.d -f grafana-server remove
+  when: (ansible_distribution_version != "16.04") and grafana_status2.stat.exists
+
+
 

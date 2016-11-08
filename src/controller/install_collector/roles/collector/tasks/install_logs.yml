@@ -1,0 +1,90 @@
+# 
+#   OpenBACH is a generic testbed able to control/configure multiple
+#   network/physical entities (under test) and collect data from them. It is
+#   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+#   Agents (one for each network entity that wants to be tested).
+#   
+#   
+#   Copyright © 2016 CNES
+#   
+#   
+#   This file is part of the OpenBACH testbed.
+#   
+#   
+#   OpenBACH is a free software : you can redistribute it and/or modify it under the
+#   terms of the GNU General Public License as published by the Free Software
+#   Foundation, either version 3 of the License, or (at your option) any later
+#   version.
+#   
+#   This program is distributed in the hope that it will be useful, but WITHOUT
+#   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
+#   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+#   details.
+#   
+#   You should have received a copy of the GNU General Public License along with
+#   this program. If not, see http://www.gnu.org/licenses/.
+#   
+#   
+#   
+#   @file     install_logs.yml
+#   @brief    Tasks that install the log part of the Collector
+#   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+
+
+---
+
+- name: Check if ElasticSearch is installed
+  shell: dpkg-query -W -f='${Version}\n' elasticsearch | sed 's/^[0-9]\+://'
+  register: elasticsearch_check_deb
+  ignore_errors: yes
+  changed_when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
+
+- name: Download ElasticSearch
+  copy: src=../src_collector/elasticsearch/elasticsearch-{{ version_elasticsearch }}.deb
+    dest=/tmp/
+  when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
+
+- name: Install ElasticSearch
+  shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
+  when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
+
+- name: Install Java 8
+  unarchive: src=../src_collector/java8/jre-8u101-linux-x64.tar.gz dest=/usr/local/ extra_opts='--strip-components=1'
+  ignore_errors: yes
+
+- name: Configure ElasticSearch 
+  template: src=elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
+    owner=root group=elasticsearch
+
+- name: Indicate ElasticSearch where to find Java
+  lineinfile: dest=/etc/init.d/elasticsearch regexp='^PATH' line='PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin' backup=yes
+  when: ansible_distribution_version != "16.04"
+
+- name: Start ElasticSearch
+  service: name=elasticsearch state=restarted
+
+- name: Check if LogStash is installed
+  shell: dpkg-query -W -f='${Version}\n' logstash | sed 's/^[0-9]\+://'
+  register: logstash_check_deb
+  ignore_errors: yes
+  changed_when: logstash_check_deb.stdout != '{{ version_logstash }}'
+
+- name: Download LogStash
+  copy: src=../src_collector/logstash/logstash_{{ version_logstash }}_all.deb \
+    dest=/tmp/
+  when: logstash_check_deb.stdout != '{{ version_logstash }}'
+
+- name: Install LogStash
+  shell: dpkg -i /tmp/logstash_{{ version_logstash }}_all.deb
+  when: logstash_check_deb.stdout != '{{ version_logstash }}'
+
+- name: Configure LogStash
+  template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
+    owner=root group=root
+
+- name: Indicate LogStash where to find Java
+  lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin' backup=yes
+
+- name: Start LogStash
+  service: name=logstash state=restarted
+

@@ -1,0 +1,131 @@
+{
+  "name": "If",
+  "description": "If scenario (for test)",
+  "arguments": {},
+  "constants": {
+    "agentA": "172.20.34.38",
+    "agentB": "172.20.34.37",
+    "agentC": "172.20.34.39"
+  },
+  "openbach_functions": [
+    {
+      "status_agents": {
+        "addresses": [
+          "$agentA"
+        ],
+        "update": true
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [],
+        "finished_indexes": []
+      }
+    },
+    {
+      "if": {
+        "condition": {
+          "type": "=",
+          "operand1": {
+            "type": "database",
+            "name": "Agent",
+            "key": "$agentA",
+            "attribute": "status"
+          },
+          "operand2": {
+            "type": "value",
+            "value": "Available"
+          }
+        },
+        "openbach_function_true_indexes": [
+          3,
+          4
+        ],
+        "openbach_function_false_indexes": [
+          5
+        ]
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [
+          1
+        ],
+        "finished_indexes": []
+      }
+    },
+    {
+      "start_job_instance": {
+        "agent_ip": "$agentA",
+        "ping": {
+          "destination_ip": "$agentB",
+          "duration": 60
+        },
+        "offset": 5
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [],
+        "finished_indexes": []
+      }
+    },
+    {
+      "start_job_instance": {
+        "agent_ip": "$agentB",
+        "ping": {
+          "destination_ip": "$agentA",
+          "duration": 60
+        },
+        "offset": 5
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [],
+        "finished_indexes": []
+      }
+    },
+    {
+      "start_job_instance": {
+        "agent_ip": "$agentB",
+        "ping": {
+          "destination_ip": "$agentC",
+          "duration": 60
+        },
+        "offset": 5
+      },
+      "wait": {
+        "time": 0,
+        "launched_indexes": [],
+        "finished_indexes": []
+      }
+    },
+    {
+      "stop_job_instance": {
+        "openbach_function_indexes": [
+          3,
+          4
+        ]
+      },
+      "wait": {
+        "time": 10,
+        "launched_indexes": [
+          3,
+          4
+        ],
+        "finished_indexes": []
+      }
+    },
+    {
+      "stop_job_instance": {
+        "openbach_function_indexes": [
+          5
+        ]
+      },
+      "wait": {
+        "time": 10,
+        "launched_indexes": [
+          5
+        ],
+        "finished_indexes": []
+      }
+    }
+  ]
+}

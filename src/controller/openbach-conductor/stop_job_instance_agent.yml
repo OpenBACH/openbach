@@ -34,4 +34,4 @@
 ---
 
 - name: Stop the Job Instance
-  shell: /opt/openbach-agent/openbach-baton stop_job_instance_agent {{ job_name }} {{ id }} {{ date }}
+  shell: /opt/openbach-agent/openbach-baton stop_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ date }}

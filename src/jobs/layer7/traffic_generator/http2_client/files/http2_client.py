@@ -35,99 +35,101 @@
 """
 
 
-"""
-Created on Thu Nov  5 15:33:30 2015
-
-@author: jmuguerza
-"""
-
 from threading import Thread
 from Queue import Queue, Empty
 import random
 import time
+import argparse
+import signal
 import sys
 from subprocess import call
 
 
-N_workers = 150
+def signal_term_handler(signal, frame):
+    global Running
+    Running = False
+    sys.exit(0)
 
-# server IP
-if len(sys.argv)>1:
-    IP = sys.argv[1]
-else:
-    exit("You have to provide a server address")
+signal.signal(signal.SIGTERM, signal_term_handler)
 
-# exponential law lambda
-if len(sys.argv)>2:
-    lambd = float(sys.argv[2])
-else:
-    lambd = 1.0
+Running = True
 
-# sim time 
-if len(sys.argv)>3:
-    sim_t = float(sys.argv[3])
-else:
-    sim_t = 60
-
-# number of connections
-if len(sys.argv)>4:
-    n_req = int(sys.argv[4])
-else:
-    n_req = 0
-
-# page number
-if len(sys.argv)>5:
-    page = int(sys.argv[5])
-else:
-    page = 1
-
-def worker_loop(q):
+def worker_loop(q, server_address, page):
+    global Running
     try:
         while Running:
             try:
                 q.get(timeout=1)
-                get_url()
+                get_url(server_address, page)
             except Empty:
                 pass
     except:
         pass
 
-def get_url():
+
+def get_url(server_address, page):
     try:
         start_time = time.time()
         if page == 0:
             url = '/index' + str(random.randint(1,3)) + '.html'
         else:
             url = '/index' + str(page) + '.html'
-        call(["nghttp","-a","-n","http://"+IP+url])
+        call(["nghttp","-a","-n","http://"+server_address+url])
     except:
         pass
 
-Running = True
-# create queue
-q = Queue()
-# start workers
-thread_pool = []
-for i in range(N_workers):
-    t = Thread(target=worker_loop,args=(q,))
-    t.start()
-    thread_pool.append(t)
 
-# calculate arrival times
-arriv_times = []
-while not (sum(arriv_times) > sim_t or (n_req and n_req <= len(arriv_times))):
-    arriv_times.append(random.expovariate(lambd))
-try:
+def main(server_address, lambd, sim_t, n_req, page):
+    global Running
+    N_workers = 150
+    Running = True
+    # create queue
+    q = Queue()
+    # start workers
+    thread_pool = []
+    for i in range(N_workers):
+        t = Thread(target=worker_loop,args=(q, server_address, page))
+        t.start()
+        thread_pool.append(t)
+
+    # calculate arrival times
+    arriv_times = []
+    while not (sum(arriv_times) > sim_t or (n_req and n_req <= len(arriv_times))):
+        arriv_times.append(random.expovariate(lambd))
     for wait_time in arriv_times:
         time.sleep(wait_time)
         q.put(1)
         while q.qsize()>10:
-            q.get()    
-        
-except KeyboardInterrupt:
-    Running = False
-    print 'Exiting ...'
+            q.get()
 
-Running = False
-for t in thread_pool:
-    t.join()
+    Running = False
+    for t in thread_pool:
+        t.join()
+
+
+if __name__ == "__main__":
+    global chain
+    # Define Usage
+    parser = argparse.ArgumentParser(description='',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('server_address', metavar='server_address', type=str,
+                        help='The IP address of the server')
+    parser.add_argument('-l', '--lambd', type=float, default=1.0,
+                        help='Exponential law lambda')
+    parser.add_argument('--sim-t', type=float, default=60.0,
+                        help='Simulation time in seconds')
+    parser.add_argument('-n', '--n-req', type=int, default=0,
+                        help='Number of connections')
+    parser.add_argument('-p', '--page', type=int, default=1,
+                        help='Page number')
+
+    # get args
+    args = parser.parse_args()
+    server_address = args.server_address
+    lambd = args.lambd
+    sim_t = args.sim_t
+    n_req = args.n_req
+    page = args.page
+
+    main(server_address, lambd, sim_t, n_req, page)
+

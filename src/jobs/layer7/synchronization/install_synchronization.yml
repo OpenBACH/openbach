@@ -47,6 +47,7 @@
   - name: Install Synchronization Job
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/synchronization/ mode={{ item.mode }}
     with_items:
+      - { file: 'synchronization.py', mode: '0755' }
       - { file: 'synchronization.help', mode: '0644' }
     become: yes
   

@@ -36,25 +36,24 @@
 - name: Create Rstats log repository
   file: path=/var/openbach_stats/openbach-agent state=directory mode=0755
 
+- name: Create Rstats repository
+  file: path=/opt/rstats state=directory mode=0755
+
 - name: Install Rstats client sources
-  copy: src=../src_agent/rstats/client_api/{{ item }} dest=/opt/rstats/client_api/ mode=0755
-  with_items:
-    - Makefile
-    - src
-    - dependencies
+  unarchive: src=../src_agent/rstats/client_api.tar.gz dest=/opt/rstats/
 
 - name: Install Build dependencies
-  apt: name={{ item }} state=present
+  apt: name={{ item }} state=present update_cache=true
   with_items:
     - make
     - g++
 
 - name: Build Rstats client library
   make:
-    chdir: /opt/rstats/client_api/
+    chdir: /opt/rstats/src/agent/rstats/client_api/
     target: install
     params:
-      DESTDIR: /opt/rstats/
+      DESTDIR: /usr/
 
 - name: Install Rstats
   copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755
@@ -67,7 +66,19 @@
 
 - name: Create Rstats Service
   copy: src=../src_agent/rstats/rstats_service dest=/etc/init.d/rstats mode=0755
+  when: ansible_distribution_version != "16.04"
+
+- name: Create Rstats Service
+  copy: src=../src_agent/rstats/rstats.service dest=/etc/systemd/system/ mode=0644
+  when: ansible_distribution_version == "16.04"
+
+- name: Reload systemd
+  shell: systemctl daemon-reload
+  when: ansible_distribution_version == "16.04"
 
 - name: Start Rstats
   service: name=rstats state=started
+
+- name: Delete Rstats sources
+  file: path=/opt/rstats/client_api state=absent
 

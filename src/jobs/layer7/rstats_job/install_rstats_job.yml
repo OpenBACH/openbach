@@ -47,7 +47,7 @@
   - name: Install Rstats_job
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/rstats_job/ mode={{ item.mode }}
     with_items:
-      - { file: 'rstats_job.sh', mode: '0755' }
+      - { file: 'rstats_job.py', mode: '0755' }
       - { file: 'rstats_job.help', mode: '0644' }
     become: yes
     

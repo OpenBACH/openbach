@@ -1,0 +1,11 @@
+[Unit]
+Description=Startup script for the Status Manager
+Requires=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/openbach-controller/status-manager/status-manager.py
+
+[Install]
+WantedBy=multi-user.target
+

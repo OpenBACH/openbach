@@ -55,10 +55,11 @@ unsigned int register_stat(
     const std::string& job_name,
     unsigned int job_instance_id,
     unsigned int scenario_instance_id,
+    bool _new,
     const std::string& prefix) {
   // Format the message
   std::stringstream command;
-  command << "1 " << config_file << " " << job_name << " " << job_instance_id << " " << scenario_instance_id;
+  command << "1 " << config_file << " " << job_name << " " << job_instance_id << " " << scenario_instance_id << " " << _new;
   if (prefix != "") {
     command << " " << prefix;
   }
@@ -241,8 +242,9 @@ unsigned int rstats_register_stat(
     char* job_name,
     unsigned int job_instance_id,
     unsigned int scenario_instance_id,
+    bool _new,
     char* prefix) {
-  return rstats::register_stat(config_file, job_name, job_instance_id, scenario_instance_id, prefix);
+  return rstats::register_stat(config_file, job_name, job_instance_id, scenario_instance_id, _new, prefix);
 }
 
 /*

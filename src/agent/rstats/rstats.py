@@ -168,17 +168,17 @@ class Rstats:
             flag += 1
         if not self._is_broadcast_denied(stat_name):
             flag += 2
-        if self.prefix:
-            stat_name_with_prefix = '{}.{}'.format(self.prefix, stat_name)
+        stat_name_with_prefix = '{}.{}.{}.{}'.format(self.scenario_instance_id,
+                                                     self.job_instance_id,
+                                                     self.prefix, stat_name)
 
         # recuperation des stats
         time = str(stats['time'])
         del stats['time']
 
         template = '"stat_name": "{}", "time": {}, "flag": {}, "job_instance_id": {}, "scenario_instance_id": {}'
-        stats_to_send = template.format(
-                stat_name_with_prefix, time, flag,
-                self.job_instance_id, self.scenario_instance_id)
+        stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(
+            stat_name_with_prefix, time, flag)
         stats_to_log = template.format(
             stat_name, time, flag,
             self.job_instance_id, self.scenario_instance_id)
@@ -325,15 +325,16 @@ class ClientThread(threading.Thread):
         data_received[0] = request_type
         return data_received
 
-    def create_stat(self, confpath, job, job_instance_id, scenario_instance_id, *prefix):
+    def create_stat(self, confpath, job, job_instance_id, scenario_instance_id,
+                    new=False, prefix=None):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
         try:
+            if new:
+                raise KeyError()
             stats_client = manager[id]
         except KeyError:
-            prefix = None if not prefix else prefix[0]
-
             # creer le rstatsclient
             stats_client = Rstats(
                     confpath=confpath,

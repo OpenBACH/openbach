@@ -43,18 +43,29 @@ except ImportError:
     import json
 import sys
 import os
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
-def send_stats(path, filename, connection_id):
+def send_stats(path, filename):
+    conffile = "/opt/openbach-jobs/send_stats/send_stats_rstats_filter.conf"
+
     with open('{}{}'.format(path, filename)) as f:
+        connection_id = None
         lines = f.readlines()
         for line in lines:
             line_json = json.loads(line)
             del line_json['flag']
             timestamp = line_json.pop('time')
             stat_name = line_json.pop('stat_name')
+            job_instance_id = line_json.pop('job_instance_id')
+            scenario_instance_id = line_json.pop('scenario_instance_id')
+            if connection_id is None:
+                # Connexion au service de collecte de l'agent
+                connection_id = rstats.register_stat(
+                    conffile, 'send_stats', job_instance_id,
+                    scenario_instance_id, new=True)
+                if connection_id == 0:
+                    quit()
             rstats.send_stat(connection_id, stat_name, timestamp, **line_json)
 
 
@@ -63,23 +74,13 @@ def main(job_name, date):
     d = datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S.%f')
     l = os.listdir('{}{}'.format(path, job_name))
 
-    conffile = "/opt/openbach-jobs/send_stats/send_stats_rstats_filter.conf"
-
-    # Connexion au service de collecte de l'agent
-    if l:
-        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-        connection_id = rstats.register_stat(conffile, 'send_stats', job_instance_id, scenario_instance_id)
-        if connection_id == 0:
-            quit()
-
     for f in l:
         if f.startswith(job_name):
             file_date_str = f.lstrip('{}_'.format(job_name)).rstrip('.stats')
             file_date = datetime.datetime.strptime(file_date_str,
                                                    '%Y-%m-%dT%H%M%S')
             if file_date > d:
-                send_stats('{}{}/'.format(path, job_name), f, connection_id)
+                send_stats('{}{}/'.format(path, job_name), f)
 
 
 if __name__ == "__main__":

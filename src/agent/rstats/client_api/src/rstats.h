@@ -26,6 +26,7 @@ namespace rstats {
       const std::string& job_name,
       unsigned int job_instance_id,
       unsigned int scenario_instance_id,
+      bool _new,
       const std::string& prefix);
 
   /*
@@ -74,6 +75,7 @@ extern "C" DLL_PUBLIC unsigned int rstats_register_stat(
   char* job_name,
   unsigned int job_instance_id,
   unsigned int scenario_instance_id,
+  bool _new,
   char* prefix);
 extern "C" DLL_PUBLIC char* rstats_send_stat(
   unsigned int id,

@@ -3,7 +3,7 @@
 general:
   name:            fping
   description: >
-      This Job principaly launch the ping command.
+      This Job principaly launch the fping command and send the measured rtt delay with a frequency of count*interval.
       It sends syslog in case of error.
   job_version:     0.1
   keywords:        [ping, fping, rate, rtt, round]
@@ -72,6 +72,6 @@ arguments:
 statistics:
     - name:        rtt
       description: >
-          The Round trip time ICMP packets
-      frequency:   'every *count* send packet'
+          The Round trip time of ICMP packets.
+      frequency:   'every *count x interval* send packet'
 

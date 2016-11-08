@@ -54,23 +54,21 @@ def signal_term_handler(signal, frame):
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, signal_term_handler)
-
+syslog.openlog("tcpprobe_monitoring", syslog.LOG_PID, syslog.LOG_USER)
 
 def watch(fn):
     fp = open(fn, 'r')
     while True:
         new = fp.readline()
-        # TODO: (Piste 2) Indiquer la ligne en cour de lecture
+        #(Improvement) Indicate the line that is being read
         # Once all lines are read this just returns ''
         # until the file changes and a new line appears
 
         if new:
             yield new
         else:
-            # TODO: (Piste1) Indiquer au script stop qu'il peut stopper le
-            # processus
+            # TODO: (Improvement2) Indicate to the script that it can stop it 
             time.sleep(0.5)
-            # TODO: (Piste1) Ne plus l'indiquer
 
 def main(path, port, interval):
     # Monitoring setup
@@ -131,8 +129,6 @@ def main(path, port, interval):
                     r = rstats.send_stat(connection_id, int(timestamp),
                                          **statistics)
                 except Exception as connection_err:
-                    #print("timestamp : %s " % timestamp)
-                    #print("Connection Error: %s" % connection_err)
                     syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % connection_err)
                     return
 

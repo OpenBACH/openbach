@@ -33,10 +33,10 @@
 
 ---
 
-#- name: Add Ansible repository
-#  apt_repository: repo=ppa:ansible/ansible update_cache=yes
-#  tags:
-#    - only-controller
+- name: Add Ansible repository
+  apt_repository: repo=ppa:ansible/ansible update_cache=yes
+  tags:
+    - only-controller
   
 - name: Install software-properties-common
   apt: pkg=software-properties-common update_cache=false

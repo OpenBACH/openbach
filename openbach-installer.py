@@ -136,7 +136,6 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
 
     if skip:
         arguments.extend(['--skip-tag', 'only-controller'])
-    print(arguments)
 
     result = subprocess.run(arguments)
     os.remove(extra_vars.name)

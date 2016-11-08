@@ -529,7 +529,6 @@ class ClientThread(threading.Thread):
                 '@/opt/openbach-controller/configs/ips -e '
                 'collector_ip={1} -e '
                 '@/opt/openbach-controller/configs/all -e '
-                '@/opt/openbach-controller/configs/proxy '
                 '-e ansible_ssh_user="{2}" -e '
                 'ansible_sudo_pass="{3}" -e '
                 'ansible_ssh_pass="{3}" '

@@ -85,6 +85,9 @@
   file: path=/etc/systemd/system/status-manager.service state=absent
   when: ansible_distribution_version == "16.04"
 
+- name: Drop the database
+  postgresql_db: name=openbach_db state=absent
+
 - name: Uninstall Django
   pip: name=django state=absent executable=pip3
   ignore_errors: true

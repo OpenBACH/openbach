@@ -175,6 +175,10 @@
     - {'src': 'rstats/rstats_service', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.service', 'dest': 'rstats/'}
 
+- name: Remove the Rstats client sources we just packed
+  local_action: file path=../src/agent/rstats/client_api.tar.gz state=absent
+  become: no
+
 - name: Copy the installation of the Agents
   copy: src=../src/controller/install_agent dest=/opt/openbach-controller/
 

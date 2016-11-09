@@ -41,7 +41,7 @@ jobs:
   - {'jobname': 'rsyslog_job', 'path': '/opt/openbach-controller/jobs/admin_jobs/rsyslog_job'}
   - {'jobname': 'synchronization', 'path': '/opt/openbach-controller/jobs/admin_jobs/synchronization'}
   - {'jobname': 'empty_influxdb_db', 'path': '/opt/openbach-controller/jobs/admin_jobs/empty_influxdb_db'}
-  - {'jobname': 'empty_elasticsearch_db', 'path': '/opt/openbach-controller/admin_jobs/empty_elasticsearch_db'}
+  - {'jobname': 'empty_elasticsearch_db', 'path': '/opt/openbach-controller/jobs/admin_jobs/empty_elasticsearch_db'}
   - {'jobname': 'rate_monitoring', 'path': '/opt/openbach-controller/jobs/user_jobs/network/rate_monitoring'}
   - {'jobname': 'tcpprobe_monitoring', 'path': '/opt/openbach-controller/jobs/user_jobs/transport/tcpprobe_monitoring'}
   - {'jobname': 'iperf', 'path': '/opt/openbach-controller/jobs/user_jobs/transport/iperf'}

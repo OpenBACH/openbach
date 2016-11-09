@@ -77,9 +77,9 @@ output {
 		# If type is 'stats', send the data to influxdb
 		if [type] == "stats" {
 			influxdb {
-				measurement => "%{stat_name}"
+				measurement => "%{measurement_name}"
 				allow_time_override => true
-				exclude_fields => ["@timestamp", "type", "stat_name", "flag"]
+				exclude_fields => ["@timestamp", "type", "measurement_name", "flag"]
 				use_event_fields_for_data_points => true
 				host => "{{ ansible_default_ipv4.address }}"
 				port => {{ influxdb_port }}

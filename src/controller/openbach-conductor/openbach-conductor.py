@@ -313,8 +313,8 @@ class PlaybookBuilder():
 
 class ClientThread(threading.Thread):
     UPDATE_AGENT_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
-    UPDATE_JOB_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"{agent.name}.jobs_list"+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
-    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}{}"'
+    UPDATE_JOB_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"0.0.{agent.name}.openbach-agent"+where+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"0.0.{agent.name}.openbach-agent+"+where+job_name+=+{}+and+job_instance_id+=+{}'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -1581,7 +1581,7 @@ class ClientThread(threading.Thread):
             if column == 'time':
                 date = datetime.fromtimestamp(value / 1000,
                         timezone.get_current_timezone())
-            elif column != 'nb':
+            elif column != 'nb' and column != '_type':
                 jobs_list.append(value)
 
         for job in agent.installed_job_set.all():

@@ -179,11 +179,10 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
 
 def status_job(job_name, job_instance_id):
     # Construction du nom de la stat
-    stat_name = job_name + job_instance_id
     timestamp = round(time.time() * 1000)
 
     # Récupération du status
-    job = JobManager().scheduler.get_job(stat_name)
+    job = JobManager().scheduler.get_job(job_name + job_instance_id)
     if job is None:
         filename = pid_filename(job_name, job_instance_id)
         try:
@@ -209,7 +208,8 @@ def status_job(job_name, job_instance_id):
         return
 
     # Envoie de la stat à Rstats
-    rstats.send_stat(connection, stat_name, timestamp, status=status)
+    rstats.send_stat(connection, timestamp, job_name=job_name,
+                     job_instance_id=job_instance_id, status=status)
 
 
 def stop_watch(job_id):
@@ -332,7 +332,8 @@ def ls_jobs():
         return
         
     # Envoie de la stat à Rstats
-    rstats.send_stat(connection, 'jobs_list', timestamp, nb=count, **job_names)
+    rstats.send_stat(connection, timestamp, _type='job_list', nb=count,
+                     **job_names)
 
         
 class BadRequest(ValueError):

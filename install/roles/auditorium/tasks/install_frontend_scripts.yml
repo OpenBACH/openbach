@@ -85,6 +85,8 @@
     - get_project.py
     - list_projects.py
     - modify_project.py
+    - retrieve_status_agents.py
+    - retrieve_status_jobs.py
 
 - name: Install frontend scripts (2)
   template: src=../src/auditorium/frontend_scripts/frontend.py.j2 dest=/opt/openbach-auditorium/frontend_scripts/frontend.py

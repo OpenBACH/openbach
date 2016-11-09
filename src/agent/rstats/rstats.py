@@ -163,48 +163,55 @@ class Rstats:
 
     def send_stat(self, stats):
         self._mutex.acquire()
-        flag = 0
-        if not self._is_storage_denied(self.job_name):
-            flag += 1
-        if not self._is_broadcast_denied(self.job_name):
-            flag += 2
-        stat_name_with_prefix = '{}.{}.{}.{}'.format(self.scenario_instance_id,
-                                                     self.job_instance_id,
-                                                     self.prefix, self.job_name)
+        measurement_name_with_prefix = '{}.{}.{}.{}'.format(
+            self.scenario_instance_id, self.job_instance_id, self.prefix,
+            self.job_name)
 
         # recuperation des stats
         time = str(stats['time'])
         del stats['time']
 
-        template = '"stat_name": "{}", "time": {}, "flag": {}, "job_instance_id": {}, "scenario_instance_id": {}'
-        stats_to_send = '"stat_name": "{}", "time": {}, "flag": {}'.format(
-            stat_name_with_prefix, time, flag)
-        stats_to_log = template.format(
-            self.job_name, time, flag,
-            self.job_instance_id, self.scenario_instance_id)
-        statistics = ''
-        for k, v in stats.items():
+        flags = {0: [], 1: [], 2: [], 3: []}
+        for stat_name, value in stats.items():
+            flag = 0
+            if not self._is_storage_denied(stat_name):
+                flag += 1
+            if not self._is_broadcast_denied(stat_name):
+                flag += 2
             try:
-                float(v)
-                statistics = '{}, "{}": {}'.format(statistics, k, v)
+                float(value)
+                statistic = {stat_name: value}
             except ValueError:
                 # TODO: Gerer les vrais booleens dans influxdb (voir avec la
                 #       conf de logstash aussi)
-                if v in BOOLEAN_TRUE:
-                    statistics = '{}, "{}": "true"'.format(statistics, k)
-                elif v in BOOLEAN_FALSE:
-                    statistics = '{}, "{}": "false"'.format(statistics, k)
+                if value in BOOLEAN_TRUE:
+                    statistic = {stat_name: True}
+                elif value in BOOLEAN_FALSE:
+                    statistic = {stat_name: False}
                 else:
-                    statistics = '{}, "{}": "{}"'.format(statistics, k, v)
-        stats_to_send = '{}{}{}{}'.format('{', stats_to_send, statistics, '}')
-        stats_to_log = '{}{}{}{}'.format('{', stats_to_log, statistics, '}')
-        try:
-            send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
-        except KeyError:
-            raise BadRequest('Mode not known')
-        if flag != 0:
-            send_function(stats_to_send)
-        self._logger.info(stats_to_log)
+                    statistic = {stat_name: value}
+            flags[flag].append(statistic)
+        for flag, statistics in flags.items():
+            stats_to_send = {
+                'measurement_name': measurement_name_with_prefix,
+                'time': time,
+                'flag': flag
+            }
+            stats_to_log = stats_to_send.copy()
+            stats_to_log['measurement_name'] = self.job_name
+            stats_to_log['job_instance_id'] = self.job_instance_id
+            stats_to_log['scenario_instance_id'] = self.scenario_instance_id
+            for statistic in statistics:
+                stats_to_send = {**stats_to_send, **statistic}
+                stats_to_log = {**stats_to_log, **statistic}
+                try:
+                    send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
+                except KeyError:
+                    raise BadRequest('Mode not known')
+            if statistics:
+                if flag != 0:
+                    send_function(json.dumps(stats_to_send))
+                self._logger.info(json.dumps(stats_to_log))
         self._mutex.release()
 
     def reload_conf(self):

@@ -34,6 +34,9 @@
 ---
 
 # Install
+- include: install_version.yml
+  tags:
+    - install
 - include: install_stats.yml
   tags:
     - install
@@ -70,3 +73,7 @@
   tags:
     - uninstall
 
+# Status
+- include: status.yml
+  tags:
+    - status

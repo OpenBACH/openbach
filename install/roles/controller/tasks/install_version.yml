@@ -26,44 +26,13 @@
 #   
 #   
 #   
-#   @file     main.yml
-#   @brief    File that indicates the tasks to perform in this role
+#   @file     install_version.yml
+#   @brief    Tasks that install the version file on the Controller
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-# Install
-- include: install_version.yml
-  tags:
-    - install
-- include: install_synchro.yml
-  tags:
-    - install
-- include: install_logs.yml
-  tags:
-    - install
-- include: install_stats.yml
-  tags:
-    - install
-- include: add_services_to_boot.yml
-  tags:
-    - install
-
-# Uninstall
-- include: del_services_to_boot.yml
-  tags:
-    - uninstall
-- include: uninstall_synchro.yml
-  tags:
-    - uninstall
-- include: uninstall_stats.yml
-  tags:
-    - uninstall
-- include: uninstall_logs.yml
-  tags:
-    - uninstall
-- include: uninstall_version.yml
-  tags:
-    - uninstall
+- name: Copy the version file on the Controller
+  copy: src=../openbach-version dest=/opt/openbach-controller/version
 

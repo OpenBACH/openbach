@@ -86,8 +86,9 @@ def parse_command_line(default_controller_ip):
                         help='set the proxy to use [default: None]')
 
     subparser = parser.add_subparsers(dest='action', metavar='action')
-    subparser.add_parser('install', help='perform installation of OpenBach machines')
-    subparser.add_parser('uninstall', help='uninstall previously installed OpenBach machines')
+    subparser.add_parser('install', help='perform installation of OpenBACH machines')
+    subparser.add_parser('uninstall', help='uninstall previously installed OpenBACH machines')
+    subparser.add_parser('status', help='get the status of OpenBACH on the Controller and Auditorium')
 
     args = parser.parse_args()
 

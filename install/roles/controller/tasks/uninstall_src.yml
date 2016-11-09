@@ -37,11 +37,10 @@
   service: name=openbach-conductor state=stopped
   ignore_errors: true
   register: service_conductor_status
-  
-- name: Debug message 
+
+- name: Debug message
   debug: msg="openbach-conductor cannot be stopped because it might not be running"
   when: service_conductor_status | failed
-
 
 - name: Remove openbach-conductor service
   file: path=/etc/init.d/openbach-conductor state=absent

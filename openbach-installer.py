@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
-   OpenBACH is a free software : you can redistribute it and/or modify it under the
-   terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-   
+
+
+   OpenBACH is a free software : you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free
+   Software Foundation, either version 3 of the License, or (at your option)
+   any later version.
+
    This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-   
+   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+   more details.
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     openbach.py
    @brief    This script is used by the installer to install/uninstall OpenBACH
              (the Controller, the Collector and the Auditorium)
@@ -44,10 +44,10 @@ import textwrap
 from functools import partial
 
 
-def parse_command_line():
+def parse_command_line(default_controller_ip):
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
-            '--controller-ip', metavar='ADDRESS', default=None,
+            '--controller-ip', metavar='ADDRESS', default=default_controller_ip,
             help='IP Address of the controller [default: IP of first (not lo) interface]')
     parser.add_argument(
             '--controller-username', metavar='NAME', default='openbach',
@@ -90,16 +90,7 @@ def parse_command_line():
     subparser.add_parser('uninstall', help='uninstall previously installed OpenBach machines')
 
     args = parser.parse_args()
-    
-    #If Controller IP is not specififed, the script takes the first interface IP    
-    
-    if args.controller_ip is None:        
-        try:
-            ips_list = subprocess.check_output(['hostname', '-I'])
-        except subprocess.CalledProcessError:
-            ips_list = subprocess.check_output(['hostname', '-i'])
-        args.controller_ip = ips_list.decode().split()[0] 
-    
+
     if args.action is None:
         parser.error('missing action')
 
@@ -116,34 +107,40 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
         ansible_ssh_user: {{a.{0}_username}}
         ansible_ssh_pass: {{a.{0}_password}}
         ansible_sudo_pass: {{a.{0}_password}}""").format(agent)
-    # We need to close the file so ansible can read it, so use delete=False
-    with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
+    with tempfile.NamedTemporaryFile('w') as extra_vars:
         print(template.format(a=args), file=extra_vars)
         if agent == 'auditorium':
             print('collector_ip:', args.collector_ip, file=extra_vars)
+        # Flush the file so ansible can read it
+        print(file=extra_vars, flush=True)
 
-    arguments = [
-        'ansible-playbook', '-i', hosts_name,
-        '-e', '@configs/ips', '-e', '@configs/all',
-        '-e', '@{}'.format(extra_vars.name),
-        '-e', '@{}'.format(proxy_vars_name)
-    ]
-    
-    if extra_vars_name is not None:
-        arguments.extend(['-e', '@{}'.format(extra_vars_name)])
+        arguments = [
+            'ansible-playbook', '-i', hosts_name,
+            '-e', '@configs/ips', '-e', '@configs/all',
+            '-e', '@{}'.format(extra_vars.name),
+            '-e', '@{}'.format(proxy_vars_name),
+        ]
 
-    arguments.extend(['install/{}.yml'.format(agent), '--tags', args.action])
+        if extra_vars_name is not None:
+            arguments.extend(['-e', '@{}'.format(extra_vars_name)])
 
-    if skip:
-        arguments.extend(['--skip-tag', 'only-controller'])
+        arguments.extend(['install/{}.yml'.format(agent), '--tags', args.action])
 
-    result = subprocess.run(arguments)
-    os.remove(extra_vars.name)
-    result.check_returncode()
+        if skip:
+            arguments.extend(['--skip-tag', 'only-controller'])
+
+        subprocess.check_call(arguments)
 
 
 if __name__ == '__main__':
-    args = parse_command_line()
+    try:
+        process_output = subprocess.check_output(['hostname', '-I'], stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        process_output = subprocess.check_output(['hostname', '-i'], stderr=subprocess.DEVNULL)
+    ips_list = process_output.decode().split()
+
+    # if controller IP is not specififed, take the first interface IP
+    args = parse_command_line(ips_list[0])
     set_default(args, 'collector_ip', args.controller_ip)
     set_default(args, 'auditorium_ip', args.controller_ip)
     set_default(args, 'collector_username', args.controller_username)
@@ -154,14 +151,6 @@ if __name__ == '__main__':
     set_default(args, 'auditorium_name', args.controller_name)
 
     if args.action == 'install':
-        proxy_vars_name = 'configs/proxy'
-        with open(proxy_vars_name, 'w') as extra_vars:
-            print('---\n', file=extra_vars)
-            print('proxy_env:', file=extra_vars)
-            if args.proxy is not None:
-                print('  http_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
-                print('  https_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
-
         with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
             print('---\n', file=extra_vars)
 
@@ -178,6 +167,13 @@ if __name__ == '__main__':
     else:
         extra_vars_name = None
 
+    with open('configs/proxy', 'w') as proxy_vars:
+        print('---\n', file=extra_vars)
+        print('proxy_env:', file=extra_vars)
+        if args.proxy is not None:
+            print('  http_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
+            print('  https_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
+
     with tempfile.NamedTemporaryFile('w', delete=False) as hosts:
         print('[Controller]', file=hosts)
         print(args.controller_ip, file=hosts)
@@ -189,15 +185,10 @@ if __name__ == '__main__':
         print('controller_ip:', "'{}'".format(args.controller_ip), file=ips)
         print('auditorium_ip:', "'{}'".format(args.auditorium_ip), file=ips)
 
-    try:
-        process_output = subprocess.check_output(['hostname', '-I'])
-    except subprocess.CalledProcessError:
-        process_output = subprocess.check_output(['hostname', '-i'])
-    skip = args.controller_ip in process_output.decode().split()
-
+    common_command = partial(run_command, extra_vars_name, proxy_vars.name, hosts.name)
     commands = [
-        partial(run_command, extra_vars_name, proxy_vars_name, hosts.name, 'controller', args, skip),
-        partial(run_command, extra_vars_name, proxy_vars_name, hosts.name, 'auditorium', args),
+        partial(common_command, 'controller', args, args.controller_ip in ips_list),
+        partial(common_command, 'auditorium', args),
     ]
     if args.action == 'uninstall':
         commands = reversed(commands)
@@ -206,9 +197,8 @@ if __name__ == '__main__':
         for command in commands:
             command()
     finally:
-        os.remove('configs/ips')
-        os.remove('configs/proxy')
+        os.remove(ips.name)
+        os.remove(proxy_vars.name)
         os.remove(hosts.name)
         if extra_vars_name:
             os.remove(extra_vars_name)
-

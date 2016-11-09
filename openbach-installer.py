@@ -134,9 +134,11 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
 
 if __name__ == '__main__':
     try:
-        process_output = subprocess.check_output(['hostname', '-I'], stderr=subprocess.DEVNULL)
+        process_output = subprocess.check_output(
+            ['hostname', '-I'], stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
-        process_output = subprocess.check_output(['hostname', '-i'], stderr=subprocess.DEVNULL)
+        process_output = subprocess.check_output(
+            ['hostname', '-i'], stderr=subprocess.DEVNULL)
     ips_list = process_output.decode().split()
 
     # if controller IP is not specififed, take the first interface IP
@@ -171,8 +173,10 @@ if __name__ == '__main__':
         print('---\n', file=proxy_vars)
         print('proxy_env:', file=proxy_vars)
         if args.proxy is not None:
-            print('  http_proxy: {}'.format(args.proxy), sep='', file=proxy_vars)
-            print('  https_proxy: {}'.format(args.proxy), sep='', file=proxy_vars)
+            print('  http_proxy:', args.proxy, file=proxy_vars)
+            print('  https_proxy:', args.proxy, file=proxy_vars)
+        else:
+            print('  {}', file=proxy_vars)
 
     with tempfile.NamedTemporaryFile('w', delete=False) as hosts:
         print('[Controller]', file=hosts)

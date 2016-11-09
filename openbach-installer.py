@@ -168,11 +168,11 @@ if __name__ == '__main__':
         extra_vars_name = None
 
     with open('configs/proxy', 'w') as proxy_vars:
-        print('---\n', file=extra_vars)
-        print('proxy_env:', file=extra_vars)
+        print('---\n', file=proxy_vars)
+        print('proxy_env:', file=proxy_vars)
         if args.proxy is not None:
-            print('  http_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
-            print('  https_proxy: {}'.format(args.proxy), sep='', file=extra_vars)
+            print('  http_proxy: {}'.format(args.proxy), sep='', file=proxy_vars)
+            print('  https_proxy: {}'.format(args.proxy), sep='', file=proxy_vars)
 
     with tempfile.NamedTemporaryFile('w', delete=False) as hosts:
         print('[Controller]', file=hosts)

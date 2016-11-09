@@ -49,5 +49,5 @@ if __name__ == "__main__":
     collector_ip = args.collector_ip
 
     del_collector(collector_ip)
-    wait_for_success(state_collector, status='del', valid_statuses=(200, 404), address=collector_ip)
+    wait_for_success(state_collector, status='del', valid_statuses=(200, 204), address=collector_ip)
 

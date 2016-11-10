@@ -26,54 +26,13 @@
 #   
 #   
 #   
-#   @file     main.yml
-#   @brief    File that indicates the tasks to perform in this role
+#   @file     install_finished.yml
+#   @brief    Tasks that install the version file on the Auditorium
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-# Install
-- include: install_running.yml
-  tags:
-    - install
-- include: install_synchro.yml
-  tags:
-    - install
-- include: install_ansible.yml
-  tags:
-    - install
-- include: install_src.yml
-  tags:
-    - install
-- include: add_services_to_boot.yml
-  tags:
-    - install
-- include: install_finished.yml
-  tags:
-    - install
+- name: Copy the version file on the Auditorium
+  copy: src=../openbach-version dest=/opt/openbach-auditorium/version
 
-# Uninstall
-- include: uninstall_running.yml
-  tags:
-    - uninstall
-- include: del_services_to_boot.yml
-  tags:
-    - uninstall
-- include: uninstall_synchro.yml
-  tags:
-    - uninstall
-- include: uninstall_src.yml
-  tags:
-    - uninstall
-- include: uninstall_ansible.yml
-  tags:
-    - uninstall
-- include: uninstall_finished.yml
-  tags:
-    - uninstall
-
-# Status
-- include: status.yml
-  tags:
-    - status

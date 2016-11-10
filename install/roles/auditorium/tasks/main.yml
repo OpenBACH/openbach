@@ -34,7 +34,7 @@
 ---
 
 # Install
-- include: install_version.yml
+- include: install_running.yml
   tags:
     - install
 - include: install_stats.yml
@@ -55,8 +55,14 @@
 - include: install_collector_and_agents.yml
   tags:
     - install
+- include: install_finished.yml
+  tags:
+    - install
 
 # Uninstall
+- include: uninstall_running.yml
+  tags:
+    - uninstall
 - include: del_services_to_boot.yml
   tags:
     - uninstall
@@ -70,6 +76,9 @@
   tags:
     - uninstall
 - include: uninstall_frontend_scripts.yml
+  tags:
+    - uninstall
+- include: uninstall_finished.yml
   tags:
     - uninstall
 

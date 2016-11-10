@@ -26,13 +26,13 @@
 #   
 #   
 #   
-#   @file     install_version.yml
-#   @brief    Tasks that install the version file on the Auditorium
+#   @file     uninstall_finished.yml
+#   @brief    Tasks that uninstall the version file on the Auditorium
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Copy the version file on the Auditorium
-  copy: src=../openbach-version dest=/opt/openbach-auditorium/version
+- name: Delete the version file on the Auditorium
+  file: path=/opt/openbach-auditorium state=absent
 

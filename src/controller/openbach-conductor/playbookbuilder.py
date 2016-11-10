@@ -35,7 +35,14 @@
 
 
 import subprocess
+import os
 from contextlib import contextmanager
+import sys
+sys.path.insert(0, '/opt/openbach-controller/backend')
+from django.core.wsgi import get_wsgi_application
+os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
+application = get_wsgi_application()
+from openbach_django.utils import BadRequest
 
 
 class PlaybookBuilder():

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+i!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -51,7 +51,7 @@ syslog.openlog('fping', syslog.LOG_PID, syslog.LOG_USER)
 def command_line_flag_for_argument(argument, flag):
     if argument is not None:
         yield flag
-        yield argument
+        yield str(argument)
 
 
 def handle_exception(exception, connection_id, timestamp):
@@ -64,7 +64,7 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     conffile = "/opt/openbach-jobs/fping/fping_rstats_filter.conf"
 
     cmd = ['fping', destination_ip]
-    cmd.extend(command_line_flag_for_argument(str(count), '-c'))
+    cmd.extend(command_line_flag_for_argument(count, '-c'))
     cmd.extend(command_line_flag_for_argument(interval, '-i'))
     cmd.extend(command_line_flag_for_argument(interface, '-I'))
     cmd.extend(command_line_flag_for_argument(packetsize, '-s'))
@@ -85,12 +85,12 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
         except subprocess.CalledProcessError as ex:
             if ex.returncode in (-15, -9):
                 continue
-            handle_exception(ex, connection_id, timestamps)
+            handle_exception(ex, connection_id, timestamp)
             return
         try:
             rtt_data = output.strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
         except IndexError as ex:
-            handle_exception(ex, connection_id, timestamps)
+            handle_exception(ex, connection_id, timestamp)
             return
         statistics = {'rtt': rtt_data}
         rstats.send_stat(connection_id, timestamp, **statistics)

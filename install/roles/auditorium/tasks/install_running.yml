@@ -40,5 +40,5 @@
   copy: src=../openbach-version dest=/opt/openbach-auditorium/version
 
 - name: Informe that an installation is running
-  shell: (echo -en "\ninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-auditorium/version
+  shell: '(echo -en "\ninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-auditorium/version'
 

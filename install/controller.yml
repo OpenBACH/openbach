@@ -30,7 +30,6 @@
 #   @brief    Playbook that install the Controller
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
-
 ---
 
 - hosts: localhost

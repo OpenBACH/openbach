@@ -40,5 +40,5 @@
   copy: src=../openbach-version dest=/opt/openbach-controller/version
 
 - name: Informe tha an installation is running
-  shell: (echo -en "\ninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version
+  shell: '(echo -en "\ninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
 

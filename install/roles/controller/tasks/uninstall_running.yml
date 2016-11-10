@@ -34,5 +34,5 @@
 ---
 
 - name: Informe tha an installation is running
-  shell: (echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version
+  shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
 

@@ -50,7 +50,7 @@
 
 - name: Build Rstats client library
   make:
-    chdir: /opt/rstats/src/agent/rstats/client_api/
+    chdir: /opt/rstats/client_api/
     target: install
     params:
       DESTDIR: /usr/

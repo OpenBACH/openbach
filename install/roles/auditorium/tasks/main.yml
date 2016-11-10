@@ -55,6 +55,9 @@
 - include: install_collector_and_agents.yml
   tags:
     - install
+- include: uninstall_frontend_scripts.yml
+  tags:
+    - install
 - include: install_finished.yml
   tags:
     - install
@@ -64,6 +67,9 @@
   tags:
     - uninstall
 - include: del_services_to_boot.yml
+  tags:
+    - uninstall
+- include: install_frontend_scripts.yml
   tags:
     - uninstall
 - include: uninstall_collector_and_agents.yml

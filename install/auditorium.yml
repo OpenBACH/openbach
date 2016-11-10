@@ -30,22 +30,16 @@
 #   @brief    Playbook that install the Auditorium
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
-
 ---
-
-
-
 
 - hosts: localhost
   connection: local
   tasks:
-  
     - name: Create .ssh/ 
       file: path={{ ansible_env.HOME }}/.ssh state=directory
       tags:
         - install
         - uninstall
-
 
     - name: Scan Auditorium public key
       known_hosts: name='{{ item }}' key="{{ lookup('pipe', 'ssh-keyscan -t rsa {{ item }}') }}"
@@ -59,4 +53,4 @@
   roles:
     - auditorium
   become: yes
-  
+

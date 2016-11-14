@@ -721,7 +721,7 @@ class Operand_Value(Operand):
 
 class Operand_Statistic(Operand):
     UPDATE_STAT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("{stat.field}")+FROM+"{stat.measurement}"'
-    measurmement = models.CharField(max_length=500)
+    measurement = models.CharField(max_length=500)
     field = models.CharField(max_length=500)
 
     def get_value(self, agent):

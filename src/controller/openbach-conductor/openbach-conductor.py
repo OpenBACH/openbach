@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     openbach-conductor.py
    @brief    The Conductor
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -63,7 +63,7 @@ from django.db.utils import DataError
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
-from openbach_django.utils import BadRequest
+from openbach_django.utils import BadRequest, convert_severity, recv_all
 
 
 def signal_term_handler(signal, frame):
@@ -75,18 +75,6 @@ def signal_term_handler(signal, frame):
             scenario_instance.save()
 
     exit(0)
-
-
-_SEVERITY_MAPPING = {
-    0: 3,   # Error
-    1: 4,   # Warning
-    2: 6,   # Informational
-    3: 7,   # Debug
-}
-
-
-def convert_severity(severity):
-    return _SEVERITY_MAPPING.get(severity, 8)
 
 
 class ThreadManager:
@@ -4353,7 +4341,7 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def run(self):
-        request = self.clientsocket.recv(9999)
+        request = recv_all(self.clientsocket)
         try:
             response, returncode = self.execute_request(request.decode())
         except BadRequest as e:
@@ -4380,7 +4368,7 @@ def listen_message_from_backend(tcp_socket):
 
 def handle_message_from_status_manager(clientsocket):
     playbook_builder = PlaybookBuilder('/tmp/')
-    request = clientsocket.recv(2048)
+    request = recv_all(clientsocket)
     clientsocket.close()
     message = json.loads(request.decode())
     type_ = message['type']

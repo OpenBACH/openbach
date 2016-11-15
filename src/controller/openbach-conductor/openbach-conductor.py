@@ -3929,11 +3929,13 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Scenario_Instance does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
-                                 'scenario_name': scenario_name})
+                                  'scenario_name': scenario_name})
         out_of_controll = False
         with ThreadManager() as threads:
             scenario_threads = threads[scenario_instance_id]
             for ofi_id, thread in scenario_threads.items():
+                if not ofi_id:
+                    continue
                 thread.do_run = False
                 ofi = scenario_instance.openbach_function_instance_set.get(
                     openbach_function_instance_id=ofi_id)
@@ -3967,7 +3969,7 @@ class ClientThread(threading.Thread):
         infos['status'] = openbach_function_instance.status
         infos['status_date'] = openbach_function_instance.status_date
         if infos['name'] == 'start_job_instance':
-            job_instance = openbach_function_instance.job_instance
+            job_instance = openbach_function_instance.job_instance_set.all()[0]
             if job_instance:
                 info, _ = self.status_job_instance_action(job_instance.id)
                 infos[job_instance.job.__str__()] = info

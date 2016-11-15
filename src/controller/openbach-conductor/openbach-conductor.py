@@ -3930,27 +3930,26 @@ class ClientThread(threading.Thread):
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
                                   'scenario_name': scenario_name})
-        out_of_controll = False
+        scenario_instance.status = "Stopped"
         with ThreadManager() as threads:
-            scenario_threads = threads[scenario_instance_id]
-            for ofi_id, thread in scenario_threads.items():
-                if not ofi_id:
-                    continue
-                thread.do_run = False
-                ofi = scenario_instance.openbach_function_instance_set.get(
-                    openbach_function_instance_id=ofi_id)
-                for job_instance in ofi.job_instance_set.all():
-                    try:
-                        result, returncode = self.stop_job_instance_action(
-                            [job_instance.id])
-                        result, returncode = self.watch_job_instance_action(
-                            job_instance.id, stop='now')
-                    except BadRequest:
-                        out_of_controll = True
-        if out_of_controll:
-            scenario_instance.status = "Running, out of controll"
-        else:
-            scenario_instance.status = "Stopped"
+            try:
+                scenario_threads = threads[scenario_instance_id]
+            except KeyError:
+                scenario_instance.status = "Stopped, out of controll"
+            else:
+                for ofi_id, thread in scenario_threads.items():
+                    if not ofi_id:
+                        continue
+                    thread.do_run = False
+        for ofi in scenario_instance.openbach_function_instance_set.all():
+            for job_instance in ofi.job_instance_set.all():
+                try:
+                    result, returncode = self.stop_job_instance_action(
+                        [job_instance.id])
+                    result, returncode = self.watch_job_instance_action(
+                        job_instance.id, stop='now')
+                except BadRequest:
+                    scenario_instance.status = "Running, out of controll"
         scenario_instance.status_date = timezone.now()
         scenario_instance.is_stopped = True
         scenario_instance.save()

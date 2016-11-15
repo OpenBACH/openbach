@@ -63,7 +63,8 @@ from django.db.utils import DataError
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
-from openbach_django.utils import BadRequest, convert_severity, recv_all
+from openbach_django.utils import BadRequest, convert_severity
+from openbach_django.utils import send_all, recv_fifo
 
 
 def signal_term_handler(signal, frame):
@@ -125,7 +126,6 @@ class ClientThread(threading.Thread):
         self.playbook_builder = PlaybookBuilder('/tmp/', self.path_src)
 
     def execute_request(self, data):
-        data = json.loads(data)
         request = '{}_action'.format(data.pop('command'))
 
         # From this point on, request should contain the
@@ -4341,22 +4341,22 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def run(self):
-        request = recv_all(self.clientsocket)
+        request, fifoname = recv_fifo(self.clientsocket)
         try:
-            response, returncode = self.execute_request(request.decode())
+            response, returncode = self.execute_request(request)
         except BadRequest as e:
-            result = {'response': {'error': e.reason}, 'returncode': e.returncode}
+            result = {'response': {'error': e.reason}, 'returncode':
+                      e.returncode}
             if e.infos:
                 result['response'].update(e.infos)
         except UnicodeError:
-            result = {'response': {'error': 'KO Undecypherable request'}, 'returncode': 400}
+            result = {'response': {'error': 'KO Undecypherable request'},
+                      'returncode': 400}
         else:
             result = {'response': response, 'returncode': returncode}
         finally:
-            msg = json.dumps(result, cls=DjangoJSONEncoder).encode()
-            if len(msg) % 4096:
-                msg += b' '
-            self.clientsocket.send(msg)
+            msg = json.dumps(result, cls=DjangoJSONEncoder)
+            send_all(fifoname, msg)
             self.clientsocket.close()
 
 
@@ -4368,7 +4368,7 @@ def listen_message_from_backend(tcp_socket):
 
 def handle_message_from_status_manager(clientsocket):
     playbook_builder = PlaybookBuilder('/tmp/')
-    request = recv_all(clientsocket)
+    request = clientsocket.recv(4096)
     clientsocket.close()
     message = json.loads(request.decode())
     type_ = message['type']

@@ -177,8 +177,16 @@ def list_agents(update=None):
     return action('agent', 'GET')
 
 
-def list_jobs():
+def list_jobs(string_to_search=None):
+
+    if string_to_search:
+        return _request_message('job', 'GET')
+    else:
+        return _request_message('job/search/{}'.format(string_to_search), 'GET')
+
+def list_matching_jobs():
     return _request_message('job', 'GET')
+
 
 
 def list_installed_jobs(agent_ip, update=None):

@@ -50,6 +50,9 @@ from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
 from datetime import datetime
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+
 
 import sys
 sys.path.insert(0, '/opt/openbach-controller/backend')
@@ -985,11 +988,30 @@ class ClientThread(threading.Thread):
     def list_jobs_action(self):
         return self.list_jobs()
 
-    def list_jobs(self):
+    def list_jobs(self, string_to_search=None):
         response = []
-        for job in Job.objects.all():
-            response.append(json.loads(job.job_conf))
+        if string_to_search:
+            try:
+                for job in Job.objects.all():
+                    for keyword in job.keywords.all():
+                        if fuzz.token_sort_ratio(keyword, string_search) > 80:
+                             print ("results fuuzzyyyyyyyyyyyyy " + fuzz.token_sort_ratio(keyword, string_search))
+                             response.append(json.loads(job.job_conf))
+                             break
+                        else:
+                            print ("Not good " + fuzz.token_sort_ratio(keyword, string_search))
+            except:
+                raise BadRequest('Problem looking for keyword match', 404, {'job_name': job})
+
+   
+                                
+        else:
+            for job in Job.objects.all():
+                response.append(json.loads(job.job_conf))
+        
+           
         return response, 200
+
 
     def get_job_json_action(self, name):
         return self.get_job_json(name)
@@ -1020,7 +1042,22 @@ class ClientThread(threading.Thread):
         ]}
         return result, 200
 
+#    def list_matching_jobs_action(self, name, string_search):
+#        return self.list_matching_jobs(name, string_search)
+#    
+#    def list_matching_jobs(self, name, string_search):
+#        response = []
+#        for job in Job.objects.all():
+#            for keyword in job.keywords.all():
+#                if fuzz.token_sort_ratio(keyword, string_search) > 80:
+#                    print ("results fuuzzyyyyyyyyyyyyy" + fuzz.token_sort_ratio(keyword, string_search)
+#                    response.append(json.loads(job.job_conf))
+#                    break
+#            
+#        return response, 200
 
+     
+        
 #    def get_job_stats_of(self, name):
 #        self.get_job_stats(name)
 #

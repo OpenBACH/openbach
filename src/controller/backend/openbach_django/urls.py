@@ -66,6 +66,7 @@ urlpatterns = [
 
     url(r'^job/?$', views.JobsView.as_view(), name='jobs_view'),
     url(r'^job/(?P<name>[^/]+)/?$', views.JobView.as_view(), name='job_view'),
+    url(r'^job/search/?$', views.JobView.as_view(), name='job_search_view'),
 
     url(r'^job_instance/?$', views.JobInstancesView.as_view(),
         name='job_instances_view'),

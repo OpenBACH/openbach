@@ -396,36 +396,30 @@ class BaseJobView(GenericView):
 class JobsView(BaseJobView):
     """Manage actions for jobs without an ID"""
 
-    def get(self, request, string_to_search=None):
-        """list all jobs"""
-        if string_to_search:
-            return self._get_matching_jobs(string_to_search)
-            
-        else:
+    def get(self, request):
+        """get the list of jobs  """
+        
+        try:
+            string_to_search = request.GET['string_to_search']
+        except KeyError:
             try:
                 address = request.GET['address']
             except KeyError:
-                return self._get_all_jobs()
+                return self._get_available_jobs()
             else:
                 update = 'update' in request.GET
                 return self._get_installed_jobs(address, update)
+        else:
+            return self._get_available_jobs(string_to_search)
+           
 
+    def _get_available_jobs(self, string_to_search=None):
+        """list all the available jobs in the bechmark or the ones whose keywords 
+        are matching string_to_search """
 
-    def _get_all_jobs(self):
-        """list all the Jobs available on the benchmark"""
-
-        data = {'command': 'list_jobs'}
-
+        data = {'command':'list_jobs', 'string_to_search': string_to_search}
         return self.conductor_execute(data)
     
-
-
-    def _get_matching_jobs(self, string_to_search):
-        """ Performs a search of available jobs that matches a given string """
-        
-        data = {'command':'list_matching_jobs', 'string_to_search': string_to_searcg}
-        
-        return self.conductor_execute(data)
            
     def _get_installed_jobs(self, address, update):
         """list all the Jobs installed on an Agent"""

@@ -41,7 +41,6 @@ import time
 import os
 import sys
 import signal
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 

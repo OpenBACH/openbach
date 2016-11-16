@@ -179,8 +179,7 @@ class Rstats:
             if not self._is_broadcast_denied(stat_name):
                 flag += 2
             try:
-                float(value)
-                statistic = {stat_name: value}
+                statistic = {stat_name: float(value)}
             except ValueError:
                 # TODO: Gerer les vrais booleens dans influxdb (voir avec la
                 #       conf de logstash aussi)

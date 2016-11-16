@@ -46,6 +46,7 @@ import json
 import parse
 import signal
 import time
+import re
 from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
@@ -993,12 +994,25 @@ class ClientThread(threading.Thread):
         if string_to_search:
             try:
                 for job in Job.objects.all():
-                    for keyword in job.keywords.all():
-                        res=fuzz.token_set_ratio(keyword, string_to_search)
-                        #print("Match ratio of ", res, "for keword", keyword, "of job ", job)
-                        if res > 80:
-                            response.append(json.loads(job.job_conf))
+                    match=False
+                    #look for a job name matching the string
+                    split_job_name=re.split('_|-',job.name)
+                    for word in split_job_name:
+                        #print("Match ratio of ", fuzz.token_set_ratio(word, string_to_search), "of job ", job.name, word)
+                        if fuzz.token_set_ratio(word, string_to_search) > 50:
+                            match=True
                             break
+                    #look for job keywords matching the string
+                    if not match:
+                        for keyword in job.keywords.all():
+                            #print("Match ratio of ", fuzz.token_set_ratio(keyword, string_to_search), "for keyword", keyword, "of job ", job.name)
+                            if fuzz.token_set_ratio(keyword, string_to_search) > 50:
+                                match=True
+                                break
+                    if match:
+                        response.append(json.loads(job.job_conf))
+                    
+                    
             except:
                 raise BadRequest('Error when looking for keyword matches', 404, {'job_name': job})
         

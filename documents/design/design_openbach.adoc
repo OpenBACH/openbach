@@ -664,11 +664,11 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 .group 7
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
-| Function                      | Method        | url                                          | Input contents (JSON or Query string) | Description
-| start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *args*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
-| stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                  | Stop a scenario instance.
-| list_scenario_instances       | GET           | /scenario_instance                           |                                       | List all the scenario instances.
-| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    |                                       | Return the status of the scenario instance
+| Function                      | Method        | url                                          | Input contents (JSON or Query string)      | Description
+| start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *arguments*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
+| stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                       | Stop a scenario instance.
+| list_scenario_instances       | GET           | /scenario_instance                           |                                            | List all the scenario instances.
+| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    |                                            | Return the status of the scenario instance
 |===
 
 And finally, the group 8 of openbach-functions allowing to 

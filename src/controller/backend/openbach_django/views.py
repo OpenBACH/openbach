@@ -1,31 +1,31 @@
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     views.py
    @brief    The implementation of the openbach-function
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -43,7 +43,7 @@ import os
 from django.views.generic import base
 from django.http import JsonResponse, HttpResponse
 import traceback
-from .utils import recv_all
+from .utils import send_fifo, recv_all
 
 class GenericView(base.View):
     """Base class for our own class-based views"""
@@ -108,9 +108,9 @@ class GenericView(base.View):
 
         conductor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conductor.connect(('localhost', 1113))
-        conductor.send(json.dumps(command).encode())
-        recv = recv_all(conductor)
-        result = json.loads(recv.decode())
+        fifoname = send_fifo(command, conductor)
+        recv = recv_all(fifoname)
+        result = json.loads(recv)
         returncode = result.pop('returncode')
         conductor.close()
         return result['response'], returncode

@@ -36,6 +36,3 @@
 - name: Uninstall frontend scripts
   file: path=/opt/openbach-auditorium/frontend_scripts state=absent
 
-- name: Uninstall Auditorium repository
-  file: path=/opt/openbach-auditorium state=absent
-

@@ -66,7 +66,8 @@ from django.db.utils import DataError
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
-from openbach_django.utils import BadRequest, convert_severity, recv_all
+from openbach_django.utils import BadRequest, convert_severity
+from openbach_django.utils import send_all, recv_fifo
 
 
 def signal_term_handler(signal, frame):
@@ -128,7 +129,6 @@ class ClientThread(threading.Thread):
         self.playbook_builder = PlaybookBuilder('/tmp/', self.path_src)
 
     def execute_request(self, data):
-        data = json.loads(data)
         request = '{}_action'.format(data.pop('command'))
 
         # From this point on, request should contain the
@@ -3966,26 +3966,27 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Scenario_Instance does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
-                                 'scenario_name': scenario_name})
-        out_of_controll = False
+                                  'scenario_name': scenario_name})
+        scenario_instance.status = "Stopped"
         with ThreadManager() as threads:
-            scenario_threads = threads[scenario_instance_id]
-            for ofi_id, thread in scenario_threads.items():
-                thread.do_run = False
-                ofi = scenario_instance.openbach_function_instance_set.get(
-                    openbach_function_instance_id=ofi_id)
-                for job_instance in ofi.job_instance_set.all():
-                    try:
-                        result, returncode = self.stop_job_instance_action(
-                            [job_instance.id])
-                        result, returncode = self.watch_job_instance_action(
-                            job_instance.id, stop='now')
-                    except BadRequest:
-                        out_of_controll = True
-        if out_of_controll:
-            scenario_instance.status = "Running, out of controll"
-        else:
-            scenario_instance.status = "Stopped"
+            try:
+                scenario_threads = threads[scenario_instance_id]
+            except KeyError:
+                scenario_instance.status = "Stopped, out of controll"
+            else:
+                for ofi_id, thread in scenario_threads.items():
+                    if not ofi_id:
+                        continue
+                    thread.do_run = False
+        for ofi in scenario_instance.openbach_function_instance_set.all():
+            for job_instance in ofi.job_instance_set.all():
+                try:
+                    result, returncode = self.stop_job_instance_action(
+                        [job_instance.id])
+                    result, returncode = self.watch_job_instance_action(
+                        job_instance.id, stop='now')
+                except BadRequest:
+                    scenario_instance.status = "Running, out of controll"
         scenario_instance.status_date = timezone.now()
         scenario_instance.is_stopped = True
         scenario_instance.save()
@@ -4004,7 +4005,7 @@ class ClientThread(threading.Thread):
         infos['status'] = openbach_function_instance.status
         infos['status_date'] = openbach_function_instance.status_date
         if infos['name'] == 'start_job_instance':
-            job_instance = openbach_function_instance.job_instance
+            job_instance = openbach_function_instance.job_instance_set.all()[0]
             if job_instance:
                 info, _ = self.status_job_instance_action(job_instance.id)
                 infos[job_instance.job.__str__()] = info
@@ -4378,22 +4379,22 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def run(self):
-        request = recv_all(self.clientsocket)
+        request, fifoname = recv_fifo(self.clientsocket)
         try:
-            response, returncode = self.execute_request(request.decode())
+            response, returncode = self.execute_request(request)
         except BadRequest as e:
-            result = {'response': {'error': e.reason}, 'returncode': e.returncode}
+            result = {'response': {'error': e.reason}, 'returncode':
+                      e.returncode}
             if e.infos:
                 result['response'].update(e.infos)
         except UnicodeError:
-            result = {'response': {'error': 'KO Undecypherable request'}, 'returncode': 400}
+            result = {'response': {'error': 'KO Undecypherable request'},
+                      'returncode': 400}
         else:
             result = {'response': response, 'returncode': returncode}
         finally:
-            msg = json.dumps(result, cls=DjangoJSONEncoder).encode()
-            if len(msg) % 4096:
-                msg += b' '
-            self.clientsocket.send(msg)
+            msg = json.dumps(result, cls=DjangoJSONEncoder)
+            send_all(fifoname, msg)
             self.clientsocket.close()
 
 
@@ -4405,7 +4406,7 @@ def listen_message_from_backend(tcp_socket):
 
 def handle_message_from_status_manager(clientsocket):
     playbook_builder = PlaybookBuilder('/tmp/')
-    request = recv_all(clientsocket)
+    request = clientsocket.recv(4096)
     clientsocket.close()
     message = json.loads(request.decode())
     type_ = message['type']

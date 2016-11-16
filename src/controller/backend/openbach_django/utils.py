@@ -34,6 +34,11 @@
 """
 
 
+import os
+import tempfile
+import json
+
+
 class BadRequest(Exception):
     """Custom exception raised when parsing of a request failed"""
     def __init__(self, reason, returncode=400, infos=None):
@@ -46,14 +51,37 @@ class BadRequest(Exception):
             self.infos = {}
 
 
-def recv_all(socket):
-    def receiver():
-        while True:
-            msg = socket.recv(4096)
-            yield msg
-            if len(msg) < 4096:
-                break
-    return b''.join(receiver())
+def send_fifo(msg, socket):
+    socket.send(json.dumps(msg).encode())
+    response = socket.recv(4096).decode()
+    fifoname = json.loads(response)['fifoname']
+    return fifoname
+
+
+def recv_fifo(socket):
+    msg = socket.recv(4096).decode()
+    msg = json.loads(msg)
+    with tempfile.NamedTemporaryFile('w') as f:
+        pass
+    try:
+        os.mkfifo(f.name)
+    except OSError as e:
+        raise BadRequest('Impossible to create the Fifo', 400, {'error': e})
+    response = {'fifoname': f.name}
+    socket.send(json.dumps(response).encode())
+    return msg, f.name
+
+
+def send_all(fifoname, msg):
+    with open(fifoname, 'w') as fifo:
+        fifo.write(msg)
+
+
+def recv_all(fifoname):
+    with open(fifoname, 'r') as fifo:
+        msg = fifo.read()
+    os.remove(fifoname)
+    return msg
 
 
 _SEVERITY_MAPPING = {

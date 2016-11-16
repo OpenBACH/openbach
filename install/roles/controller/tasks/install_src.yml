@@ -122,6 +122,15 @@
   pip: name=uwsgi executable=pip3 version={{ uwsgi_version }} extra_args='--no-index --find-links=file:///tmp/uwsgi/'
   when: ansible_distribution_version == "16.04"
 
+- name: Install Fuzzywuzzy module
+  pip: name=fuzzywuzzy executable=pip3 
+  when: ansible_distribution_version != "16.04"
+
+- name: Install Fuzzywuzzy module
+  pip: name=fuzzywuzzy executable=pip3
+  when: ansible_distribution_version == "16.04"
+
+
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
 

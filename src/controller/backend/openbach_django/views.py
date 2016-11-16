@@ -361,7 +361,7 @@ class BaseJobView(GenericView):
 
         return self.conductor_execute(data)
 
-
+   
     def _action_install(self, names, addresses):
         """Install jobs on some agents"""
 
@@ -392,25 +392,30 @@ class JobsView(BaseJobView):
     """Manage actions for jobs without an ID"""
 
     def get(self, request):
-        """list all jobs"""
-
+        """get the list of jobs  """
+        
         try:
-            address = request.GET['address']
+            string_to_search = request.GET['string_to_search']
         except KeyError:
-            return self._get_all_jobs()
+            try:
+                address = request.GET['address']
+            except KeyError:
+                return self._get_available_jobs()
+            else:
+                update = 'update' in request.GET
+                return self._get_installed_jobs(address, update)
         else:
-            update = 'update' in request.GET
-            return self._get_installed_jobs(address, update)
+            return self._get_available_jobs(string_to_search)
+           
 
+    def _get_available_jobs(self, string_to_search=None):
+        """list all the available jobs in the bechmark or the ones whose keywords 
+        are matching string_to_search """
 
-    def _get_all_jobs(self):
-        """list all the Jobs available on the benchmark"""
-
-        data = {'command': 'list_jobs'}
-
+        data = {'command':'list_jobs', 'string_to_search': string_to_search}
         return self.conductor_execute(data)
-
-
+    
+           
     def _get_installed_jobs(self, address, update):
         """list all the Jobs installed on an Agent"""
 

@@ -51,6 +51,7 @@ except ImportError:
 
 _URL = "http://{{ controller_ip }}:8000/{}/"
 
+#TODO: Remove unnecessary funtions 
 
 def wait_for_success(state_function, status=None, valid_statuses=(200, 204),
                      **kwargs):
@@ -177,8 +178,12 @@ def list_agents(update=None):
     return action('agent', 'GET')
 
 
-def list_jobs():
-    return _request_message('job', 'GET')
+def list_jobs(string_to_search=None):
+
+    if string_to_search:
+        return _request_message('job', 'GET', string_to_search=string_to_search)
+    else:
+        return _request_message('job', 'GET')
 
 
 def list_installed_jobs(agent_ip, update=None):

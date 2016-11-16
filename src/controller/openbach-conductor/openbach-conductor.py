@@ -50,6 +50,9 @@ from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
 from datetime import datetime
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+
 
 import sys
 sys.path.insert(0, '/opt/openbach-controller/backend')
@@ -982,13 +985,27 @@ class ClientThread(threading.Thread):
 #
 #        return []
 
-    def list_jobs_action(self):
-        return self.list_jobs()
+    def list_jobs_action(self, string_to_search=None):
+        return self.list_jobs(string_to_search)
 
-    def list_jobs(self):
+    def list_jobs(self, string_to_search=None):
         response = []
-        for job in Job.objects.all():
-            response.append(json.loads(job.job_conf))
+        if string_to_search:
+            try:
+                for job in Job.objects.all():
+                    for keyword in job.keywords.all():
+                        res=fuzz.token_set_ratio(keyword, string_to_search)
+                        #print("Match ratio of ", res, "for keword", keyword, "of job ", job)
+                        if res > 80:
+                            response.append(json.loads(job.job_conf))
+                            break
+            except:
+                raise BadRequest('Error when looking for keyword matches', 404, {'job_name': job})
+        
+        else:
+            for job in Job.objects.all():
+                response.append(json.loads(job.job_conf))
+           
         return response, 200
 
     def get_job_json_action(self, name):
@@ -1019,7 +1036,7 @@ class ClientThread(threading.Thread):
             keyword.name for keyword in job.keywords.all()
         ]}
         return result, 200
-
+       
 
 #    def get_job_stats_of(self, name):
 #        self.get_job_stats(name)
@@ -1035,6 +1052,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
+
 
         result = {'job_name': name , 'statistics': [] }
         for stat in job.statistic_set.all():

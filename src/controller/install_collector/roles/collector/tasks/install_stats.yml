@@ -61,8 +61,11 @@
   wait_for: port={{ influxdb_port }} timeout=10
   
 - name: Database Creation
-  shell: curl -G http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
+  shell: curl -POST http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
   with_items:
     - CREATE DATABASE "{{ database_name }}"
     - CREATE USER "{{ database_username }}" WITH PASSWORD '{{ database_password }}' WITH ALL PRIVILEGES
+  environment:
+    http_proxy: ''
+    https_proxy: ''
 

@@ -3968,7 +3968,11 @@ class ClientThread(threading.Thread):
         infos['status'] = openbach_function_instance.status
         infos['status_date'] = openbach_function_instance.status_date
         if infos['name'] == 'start_job_instance':
-            job_instance = openbach_function_instance.job_instance_set.all()[0]
+            try:
+                job_instance = openbach_function_instance.job_instance_set.all()[0]
+            except IndexError:
+                raise BadRequest('Integrity of the Openbach_Function_Instance '
+                                 'lost')
             if job_instance:
                 info, _ = self.status_job_instance_action(job_instance.id)
                 infos[job_instance.job.__str__()] = info
@@ -3999,7 +4003,10 @@ class ClientThread(threading.Thread):
             infos['arguments'].append(info)
         infos['openbach_functions'] = []
         for ofi in scenario_instance.openbach_function_instance_set.all():
-            info = self.infos_openbach_function_instance(ofi)
+            try:
+                info = self.infos_openbach_function_instance(ofi)
+            except BadRequest as e:
+                info = {'name': ofi.openbach_function.name, 'error': e}
             infos['openbach_functions'].append(info)
         return infos
 

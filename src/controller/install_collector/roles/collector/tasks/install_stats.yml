@@ -60,11 +60,14 @@
 - name: Wait a little
   wait_for: port={{ influxdb_port }} timeout=10
   
+- name: Install python-influxdb
+  apt: name=python-influxdb state=present
+
 - name: Database Creation
-  shell: curl -POST http://localhost:{{ influxdb_port }}/query --data-urlencode "q={{ item }}"
-  with_items:
-    - CREATE DATABASE "{{ database_name }}"
-    - CREATE USER "{{ database_username }}" WITH PASSWORD '{{ database_password }}' WITH ALL PRIVILEGES
+  influxdb_database:
+    hostname: localhost
+    database_name: "{{ database_name }}"
+    state: present
   environment:
     http_proxy: ''
     https_proxy: ''

@@ -33,17 +33,6 @@
 
 ---
 
-- hosts: localhost
-  connection: local
-  tasks:
-    - name: Scan Collector public key
-      known_hosts: name='{{ item }}' key="{{ lookup('pipe', 'ssh-keyscan -t rsa {{ item }}') }}"
-      with_items:
-        - '{{ collector_ip }}'
-      tags:
-        - install
-        - uninstall
-
 - hosts: Collector
   roles:
     - collector

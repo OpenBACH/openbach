@@ -4006,7 +4006,7 @@ class ClientThread(threading.Thread):
             try:
                 info = self.infos_openbach_function_instance(ofi)
             except BadRequest as e:
-                info = {'name': ofi.openbach_function.name, 'error': e}
+                info = {'name': ofi.openbach_function.name, 'error': e.reason}
             infos['openbach_functions'].append(info)
         return infos
 

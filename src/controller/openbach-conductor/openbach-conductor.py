@@ -172,8 +172,7 @@ class ClientThread(threading.Thread):
         collector.save()
         host_filename = self.playbook_builder.write_hosts(
             address, 'add_collector', 'Collector')
-        with self.playbook_builder.extra_vars_file(
-            'add_collector_{}'.format(address)) as extra_vars:
+        with self.playbook_builder.extra_vars_file() as extra_vars:
             print('collector_ip:', address, file=extra_vars)
             print('logstash_logs_port:', collector.logs_port, file=extra_vars)
             print('logstash_stats_port:', collector.stats_port, file=extra_vars)
@@ -453,8 +452,7 @@ class ClientThread(threading.Thread):
             agent.address, 'install_agent')
         agent_filename = self.playbook_builder.write_agent(agent.address,
                                                            'install')
-        with self.playbook_builder.extra_vars_file(
-            'install_agent_{}'.format(agent.address)) as extra_vars:
+        with self.playbook_builder.extra_vars_file() as extra_vars:
             print('collector_ip:', collector.address, file=extra_vars)
             print('logstash_logs_port:', collector.logs_port, file=extra_vars)
             print('logstash_stats_port:', collector.stats_port, file=extra_vars)
@@ -552,8 +550,7 @@ class ClientThread(threading.Thread):
             agent.address, 'uninstall_agent')
         agent_filename = self.playbook_builder.write_agent(agent.address,
                                                            'uninstall')
-        with self.playbook_builder.extra_vars_file(
-            'uninstall_agent_{}'.format(agent.address)) as extra_vars:
+        with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
         try:
             self.playbook_builder.launch_playbook(
@@ -691,7 +688,7 @@ class ClientThread(threading.Thread):
                 command_result.status_retrieve_status_agent.returncode = 204
                 command_result.status_retrieve_status_agent.save()
                 continue
-            with self.playbook_builder.playbook_file('status_agent') as playbook:
+            with self.playbook_builder.playbook_file() as playbook:
                 playbook_name = playbook.name
             # [Ugly hack] Reset file to remove the last line
             with open(playbook_name, 'w') as playbook:
@@ -718,7 +715,7 @@ class ClientThread(threading.Thread):
             agent.reachable = True
             agent.update_reachable = timezone.now()
             agent.save()
-            with self.playbook_builder.playbook_file('status_agent') as playbook:
+            with self.playbook_builder.playbook_file() as playbook:
                 self.playbook_builder.build_status_agent(playbook) 
             try:
                 self.playbook_builder.launch_playbook(
@@ -812,9 +809,7 @@ class ClientThread(threading.Thread):
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'assign_collector')
-        with self.playbook_builder.playbook_file(
-            'assign_collector') as playbook, self.playbook_builder.extra_vars_file(
-                'assign_collector_{}'.format(agent.address)) as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_assign_collector(collector, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
@@ -1486,7 +1481,7 @@ class ClientThread(threading.Thread):
 
             host_filename = self.playbook_builder.write_hosts(
                 agent.address, 'retrieve_status_jobs')
-            with self.playbook_builder.playbook_file('status_jobs') as playbook:
+            with self.playbook_builder.playbook_file() as playbook:
                 self.playbook_builder.build_list_jobs_agent(playbook) 
             try:
                 self.playbook_builder.launch_playbook(
@@ -1529,7 +1524,7 @@ class ClientThread(threading.Thread):
         agent = Agent.objects.get(pk=agent_ip)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'push_file')
-        with self.playbook_builder.playbook_file('push_file') as playbook:
+        with self.playbook_builder.playbook_file() as playbook:
             self.playbook_builder.build_push_file(
                     local_path, remote_path, playbook)
         self.playbook_builder.launch_playbook(
@@ -1707,8 +1702,7 @@ class ClientThread(threading.Thread):
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'start_job_instance')
         args = self.format_args(job_instance)
-        with self.playbook_builder.playbook_file(
-                'start_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance.id) as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_start(
                     job.name, job_instance.id,
                     scenario_instance_id,
@@ -1843,8 +1837,7 @@ class ClientThread(threading.Thread):
             agent = job_instance.job.agent
             host_filename = self.playbook_builder.write_hosts(
                 agent.address, 'stop_job_instance')
-            with self.playbook_builder.playbook_file(
-                    'stop_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+            with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
                 self.playbook_builder.build_stop(
                         job.name, job_instance.id, date,
                         playbook, extra_vars)
@@ -1921,8 +1914,7 @@ class ClientThread(threading.Thread):
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'restart_job_instance')
         args = self.format_args(job_instance)
-        with self.playbook_builder.playbook_file(
-                'restart_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_restart(
                     job.name, job_instance.id, scenario_instance_id,
                     args, date, interval, playbook, extra_vars)
@@ -1994,8 +1986,7 @@ class ClientThread(threading.Thread):
         agent = watch.job.agent
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'watch_job_instance')
-        with self.playbook_builder.playbook_file(
-                'status_{}'.format(job.name)) as playbook, self.playbook_builder.extra_vars_file(job_instance_id) as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_status(
                     job.name, job_instance_id,
                     date, interval, stop,
@@ -2283,7 +2274,7 @@ class ClientThread(threading.Thread):
         disable = 0
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'set_job_log_severity')
-        with self.playbook_builder.playbook_file('logs') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             if syslogseverity == 8:
                 disable += 1
             else:
@@ -2518,7 +2509,7 @@ class ClientThread(threading.Thread):
             agent.address, 'set_job_stat_policy')
         remote_path = ('/opt/openbach-jobs/{0}/{0}{1}'
                 '_rstats_filter.conf.locked').format(job_name, job_instance.id)
-        with self.playbook_builder.playbook_file('rstats') as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
+        with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_push_file(
                     rstats_filter.name, remote_path, playbook)
             args = self.format_args(job_instance)
@@ -4438,8 +4429,7 @@ def handle_message_from_status_manager(clientsocket):
         agent = watch.job.agent
         host_filename = playbook_builder.write_hosts(
             agent.address, 'handle_message_from_status_manager')
-        with playbook_builder.playbook_file(
-                'status_{}'.format(job.name)) as playbook, playbook_builder.extra_vars_file(job_instance_id) as extra_vars:
+        with playbook_builder.playbook_file() as playbook, playbook_builder.extra_vars_file() as extra_vars:
             playbook_builder.build_status(
                     job.name, job_instance_id,
                     None, None, 'now',

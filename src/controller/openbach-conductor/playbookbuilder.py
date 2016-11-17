@@ -38,6 +38,7 @@ import subprocess
 import os
 from contextlib import contextmanager
 import sys
+import tempfile
 sys.path.insert(0, '/opt/openbach-controller/backend')
 from django.core.wsgi import get_wsgi_application
 os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
@@ -86,9 +87,8 @@ class PlaybookBuilder():
         return agent_filename
 
     @contextmanager
-    def playbook_file(self, filename):
-        file_name = os.path.join(self.path_to_build, '{}.yml'.format(filename))
-        with open(file_name, 'w') as playbook:
+    def playbook_file(self):
+        with tempfile.NamedTemporaryFile('w', delete=False) as playbook:
             print('---', file=playbook)
             print(file=playbook)
             print('- hosts: Agents', file=playbook)
@@ -96,12 +96,8 @@ class PlaybookBuilder():
             yield playbook
 
     @contextmanager
-    def extra_vars_file(self, filename=None):
-        if not filename:
-            filename = '/tmp/openbach_extra_vars'
-        else:
-            filename = '/tmp/openbach_extra_vars_{}'.format(filename)
-        with open(filename, 'w') as extra_vars:
+    def extra_vars_file(self):
+        with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
             yield extra_vars
 
     def build_start(self, job_name, job_instance_id, scenario_instance_id,

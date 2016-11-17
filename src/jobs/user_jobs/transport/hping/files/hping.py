@@ -95,9 +95,9 @@ if __name__ == "__main__":
     parser.add_argument('destination_ip', metavar='destination_ip', type=str,
                         help='')
     parser.add_argument('-p', '--destport', type=int,
-                        help='destination port for TCP ping')
+                        help='destination port for TCP ping', default=443)
     parser.add_argument('-c', '--count', type=int,
-                        help='')
+                        help='', default=3)
     parser.add_argument('-i', '--interval', type=int,
                         help='')
     parser.add_argument('-S', '--tcpmode', action='store_true',

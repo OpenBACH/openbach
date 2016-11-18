@@ -1,34 +1,34 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     rstats.py
    @brief    The Collect-Agent (for the stats)
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -54,6 +54,7 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
 
 BOOLEAN_TRUE = frozenset({'t', 'T', 'true', 'True', 'TRUE'})
 BOOLEAN_FALSE = frozenset({'f', 'F', 'false', 'False', 'FALSE'})
+
 
 class BadRequest(ValueError):
     def __init__(self, reason):
@@ -93,20 +94,22 @@ class StatsManager:
 
 class Rstats:
     def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
-                 prefix=None, id=None, job_name=None, instance=0, scenario=0):
+                 suffix=None, id=None, job_name=None, instance=0, scenario=0):
         self._mutex = threading.Lock()
         self.conf = conf
         self.job_instance_id = instance
         self.scenario_instance_id = scenario
         self.job_name = 'rstats' if job_name is None else job_name
-        self.prefix = self.conf.prefix if prefix is None else prefix
+        self.agent_name = self.conf.agent_name
+        self.suffix = suffix
 
         logger_name = 'Rstats' if id is None else 'Rstats{}'.format(id)
         self._logger = logging.getLogger(logger_name)
         self._logger.setLevel(logging.INFO)
 
         date = time.strftime("%Y-%m-%dT%H%M%S")
-        logfile = os.path.join(logpath, '{0}/{0}_{1}.stats'.format(self.job_name, date))
+        logfile = os.path.join(
+            logpath, '{0}/{0}_{1}.stats'.format(self.job_name, date))
         try:
             fhd = logging.FileHandler(logfile, mode='a')
             fhd.setFormatter(logging.Formatter('{message}', style='{'))
@@ -163,9 +166,11 @@ class Rstats:
 
     def send_stat(self, stats):
         self._mutex.acquire()
-        measurement_name_with_prefix = '{}.{}.{}.{}'.format(
-            self.scenario_instance_id, self.job_instance_id, self.prefix,
+        measurement_name = '{}.{}.{}.{}'.format(
+            self.scenario_instance_id, self.job_instance_id, self.agent_name,
             self.job_name)
+        if self.suffix is not None:
+            measurement_name = '{}.{}'.format(measurement_name, self.suffix)
 
         # recuperation des stats
         time = str(stats['time'])
@@ -192,19 +197,22 @@ class Rstats:
             flags[flag].append(statistic)
         for flag, statistics in flags.items():
             stats_to_send = {
-                'measurement_name': measurement_name_with_prefix,
                 'time': time,
                 'flag': flag
             }
             stats_to_log = stats_to_send.copy()
-            stats_to_log['measurement_name'] = self.job_name
+            stats_to_log['job_name'] = self.job_name
             stats_to_log['job_instance_id'] = self.job_instance_id
             stats_to_log['scenario_instance_id'] = self.scenario_instance_id
+            if self.suffix is not None:
+                stats_to_log['suffix'] = self.suffix
             for statistic in statistics:
-                stats_to_send = {**stats_to_send, **statistic}
+                stats_to_send = {'measurement_name': measurement_name, 
+                                 **stats_to_send, **statistic}
                 stats_to_log = {**stats_to_log, **statistic}
                 try:
-                    send_function = {'udp': self._send_udp, 'tcp': self._send_tcp}[self.conf.mode]
+                    send_function = {'udp': self._send_udp, 'tcp':
+                                     self._send_tcp}[self.conf.mode]
                 except KeyError:
                     raise BadRequest('Mode not known')
             if statistics:
@@ -249,7 +257,7 @@ class Conf:
         config = ConfigParser()
         config.read(conf_path)
         self.mode = config.get('logstash', 'mode')
-        self.prefix = config.get('agent', 'prefix')
+        self.agent_name = config.get('agent', 'name')
         with open(collector_conf) as stream:
             content = yaml.load(stream)
         self.host = content['address']
@@ -332,7 +340,7 @@ class ClientThread(threading.Thread):
         return data_received
 
     def create_stat(self, confpath, job, job_instance_id, scenario_instance_id,
-                    new=False, prefix=None):
+                    new=False, suffix=None):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
@@ -345,7 +353,7 @@ class ClientThread(threading.Thread):
             stats_client = Rstats(
                     confpath=confpath,
                     job_name=job,
-                    prefix=prefix,
+                    suffix=suffix,
                     id=id,
                     instance=job_instance_id,
                     scenario=scenario_instance_id,
@@ -395,7 +403,8 @@ class ClientThread(threading.Thread):
             # reload la conf
             stats_client.reload_conf()
 
-    def get_config(self):
+    def change_config(self, job_instance_id, scenario_instance_id, broadcast,
+                      storage):
         configs = defaultdict(set)
         for _, job_config in StatsManager():
             configs[job_config.job_name].add(job_config._confpath)
@@ -409,7 +418,7 @@ class ClientThread(threading.Thread):
                 self.reload_stat,
                 self.remove_stat,
                 self.reload_stats,
-                self.get_config,
+                self.change_config,
         ]
         return functions[request-1](*args)
 

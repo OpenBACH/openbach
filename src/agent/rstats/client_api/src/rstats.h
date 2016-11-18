@@ -23,11 +23,8 @@ namespace rstats {
    */
   DLL_PUBLIC unsigned int register_stat(
       const std::string& config_file,
-      const std::string& job_name,
-      unsigned int job_instance_id,
-      unsigned int scenario_instance_id,
-      bool _new,
-      const std::string& prefix);
+      const std::string& suffix,
+      bool _new);
 
   /*
    * Send a new statistic containing several attributes
@@ -60,7 +57,7 @@ namespace rstats {
    * Retrive informations about the configuration of
    * currently monitored stats.
    */
-  DLL_PUBLIC std::string get_configs();
+  DLL_PUBLIC std::string change_config(bool storage, bool broadcast);
 
 }
 
@@ -71,11 +68,8 @@ namespace rstats {
  */
 extern "C" DLL_PUBLIC unsigned int rstats_register_stat(
   char* config_file,
-  char* job_name,
-  unsigned int job_instance_id,
-  unsigned int scenario_instance_id,
-  bool _new,
-  char* prefix);
+  char* suffix,
+  bool _new);
 extern "C" DLL_PUBLIC char* rstats_send_stat(
   unsigned int id,
   long long timestamp,
@@ -83,6 +77,6 @@ extern "C" DLL_PUBLIC char* rstats_send_stat(
 extern "C" DLL_PUBLIC char* rstats_reload_stat(unsigned int id);
 extern "C" DLL_PUBLIC char* rstats_remove_stat(unsigned int id);
 extern "C" DLL_PUBLIC char* rstats_reload_all_stats();
-extern "C" DLL_PUBLIC char* rstats_get_configs();
+extern "C" DLL_PUBLIC char* rstats_change_config(bool storage, bool broadcast);
 
 #endif /* _RSTATS_API_H__ */

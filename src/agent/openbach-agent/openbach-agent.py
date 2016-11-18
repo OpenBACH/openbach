@@ -65,8 +65,7 @@ try:
     INSTANCES_FOLDER = '/opt/openbach-agent/job_instances/'
     RSTAT_REGISTER_STAT = partial(
         rstats.register_stat,
-        '/opt/openbach-agent/openbach-agent_filter.conf',
-        'openbach-agent', 0, 0)
+        '/opt/openbach-agent/openbach-agent_filter.conf')
 except ImportError:
     # If we failed assure we’re on windows
     import syslog_viveris as syslog
@@ -76,8 +75,7 @@ except ImportError:
     INSTANCES_FOLDER = r'C:\openbach\instances'
     RSTAT_REGISTER_STAT = partial(
         rstats.register_stat,
-        r'C:\openbach\openbach-agent_filter.conf',
-        'openbach-agent', 0, 0)
+        r'C:\openbach\openbach-agent_filter.conf')
 
 
 class JobManager:
@@ -138,7 +136,8 @@ def signal_term_handler(signal, frame):
 
 def launch_job(job_name, job_instance_id, scenario_instance_id, command, args):
     environ = os.environ.copy()
-    environ.update({'INSTANCE_ID': job_instance_id, 'SCENARIO_ID': scenario_instance_id})
+    environ.update({'JOB_NAME': job_name, 'JOB_INSTANCE_ID': job_instance_id,
+                    'SCENARIO_INSTANCE_ID': scenario_instance_id})
     proc = psutil.Popen(
         command.split() + args.split(),
         stdout=DEVNULL, stderr=DEVNULL,
@@ -203,13 +202,15 @@ def status_job(job_name, job_instance_id):
             status = 'Programmed every {}'.format(job.trigger.interval_length)
 
     # Connexion au service de collecte de l'agent
+    os.environ['JOB_NAME'] = 'openbach-agent'
     connection = RSTAT_REGISTER_STAT()
     if not connection:
         return
 
     # Envoie de la stat à Rstats
-    rstats.send_stat(connection, timestamp, job_name=job_name,
-                     job_instance_id=job_instance_id, status=status)
+    statistics = {'job_name': job_name, 'job_instance_id': job_instance_id,
+                  'status': status}
+    rstats.send_stat(connection, timestamp, **statistics)
 
 
 def stop_watch(job_id):
@@ -327,15 +328,16 @@ def ls_jobs():
         job_names = {'job{}'.format(i): job for i, job in enumerate(jobs, 1)}
 
     # Connexion au service de collecte de l'agent
+    os.environ['JOB_NAME'] = 'openbach-agent'
     connection = RSTAT_REGISTER_STAT()
     if not connection:
         return
-        
-    # Envoie de la stat à Rstats
-    rstats.send_stat(connection, timestamp, _type='job_list', nb=count,
-                     **job_names)
 
-        
+    # Envoie de la stat à Rstats
+    statistics = {'_type': 'job_list', 'nb': count, **job_names}
+    rstats.send_stat(connection, timestamp, **statistics)
+
+
 class BadRequest(ValueError):
     def __init__(self, reason):
         super().__init__(reason)

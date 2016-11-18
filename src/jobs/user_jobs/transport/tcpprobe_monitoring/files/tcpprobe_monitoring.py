@@ -6,29 +6,29 @@
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     tcpprobe_dmonitoring.py
    @brief    Sources of the Job tcpprobe_monitoring
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -39,7 +39,7 @@ import syslog
 import argparse
 import time
 import os
-import sys
+from sys import exit
 import signal
 import rstats_api as rstats
 
@@ -50,7 +50,7 @@ def signal_term_handler(signal, frame):
     os.system(cmd)
     cmd = "rmmod tcp_probe_new_fix > /dev/null 2>&1"
     os.system(cmd)
-    sys.exit(0)
+    exit(0)
 
 signal.signal(signal.SIGTERM, signal_term_handler)
 syslog.openlog("tcpprobe_monitoring", syslog.LOG_PID, syslog.LOG_USER)
@@ -94,12 +94,7 @@ def main(path, port, interval):
     syslog.syslog(syslog.LOG_DEBUG, "DEBUG: the following stats have been built --> %s" % stats_list)
 
     # Connect to the Agent collecting service
-    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-
-    connection_id = rstats.register_stat(conffile,"tcpprobe_monitoring",
-                                                  job_instance_id,
-                                                  scenario_instance_id)
+    connection_id = rstats.register_stat(conffile)
     if connection_id == 0:
         quit()
 

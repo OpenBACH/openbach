@@ -1,34 +1,34 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     traffic_monitor_http2_client.py
    @brief    Sources of the Job traffic_monitor_http2_client
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -40,17 +40,16 @@ from Queue import Queue, Empty
 import random
 import time
 import argparse
-import sys
+from sys import exit
 import signal
 import syslog
-import os
 from subprocess import call
 import rstats_api as rstats
 
 
 def signal_term_handler(signal, frame):
     Running = False
-    sys.exit(0)
+    exit(0)
 
 signal.signal(signal.SIGTERM, signal_term_handler)
 
@@ -95,9 +94,7 @@ def get_url(server_address, simu_name, page, connection_id):
 def main(server_address, simu_name, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-jobs.traffic_monitor_http2_client/traffic_monitor_http2_client_rstats_filter.conf"
-    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-    connection_id = rstats.register_stat(conffile, 'traffic_monitor_http2_client', job_instance_id, scenario_instance_id)
+    connection_id = rstats.register_stat(conffile)
     if connection_id == 0:
         quit()
 

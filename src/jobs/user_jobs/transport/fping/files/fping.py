@@ -39,7 +39,6 @@
 import subprocess
 import argparse
 import time
-import os
 import syslog
 import rstats_api as rstats
 
@@ -71,10 +70,7 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     cmd.extend(command_line_flag_for_argument(ttl, '-t'))
     cmd.extend(command_line_flag_for_argument(duration, '-w'))
 
-    job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-    scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-    connection_id = rstats.register_stat(conffile, 'fping', job_instance_id,
-                                         scenario_instance_id)
+    connection_id = rstats.register_stat(conffile)
     if connection_id == 0:
         return
 

@@ -52,16 +52,18 @@ std::string rstats_messager(const std::string& message) {
  */
 unsigned int register_stat(
     const std::string& config_file,
-    const std::string& job_name,
-    unsigned int job_instance_id,
-    unsigned int scenario_instance_id,
-    bool _new,
-    const std::string& prefix) {
+    const std::string& suffix,
+    bool _new) {
+  // Get the ids
+  const char* job_name = std::getenv("JOB_NAME");
+  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
+  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
+
   // Format the message
   std::stringstream command;
-  command << "1 " << config_file << " " << job_name << " " << job_instance_id << " " << scenario_instance_id << " " << _new;
-  if (prefix != "") {
-    command << " " << prefix;
+  command << "1 " << config_file << " " << job_name << " " << (job_instance_id ? job_instance_id : "0") << " " << (scenario_instance_id ? scenario_instance_id : "0") << " " << _new;
+  if (suffix != "") {
+    command << " " << suffix;
   }
 
   // Send the message
@@ -209,9 +211,18 @@ std::string reload_all_stats() {
  * Create the message to fetch current jobs configurations;
  * send it to the RStats service and propagate its response.
  */
-std::string get_configs() {
+std::string change_config(bool storage, bool broadcast) {
+  // Get the ids
+  const char* job_instance_id = std::getenv("INSTANCE_ID");
+  const char* scenario_instance_id = std::getenv("SCENARIO_ID");
+
+  // Format the message
+  std::stringstream command;
+  command << "6 " << scenario_instance_id << " " << job_instance_id << " ";
+  command << storage << " " << broadcast;
+
   try {
-    return rstats_messager("6");
+    return rstats_messager(command.str());
   } catch (std::exception& e) {
     std::string msg = "KO Failed to fetch configurations: ";
     msg += e.what();
@@ -237,12 +248,9 @@ char* convert_std_string_to_char(const std::string& value) {
  */
 unsigned int rstats_register_stat(
     char* config_file,
-    char* job_name,
-    unsigned int job_instance_id,
-    unsigned int scenario_instance_id,
-    bool _new,
-    char* prefix) {
-  return rstats::register_stat(config_file, job_name, job_instance_id, scenario_instance_id, _new, prefix);
+    char* suffix,
+    bool _new) {
+  return rstats::register_stat(config_file, suffix, _new);
 }
 
 /*
@@ -279,6 +287,6 @@ char* rstats_reload_all_stats() {
 /*
  * Maps C interface to C++ call.
  */
-char* rstats_get_configs() {
-  return convert_std_string_to_char(rstats::get_configs());
+char* rstats_change_config(bool storage, bool broadcast) {
+  return convert_std_string_to_char(rstats::change_config(storage, broadcast));
 }

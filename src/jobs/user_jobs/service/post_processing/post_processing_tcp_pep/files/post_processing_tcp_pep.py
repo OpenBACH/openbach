@@ -1,34 +1,34 @@
 #!/usr/bin/env python 
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     post_processing_tcp_pep.py
    @brief    Sources of the Job post_processing_tcp_pep
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -38,9 +38,6 @@
 import subprocess
 import json
 import argparse
-import sys
-import os
-sys.path.insert(0, "/opt/rstats/")
 import rstats_api as rstats
 
 
@@ -95,9 +92,7 @@ def main(collector, port, begin, end, simu_name, database_name, username, passwo
         print cpt
         stat_name = test['results'][0]['series'][0]['name']
         
-        job_instance_id = int(os.environ.get('INSTANCE_ID', 0))
-        scenario_instance_id = int(os.environ.get('SCENARIO_ID', 0))
-        connection_id = rstats.register_stat(conffile, 'post_processing_tcp_pep', job_instance_id, scenario_instance_id)
+        connection_id = rstats.register_stat(conffile)
         if connection_id == 0:
             print "Connection to rstats failed"
             exit()

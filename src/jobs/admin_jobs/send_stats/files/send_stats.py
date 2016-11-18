@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     send_stats.py
    @brief    Sources of the Job send_stats
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -41,7 +41,6 @@ try:
     import simplejson as json
 except ImportError:
     import json
-import sys
 import os
 import rstats_api as rstats
 
@@ -56,14 +55,20 @@ def send_stats(path, filename):
             line_json = json.loads(line)
             del line_json['flag']
             timestamp = line_json.pop('time')
-            stat_name = line_json.pop('stat_name')
+            job_name = line_json.pop('job_name')
             job_instance_id = line_json.pop('job_instance_id')
             scenario_instance_id = line_json.pop('scenario_instance_id')
+            try:
+                suffix = line_json.pop('suffix')
+            except KeyError:
+                suffix = None
+            os.environ['JOB_NAME'] = job_name
+            os.environ['JOB_INSTANCE_ID'] = job_instance_id
+            os.environ['SCENARIO_INSTANCE_ID'] = scenario_instance_id
             if connection_id is None:
                 # Connexion au service de collecte de l'agent
-                connection_id = rstats.register_stat(
-                    conffile, stat_name, job_instance_id,
-                    scenario_instance_id, new=True)
+                connection_id = rstats.register_stat(conffile, suffix=suffix,
+                                                     new=True)
                 if connection_id == 0:
                     quit()
             rstats.send_stat(connection_id, timestamp, **line_json)
@@ -96,4 +101,3 @@ if __name__ == "__main__":
     date = '{} {}'.format(*args.date)
 
     main(job_name, date)
-

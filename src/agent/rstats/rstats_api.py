@@ -47,8 +47,7 @@ except OSError:
 
 _register_stat = rstats.rstats_register_stat
 _register_stat.restype = ctypes.c_uint
-_register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint,
-                           ctypes.c_uint, ctypes.c_bool, ctypes.c_char_p]
+_register_stat.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool]
 
 _send_stat = rstats.rstats_send_stat
 _send_stat.restype = ctypes.c_char_p
@@ -67,22 +66,19 @@ _reload_all_stats = rstats.rstats_reload_all_stats
 _reload_all_stats.restype = ctypes.c_char_p
 _reload_all_stats.argtypes = []
 
-_get_configs = rstats.rstats_get_configs
-_get_configs.restype = ctypes.c_char_p
-_get_configs.argtypes = []
+_change_config = rstats.rstats_change_config
+_change_config.restype = ctypes.c_char_p
+_change_config.argtypes = [
+        ctypes.c_bool, ctypes.c_bool]
 
 
-def register_stat(config_file, job_name, job_instance_id, scenario_instance_id,
-                  new=False, prefix=None):
-    if prefix is None:
-        prefix = ''
+def register_stat(config_file, suffix=None, new=False):
+    if suffix is None:
+        suffix = ''
     return _register_stat(
             config_file.encode(),
-            job_name.encode(),
-            job_instance_id,
-            scenario_instance_id,
-            new,
-            prefix.encode())
+            suffix.encode(),
+            new)
 
 
 def send_stat(id, timestamp, **kwargs):
@@ -105,9 +101,8 @@ def reload_all_stats():
     return _reload_all_stats().decode(errors='replace')
 
 
-def get_configs():
-    configs = _get_configs().decode(errors='replace')
-    return json.loads(configs)
+def change_config(storage, broadcast):
+    return _change_config(storage, broadcast).decode(errors='replace')
 
 
 if __name__ == '__main__':

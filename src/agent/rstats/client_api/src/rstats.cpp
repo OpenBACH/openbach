@@ -30,7 +30,7 @@ std::string rstats_messager(const std::string& message) {
   sock.open(asio::ip::udp::v4());
   sock.send_to(asio::buffer(message), endpoint, 0, error);
   if (error) {
-    syslog(LOG_ERR, "Error: Connexion to rstats refused, maybe rstats service isn't started");
+    syslog(LOG_ERR, (char*)"Error: Connexion to rstats refused, maybe rstats service isn't started");
     throw asio::system_error(error);
   }
 
@@ -39,7 +39,7 @@ std::string rstats_messager(const std::string& message) {
   char data[2048];
   sock.receive(asio::buffer(data), 0, error);  // TODO: See http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_udp_client.cpp and implement a timeout
   if (error && error != asio::error::message_size) {
-    syslog(LOG_ERR, "Error: Connexion to rstats was closed, could not get an answer");
+    syslog(LOG_ERR, (char*)"Error: Connexion to rstats was closed, could not get an answer");
     throw asio::system_error(error);
   }
 
@@ -71,7 +71,7 @@ unsigned int register_stat(
   try {
     result = rstats_messager(command.str());
   } catch (std::exception& e) {
-    syslog(LOG_ERR, "Failed to register to rstats service: %s", e.what());
+    syslog(LOG_ERR, (char*)"Failed to register to rstats service: %s", e.what());
     return 0;
   }
   std::stringstream parser(result);
@@ -83,19 +83,19 @@ unsigned int register_stat(
     unsigned int id;
     parser >> id;
     if (!id) {
-      syslog(LOG_ERR, "ERROR: Return message isn't well formed");
-      syslog(LOG_ERR, "\t%s", result.c_str());
+      syslog(LOG_ERR, (char*)"ERROR: Return message isn't well formed");
+      syslog(LOG_ERR, (char*)"\t%s", result.c_str());
     } else {
-      syslog(LOG_NOTICE, "NOTICE: Connexion ID is %d", id);
+      syslog(LOG_NOTICE, (char*)"NOTICE: Connexion ID is %d", id);
     }
     return id;
   } else if (startswith == "KO") {
-    syslog(LOG_ERR, "ERROR: Something went wrong");
+    syslog(LOG_ERR, (char*)"ERROR: Something went wrong");
   } else {
-    syslog(LOG_ERR, "ERROR: Return message isn't well formed");
+    syslog(LOG_ERR, (char*)"ERROR: Return message isn't well formed");
   }
 
-  syslog(LOG_ERR, "\t%s", result.c_str());
+  syslog(LOG_ERR, (char*)"\t%s", result.c_str());
   return 0;
 }
 
@@ -121,7 +121,7 @@ std::string send_stat(
   } catch (std::exception& e) {
     std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }
@@ -147,7 +147,7 @@ std::string send_prepared_stat(
   } catch (std::exception& e) {
     std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }
@@ -167,7 +167,7 @@ std::string reload_stat(unsigned int id) {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to reload statistic: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }
@@ -187,7 +187,7 @@ std::string remove_stat(unsigned int id) {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to remove statistic: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }
@@ -202,7 +202,7 @@ std::string reload_all_stats() {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to reload statistics: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }
@@ -226,7 +226,7 @@ std::string change_config(bool storage, bool broadcast) {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to fetch configurations: ";
     msg += e.what();
-    syslog(LOG_ERR, "%s", msg.c_str());
+    syslog(LOG_ERR, (char*)"%s", msg.c_str());
     return msg;
   }
 }

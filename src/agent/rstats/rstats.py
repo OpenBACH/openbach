@@ -405,10 +405,14 @@ class ClientThread(threading.Thread):
 
     def change_config(self, job_instance_id, scenario_instance_id, broadcast,
                       storage):
-        configs = defaultdict(set)
-        for _, job_config in StatsManager():
-            configs[job_config.job_name].add(job_config._confpath)
-        return json.dumps({name: list(paths) for name, paths in configs.items()})
+        manager = StatsManager()
+        id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
+        try:
+            stats_client = manager[id]
+        except KeyError:
+            raise BadRequest('KO No connection is available for these ids')
+        stats_client._default_storage = storage
+        stats_client._default_broadcast = broadcast
 
     def execute_request(self, data): 
         request, *args = self.parse_and_check(data)

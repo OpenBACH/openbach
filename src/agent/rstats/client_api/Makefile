@@ -1,4 +1,4 @@
-BUILD_FLAGS=$(CXXFLAGS) -pthread -std=c++11 -pedantic -fPIC -DGENERATE_LIB
+BUILD_FLAGS=-pthread -std=c++11 -pedantic -Wall -Wextra -Werror -fPIC $(CXXFLAGS) -DGENERATE_LIB
 ASIO_FLAGS=-DASIO_STANDALONE -I./dependencies/asio-1.10.6/include
 LIBS_FLAGS=-pthread $(LDLIBS)
 

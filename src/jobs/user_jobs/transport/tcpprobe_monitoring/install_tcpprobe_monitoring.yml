@@ -60,6 +60,10 @@
   - name: Send tcpprobe_new_fix module sources
     unarchive: src=files/tcp_probe_new_fix.tar.gz dest=/opt/openbach-jobs/{{ job_name }}/ 
     become: yes
+  
+  - name: Modify tcp_probe module if Ubuntu 14.04
+    replace: dest=/opt/openbach-jobs/{{ job_name }}/tcp_probe_new_fix/tcp_probe_new_fix.c regexp='^(.*)srtt_us(.*)$' replace='\1srtt\2'
+    when: ansible_distribution_version == "14.04"
      
   - name: Build tcpprobe_new_fix module 
     make: chdir=/opt/openbach-jobs/{{ job_name }}/tcp_probe_new_fix/

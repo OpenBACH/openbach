@@ -180,7 +180,7 @@
     - {'src': 'openbach-agent/', 'dest': 'openbach-agent/'}
     - {'src': 'rstats/client_api.tar.gz', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats_api.py', 'dest': 'rstats/'}
-    - {'src': 'rstats/rstats.cfg.j2', 'dest': 'rstats/'}
+    - {'src': 'rstats/rstats.yml.j2', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.py', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats_service', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.service', 'dest': 'rstats/'}

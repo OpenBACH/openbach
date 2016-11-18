@@ -62,7 +62,7 @@
     - rstats_api.py
 
 - name: Configure Rstats
-  template: src=../src_agent/rstats/rstats.cfg.j2 dest=/opt/rstats/rstats.cfg
+  template: src=../src_agent/rstats/rstats.yml.j2 dest=/opt/rstats/rstats.yml
 
 - name: Create Rstats Service
   copy: src=../src_agent/rstats/rstats_service dest=/etc/init.d/rstats mode=0755

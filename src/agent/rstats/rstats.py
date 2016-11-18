@@ -254,10 +254,10 @@ def grouper(iterable, n):
 
 class Conf:
     def __init__(self, conf_path, collector_conf):
-        config = ConfigParser()
-        config.read(conf_path)
-        self.mode = config.get('logstash', 'mode')
-        self.agent_name = config.get('agent', 'name')
+        with open(conf_path) as stream:
+            content = yaml.load(stream)
+        self.mode = content['logstash']['mode']
+        self.agent_name = content['agent']['name']
         with open(collector_conf) as stream:
             content = yaml.load(stream)
         self.host = content['address']
@@ -449,7 +449,7 @@ if __name__ == '__main__':
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind(('', 1111))
 
-    conf = Conf('/opt/rstats/rstats.cfg', '/opt/openbach-agent/collector.yml')
+    conf = Conf('/opt/rstats/rstats.yml', '/opt/openbach-agent/collector.yml')
 
     while True:
         data, remote = udp_socket.recvfrom(2048)

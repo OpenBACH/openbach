@@ -26,7 +26,6 @@ namespace collect_agent {
    */
   DLL_PUBLIC bool register_collect(
       const std::string& config_file,
-      const std::string& suffix,
       bool _new);
 
   /*
@@ -42,6 +41,7 @@ namespace collect_agent {
    */
   DLL_PUBLIC std::string send_stat(
       long long timestamp,
+      const std::string& suffix,
       const std::unordered_map<std::string, std::string>& stats);
 
   /*
@@ -77,13 +77,13 @@ namespace collect_agent {
  */
 extern "C" DLL_PUBLIC unsigned int collect_agent_register_collect(
   char* config_file,
-  char* suffix,
   bool _new);
 extern "C" DLL_PUBLIC void collect_agent_send_log(
   int priority,
   char* log);
 extern "C" DLL_PUBLIC char* collect_agent_send_stat(
   long long timestamp,
+  char* suffix,
   char* stats);
 extern "C" DLL_PUBLIC char* collect_agent_reload_stat();
 extern "C" DLL_PUBLIC char* collect_agent_remove_stat();

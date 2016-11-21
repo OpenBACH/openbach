@@ -56,7 +56,6 @@ std::string rstats_messager(const std::string& message) {
  */
 bool register_collect(
     const std::string& config_file,
-    const std::string& suffix,
     bool _new) {
   // Get the ids
   const char* job_name = std::getenv("JOB_NAME");
@@ -69,9 +68,6 @@ bool register_collect(
   // Format the message to send to rstats
   std::stringstream command;
   command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << (job_instance_id ? job_instance_id : "0") << " " << (scenario_instance_id ? scenario_instance_id : "0") << " " << _new;
-  if (suffix != "") {
-    command << " " << suffix;
-  }
 
   // Send the message to rstats
   std::string result;
@@ -126,6 +122,7 @@ void send_log(
  */
 std::string send_stat(
     long long timestamp,
+    const std::string& suffix,
     const std::unordered_map<std::string, std::string>& stats) {
   // Format the message
   std::stringstream command;
@@ -133,6 +130,9 @@ std::string send_stat(
 
   for (auto& stat : stats) {
     command << " \"" << stat.first << "\" \"" << stat.second << "\"";
+  }
+  if (suffix != "") {
+    command << " " << suffix;
   }
 
   // Send the message and propagate RStats response
@@ -152,12 +152,16 @@ std::string send_stat(
  */
 std::string send_prepared_stat(
     long long timestamp,
+    const std::string& suffix,
     const std::string& stat_values) {
   // Format the message
   std::stringstream command;
   command << "2 " << rstats_connection_id << " " << timestamp;
   if (stat_values != "") {
     command << " " << stat_values;
+  }
+  if (suffix != "") {
+    command << " " << suffix;
   }
 
   // Send the message and propagate RStats response
@@ -267,9 +271,8 @@ char* convert_std_string_to_char(const std::string& value) {
  */
 unsigned int collect_agent_register_collect(
     char* config_file,
-    char* suffix,
     bool _new) {
-  return collect_agent::register_collect(config_file, suffix, _new);
+  return collect_agent::register_collect(config_file, _new);
 }
 
 /*
@@ -286,8 +289,9 @@ void collect_agent_send_log(
  */
 char* collect_agent_send_stat(
     long long timestamp,
+    char* suffix,
     char* stats) {
-  return convert_std_string_to_char(collect_agent::send_prepared_stat(timestamp, stats));
+  return convert_std_string_to_char(collect_agent::send_prepared_stat(timestamp, suffix, stats));
 }
 
 /*

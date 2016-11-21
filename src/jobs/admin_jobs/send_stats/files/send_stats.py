@@ -68,11 +68,11 @@ def send_stats(path, filename):
             if not connection_recreated:
                 # Connexion au service de collecte de l'agent
                 success = collect_agent.register_collect(
-                    conffile, suffix=suffix, new=True)
+                    conffile, new=True)
                 if not success:
                     quit()
                 connection_recreated = True
-            collect_agent.send_stat(timestamp, **line_json)
+            collect_agent.send_stat(timestamp, suffix=suffix, **line_json)
 
 
 def main(job_name, date):

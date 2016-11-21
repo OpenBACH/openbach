@@ -47,7 +47,7 @@ except OSError:
 
 _register_collect = library.collect_agent_register_collect
 _register_collect.restype = ctypes.c_bool
-_register_collect.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_bool]
+_register_collect.argtypes = [ctypes.c_char_p, ctypes.c_bool]
 
 _send_log = library.collect_agent_send_log
 _send_log.restype = ctypes.c_void_p
@@ -55,7 +55,7 @@ _send_log.argtypes = [ctypes.c_int, ctypes.c_char_p]
 
 _send_stat = library.collect_agent_send_stat
 _send_stat.restype = ctypes.c_char_p
-_send_stat.argtypes = [ctypes.c_longlong, ctypes.c_char_p]
+_send_stat.argtypes = [ctypes.c_longlong, ctypes.c_char_p, ctypes.c_char_p]
 
 _reload_stat = library.collect_agent_reload_stat
 _reload_stat.restype = ctypes.c_char_p
@@ -74,12 +74,9 @@ _change_config.restype = ctypes.c_char_p
 _change_config.argtypes = [ctypes.c_bool, ctypes.c_bool]
 
 
-def register_collect(config_file, suffix=None, new=False):
-    if suffix is None:
-        suffix = ''
+def register_collect(config_file, new=False):
     return _register_collect(
             config_file.encode(),
-            suffix.encode(),
             new)
 
 
@@ -87,11 +84,14 @@ def send_log(priority, log):
     _send_log(priority, log.encode())
 
 
-def send_stat(timestamp, **kwargs):
+def send_stat(timestamp, suffix=None, **kwargs):
+    if suffix is None:
+        suffix = ''
     stats = ' '.join(
             '"{}" "{}"'.format(k, v)
             for k, v in kwargs.items())
-    return _send_stat(timestamp, stats.encode()).decode(errors='replace')
+    return _send_stat(timestamp, suffix.encode(), stats.encode()).decode(
+        errors='replace')
 
 
 def reload_stat():

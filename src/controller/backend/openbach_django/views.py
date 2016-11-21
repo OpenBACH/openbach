@@ -405,14 +405,21 @@ class JobsView(BaseJobView):
                 update = 'update' in request.GET
                 return self._get_installed_jobs(address, update)
         else:
-            return self._get_available_jobs(string_to_search)
+            try:
+                ratio = request.GET['ratio']
+            except KeyError:
+                ratio=None
+            return self._get_available_jobs(string_to_search, ratio)
            
 
-    def _get_available_jobs(self, string_to_search=None):
+    def _get_available_jobs(self, string_to_search=None, ratio=None):
         """list all the available jobs in the bechmark or the ones whose keywords 
         are matching string_to_search """
-
-        data = {'command':'list_jobs', 'string_to_search': string_to_search}
+        
+        if ratio is None:
+            data = {'command':'list_jobs', 'string_to_search': string_to_search}
+        else:
+            data = {'command':'list_jobs', 'string_to_search': string_to_search, 'ratio': ratio}
         return self.conductor_execute(data)
     
            

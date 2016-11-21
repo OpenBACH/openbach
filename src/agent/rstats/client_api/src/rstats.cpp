@@ -61,7 +61,7 @@ unsigned int register_stat(
 
   // Format the message
   std::stringstream command;
-  command << "1 " << config_file << " " << job_name << " " << (job_instance_id ? job_instance_id : "0") << " " << (scenario_instance_id ? scenario_instance_id : "0") << " " << _new;
+  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << (job_instance_id ? job_instance_id : "0") << " " << (scenario_instance_id ? scenario_instance_id : "0") << " " << _new;
   if (suffix != "") {
     command << " " << suffix;
   }

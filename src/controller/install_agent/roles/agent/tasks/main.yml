@@ -40,6 +40,9 @@
 - include: install_stats.yml
   tags:
     - install
+- include: install_collect_agent.yml
+  tags:
+    - install
 - include: install_daemon.yml
   tags:
     - install
@@ -64,6 +67,9 @@
   tags:
     - uninstall
 - include: uninstall_synchro.yml
+  tags:
+    - uninstall
+- include: uninstall_collect_agent.yml
   tags:
     - uninstall
 - include: uninstall_stats.yml

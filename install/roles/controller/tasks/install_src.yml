@@ -167,8 +167,8 @@
     - { name: 'restart_job_instance_agent.yml', mode: '0644' }
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
-- name: Packs Rstats client sources
-  local_action: command tar -cvzf ../src/agent/rstats/client_api.tar.gz -C ../src/agent/rstats client_api/
+- name: Packs Collect-Agent client sources
+  local_action: command tar -cvzf ../src/agent/collect-agent/client_api.tar.gz -C ../src/agent/collect-agent client_api/
   become: no
 
 - name: Create the repository for the src of the Agents
@@ -178,15 +178,15 @@
   copy: src=../src/agent/{{ item.src }} dest=/opt/openbach-controller/src_agent/{{ item.dest }}
   with_items:
     - {'src': 'openbach-agent/', 'dest': 'openbach-agent/'}
-    - {'src': 'rstats/client_api.tar.gz', 'dest': 'rstats/'}
-    - {'src': 'rstats/rstats_api.py', 'dest': 'rstats/'}
+    - {'src': 'collect-agent/', 'dest': 'collect-agent/'}
+    - {'src': 'rstats/rstats_reload.py', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.yml.j2', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.py', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats_service', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.service', 'dest': 'rstats/'}
 
 - name: Remove the Rstats client sources we just packed
-  local_action: file path=../src/agent/rstats/client_api.tar.gz state=absent
+  local_action: file path=../src/agent/collect-agent/client_api.tar.gz state=absent
   become: no
 
 - name: Copy the installation of the Agents

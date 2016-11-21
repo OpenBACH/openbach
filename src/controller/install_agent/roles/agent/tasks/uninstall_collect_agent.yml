@@ -26,43 +26,13 @@
 #   
 #   
 #   
-#   @file     install_stats.yml
-#   @brief    Tasks that install the Collect-Agent for the statistics
+#   @file     uninstall_collect_agent.yml
+#   @brief    Tasks that uninstall the Collect-Agent
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Create Rstats log repository
-  file: path=/var/openbach_stats/openbach-agent state=directory mode=0755
-
-- name: Create Rstats repository
-  file: path=/opt/rstats state=directory mode=0755
-
-- name: Install Rstats
-  copy: src=../src_agent/rstats/{{ item }} dest=/opt/rstats/ mode=0755
-  with_items:
-    - rstats.py
-    - rstats_reload.py
-
-- name: Configure Rstats
-  template: src=../src_agent/rstats/rstats.yml.j2 dest=/opt/rstats/rstats.yml
-
-- name: Create Rstats Service
-  copy: src=../src_agent/rstats/rstats_service dest=/etc/init.d/rstats mode=0755
-  when: ansible_distribution_version != "16.04"
-
-- name: Create Rstats Service
-  copy: src=../src_agent/rstats/rstats.service dest=/etc/systemd/system/ mode=0644
-  when: ansible_distribution_version == "16.04"
-
-- name: Reload systemd
-  shell: systemctl daemon-reload
-  when: ansible_distribution_version == "16.04"
-
-- name: Start Rstats
-  service: name=rstats state=started
-
-- name: Delete Rstats sources
-  file: path=/opt/rstats/client_api state=absent
+- name: Uninstall Collect-Agent
+  file: path=/opt/collect-agent/ state=absent
 

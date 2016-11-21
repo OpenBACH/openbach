@@ -42,14 +42,14 @@ try:
 except ImportError:
     import json
 import os
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 
 def send_stats(path, filename):
     conffile = "/opt/openbach-jobs/send_stats/send_stats_rstats_filter.conf"
 
     with open('{}{}'.format(path, filename)) as f:
-        connection_id = None
+        connection_recreated = False
         lines = f.readlines()
         for line in lines:
             line_json = json.loads(line)
@@ -65,13 +65,14 @@ def send_stats(path, filename):
             os.environ['JOB_NAME'] = job_name
             os.environ['JOB_INSTANCE_ID'] = job_instance_id
             os.environ['SCENARIO_INSTANCE_ID'] = scenario_instance_id
-            if connection_id is None:
+            if not connection_recreated:
                 # Connexion au service de collecte de l'agent
-                connection_id = rstats.register_stat(conffile, suffix=suffix,
-                                                     new=True)
-                if connection_id == 0:
+                success = collect_agent.register_collect(
+                    conffile, suffix=suffix, new=True)
+                if not success:
                     quit()
-            rstats.send_stat(connection_id, timestamp, **line_json)
+                connection_recreated = True
+            collect_agent.send_stat(timestamp, **line_json)
 
 
 def main(job_name, date):

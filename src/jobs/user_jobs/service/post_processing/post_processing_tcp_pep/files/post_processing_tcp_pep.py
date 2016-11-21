@@ -38,7 +38,7 @@
 import subprocess
 import json
 import argparse
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 
 def main(collector, port, begin, end, simu_name, database_name, username, password):
@@ -92,13 +92,13 @@ def main(collector, port, begin, end, simu_name, database_name, username, passwo
         print cpt
         stat_name = test['results'][0]['series'][0]['name']
         
-        connection_id = rstats.register_stat(conffile)
-        if connection_id == 0:
+        success = collect_agent.register_collect(conffile)
+        if not success:
             print "Connection to rstats failed"
             exit()
         
         statistics = {'mean': mean, 'compteur': cpt}
-        rstats.send_stat(connection_id, stat_name, str(finished[i]), **statistics)
+        collect_agent.send_stat(stat_name, str(finished[i]), **statistics)
         #cmd = "curl -X POST 'http://" + collector + ":" + str(port) + "/write?d"
         #cmd += "b=" + database_name + "&precision=" + 'ms' + "&u=" + username
         #cmd += "&p=" + password +  "' --data-binary '" + stat_name + " mean="

@@ -41,7 +41,7 @@ import time
 import os
 from sys import exit
 import signal
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 
 def signal_term_handler(signal, frame):
@@ -53,7 +53,6 @@ def signal_term_handler(signal, frame):
     exit(0)
 
 signal.signal(signal.SIGTERM, signal_term_handler)
-syslog.openlog("tcpprobe_monitoring", syslog.LOG_PID, syslog.LOG_USER)
 
 def watch(fn):
     fp = open(fn, 'r')
@@ -76,7 +75,7 @@ def main(path, port, interval):
     try:
         os.system(cmd)
     except Exception as exe_error:
-        syslog.syslog(syslog.LOG_ERROR, "ERROR: %s" % exe_error)
+        collect_agent.send_log(syslog.LOG_ERROR, "ERROR: %s" % exe_error)
         exit("tcp_probe_new_fix.ko can not be executed")
 
     cmd = "chmod 444 /proc/net/tcpprobe"
@@ -91,11 +90,11 @@ def main(path, port, interval):
 
     conffile = "/opt/openbach-jobs/tcpprobe_monitoring/tcpprobe_monitoring_rstats_filter.conf"
 
-    syslog.syslog(syslog.LOG_DEBUG, "DEBUG: the following stats have been built --> %s" % stats_list)
+    collect_agent.send_log(syslog.LOG_DEBUG, "DEBUG: the following stats have been built --> %s" % stats_list)
 
     # Connect to the Agent collecting service
-    connection_id = rstats.register_stat(conffile)
-    if connection_id == 0:
+    success = collect_agent.register_collect(conffile)
+    if not success:
         quit()
 
     i = 1
@@ -120,10 +119,9 @@ def main(path, port, interval):
                         # Send stats to Collector
                         statistics[stats_list[nstats]] = stat[nstats]
 
-                    r = rstats.send_stat(connection_id, int(timestamp),
-                                         **statistics)
+                    r = collect_agent.send_stat(int(timestamp), **statistics)
                 except Exception as connection_err:
-                    syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % connection_err)
+                    collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % connection_err)
                     return
 
             i = 1

@@ -43,7 +43,7 @@ import syslog
 import signal
 from sys import exit
 from apscheduler.schedulers.blocking import BlockingScheduler
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 
 def signal_term_handler(signal, frame):
@@ -55,7 +55,6 @@ signal.signal(signal.SIGTERM, signal_term_handler)
 
 def monitor():
     global chain
-    global connection_id
     global mutex
     global previous_bytes_count
     global previous_timestamp
@@ -79,7 +78,7 @@ def monitor():
 
     # Envoie de la stat au collecteur
     statistics = {'rate': rate}
-    r = rstats.send_stat(connection_id, timestamp, **statistics)
+    r = collect_agent.send_stat(timestamp, **statistics)
 
     # Mise a jour des vieilles stats pour le prochain calcul de debit
     mutex.acquire()
@@ -90,17 +89,9 @@ def monitor():
 
 def main(rule, interval):
     global chain
-    global connection_id
     global mutex
     global previous_bytes_count
     global previous_timestamp
-
-    conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
-
-    # Connexion au service de collecte de l'agent
-    connection_id = rstats.register_stat(conffile)
-    if connection_id == 0:
-        quit()
 
     # On insere la règle
     chain.insert_rule(rule)
@@ -118,6 +109,13 @@ def main(rule, interval):
 
 if __name__ == "__main__":
     global chain
+    conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
+
+    # Connexion au service de collecte de l'agent
+    success = collect_agent.register_collect(conffile)
+    if not success:
+        quit()
+
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -189,7 +187,7 @@ if __name__ == "__main__":
             chain = c
             continue
     if chain == None:
-        syslog.syslog(syslog.LOG_ERR, "ERROR: " + chain_name + " does not exist in FILTER table")
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR: " + chain_name + " does not exist in FILTER table")
         exit(1)
 
     # Creation de la Rule

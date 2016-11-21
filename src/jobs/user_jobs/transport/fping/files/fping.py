@@ -40,11 +40,7 @@ import subprocess
 import argparse
 import time
 import syslog
-import rstats_api as rstats
-
-
-# Configure logger
-syslog.openlog('fping', syslog.LOG_PID, syslog.LOG_USER)
+import collect_agent_api as collect_agent
 
 
 def command_line_flag_for_argument(argument, flag):
@@ -53,10 +49,10 @@ def command_line_flag_for_argument(argument, flag):
         yield str(argument)
 
 
-def handle_exception(exception, connection_id, timestamp):
+def handle_exception(exception, timestamp):
     statistics = {'status': 'Error'}
-    rstats.send_stat(connection_id, timestamp, **statistics)
-    syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % exception)
+    collect_agent.send_stat(timestamp, **statistics)
+    collect_agent.sned_log(syslog.LOG_ERR, "ERROR: %s" % exception)
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
@@ -70,8 +66,8 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     cmd.extend(command_line_flag_for_argument(ttl, '-t'))
     cmd.extend(command_line_flag_for_argument(duration, '-w'))
 
-    connection_id = rstats.register_stat(conffile)
-    if connection_id == 0:
+    success = collect_agent.register_collect(conffile)
+    if not success:
         return
 
     while True:
@@ -81,15 +77,15 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
         except subprocess.CalledProcessError as ex:
             if ex.returncode in (-15, -9):
                 continue
-            handle_exception(ex, connection_id, timestamp)
+            handle_exception(ex, timestamp)
             return
         try:
             rtt_data = output.strip().decode().split(':')[-1].split('=')[-1].split('/')[1]
         except IndexError as ex:
-            handle_exception(ex, connection_id, timestamp)
+            handle_exception(ex, timestamp)
             return
         statistics = {'rtt': rtt_data}
-        rstats.send_stat(connection_id, timestamp, **statistics)
+        collect_agent.send_stat(timestamp, **statistics)
 
 
 if __name__ == "__main__":

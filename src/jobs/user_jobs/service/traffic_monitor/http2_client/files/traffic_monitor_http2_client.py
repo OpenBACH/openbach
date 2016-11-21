@@ -44,7 +44,7 @@ from sys import exit
 import signal
 import syslog
 from subprocess import call
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 
 def signal_term_handler(signal, frame):
@@ -54,23 +54,19 @@ def signal_term_handler(signal, frame):
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 
-# Configure logger
-syslog.openlog("traffic_monitor_http2_client", syslog.LOG_PID, syslog.LOG_USER)
-
-
-def worker_loop(q, server_address, simu_name, page, connection_id):
+def worker_loop(q, server_address, simu_name, page):
     try:
         while Running:
             try:
                 q.get(timeout=1)
-                get_url(server_address, simu_name, page, connection_id)
+                get_url(server_address, simu_name, page)
             except Empty:
                 pass
     except:
         pass
 
 
-def get_url(server_address, simu_name, page, connection_id):
+def get_url(server_address, simu_name, page):
     try:
         start_time = time.time()
         if page == 0:
@@ -80,11 +76,11 @@ def get_url(server_address, simu_name, page, connection_id):
         call(["nghttp","-a","-n","-W 25","-w 20","http://"+server_address+url])
         conntime = round(time.time() - start_time,3)
         timestamp = int(round(time.time() * 1000))
-        syslog.syslog(syslog.LOG_NOTICE, "NOTICE: Delai = " + str(conntime))
+        collect_agent.send_log(syslog.LOG_NOTICE, "NOTICE: Delai = " + str(conntime))
         try:
             # Envoie de la stat au collecteur
             statistics = {'value': conntime}
-            r = rstats.send_stat(connection_id, timestamp, **statistics)
+            r = collect_agent.send_stat(timestamp, **statistics)
         except Exception as ex: 
             print "Erreur: %s" % ex
 
@@ -94,8 +90,8 @@ def get_url(server_address, simu_name, page, connection_id):
 def main(server_address, simu_name, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-jobs.traffic_monitor_http2_client/traffic_monitor_http2_client_rstats_filter.conf"
-    connection_id = rstats.register_stat(conffile)
-    if connection_id == 0:
+    success = collect_agent.register_collect(conffile)
+    if not success:
         quit()
 
     N_workers = 150
@@ -105,7 +101,7 @@ def main(server_address, simu_name, lambd, sim_t, n_req, page):
     # start workers
     thread_pool = []
     for i in range(N_workers):
-        t = Thread(target=worker_loop,args=(q, server_address, simu_name, page, connection_id))
+        t = Thread(target=worker_loop,args=(q, server_address, simu_name, page))
         t.start()
         thread_pool.append(t)
 
@@ -123,8 +119,6 @@ def main(server_address, simu_name, lambd, sim_t, n_req, page):
     Running = False
     for t in thread_pool:
         t.join()
-
-    syslog.closelog()
 
 
 if __name__ == "__main__":

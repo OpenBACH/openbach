@@ -41,7 +41,7 @@ import argparse
 import time
 import sys
 import syslog
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 from subprocess import Popen, PIPE, STDOUT
 
 def get_simple_cmd_output(cmd, stderr=STDOUT):
@@ -65,8 +65,8 @@ def main(destination_ip, count, interval, destport, tcpmode):
     if tcpmode:
         cmd = '{} -S'.format(cmd)
 
-    connection_id = rstats.register_stat(conffile)
-    if connection_id == 0:
+    success = collect_agent.register_collect(conffile)
+    if not success:
         quit()
 
     while True:
@@ -76,12 +76,12 @@ def main(destination_ip, count, interval, destport, tcpmode):
 
         except Exception as ex:
             statistics = {'status': 'Error'}
-            r = rstats.send_stat(connection_id, timestamp, **statistics)
-            syslog.syslog(syslog.LOG_ERR, "ERROR: %s" % ex)
+            collect_agent.send_stat(timestamp, **statistics)
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % ex)
             return
 
         statistics = {'rtt': rtt_data}
-        r = rstats.send_stat(connection_id, timestamp, **statistics)
+        r = collect_agent.send_stat(timestamp, **statistics)
 
 
 if __name__ == "__main__":

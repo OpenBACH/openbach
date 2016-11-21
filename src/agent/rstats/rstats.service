@@ -5,7 +5,7 @@ Requires=network.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 /opt/rstats/rstats.py
-ExecReload=/usr/bin/python3 /opt/rstats/rstats_api.py
+ExecReload=/usr/bin/python3 /opt/rstats/rstats_reload.py
 
 [Install]
 WantedBy=multi-user.target

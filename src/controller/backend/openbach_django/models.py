@@ -83,6 +83,7 @@ class Command_Result(models.Model):
     def reset(self):
         self.response = '{"state": "Running"}'
         self.returncode = 202
+        self.date = timezone.now
         self.save()
 
     def get_json(self):
@@ -291,7 +292,7 @@ class Required_Job_Argument(Argument):
             raise BadRequest('This Job can only have one required argument with'
                              ' an uncertain count, and it should be the last'
                              ' one')
-        if self.count == '+':
+        if self.count == '*' or self.count == '+':
             self.job.has_uncertain_required_arg = True
         else:
             try:
@@ -312,8 +313,8 @@ class Required_Job_Argument(Argument):
                                          ' the first should be lower or equal'
                                          ' to the second')
                 else:
-                    raise BadRequest('count should be \'+\', an int or an'
-                                     ' interval')
+                    raise BadRequest('count should be \'*\', \'+\', an int or'
+                                     ' an interval')
                 self.job.has_uncertain_required_arg = True
         super(Argument, self).save(*args, **kwargs)
 

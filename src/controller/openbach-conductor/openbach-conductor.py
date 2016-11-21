@@ -981,10 +981,10 @@ class ClientThread(threading.Thread):
 #
 #        return []
 
-    def list_jobs_action(self, string_to_search=None):
-        return self.list_jobs(string_to_search)
+    def list_jobs_action(self, string_to_search=None, ratio=60):
+        return self.list_jobs(string_to_search, ratio)
 
-    def list_jobs(self, string_to_search=None):
+    def list_jobs(self, string_to_search=None, ratio=60):
         response = []
         if string_to_search:
             try:
@@ -994,14 +994,14 @@ class ClientThread(threading.Thread):
                     split_job_name=re.split('_|-',job.name)
                     for word in split_job_name:
                         #print("Match ratio of ", fuzz.token_set_ratio(word, string_to_search), "of job ", job.name, word)
-                        if fuzz.token_set_ratio(word, string_to_search) > 50:
+                        if fuzz.token_set_ratio(word, string_to_search) > int(ratio):
                             match=True
                             break
                     #look for job keywords matching the string
                     if not match:
                         for keyword in job.keywords.all():
                             #print("Match ratio of ", fuzz.token_set_ratio(keyword, string_to_search), "for keyword", keyword, "of job ", job.name)
-                            if fuzz.token_set_ratio(keyword, string_to_search) > 50:
+                            if fuzz.token_set_ratio(keyword, string_to_search) > int(ratio):
                                 match=True
                                 break
                     if match:

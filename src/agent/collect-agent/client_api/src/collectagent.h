@@ -26,6 +26,8 @@ namespace collect_agent {
    */
   DLL_PUBLIC bool register_collect(
       const std::string& config_file,
+      int log_option,
+      int log_facility,
       bool _new);
 
   /*
@@ -77,6 +79,8 @@ namespace collect_agent {
  */
 extern "C" DLL_PUBLIC unsigned int collect_agent_register_collect(
   char* config_file,
+  int log_option,
+  int log_facility,
   bool _new);
 extern "C" DLL_PUBLIC void collect_agent_send_log(
   int priority,

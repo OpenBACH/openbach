@@ -36,6 +36,7 @@
 
 
 import ctypes
+import syslog
 import json
 
 
@@ -47,7 +48,7 @@ except OSError:
 
 _register_collect = library.collect_agent_register_collect
 _register_collect.restype = ctypes.c_bool
-_register_collect.argtypes = [ctypes.c_char_p, ctypes.c_bool]
+_register_collect.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
 
 _send_log = library.collect_agent_send_log
 _send_log.restype = ctypes.c_void_p
@@ -74,9 +75,12 @@ _change_config.restype = ctypes.c_char_p
 _change_config.argtypes = [ctypes.c_bool, ctypes.c_bool]
 
 
-def register_collect(config_file, new=False):
+def register_collect(config_file, log_option=syslog.LOG_PID,
+                     log_facility=syslog.LOG_USER, new=False):
     return _register_collect(
             config_file.encode(),
+            log_option,
+            log_facility,
             new)
 
 

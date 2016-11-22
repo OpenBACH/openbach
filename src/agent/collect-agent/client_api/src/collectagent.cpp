@@ -56,6 +56,8 @@ std::string rstats_messager(const std::string& message) {
  */
 bool register_collect(
     const std::string& config_file,
+    int log_option,
+    int log_facility,
     bool _new) {
   // Get the ids
   const char* job_name = std::getenv("JOB_NAME");
@@ -63,7 +65,7 @@ bool register_collect(
   const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
 
   // Open the log
-  openlog((char*)(job_name ? job_name : "job_debug"), LOG_PID, LOG_USER);
+  openlog((char*)(job_name ? job_name : "job_debug"), log_option, log_facility);
 
   // Format the message to send to rstats
   std::stringstream command;
@@ -271,8 +273,10 @@ char* convert_std_string_to_char(const std::string& value) {
  */
 unsigned int collect_agent_register_collect(
     char* config_file,
+    int log_option,
+    int log_facility,
     bool _new) {
-  return collect_agent::register_collect(config_file, _new);
+  return collect_agent::register_collect(config_file, log_option, log_facility, _new);
 }
 
 /*

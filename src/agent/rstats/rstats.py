@@ -164,13 +164,13 @@ class Rstats:
         except socket.error as msg:
             raise BadRequest('Error code: {}, Message {}'.format(*msg))
 
-    def send_stat(self, stats):
+    def send_stat(self, suffix, stats):
         self._mutex.acquire()
         measurement_name = '{}.{}.{}.{}'.format(
             self.scenario_instance_id, self.job_instance_id, self.agent_name,
             self.job_name)
-        if self.suffix is not None:
-            measurement_name = '{}.{}'.format(measurement_name, self.suffix)
+        if suffix is not None:
+            measurement_name = '{}.{}'.format(measurement_name, suffix)
 
         # recuperation des stats
         time = str(stats['time'])
@@ -204,8 +204,8 @@ class Rstats:
             stats_to_log['job_name'] = self.job_name
             stats_to_log['job_instance_id'] = self.job_instance_id
             stats_to_log['scenario_instance_id'] = self.scenario_instance_id
-            if self.suffix is not None:
-                stats_to_log['suffix'] = self.suffix
+            if suffix is not None:
+                stats_to_log['suffix'] = suffix
             for statistic in statistics:
                 stats_to_send = {'measurement_name': measurement_name, 
                                  **stats_to_send, **statistic}
@@ -290,7 +290,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(6, 7), (5, None), (2, 2), (2, 2), (1, 1), (5, 5)]
+        bounds = [(5, 6), (5, None), (2, 2), (2, 2), (1, 1), (5, 5)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -305,35 +305,22 @@ class ClientThread(threading.Thread):
         if request_type == 1:  # create stats
             try:
                 # convert job_instance_id, scenario_instance_id and new
-                data_received[3:6] = map(int, data_received[3:6])
+                data_received[2:5] = map(int, data_received[2:5])
             except ValueError:
                 raise BadRequest(
-                        'KO Message not formed well. Third, forth '
+                        'KO Message not formed well. Third, forth'
                         'and fifth arguments should be integers.')
         if request_type == 2:  # send stats
-            if not length % 2:
-                raise BadRequest(
-                        'KO Message not formed well. '
-                        'Arguments should come in pairs.')
-            else:
-                try:
-                    # convert stat id
-                    data_received[1] = int(data_received[1])
-                    # convert timestamp
-                    data_received[2] = int(data_received[2])
-                except ValueError:
-                    raise BadRequest(
-                            'KO Message not formed well. Second and '
-                            'forth arguments should be integers.')
-        elif request_type == 3:  # reload stat
             try:
                 # convert stat id
                 data_received[1] = int(data_received[1])
+                # convert timestamp
+                data_received[2] = int(data_received[2])
             except ValueError:
                 raise BadRequest(
-                        'KO Message not formed well. Second '
-                        'argument should be an integer.')
-        elif request_type == 4:  # remove stat
+                        'KO Message not formed well. Second and '
+                        'third arguments should be integers.')
+        elif request_type == 3 of request_type == 4:  # reload and remove stat
             try:
                 # convert stat id
                 data_received[1] = int(data_received[1])
@@ -353,7 +340,7 @@ class ClientThread(threading.Thread):
         return data_received
 
     def create_stat(self, confpath, job, job_instance_id, scenario_instance_id,
-                    new=False, suffix=None):
+                    new=False):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
@@ -366,7 +353,6 @@ class ClientThread(threading.Thread):
             stats_client = Rstats(
                     confpath=confpath,
                     job_name=job,
-                    suffix=suffix,
                     id=id,
                     instance=job_instance_id,
                     scenario=scenario_instance_id,
@@ -386,11 +372,18 @@ class ClientThread(threading.Thread):
                     'KO The given id doesn\'t '
                     'represent an open connection')
 
+        # Recuperer l'eventuel suffix
+        if len(extra_stats) % 2:
+            suffix = extra_stats[-1]
+            extra_stats = extra_stats[:-1]
+        else:
+            suffix = None
+
         # recuperer les stats
         stats = {key: value for key, value in grouper(extra_stats, 2)}
         stats['time'] = time
         # send les stats
-        stats_client.send_stat(stats)
+        stats_client.send_stat(suffix, stats)
 
     def reload_stat(self, id):
         # recuperer le rstatsclient et son mutex
@@ -416,7 +409,8 @@ class ClientThread(threading.Thread):
             # reload la conf
             stats_client.reload_conf()
 
-    def change_config(self, scenario_instance_id, job_instance_id, broadcast, storage):
+    def change_config(self, job_instance_id, scenario_instance_id, broadcast,
+                      storage):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
         try:
@@ -426,7 +420,7 @@ class ClientThread(threading.Thread):
         stats_client._default_storage = storage
         stats_client._default_broadcast = broadcast
 
-    def execute_request(self, data):
+    def execute_request(self, data): 
         request, *args = self.parse_and_check(data)
         functions = [
                 self.create_stat,
@@ -466,3 +460,4 @@ if __name__ == '__main__':
     while True:
         data, remote = udp_socket.recvfrom(2048)
         ClientThread(data, remote, conf).start()
+

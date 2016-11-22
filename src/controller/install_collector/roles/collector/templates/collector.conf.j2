@@ -40,10 +40,6 @@ filter {
 
 	# If the type is 'logs', we add the flag (broadcast is severity is ERROR or more)
 	if [type] == "logs" {
-		mutate {
-			replace => [ "host", "%{sysloghost}" ]
-			remove_field => "sysloghost"
-		}
 		if [severity] <= 3 {
 			mutate {
 				add_field => { "flag" => 3 }
@@ -55,6 +51,19 @@ filter {
 		}
 		mutate {
 			convert => ["flag", "integer"]
+		}
+		grok {
+			match => { "message" => "SCENARIO_INSTANCE_ID %{NUMBER:scenario_instance_id}, JOB_INSTANCE_ID %{NUMBER:job_instance_id}, %{GREEDYDATA:syslog_message}" }
+		}
+		if "_grokparsefailure" in [tags] {
+			mutate {
+				remove_tag => "_grokparsefailure"
+			}
+		}
+		else {
+			mutate {
+				rename => { "syslog_message" => "message" }
+			}
 		}
 	}
 }

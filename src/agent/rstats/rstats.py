@@ -290,7 +290,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(5, 7), (5, None), (2, 2), (1, 1)]
+        bounds = [(6, 7), (5, None), (2, 2), (2, 2), (1, 1), (5, 5)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -304,14 +304,12 @@ class ClientThread(threading.Thread):
 
         if request_type == 1:  # create stats
             try:
-                # convert job_instance_id
-                data_received[3] = int(data_received[3])
-                # convert scenario_instance_id
-                data_received[4] = int(data_received[4])
+                # convert job_instance_id, scenario_instance_id and new
+                data_received[3:6] = map(int, data_received[3:6])
             except ValueError:
                 raise BadRequest(
-                        'KO Message not formed well. Third and '
-                        'forth arguments should be integers.')
+                        'KO Message not formed well. Third, forth '
+                        'and fifth arguments should be integers.')
         if request_type == 2:  # send stats
             if not length % 2:
                 raise BadRequest(
@@ -335,6 +333,21 @@ class ClientThread(threading.Thread):
                 raise BadRequest(
                         'KO Message not formed well. Second '
                         'argument should be an integer.')
+        elif request_type == 4:  # remove stat
+            try:
+                # convert stat id
+                data_received[1] = int(data_received[1])
+            except ValueError:
+                raise BadRequest(
+                        'KO Message not formed well. Second '
+                        'argument should be an integer.')
+        elif request_type == 6:  # change config
+            try:
+                data_received[1:5] = map(int, data_received[1:5])
+            except ValueError:
+                raise BadRequest(
+                        'KO Message not formed well. All '
+                        'arguments should be integers.')
 
         data_received[0] = request_type
         return data_received
@@ -403,8 +416,7 @@ class ClientThread(threading.Thread):
             # reload la conf
             stats_client.reload_conf()
 
-    def change_config(self, job_instance_id, scenario_instance_id, broadcast,
-                      storage):
+    def change_config(self, scenario_instance_id, job_instance_id, broadcast, storage):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
         try:
@@ -414,7 +426,7 @@ class ClientThread(threading.Thread):
         stats_client._default_storage = storage
         stats_client._default_broadcast = broadcast
 
-    def execute_request(self, data): 
+    def execute_request(self, data):
         request, *args = self.parse_and_check(data)
         functions = [
                 self.create_stat,
@@ -454,4 +466,3 @@ if __name__ == '__main__':
     while True:
         data, remote = udp_socket.recvfrom(2048)
         ClientThread(data, remote, conf).start()
-

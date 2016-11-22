@@ -52,7 +52,7 @@ def command_line_flag_for_argument(argument, flag):
 def handle_exception(exception, timestamp):
     statistics = {'status': 'Error'}
     collect_agent.send_stat(timestamp, **statistics)
-    collect_agent.sned_log(syslog.LOG_ERR, "ERROR: %s" % exception)
+    collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % exception)
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl, duration):

@@ -63,7 +63,7 @@ bool register_collect(
   const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
 
   // Open the log
-  openlog((char*)job_name, LOG_PID, LOG_USER);
+  openlog((char*)(job_name ? job_name : "job_debug"), LOG_PID, LOG_USER);
 
   // Format the message to send to rstats
   std::stringstream command;
@@ -113,7 +113,7 @@ void send_log(
   const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
   const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
   // Send the message
-  syslog(priority, (char*)"SCENARIO_INSTANCE_ID %u, JOB_INSTANCE_ID %u, %s", (scenario_instance_id ? scenario_instance_id : 0), (job_instance_id ? job_instance_id : 0), log);
+  syslog(priority, (char*)"SCENARIO_INSTANCE_ID %s, JOB_INSTANCE_ID %s, %s", (scenario_instance_id ? scenario_instance_id : "0"), (job_instance_id ? job_instance_id : "0"), log);
 }
 
 /*
@@ -241,7 +241,7 @@ std::string change_config(bool storage, bool broadcast) {
 
   // Format the message
   std::stringstream command;
-  command << "6 " << scenario_instance_id << " " << job_instance_id << " ";
+  command << "6 " << (scenario_instance_id ? scenario_instance_id : "0") << " " << (job_instance_id ? job_instance_id : "0") << " ";
   command << storage << " " << broadcast;
 
   try {

@@ -2989,7 +2989,7 @@ class ClientThread(threading.Thread):
             try:
                 of = Openbach_Function.objects.get(pk=name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Openbach_Function doesn\'t exist', 404,
+                raise BadRequest('This Openbach_Function doesn\'t exist', 400,
                                  {'name': openbach_function['name']})
             if name == 'start_job_instance':
                 try:
@@ -3016,7 +3016,7 @@ class ClientThread(threading.Thread):
                 try:
                     job = Job.objects.get(name=job_name)
                 except ObjectDoesNotExist:
-                    raise BadRequest('This Job does not exist', 404, {'name':
+                    raise BadRequest('This Job does not exist', 400, {'name':
                                                                       job_name})
                 if not isinstance(job_args, dict):
                     raise BadRequest('Your Scenario is malformed')
@@ -3028,7 +3028,7 @@ class ClientThread(threading.Thread):
                             ja = job.optional_job_argument_set.get(name=job_arg)
                         except ObjectDoesNotExist:
                             raise BadRequest('This Job_Argument does not exist',
-                                             404, {'job_name': job_name,
+                                             400, {'job_name': job_name,
                                                    'argument_name': job_arg})
                     if isinstance(job_value, list):
                         for v in job_value:
@@ -3094,7 +3094,7 @@ class ClientThread(threading.Thread):
                             name=of_arg, openbach_function=of)
                     except ObjectDoesNotExist:
                         raise BadRequest('This Openbach_Function doesn\'t have'
-                                         ' this argument', 404, {'name': name,
+                                         ' this argument', 400, {'name': name,
                                                                  'argument':
                                                                  of_arg})
                 ClientThread.check_type(of_argument, of_value,

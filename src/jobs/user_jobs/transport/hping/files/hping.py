@@ -41,7 +41,7 @@ import argparse
 import time
 import sys
 import syslog
-import collect_agent_api as collect_agent
+import collect_agent
 from subprocess import Popen, PIPE, STDOUT
 
 def get_simple_cmd_output(cmd, stderr=STDOUT):

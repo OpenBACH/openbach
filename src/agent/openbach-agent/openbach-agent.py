@@ -52,7 +52,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 
 import psutil
-import collect_agent_api as collect_agent
+import collect_agent
 
 try:
     # Try importing unix stuff

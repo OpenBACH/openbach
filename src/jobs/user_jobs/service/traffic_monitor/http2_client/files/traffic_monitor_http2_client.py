@@ -44,7 +44,7 @@ from sys import exit
 import signal
 import syslog
 from subprocess import call
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 def signal_term_handler(signal, frame):

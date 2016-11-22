@@ -40,7 +40,7 @@ import subprocess
 import argparse
 import time
 import syslog
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 def command_line_flag_for_argument(argument, flag):

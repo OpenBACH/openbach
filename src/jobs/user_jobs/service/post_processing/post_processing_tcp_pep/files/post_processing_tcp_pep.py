@@ -38,7 +38,7 @@
 import subprocess
 import json
 import argparse
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 def main(collector, port, begin, end, simu_name, database_name, username, password):

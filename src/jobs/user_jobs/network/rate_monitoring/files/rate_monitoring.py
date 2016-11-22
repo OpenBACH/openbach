@@ -43,7 +43,7 @@ import syslog
 import signal
 from sys import exit
 from apscheduler.schedulers.blocking import BlockingScheduler
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 def signal_term_handler(signal, frame):

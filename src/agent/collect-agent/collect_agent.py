@@ -29,7 +29,7 @@
 
 
 
-   @file     collect_agent_api.py
+   @file     collect_agent.py
    @brief    Collect-Agent API
    @author   Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
 """

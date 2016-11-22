@@ -179,7 +179,7 @@
   with_items:
     - {'src': 'openbach-agent/', 'dest': 'openbach-agent/'}
     - {'src': 'collect-agent/client_api.tar.gz', 'dest': 'collect-agent/'}
-    - {'src': 'collect-agent/collect_agent_api.py', 'dest': 'collect-agent/'}
+    - {'src': 'collect-agent/collect_agent.py', 'dest': 'collect-agent/'}
     - {'src': 'rstats/rstats_reload.py', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.yml.j2', 'dest': 'rstats/'}
     - {'src': 'rstats/rstats.py', 'dest': 'rstats/'}

@@ -37,7 +37,7 @@
 
 import sys
 sys.path.insert(0, "/opt/collect-agent/")
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 result = collect_agent.reload_all_stats()

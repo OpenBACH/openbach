@@ -42,7 +42,7 @@ try:
 except ImportError:
     import json
 import os
-import collect_agent_api as collect_agent
+import collect_agent
 
 
 def send_stats(path, filename):

@@ -53,7 +53,7 @@
       DESTDIR: /usr/
 
 - name: Install Collect-Agent API
-  copy: src=../src_agent/collect-agent/collect_agent_api.py dest=/opt/collect-agent/ mode=0755
+  copy: src=../src_agent/collect-agent/collect_agent.py dest=/opt/collect-agent/ mode=0755
 
 - name: Delete Collect-Agent API sources
   file: path=/opt/collect-agent/client_api state=absent

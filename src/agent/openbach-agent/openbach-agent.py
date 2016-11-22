@@ -52,7 +52,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.util import datetime_repr
 
 import psutil
-import rstats_api as rstats
+import collect_agent_api as collect_agent
 
 try:
     # Try importing unix stuff
@@ -63,8 +63,8 @@ try:
     PID_FOLDER = '/var/run/openbach'
     JOBS_FOLDER = '/opt/openbach-agent/jobs/'
     INSTANCES_FOLDER = '/opt/openbach-agent/job_instances/'
-    RSTAT_REGISTER_STAT = partial(
-        rstats.register_stat,
+    COLLECT_AGENT_REGISTER_COLLECT = partial(
+        collect_agent.register_collect,
         '/opt/openbach-agent/openbach-agent_filter.conf')
 except ImportError:
     # If we failed assure we’re on windows
@@ -73,8 +73,8 @@ except ImportError:
     PID_FOLDER = r'C:\openbach\pid'
     JOBS_FOLDER = r'C:\openbach\jobs'
     INSTANCES_FOLDER = r'C:\openbach\instances'
-    RSTAT_REGISTER_STAT = partial(
-        rstats.register_stat,
+    COLLECT_AGENT_REGISTER_COLLECT = partial(
+        collect_agent.register_collect,
         r'C:\openbach\openbach-agent_filter.conf')
 
 
@@ -90,7 +90,7 @@ class JobManager:
             self.scheduler.start()
             self.jobs = {}
             self.mutex = threading.Lock()
-            #self.rstats_connection = RSTAT_REGISTER_STAT()  # [Mathias] Maybe open only one connection to rstats like this
+            #self.rstats_connection = COLLECT_AGENT_REGISTER_COLLECT()  # [Mathias] Maybe open only one connection to rstats like this
         self._required_job = self.jobs if job is None else self.jobs[job]
 
     def __enter__(self):
@@ -203,14 +203,14 @@ def status_job(job_name, job_instance_id):
 
     # Connexion au service de collecte de l'agent
     os.environ['JOB_NAME'] = 'openbach-agent'
-    connection = RSTAT_REGISTER_STAT()
-    if not connection:
+    success = COLLECT_AGENT_REGISTER_COLLECT()
+    if not success:
         return
 
     # Envoie de la stat à Rstats
     statistics = {'job_name': job_name, 'job_instance_id': job_instance_id,
                   'status': status}
-    rstats.send_stat(connection, timestamp, **statistics)
+    collect_agent.send_stat(timestamp, **statistics)
 
 
 def stop_watch(job_id):
@@ -329,13 +329,13 @@ def ls_jobs():
 
     # Connexion au service de collecte de l'agent
     os.environ['JOB_NAME'] = 'openbach-agent'
-    connection = RSTAT_REGISTER_STAT()
-    if not connection:
+    success = COLLECT_AGENT_REGISTER_COLLECT()
+    if not success:
         return
 
     # Envoie de la stat à Rstats
     statistics = {'_type': 'job_list', 'nb': count, **job_names}
-    rstats.send_stat(connection, timestamp, **statistics)
+    collect_agent.send_stat(timestamp, **statistics)
 
 
 class BadRequest(ValueError):

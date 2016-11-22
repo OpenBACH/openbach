@@ -33,7 +33,7 @@ std::string rstats_messager(const std::string& message) {
   sock.open(asio::ip::udp::v4());
   sock.send_to(asio::buffer(message), endpoint, 0, error);
   if (error) {
-    syslog(LOG_ERR, (char*)"Error: Connexion to rstats refused, maybe rstats service isn't started");
+    send_log(LOG_ERR, "Error: Connexion to rstats refused, maybe rstats service isn't started");
     throw asio::system_error(error);
   }
 
@@ -42,7 +42,7 @@ std::string rstats_messager(const std::string& message) {
   char data[2048];
   sock.receive(asio::buffer(data), 0, error);  // TODO: See http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_udp_client.cpp and implement a timeout
   if (error && error != asio::error::message_size) {
-    syslog(LOG_ERR, (char*)"Error: Connexion to rstats was closed, could not get an answer");
+    send_log(LOG_ERR, "Error: Connexion to rstats was closed, could not get an answer");
     throw asio::system_error(error);
   }
 
@@ -76,7 +76,7 @@ bool register_collect(
   try {
     result = rstats_messager(command.str());
   } catch (std::exception& e) {
-    syslog(LOG_ERR, (char*)"Failed to register to rstats service: %s", e.what());
+    send_log(LOG_ERR, "Failed to register to rstats service: %s", e.what());
     return false;
   }
   std::stringstream parser(result);
@@ -88,20 +88,20 @@ bool register_collect(
     unsigned int id;
     parser >> id;
     if (!id) {
-      syslog(LOG_ERR, (char*)"ERROR: Return message isn't well formed");
-      syslog(LOG_ERR, (char*)"\t%s", result.c_str());
+      send_log(LOG_ERR, "ERROR: Return message isn't well formed");
+      send_log(LOG_ERR, "\t%s", result.c_str());
     } else {
-      syslog(LOG_NOTICE, (char*)"NOTICE: Connexion ID is %d", id);
+      send_log(LOG_NOTICE, "NOTICE: Connexion ID is %d", id);
     }
     rstats_connection_id = id;
     return true;
   } else if (startswith == "KO") {
-    syslog(LOG_ERR, (char*)"ERROR: Something went wrong");
+    send_log(LOG_ERR, "ERROR: Something went wrong");
   } else {
-    syslog(LOG_ERR, (char*)"ERROR: Return message isn't well formed");
+    send_log(LOG_ERR, "ERROR: Return message isn't well formed");
   }
 
-  syslog(LOG_ERR, (char*)"\t%s", result.c_str());
+  send_log(LOG_ERR, "\t%s", result.c_str());
   return false;
 }
 
@@ -110,12 +110,36 @@ bool register_collect(
  */
 void send_log(
     int priority,
-    char* log) {
+    const char* log,
+    va_list ap) {
   // Get the ids
   const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
   const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
+  // Create the message to log
+  std::stringstream message;
+  message
+    << "SCENARIO_INSTANCE_ID "
+    << (scenario_instance_id ? scenario_instance_id : "0")
+    << ", JOB_INSTANCE_ID "
+    << (job_instance_id ? job_instance_id : "0")
+    << ", " << log;
   // Send the message
-  syslog(priority, (char*)"SCENARIO_INSTANCE_ID %s, JOB_INSTANCE_ID %s, %s", (scenario_instance_id ? scenario_instance_id : "0"), (job_instance_id ? job_instance_id : "0"), log);
+  vsyslog(priority, message.str().c_str(), ap);
+}
+
+/*
+ * Send the log
+ */
+void send_log(
+    int priority,
+    const char* log,
+    ...) {
+  // Get the variable arguments
+  va_list ap;
+  va_start(ap, log);
+  // Send the message
+  send_log(priority, log, ap);
+  va_end(ap);
 }
 
 /*
@@ -143,7 +167,7 @@ std::string send_stat(
   } catch (std::exception& e) {
     std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -172,7 +196,7 @@ std::string send_prepared_stat(
   } catch (std::exception& e) {
     std::string msg = "KO Failed to send statistic to rstats: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -192,7 +216,7 @@ std::string reload_stat() {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to reload statistic: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -212,7 +236,7 @@ std::string remove_stat() {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to remove statistic: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -227,7 +251,7 @@ std::string reload_all_stats() {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to reload statistics: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -251,7 +275,7 @@ std::string change_config(bool storage, bool broadcast) {
   } catch (std::exception& e) {
     std::string msg = "KO Failed to fetch configurations: ";
     msg += e.what();
-    syslog(LOG_ERR, (char*)"%s", msg.c_str());
+    send_log(LOG_ERR, "%s", msg.c_str());
     return msg;
   }
 }
@@ -284,8 +308,12 @@ unsigned int collect_agent_register_collect(
  */
 void collect_agent_send_log(
     int priority,
-    char* log) {
-  return collect_agent::send_log(priority, log);
+    const char* log,
+    ...) {
+  va_list ap;
+  va_start(ap, log);
+  collect_agent::send_log(priority, log, ap);
+  va_end(ap);
 }
 
 /*

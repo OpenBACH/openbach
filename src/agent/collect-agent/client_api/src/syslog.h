@@ -172,16 +172,16 @@ extern "C" {
 extern DLL_PUBLIC void closelog (void);
 
 /* Open connection to system logger.  */
-extern DLL_PUBLIC void openlog (char *__ident, int __option, int __facility);
+extern DLL_PUBLIC void openlog (const char *__ident, int __option, int __facility);
 
 /* Set the log mask level.  */
 extern DLL_PUBLIC int setlogmask (int __mask);
 
 /* Generate a log message using FMT string and option arguments.  */
-extern DLL_PUBLIC void syslog (int __pri, char *__fmt, ...);
+extern DLL_PUBLIC void syslog (int __pri, const char *__fmt, ...);
 
 /* Generate a log message using FMT and using arguments pointed to by AP.  */
-extern DLL_PUBLIC void vsyslog (int __pri, char *__fmt, va_list __ap);
+extern DLL_PUBLIC void vsyslog (int __pri, const char *__fmt, va_list __ap);
 
 /* windows-specific;
    set directory from where syslog.host must be read;

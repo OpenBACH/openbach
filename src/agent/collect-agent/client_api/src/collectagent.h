@@ -35,7 +35,16 @@ namespace collect_agent {
    */
   DLL_PUBLIC void send_log(
       int priority,
-      char* log);
+      const char* log,
+      va_list ap);
+
+  /*
+   * Send the log
+   */
+  DLL_PUBLIC void send_log(
+      int priority,
+      const char* log,
+      ...);
 
   /*
    * Send a new statistic containing several attributes
@@ -84,7 +93,8 @@ extern "C" DLL_PUBLIC unsigned int collect_agent_register_collect(
   bool _new);
 extern "C" DLL_PUBLIC void collect_agent_send_log(
   int priority,
-  char* log);
+  const char* log,
+  ...);
 extern "C" DLL_PUBLIC char* collect_agent_send_stat(
   long long timestamp,
   char* suffix,

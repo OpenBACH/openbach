@@ -83,7 +83,7 @@ class Command_Result(models.Model):
     def reset(self):
         self.response = '{"state": "Running"}'
         self.returncode = 202
-        self.date = timezone.now
+        self.date = timezone.now()
         self.save()
 
     def get_json(self):

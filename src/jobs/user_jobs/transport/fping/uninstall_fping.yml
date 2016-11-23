@@ -42,7 +42,7 @@
     file: path=/opt/openbach-jobs/fping state=absent
     become: yes
     
-  - name: Informe Agent that Fping is uninstalled
+  - name: Informs Agent that Fping is uninstalled
     file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
     become: yes
     

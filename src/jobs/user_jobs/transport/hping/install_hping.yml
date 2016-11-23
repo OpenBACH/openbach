@@ -54,7 +54,7 @@
       - { file: 'hping_rstats_filter.conf', mode: '0644' }
     become: yes
   
-  - name: Inform Agent that Hping Job is installed
+  - name: Informs Agent that Hping Job is installed
     copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
     

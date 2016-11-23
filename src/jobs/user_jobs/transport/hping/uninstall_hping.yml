@@ -42,7 +42,7 @@
     file: path=/opt/openbach-jobs/hping state=absent
     become: yes
     
-  - name: Informe Agent that Hping is uninstalled
+  - name: Informs Agent that Hping is uninstalled
     file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
     become: yes
     

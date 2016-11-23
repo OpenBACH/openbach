@@ -33,6 +33,6 @@
 
 ---
 
-- name: Informe that an installation is running
+- name: Informs that an installation is running
   shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-auditorium/version'
 

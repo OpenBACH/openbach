@@ -26,8 +26,8 @@ namespace collect_agent {
    */
   DLL_PUBLIC bool register_collect(
       const std::string& config_file,
-      int log_option,
-      int log_facility,
+      int log_option=LOG_PID,
+      int log_facility=LOG_USER,
       bool _new);
 
   /*
@@ -52,8 +52,8 @@ namespace collect_agent {
    */
   DLL_PUBLIC std::string send_stat(
       long long timestamp,
-      const std::string& suffix,
-      const std::unordered_map<std::string, std::string>& stats);
+      const std::unordered_map<std::string, std::string>& stats,
+      const std::string& suffix="");
 
   /*
    * Reload the configuration for a given job
@@ -88,8 +88,8 @@ namespace collect_agent {
  */
 extern "C" DLL_PUBLIC unsigned int collect_agent_register_collect(
   char* config_file,
-  int log_option,
-  int log_facility,
+  int log_option=LOG_PID,
+  int log_facility=LOG_USER,
   bool _new);
 extern "C" DLL_PUBLIC void collect_agent_send_log(
   int priority,

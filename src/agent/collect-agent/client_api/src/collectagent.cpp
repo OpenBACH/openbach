@@ -148,8 +148,8 @@ void send_log(
  */
 std::string send_stat(
     long long timestamp,
-    const std::string& suffix,
-    const std::unordered_map<std::string, std::string>& stats) {
+    const std::unordered_map<std::string, std::string>& stats,
+    const std::string& suffix) {
   // Format the message
   std::stringstream command;
   command << "2 " << rstats_connection_id << " " << timestamp;

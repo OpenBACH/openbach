@@ -95,7 +95,7 @@ class StatsManager:
 class Rstats:
     def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
                  suffix=None, id=None, job_name=None, job_instance_id=0,
-                 scenario_instancd_id=0, agent_name='agent_name_not_found'):
+                 scenario_instance_id=0, agent_name='agent_name_not_found'):
         self._mutex = threading.Lock()
         self.conf = conf
         self.job_instance_id = job_instance_id
@@ -305,11 +305,12 @@ class ClientThread(threading.Thread):
         if request_type == 1:  # create stats
             try:
                 # convert job_instance_id, scenario_instance_id and new
-                data_received[2:5] = map(int, data_received[2:5])
+                data_received[3:5] = map(int, data_received[3:5])
+                data_received[6] = int(data_received[6])
             except ValueError:
                 raise BadRequest(
                         'KO Message not formed well. Third, forth'
-                        'and fifth arguments should be integers.')
+                        'and sixth arguments should be integers.')
         if request_type == 2:  # send stats
             try:
                 # convert stat id
@@ -320,7 +321,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest(
                         'KO Message not formed well. Second and '
                         'third arguments should be integers.')
-        elif request_type == 3 of request_type == 4:  # reload and remove stat
+        elif request_type == 3 or request_type == 4:  # reload and remove stat
             try:
                 # convert stat id
                 data_received[1] = int(data_received[1])
@@ -354,8 +355,8 @@ class ClientThread(threading.Thread):
                     confpath=confpath,
                     job_name=job,
                     id=id,
-                    instance=job_instance_id,
-                    scenario=scenario_instance_id,
+                    job_instance_id=job_instance_id,
+                    scenario_instance_id=scenario_instance_id,
                     agent_name=agent_name,
                     conf=self.conf)
 

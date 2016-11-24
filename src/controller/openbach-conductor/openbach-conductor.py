@@ -3953,6 +3953,8 @@ class ClientThread(threading.Thread):
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
                                   'scenario_name': scenario_name})
+        if scenario_instance.is_stopped:
+            return None, 204
         scenario_instance.status = "Stopped"
         with ThreadManager() as threads:
             try:

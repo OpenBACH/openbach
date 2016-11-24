@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "lib_export.h"
+#include "syslog.h"
 
 
 extern int rstats_connection_id;
@@ -28,7 +29,7 @@ namespace collect_agent {
       const std::string& config_file,
       int log_option=LOG_PID,
       int log_facility=LOG_USER,
-      bool _new);
+      bool _new=false);
 
   /*
    * Send the log
@@ -90,7 +91,7 @@ extern "C" DLL_PUBLIC unsigned int collect_agent_register_collect(
   char* config_file,
   int log_option=LOG_PID,
   int log_facility=LOG_USER,
-  bool _new);
+  bool _new=false);
 extern "C" DLL_PUBLIC void collect_agent_send_log(
   int priority,
   const char* log,

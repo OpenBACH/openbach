@@ -13,7 +13,10 @@
 #include "syslog.h"
 
 
-extern int rstats_connection_id;
+extern unsigned int rstats_connection_id;
+extern unsigned int job_instance_id;
+extern unsigned int scenario_instance_id;
+extern std::string agent_name;
 
 
 namespace collect_agent {

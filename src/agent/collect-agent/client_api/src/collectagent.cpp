@@ -4,11 +4,12 @@
 #include <cstring>
 
 #include "collectagent.h"
-#include "syslog.h"
 #include "asio.hpp"
 
-
-int rstats_connection_id;
+unsigned int rstats_connection_id = 0;
+unsigned int job_instance_id = 0;
+unsigned int scenario_instance_id = 0;
+std::string agent_name("");
 
 
 namespace collect_agent {
@@ -20,6 +21,19 @@ namespace collect_agent {
 asio::io_service io_service;
 asio::ip::udp::resolver resolver(io_service);
 asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::query(asio::ip::udp::v4(), "", "1111"));
+
+
+inline unsigned int from_env(const char* name, unsigned int default_value) {
+  const char* value = std::getenv(name);
+  if (!value) {
+    return default_value;
+  }
+  std::stringstream parser;
+  parser << value;
+  unsigned int parsed;
+  parser >> parsed;
+  return parsed;
+}
 
 
 /*
@@ -61,15 +75,28 @@ bool register_collect(
     bool _new) {
   // Get the ids
   const char* job_name = std::getenv("JOB_NAME");
-  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
-  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
+  job_instance_id = from_env("JOB_INSTANCE_ID", 0);
+  scenario_instance_id = from_env("SCENARIO_INSTANCE_ID", 0);
+  std::ifstream agent_name_file("/opt/openbach-agent/agent_name");
+  if (!agent_name_file) {
+    std::ifstream host_name_file("/etc/hostname");
+    if (!host_name_file) {
+      agent_name = "agent_name_not_found";
+    } else {
+      std::getline(host_name_file, agent_name);
+      host_name_file.close();
+    }
+  } else {
+    std::getline(agent_name_file, agent_name);
+    agent_name_file.close();
+  }
 
   // Open the log
   openlog((char*)(job_name ? job_name : "job_debug"), log_option, log_facility);
 
   // Format the message to send to rstats
   std::stringstream command;
-  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << (job_instance_id ? job_instance_id : "0") << " " << (scenario_instance_id ? scenario_instance_id : "0") << " " << _new;
+  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << job_instance_id << " " << scenario_instance_id << " " << _new;
 
   // Send the message to rstats
   std::string result;
@@ -101,6 +128,7 @@ bool register_collect(
     send_log(LOG_ERR, "ERROR: Return message isn't well formed");
   }
 
+  rstats_connection_id = 0;
   send_log(LOG_ERR, "\t%s", result.c_str());
   return false;
 }
@@ -112,16 +140,15 @@ void send_log(
     int priority,
     const char* log,
     va_list ap) {
-  // Get the ids
-  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
-  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
   // Create the message to log
   std::stringstream message;
   message
     << "SCENARIO_INSTANCE_ID "
-    << (scenario_instance_id ? scenario_instance_id : "0")
+    << scenario_instance_id
     << ", JOB_INSTANCE_ID "
-    << (job_instance_id ? job_instance_id : "0")
+    << job_instance_id
+    << ", AGENT_NAME "
+    << agent_name
     << ", " << log;
   // Send the message
   vsyslog(priority, message.str().c_str(), ap);
@@ -262,8 +289,8 @@ std::string reload_all_stats() {
  */
 std::string change_config(bool storage, bool broadcast) {
   // Get the ids
-  const char* job_instance_id = std::getenv("INSTANCE_ID");
-  const char* scenario_instance_id = std::getenv("SCENARIO_ID");
+  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
+  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
 
   // Format the message
   std::stringstream command;

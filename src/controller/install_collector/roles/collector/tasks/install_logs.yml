@@ -82,6 +82,9 @@
   template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf \
     owner=root group=root
 
+- name: Add patterns to the output module 'grok'
+  copy: src=../src_collector/logstash/pattern dest=/etc/logstash/conf.d/
+
 - name: Indicate LogStash where to find Java
   lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin' backup=yes
 

@@ -1628,11 +1628,12 @@ class ClientThread(threading.Thread):
         return date
 
     def start_job_instance_of(self, scenario_instance_id, agent_ip, job_name,
-                             instance_args, ofi, finished_queues, offset=None,
-                             origin=int(timezone.now().timestamp()*1000),
-                             interval=None):
+                              instance_args, ofi, finished_queues, offset=0,
+                              origin=None, interval=None):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
+        if origin is None:
+            origin = int(timezone.now().timestamp()*1000)
         date = origin + int(offset)*1000
 
         result, _ = self.start_job_instance(agent_ip, job_name,
@@ -3953,6 +3954,8 @@ class ClientThread(threading.Thread):
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
                                   'scenario_name': scenario_name})
+        if scenario_instance.is_stopped:
+            return None, 204
         scenario_instance.status = "Stopped"
         with ThreadManager() as threads:
             try:

@@ -3989,8 +3989,12 @@ class ClientThread(threading.Thread):
         infos['name'] = openbach_function_instance.openbach_function.name
         if (openbach_function_instance.openbach_function.name ==
             'start_scenario_instance'):
-            scenario_instance = openbach_function_instance.scenario_instance
-            info, _ = self.infos_scenario_instance(scenario_instance)
+            try:
+                scenario_instance = openbach_function_instance.openbach_function_instance_master.all()[0]
+            except IndexError:
+                raise BadRequest('Integrity of the Openbach_Function_Instance '
+                                 'lost')
+            info = self.infos_scenario_instance(scenario_instance)
             infos.update(info)
             return infos
         infos['status'] = openbach_function_instance.status

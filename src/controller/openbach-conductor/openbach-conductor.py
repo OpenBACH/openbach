@@ -51,8 +51,7 @@ from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
 from datetime import datetime
-from fuzzywuzzy import fuzz
-from fuzzywuzzy import process
+from fuzzywuzzy import fuzz, process
 
 
 import sys
@@ -1065,7 +1064,7 @@ class ClientThread(threading.Thread):
 
         result = {'job_name': name , 'statistics': [] }
         for stat in job.statistic_set.all():
-            statistic = { 'name': stat.name }
+            statistic = {'name': stat.name}
             statistic['description'] = stat.description
             statistic['frequency'] = stat.frequency
             result['statistics'].append(statistic)
@@ -1348,7 +1347,7 @@ class ClientThread(threading.Thread):
             try:
                 result = self.update_jobs(agent.address)
             except BadRequest as e:
-                error = { 'error': e.reason }
+                error = {'error': e.reason}
                 response.update(error)
                 response.update(e.infos)
 
@@ -1373,7 +1372,7 @@ class ClientThread(threading.Thread):
                 for statistic_instance in job.statistic_instance_set.all():
                     if 'statistic_instances' not in job_infos:
                         job_infos['statistic_instances'] = []
-                    job_infos['statistic_instances'].append({ 'name':
+                    job_infos['statistic_instances'].append({'name':
                                                              statistic_instance.stat.name,
                                                              'storage':
                                                              statistic_instance.storage,
@@ -1649,17 +1648,17 @@ class ClientThread(threading.Thread):
         self.watch_job_instance_action(job_instance_id, interval=2)
 
         with WaitingQueueManager() as waiting_queues:
-            waiting_queues[job_instance_id] = (scenario_instance_id,
-                                               ofi.openbach_function_instance_id,
-                                               finished_queues)
+            waiting_queues[job_instance_id] = (
+                scenario_instance_id, ofi.openbach_function_instance_id,
+                finished_queues)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('', 2845))
         except socket.error as serr:
             raise BadRequest('Connexion error with the Status Manager')
-        message = { 'type': 'watch', 'scenario_instance_id':
-                    scenario_instance_id, 'job_instance_id': job_instance_id }
+        message = {'type': 'watch', 'scenario_instance_id':
+                   scenario_instance_id, 'job_instance_id': job_instance_id}
         sock.send(json.dumps(message).encode())
         sock.close()
 
@@ -2128,14 +2127,14 @@ class ClientThread(threading.Thread):
             agents = Agent.objects.filter(pk__in=addresses)
         agents = agents.prefetch_related('installed_job_set')
 
-        response = { 'instances': [] }
+        response = {'instances': []}
         try:
             for agent in agents:
-                job_instances_for_agent = { 'address': agent.address,
-                                            'installed_jobs': [] }
+                job_instances_for_agent = {'address': agent.address,
+                                           'installed_jobs': []}
                 for job in agent.installed_job_set.all():
-                    job_instances_for_job = { 'job_name': job.__str__(),
-                                              'instances': [] }
+                    job_instances_for_job = {'job_name': job.__str__(),
+                                             'instances': []}
                     for job_instance in job.job_instance_set.filter(is_stopped=False):
                         instance_infos, _ = self.status_job_instance(
                             job_instance.id, update)
@@ -2982,8 +2981,8 @@ class ClientThread(threading.Thread):
                 name=const_name,
                 scenario=scenario
             )
-            scenario_constants[const_name] = { 'value': const_value,
-                                               'scenario_constant': sa }
+            scenario_constants[const_name] = {'value': const_value,
+                                              'scenario_constant': sa}
         for openbach_function in scenario_json['openbach_functions']:
             openbach_function.pop('wait', None)
             (name, args), = openbach_function.items()
@@ -3609,19 +3608,19 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def build_entry(programmable=True):
-        return { 'wait_for_launched': set(),
-                 'is_waited_for_launched': set(),
-                 'wait_for_finished': set(),
-                 'is_waited_for_finished': set(),
-                 'if_true': set(),
-                 'wait_if_true': set(),
-                 'if_false': set(),
-                 'wait_if_false': set(),
-                 'while': set(),
-                 'wait_while': set(),
-                 'while_end': set(),
-                 'wait_while_end': set(),
-                 'programmable': programmable }
+        return {'wait_for_launched': set(),
+                'is_waited_for_launched': set(),
+                'wait_for_finished': set(),
+                'is_waited_for_finished': set(),
+                'if_true': set(),
+                'wait_if_true': set(),
+                'if_false': set(),
+                'wait_if_false': set(),
+                'while': set(),
+                'wait_while': set(),
+                'while_end': set(),
+                'wait_while_end': set(),
+                'programmable': programmable}
 
     @staticmethod
     def build_table(scenario_instance):
@@ -3823,11 +3822,13 @@ class ClientThread(threading.Thread):
             thread.join()
 
     @staticmethod
-    def wait_threads_to_finish(scenario_instance, threads):
+    def wait_threads_to_finish(scenario_instance_id, threads):
         for thread in threads:
             thread.join()
         # TODO trouver un meilleur status
         finished = True
+        scenario_instance = Scenario_Instance.objects.get(
+            pk=scenario_instance_id)
         for job_instance in scenario_instance.job_instance_set.all():
             if not job_instance.is_stopped:
                 finished = False
@@ -3842,8 +3843,9 @@ class ClientThread(threading.Thread):
             scenario_instance.status_date = timezone.now()
             scenario_instance.save()
 
-    def start_scenario_instance_of(self, scenario_name, arguments, ofi, date=None,
-                                   project_name=None):
+    def start_scenario_instance_of(self, scenario_name, arguments, ofi,
+                                   date=None):
+        project_name = ofi.scenario_instance.scenario.project.name
         result, _ = self.start_scenario_instance(scenario_name, arguments, date,
                                                  project_name)
 
@@ -3855,8 +3857,8 @@ class ClientThread(threading.Thread):
         with ThreadManager() as threads:
             return [threads[scenario_instance.id][0]]
 
-    def start_scenario_instance_action(self, scenario_name, arguments, date=None,
-                                       project_name=None):
+    def start_scenario_instance_action(self, scenario_name, arguments,
+                                       date=None, project_name=None):
         return self.start_scenario_instance(scenario_name, arguments, date,
                                             project_name)
 
@@ -3879,7 +3881,7 @@ class ClientThread(threading.Thread):
         scenario_instance = self.register_scenario_instance(scenario, arguments)
         table = self.build_table(scenario_instance)
         # lance les openbach function possible
-        queues = { id: Queue() for id in table }
+        queues = {id: Queue() for id in table}
         thread_list = []
         for ofi_id, entry in table.items():
             if entry['programmable']:
@@ -3895,7 +3897,7 @@ class ClientThread(threading.Thread):
                     threads[scenario_instance.id][ofi_id] = thread
         thread = threading.Thread(
             target=self.wait_threads_to_finish,
-            args=(scenario_instance, thread_list))
+            args=(scenario_instance.id, thread_list))
         thread.do_run = True
         thread.start()
         with ThreadManager() as threads:

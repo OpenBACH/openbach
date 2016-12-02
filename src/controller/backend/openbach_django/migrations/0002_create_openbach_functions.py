@@ -284,7 +284,7 @@ def create_openbach_functions(apps, schema_editor):
     start_scenario_instance.save()
     Openbach_Function_Argument(name='scenario_name', description='', type='str',
                                openbach_function=start_scenario_instance).save()
-    Openbach_Function_Argument(name='args', description='', type='json',
+    Openbach_Function_Argument(name='arguments', description='', type='json',
                                openbach_function=start_scenario_instance).save()
 
 

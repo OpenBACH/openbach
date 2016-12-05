@@ -134,10 +134,12 @@ def signal_term_handler(signal, frame):
     exit(0)
 
 
-def launch_job(job_name, job_instance_id, scenario_instance_id, command, args):
+def launch_job(job_name, job_instance_id, scenario_instance_id,
+               owner_scenario_instance_id, command, args):
     environ = os.environ.copy()
     environ.update({'JOB_NAME': job_name, 'JOB_INSTANCE_ID': job_instance_id,
-                    'SCENARIO_INSTANCE_ID': scenario_instance_id})
+                    'SCENARIO_INSTANCE_ID': scenario_instance_id,
+                    'OWNER_SCENARIO_INSTANCE_ID': owner_scenario_instance_id})
     proc = psutil.Popen(
         command.split() + args.split(),
         stdout=DEVNULL, stderr=DEVNULL,
@@ -221,7 +223,8 @@ def stop_watch(job_id):
 
 
 def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
-                          arguments, date_value, reschedule=False):
+                          owner_scenario_instance_id, arguments, date_value,
+                          reschedule=False):
     timestamp = time.time()
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
     try:
@@ -235,7 +238,7 @@ def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
             JobManager().scheduler.add_job(
                     launch_job, 'date', run_date=date,
                     args=(job_name, job_instance_id, scenario_instance_id,
-                          command, arguments),
+                          owner_scenario_instance_id, command, arguments),
                     id=job_name+job_instance_id)
         except ConflictingIdError:
             raise BadRequest('KO A job {} is already programmed'.format(job_name))
@@ -412,7 +415,8 @@ class ClientThread(threading.Thread):
         self.path_scheduled_instances_job = path_scheduled_instances_job
 
     def start_job_instance(self, name, job_instance_id, scenario_instance_id,
-                           date_type, date_value, args):
+                           owner_scenario_instance_id, date_type, date_value,
+                           args):
         with JobManager(name) as job:
             command = job['command']
             command_stop = job['command_stop']
@@ -420,13 +424,16 @@ class ClientThread(threading.Thread):
         arguments = ' '.join(args)
         if date_type == 'date':
             date, _ = schedule_job_instance(name, job_instance_id,
-                                            scenario_instance_id, arguments,
-                                            date_value)
+                                            scenario_instance_id,
+                                            owner_scenario_instance_id,
+                                            arguments, date_value)
             if date != None:
                 filename = '{}{}{}.start'.format(self.path_scheduled_instances_job,
                                                  name, job_instance_id)
                 with open(filename, 'w') as job_instance_prog:
-                    print(name, job_instance_id, scenario_instance_id, date_value, arguments, sep='\n', file=job_instance_prog)
+                    print(name, job_instance_id, scenario_instance_id,
+                          owner_scenario_instance_id, date_value, arguments,
+                          sep='\n', file=job_instance_prog)
         elif date_type == 'interval':
             date = None
             with JobManager(name) as job:
@@ -453,7 +460,7 @@ class ClientThread(threading.Thread):
                 JobManager().scheduler.add_job(
                         launch_job, 'interval', seconds=date_value,
                         args=(name, job_instance_id, scenario_instance_id,
-                              command, arguments),
+                              owner_scenario_instance_id, command, arguments),
                         id=name+job_instance_id)
             except ConflictingIdError:
                 raise BadRequest(
@@ -561,16 +568,16 @@ class ClientThread(threading.Thread):
                                 'already started'.format(job_name, job_instance_id))
 
             # On récupère la date ou l'interval
-            if args[3] == 'date':
+            if args[4] == 'date':
                 try:
-                    args[4] = 0 if args[4] == 'now' else int(args[4]) // 1000
+                    args[5] = 0 if args[5] == 'now' else int(args[5]) // 1000
                 except ValueError:
                     raise BadRequest(
                             'KO The date to begin should be '
                             'given as a timestamp in milliseconds')
-            elif args[3] == 'interval':
+            elif args[4] == 'interval':
                 try:
-                    args[4] = int(args[4])
+                    args[5] = int(args[5])
                 except ValueError:
                     raise BadRequest(
                             'KO The interval to execute the '
@@ -654,8 +661,12 @@ class ClientThread(threading.Thread):
         with JobManager() as jobs:
             del jobs[job_name]
 
-    def start_job_instance_agent(self, job, job_instance_id, scenario_instance_id, date, value, *args):
-        self.start_job_instance(job, job_instance_id, scenario_instance_id, date, value, args)
+    def start_job_instance_agent(self, job, job_instance_id,
+                                 scenario_instance_id,
+                                 owner_scenario_instance_id, date, value,
+                                 *args):
+        self.start_job_instance(job, job_instance_id, scenario_instance_id,
+                                owner_scenario_instance_id, date, value, args)
 
     def stop_job_instance_agent(self, job_name, job_instance_id, _, value):
         date = schedule_job_instance_stop(job_name, job_instance_id, value)
@@ -673,7 +684,10 @@ class ClientThread(threading.Thread):
         with open(filename, 'w') as job_instance_status:
             print(job_name, job_instance_id, date_type, date_value, sep='\n', file=job_instance_status)
 
-    def restart_job_instance_agent(self, job_name, job_instance_id, scenario_instance_id, date, value, *args):
+    def restart_job_instance_agent(self, job_name, job_instance_id,
+                                   scenario_instance_id,
+                                   owner_scenario_instance_id, date, value,
+                                   *args):
         # Stoppe le job si il est lancé
         with JobManager(job_name) as job:
             try:
@@ -686,7 +700,8 @@ class ClientThread(threading.Thread):
                 stop_job(job_name, job_instance_id, command_stop, arguments)
 
         # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
-        self.start_job_instance(job_name, job_instance_id, scenario_instance_id, date, value, args)
+        self.start_job_instance(job_name, job_instance_id, scenario_instance_id,
+                                owner_scenario_instance_id, date, value, args)
 
     def run(self):
         request = self.socket.recv(2048)
@@ -742,14 +757,15 @@ if __name__ == '__main__':
                 basename, ext = os.path.splitext(filename)
                 if ext == 'start':
                     try:
-                        job_name, job_instance_id, scenario_instance_id, date_value, arguments = f.readlines()
+                        job_name, job_instance_id, scenario_instance_id, owner_scenario_instance_id, date_value, arguments = f.readlines()
                         date_value = float(date_value)
                     except ValueError:
                         print('Error with the reading of {}'.format(fullpath))
                         continue
                     date, result = schedule_job_instance(
                             job_name, job_instance_id, scenario_instance_id,
-                            arguments, date_value, reschedule=True)
+                            owner_scenario_instance_id, arguments, date_value,
+                            reschedule=True)
                     if result:
                         with JobManager(job_name) as job:
                             job['instances'][job_instance_id] = {

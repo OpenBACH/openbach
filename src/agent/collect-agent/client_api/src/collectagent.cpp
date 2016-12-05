@@ -9,6 +9,7 @@
 unsigned int rstats_connection_id = 0;
 unsigned int job_instance_id = 0;
 unsigned int scenario_instance_id = 0;
+unsigned int owner_scenario_instance_id = 0;
 std::string agent_name("");
 
 
@@ -77,6 +78,7 @@ bool register_collect(
   const char* job_name = std::getenv("JOB_NAME");
   job_instance_id = from_env("JOB_INSTANCE_ID", 0);
   scenario_instance_id = from_env("SCENARIO_INSTANCE_ID", 0);
+  owner_scenario_instance_id = from_env("OWNER_SCENARIO_INSTANCE_ID", 0);
   std::ifstream agent_name_file("/opt/openbach-agent/agent_name");
   if (!agent_name_file) {
     std::ifstream host_name_file("/etc/hostname");
@@ -96,7 +98,7 @@ bool register_collect(
 
   // Format the message to send to rstats
   std::stringstream command;
-  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << job_instance_id << " " << scenario_instance_id << " " << agent_name << " " << _new;
+  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << job_instance_id << " " << scenario_instance_id << " " << owner_scenario_instance_id << " " << agent_name << " " << _new;
 
   // Send the message to rstats
   std::string result;
@@ -143,7 +145,9 @@ void send_log(
   // Create the message to log
   std::stringstream message;
   message
-    << "SCENARIO_INSTANCE_ID "
+    << "OWNER_SCENARIO_INSTANCE_ID "
+    << owner_scenario_instance_id
+    << ", SCENARIO_INSTANCE_ID "
     << scenario_instance_id
     << ", JOB_INSTANCE_ID "
     << job_instance_id

@@ -54,7 +54,7 @@ filter {
 		}
 		grok {
 			patterns_dir => ["/etc/logstash/conf.d/pattern/"]
-			match => { "message" => "SCENARIO_INSTANCE_ID %{NUMBER:scenario_instance_id}, JOB_INSTANCE_ID %{NUMBER:job_instance_id}, AGENT_NAME %{HOSTNAME:agent_name}, %{GREEDYDATA:syslog_message}" }
+			match => { "message" => "OWNER_SCENARIO_INSTANCE_ID %{NUMBER:owner_scenario_instance_id}, SCENARIO_INSTANCE_ID %{NUMBER:scenario_instance_id}, JOB_INSTANCE_ID %{NUMBER:job_instance_id}, AGENT_NAME %{HOSTNAME:agent_name}, %{GREEDYDATA:syslog_message}" }
 		}
 		if "_grokparsefailure" in [tags] {
 			mutate {

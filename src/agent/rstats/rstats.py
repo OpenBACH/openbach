@@ -95,11 +95,13 @@ class StatsManager:
 class Rstats:
     def __init__(self, logpath='/var/openbach_stats/', confpath='', conf=None,
                  suffix=None, id=None, job_name=None, job_instance_id=0,
-                 scenario_instance_id=0, agent_name='agent_name_not_found'):
+                 scenario_instance_id=0, owner_scenario_instance_id=0,
+                 agent_name='agent_name_not_found'):
         self._mutex = threading.Lock()
         self.conf = conf
         self.job_instance_id = job_instance_id
         self.scenario_instance_id = scenario_instance_id
+        self.owner_scenario_instance_id = owner_scenario_instance_id
         self.job_name = 'rstats' if job_name is None else job_name
         self.agent_name = agent_name
         self.suffix = suffix
@@ -167,9 +169,9 @@ class Rstats:
 
     def send_stat(self, suffix, stats):
         self._mutex.acquire()
-        measurement_name = '{}.{}.{}.{}'.format(
-            self.scenario_instance_id, self.job_instance_id, self.agent_name,
-            self.job_name)
+        measurement_name = '{}.{}.{}.{}.{}'.format(
+            self.owner_scenario_instance_id, self.scenario_instance_id,
+            self.job_instance_id, self.agent_name, self.job_name)
         if suffix is not None:
             measurement_name = '{}.{}'.format(measurement_name, suffix)
 
@@ -205,6 +207,7 @@ class Rstats:
             stats_to_log['job_name'] = self.job_name
             stats_to_log['job_instance_id'] = self.job_instance_id
             stats_to_log['scenario_instance_id'] = self.scenario_instance_id
+            stats_to_log['owner_scenario_instance_id'] = self.owner_scenario_instance_id
             if suffix is not None:
                 stats_to_log['suffix'] = suffix
             for statistic in statistics:
@@ -290,7 +293,7 @@ class ClientThread(threading.Thread):
         except (ValueError, IndexError):
             raise BadRequest('KO Type not recognize')
 
-        bounds = [(6, 7), (5, None), (2, 2), (2, 2), (1, 1), (5, 5)]
+        bounds = [(8, 8), (5, None), (2, 2), (2, 2), (1, 1), (5, 5)]
         minimum, maximum = bounds[request_type - 1]
 
         length = len(data_received)
@@ -340,7 +343,7 @@ class ClientThread(threading.Thread):
         return data_received
 
     def create_stat(self, confpath, job, job_instance_id, scenario_instance_id,
-                    agent_name, new=False):
+                    owner_scenario_instance_id, agent_name, new=False):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
@@ -356,6 +359,7 @@ class ClientThread(threading.Thread):
                     id=id,
                     job_instance_id=job_instance_id,
                     scenario_instance_id=scenario_instance_id,
+                    owner_scenario_instance_id=owner_scenario_instance_id,
                     agent_name=agent_name,
                     conf=self.conf)
 

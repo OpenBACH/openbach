@@ -1690,6 +1690,13 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Installed_Job isn\'t in the database', 404,
                              {'job_name': '{} on {}'.format(job_name,
                                                             agent_ip)})
+        try:
+            scenario_instance = Scenario_Instance.objects.get(
+                pk=scenario_instance_id)
+        except ObjectDoesNotExist:
+            owner_scenario_instance_id = scenario_instance_id
+        else:
+            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
 
         job_instance = Job_Instance(job=installed_job)
         job_instance.status = "Starting ..."
@@ -1706,6 +1713,7 @@ class ClientThread(threading.Thread):
             self.playbook_builder.build_start(
                     job.name, job_instance.id,
                     scenario_instance_id,
+                    owner_scenario_instance_id,
                     args, date, interval,
                     playbook, extra_vars)
         if action:
@@ -2257,6 +2265,13 @@ class ClientThread(threading.Thread):
 
     def launch_set_job_log_severity(self, job_instance, job_name, severity,
                                     date, local_severity, scenario_instance_id):
+        try:
+            scenario_instance = Scenario_Instance.objects.get(
+                pk=scenario_instance_id)
+        except ObjectDoesNotExist:
+            owner_scenario_instance_id = scenario_instance_id
+        else:
+            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
         agent = job_instance.job.agent
         job = Job.objects.get(name=job_name)
         installed_job = Installed_Job.objects.get(agent=agent, job=job)
@@ -2302,8 +2317,9 @@ class ClientThread(threading.Thread):
                     syslogseverity, syslogseverity_local,
                     logs_job_path, playbook)
             self.playbook_builder.build_start(
-                    'rsyslog_job', job_instance.id, scenario_instance_id, args,
-                    date, None, playbook, extra_vars)
+                    'rsyslog_job', job_instance.id, scenario_instance_id,
+                    owner_scenario_instance_id, args, date, None, playbook,
+                    extra_vars)
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} '
@@ -2486,6 +2502,13 @@ class ClientThread(threading.Thread):
 
     def launch_set_job_stat_policy(self, job_instance, job_name, date,
                                    scenario_instance_id):
+        try:
+            scenario_instance = Scenario_Instance.objects.get(
+                pk=scenario_instance_id)
+        except ObjectDoesNotExist:
+            owner_scenario_instance_id = scenario_instance_id
+        else:
+            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
         agent = job_instance.job.agent
         job = Job.objects.get(name=job_name)
         installed_job = Installed_Job.objects.get(agent=agent, job=job)
@@ -2514,8 +2537,9 @@ class ClientThread(threading.Thread):
                     rstats_filter.name, remote_path, playbook)
             args = self.format_args(job_instance)
             self.playbook_builder.build_start(
-                    'rstats_job', job_instance.id, scenario_instance_id, args,
-                    date, None, playbook, extra_vars)
+                    'rstats_job', job_instance.id, scenario_instance_id,
+                    owner_scenario_instance_id, args, date, None, playbook,
+                    extra_vars)
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} '

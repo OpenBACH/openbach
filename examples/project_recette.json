@@ -1,7 +1,7 @@
 {
   "name": "Pre-Recette",
   "description": "Pre-Recette 07/11/2016",
-  "machine": [
+  "entity": [
     {
       "name": "Sat",
       "description": "The satellite",

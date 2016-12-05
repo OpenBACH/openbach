@@ -1,12 +1,12 @@
 {
   "name": "OpenSAND",
   "description": "OpenSAND Plateform",
-  "machine": [
+  "entity": [
     {
       "name": "Sat",
       "description": "The satellite",
       "agent": {
-      	  "name": "openbach-controller2",
+      	  "name": "openbach-controller",
       	  "address": "172.20.34.39",
       	  "username": "opensand",
       	  "collector": "172.20.34.39"
@@ -87,9 +87,9 @@
       "openbach_functions": [
         {
           "start_job_instance": {
-            "agent_ip": "172.20.42.167",
-            "ping": {
-              "destination_ip": "192.168.0.1"
+            "agent_ip": "172.20.34.39",
+            "fping": {
+              "destination_ip": "172.20.0.83"
             },
             "offset": 5
           },
@@ -101,9 +101,9 @@
         },
         {
           "start_job_instance": {
-            "agent_ip": "172.20.42.167",
-            "ping": {
-              "destination_ip": "192.168.0.1"
+            "agent_ip": "172.20.34.39",
+            "hping": {
+              "destination_ip": "172.20.0.83"
             },
             "offset": 5
           },
@@ -170,7 +170,7 @@
         {
           "start_job_instance": {
             "agent_ip": "192.168.0.7",
-            "cwnd_monitoring": {
+            "tcpprobe_monitoring": {
               "port": 5001,
               "interval": 10,
               "path": "/tcp/tcpprobe.out"

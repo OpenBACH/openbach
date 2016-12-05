@@ -4161,7 +4161,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def first_check_on_project(project_json):
-        required_parameters = ('name', 'description', 'machine', 'network',
+        required_parameters = ('name', 'description', 'entity', 'network',
                                'scenario')
         try:
             for k in required_parameters:
@@ -4172,7 +4172,7 @@ class ClientThread(threading.Thread):
             return False
         if not isinstance(project_json['description'], str):
             return False
-        if not isinstance(project_json['machine'], list):
+        if not isinstance(project_json['entity'], list):
             return False
         if not isinstance(project_json['network'], list):
             return False
@@ -4181,35 +4181,35 @@ class ClientThread(threading.Thread):
         return True
 
     @staticmethod
-    def first_check_on_machine(machine_json):
+    def first_check_on_entity(entity_json):
         required_parameters = ('name', 'description', 'agent', 'networks')
         try:
             for k in required_parameters:
-                machine_json[k]
+                entity_json[k]
         except KeyError:
             return False
-        if not isinstance(machine_json['name'], str):
+        if not isinstance(entity_json['name'], str):
             return False
-        if not isinstance(machine_json['description'], str):
+        if not isinstance(entity_json['description'], str):
             return False
-        if machine_json['agent'] != None:
-            if not isinstance(machine_json['agent'], dict):
+        if entity_json['agent'] != None:
+            if not isinstance(entity_json['agent'], dict):
                 return False
             required_parameters = ('address', 'name', 'username', 'collector')
             try:
                 for k in required_parameters:
-                    machine_json['agent'][k]
+                    entity_json['agent'][k]
             except KeyError:
                 return False
-            if not isinstance(machine_json['agent']['address'], str):
+            if not isinstance(entity_json['agent']['address'], str):
                 return False
-            if not isinstance(machine_json['agent']['name'], str):
+            if not isinstance(entity_json['agent']['name'], str):
                 return False
-            if not isinstance(machine_json['agent']['username'], str):
+            if not isinstance(entity_json['agent']['username'], str):
                 return False
-            if not isinstance(machine_json['agent']['collector'], str):
+            if not isinstance(entity_json['agent']['collector'], str):
                 return False
-        return ClientThread.first_check_on_network(machine_json['networks'])
+        return ClientThread.first_check_on_network(entity_json['networks'])
 
     @staticmethod
     def first_check_on_network(network_json):
@@ -4221,35 +4221,35 @@ class ClientThread(threading.Thread):
         return True
 
     @staticmethod
-    def register_machine(machine_json, project_name):
+    def register_entity(entity_json, project_name):
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoeNotExist:
             raise BadRequest('This Project is not on the database', 404)
-        machine = Machine(
-            name=machine_json['name'],
+        entity = Entity(
+            name=entity_json['name'],
             project=project,
-            description=machine_json['description']
+            description=entity_json['description']
         )
-        if machine_json['agent'] != None:
+        if entity_json['agent'] != None:
             try:
-                agent = Agent.objects.get(pk=machine_json['agent']['address'])
+                agent = Agent.objects.get(pk=entity_json['agent']['address'])
             except ObjectDoesNotExist:
                 raise BadRequest('This Agent \'{}\' is not in the database'.format(
-                    machine_json['agent']['address']), 404)
-            machine.agent = agent
+                    entity_json['agent']['address']), 404)
+            entity.agent = agent
         try:
-            machine.save()
+            entity.save()
         except IntegrityError:
-            raise BadRequest('A Machine with this name already exists')
-        for network_name in machine_json['networks']:
+            raise BadRequest('A Entity with this name already exists')
+        for network_name in entity_json['networks']:
             try:
                 network = Network.objects.get(name=network_name,
                                               project=project)
             except ObjectDoesNotExist:
                 raise BadRequest('This network \'{}\' does not exist in the'
                                  ' database'.format(network), 404)
-            machine.networks.add(network)
+            entity.networks.add(network)
 
     @staticmethod
     def register_network(network_json, project_name):
@@ -4282,14 +4282,14 @@ class ClientThread(threading.Thread):
             except BadRequest:
                 project.delete()
                 raise
-        machines = project_json['machine']
-        for machine in machines:
-            if not self.first_check_on_machine(machine):
+        entities = project_json['entity']
+        for entity in entities:
+            if not self.first_check_on_entity(entity):
                 project.delete()
                 raise BadRequest('Your Project is malformed: the json is'
                                  ' malformed')
             try:
-                self.register_machine(machine, name)
+                self.register_entity(entity, name)
             except BadRequest:
                 project.delete()
                 raise

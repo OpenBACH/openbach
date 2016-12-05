@@ -926,8 +926,8 @@ class Project(models.Model):
         info_json = {
             'name': self.name,
             'description': self.description,
-            'machine': [machine.get_json() for machine in
-                        self.machine_set.order_by('name')],
+            'entity': [entity.get_json() for entity in
+                        self.entity_set.order_by('name')],
             'scenario': [scenario.get_json() for scenario in
                          self.scenario_set.order_by('name')],
             'network': [network.get_json() for network in
@@ -950,7 +950,7 @@ class Network(models.Model):
         return self.name
 
 
-class Machine(models.Model):
+class Entity(models.Model):
     name = models.CharField(max_length=500)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)

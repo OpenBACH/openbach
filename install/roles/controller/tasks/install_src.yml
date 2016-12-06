@@ -205,6 +205,9 @@
 - name: Copy the src of the Jobs
   copy: src=../src/jobs dest=/opt/openbach-controller
 
+- name: Create the repository for the private Jobs
+  file: path=/opt/openbach-controller/jobs/private_jobs state=directory owner={{ ansible_ssh_user }} group={{ ansible_ssh_user }}
+
 - name: Set the influxdb port to use
   replace: dest=/opt/openbach-controller/{{item}} regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
   with_items:

@@ -39,6 +39,7 @@ except ImportError:
     import json
 import socket
 import os
+import tempfile
 
 from django.views.generic import base
 from django.http import JsonResponse, HttpResponse
@@ -53,16 +54,24 @@ class GenericView(base.View):
         JSON response.
         """
 
-        data = request.body.decode()
-        if data:
-            try:
-                request.JSON = json.loads(data)
-            except ValueError:
-                return JsonResponse(
-                        status=400,
-                        data={'error': 'API error: data should be sent as JSON in the request body'})
+        if request.FILES:
+            request.JSON = request.POST
         else:
-            request.JSON = {}
+            try:
+                data = request.body.decode()
+            except Exception:
+                return JsonResponse(
+                        status=500,
+                        data={'error': traceback.format_exc()})
+            if data:
+                try:
+                    request.JSON = json.loads(data)
+                except ValueError:
+                    return JsonResponse(
+                            status=400,
+                            data={'error': 'API error: data should be sent as JSON in the request body'})
+            else:
+                request.JSON = {}
 
         try:
             response = super().dispatch(request, *args, **kwargs)
@@ -354,10 +363,22 @@ class AgentView(BaseAgentView):
 class BaseJobView(GenericView):
     """Abstract base class used to factorize jobs creation"""
 
-    def _create_job(self, job_name, job_path):
+    def _add_job(self, job_name, path):
         """Helper function to factorize out the job creation code"""
 
-        data = {'command': 'add_job', 'name': job_name, 'path': job_path}
+        data = {'command': 'add_job', 'name': job_name, 'path': path}
+
+        return self.conductor_execute(data)
+
+    def _create_job(self, job_name, compressed_sources):
+        """Helper function to factorize out the job creation code"""
+
+        with tempfile.NamedTemporaryFile('wb', delete=False) as f:
+            for chunk in compressed_sources.chunks():
+                f.write(chunk)
+        os.chmod(f.name, 0o644)
+
+        data = {'command': 'add_new_job', 'name': job_name, 'tar_path': f.name}
 
         return self.conductor_execute(data)
 
@@ -443,9 +464,14 @@ class JobsView(BaseJobView):
                 name = request.JSON['name']
                 path = request.JSON['path']
             except KeyError as e:
-                return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+                try:
+                    compressed_sources = request.FILES['file']
+                except KeyError as e:
+                    return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
+            else:
+                return self._add_job(name, path)
 
-            return self._create_job(name, path)
+            return self._create_job(name, compressed_sources)
         else:
             # Execute (un)installation of several jobs
             try:
@@ -915,4 +941,3 @@ def push_file(request):
     os.remove(path)
 
     return result
-

@@ -606,7 +606,8 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function           | Method          | url              | Input contents (JSON or Query string)      | Description
-| add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list
+| add_job            | POST            | /job             | *name*, *tar_file*                         | Add a Job to the Jobs list (with the sources in the tar file)
+| add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path)
 | del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
 | list_jobs          | GET             | /job             |                                            | Return the Jobs list. 
 | get_job_stats      | GET             | /job/*job_name*  | *type=stats*                               | Return the statistics produced by a Job.

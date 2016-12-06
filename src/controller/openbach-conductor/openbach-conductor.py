@@ -47,6 +47,7 @@ import parse
 import signal
 import time
 import re
+import tarfile
 from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
@@ -830,10 +831,18 @@ class ClientThread(threading.Thread):
         command_result.status_assign.returncode = 204
         command_result.status_assign.save()
 
-    def add_job_of(self, name, path):
-        self.add_job(name, path)
+    def add_new_job_action(self, name, tar_path):
+        return self.add_new_job(name, tar_path)
 
-        return []
+    def add_new_job(self, name, tar_path):
+        path = '/opt/openbach-controller/jobs/private_jobs/'
+        try:
+            with tarfile.open(tar_path) as tar_file:
+                tar_file.extractall(path)
+        except tarfile.ReadError:
+            raise BadRequest('Failed to uncompress the file')
+        path += name + '/'
+        return self.add_job(name, path)
 
     def add_job_action(self, name, path):
         return self.add_job(name, path)

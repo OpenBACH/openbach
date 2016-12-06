@@ -1107,6 +1107,11 @@ class ClientThread(threading.Thread):
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
+            except ObjectDoesNotExist:
+                response = {'address': address}
+                returncode = 404
+                reason = 'This Agent is not in the database'
+                raise BadRequest(reason, returncode, infos=response)
             except DataError:
                 raise BadRequest('You must give an ip address for all the'
                                  ' Agents')

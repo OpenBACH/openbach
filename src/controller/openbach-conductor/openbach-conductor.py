@@ -4082,6 +4082,8 @@ class ClientThread(threading.Thread):
                 continue
             sub_scenario_instance_ids.add(sub_scenario_instance.id)
         infos = {}
+        infos['project_name'] = scenario_instance.scenario.project.name
+        infos['scenario_name'] = scenario_instance.scenario.name
         infos['scenario_instance_id'] = scenario_instance.id
         infos['owner_scenario_instance_id'] = owner_scenario_instance_id
         infos['sub_scenario_instance_ids'] = list(sub_scenario_instance_ids)
@@ -4118,15 +4120,13 @@ class ClientThread(threading.Thread):
         if scenario_name is not None:
             scenarios = scenarios.filter(name=scenario_name)
 
-        result = {}
+        result = []
         for scenario in scenarios:
-            project_name = getattr(scenario.project, 'name', '')
             scenario_instances = [
                 self.infos_scenario_instance(scenario_instance)
                 for scenario_instance in scenario.scenario_instance_set.all()
             ]
-            if scenario_instances:
-                result.setdefault(project_name, {})[scenario.name] = scenario_instances
+            result += scenario_instances
 
         return result, 200
 

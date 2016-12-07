@@ -964,8 +964,7 @@ class ClientThread(threading.Thread):
                     raise BadRequest('The configuration file of the Job is not well'
                                      ' formed', 409, {'configuration file':
                                                       config_file})
-
-        return None, 204
+        return self.get_job_json(name)
 
     def del_job_of(self, name):
         self.del_job(name)
@@ -1710,7 +1709,10 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             owner_scenario_instance_id = scenario_instance_id
         else:
-            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            if scenario_instance.openbach_function_instance_master is not None:
+                owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            else:
+                owner_scenario_instance_id = scenario_instance_id
 
         job_instance = Job_Instance(job=installed_job)
         job_instance.status = "Starting ..."
@@ -2285,7 +2287,10 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             owner_scenario_instance_id = scenario_instance_id
         else:
-            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            if scenario_instance.openbach_function_instance_master is not None:
+                owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            else:
+                owner_scenario_instance_id = scenario_instance_id
         agent = job_instance.job.agent
         job = Job.objects.get(name=job_name)
         installed_job = Installed_Job.objects.get(agent=agent, job=job)
@@ -2522,7 +2527,10 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             owner_scenario_instance_id = scenario_instance_id
         else:
-            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            if scenario_instance.openbach_function_instance_master is not None:
+                owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+            else:
+                owner_scenario_instance_id = scenario_instance_id
         agent = job_instance.job.agent
         job = Job.objects.get(name=job_name)
         installed_job = Installed_Job.objects.get(agent=agent, job=job)
@@ -4062,8 +4070,21 @@ class ClientThread(threading.Thread):
         return infos
 
     def infos_scenario_instance(self, scenario_instance):
+        if scenario_instance.openbach_function_instance_master is not None:
+            owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
+        else:
+            owner_scenario_instance_id = None
+        sub_scenario_instance_ids = set()
+        for ofi in scenario_instance.openbach_function_instance_set.all():
+            try:
+                sub_scenario_instance = ofi.openbach_function_instance_master.all()[0]
+            except IndexError:
+                continue
+            sub_scenario_instance_ids.add(sub_scenario_instance.id)
         infos = {}
         infos['scenario_instance_id'] = scenario_instance.id
+        infos['owner_scenario_instance_id'] = owner_scenario_instance_id
+        infos['sub_scenario_instance_ids'] = list(sub_scenario_instance_ids)
         infos['status'] = scenario_instance.status
         infos['status_date'] = scenario_instance.status_date
         infos['arguments'] = []
@@ -4322,7 +4343,7 @@ class ClientThread(threading.Thread):
         if not self.first_check_on_project(project_json):
             raise BadRequest('Your Project is malformed: the json is malformed')
         self.register_project(project_json)
-        return None, 204
+        return self.get_project(project_name)
 
     def modify_project_action(self, project_name, project_json):
         return self.modify_project(project_name, project_json)

@@ -74,11 +74,10 @@ from openbach_django.utils import send_all, recv_fifo
 def signal_term_handler(signal, frame):
     for scenario_instance in Scenario_Instance.objects.all():
         if not scenario_instance.is_stopped:
-            scenario_instance.status = "Stopped"
+            scenario_instance.status = 'Stopped'
             scenario_instance.status_date = timezone.now()
             scenario_instance.is_stopped = True
             scenario_instance.save()
-
     exit(0)
 
 
@@ -1614,7 +1613,7 @@ class ClientThread(threading.Thread):
     @staticmethod
     def fill_job_instance(job_instance, instance_args, date=None, interval=None,
                           restart=False):
-        job_instance.status = "Starting ..."
+        job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
 
         if interval:
@@ -1715,7 +1714,7 @@ class ClientThread(threading.Thread):
                 owner_scenario_instance_id = scenario_instance_id
 
         job_instance = Job_Instance(job=installed_job)
-        job_instance.status = "Starting ..."
+        job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
@@ -1741,7 +1740,7 @@ class ClientThread(threading.Thread):
 
         self.launch_job_instance(agent, job_instance, host_filename, playbook,
                                  extra_vars)
-        job_instance.status = "Started"
+        job_instance.status = 'Running'
         job_instance.update_status = timezone.now()
         job_instance.save()
         return {'job_instance_id': job_instance.id}, 200
@@ -1959,7 +1958,7 @@ class ClientThread(threading.Thread):
             command_result.status_restart.save()
             raise
         job_instance.is_stopped = False
-        job_instance.status = "Restarted"
+        job_instance.status = 'Running'
         job_instance.update_status = timezone.now()
         job_instance.save()
         command_result.status_restart.response = json.dumps(None)
@@ -2263,7 +2262,7 @@ class ClientThread(threading.Thread):
             raise BadRequest(reason, returncode, infos=response)
 
         job_instance = Job_Instance(job=logs_job)
-        job_instance.status = "Starting ..."
+        job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
@@ -2371,7 +2370,7 @@ class ClientThread(threading.Thread):
                 returncode = 200
             else:
                 job_instance.scenario_instance = scenario_instance
-        job_instance.status = "Started"
+        job_instance.status = 'Running'
         job_instance.update_status = timezone.now()
         job_instance.save()
         command_result.status_log_severity.response = json.dumps(result)
@@ -2503,7 +2502,7 @@ class ClientThread(threading.Thread):
             raise BadRequest(reason, returncode, infos=response)
 
         job_instance = Job_Instance(job=rstats_job)
-        job_instance.status = "Starting ..."
+        job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
@@ -2579,7 +2578,7 @@ class ClientThread(threading.Thread):
             command_result.status_stat_policy.returncode = e.returncode
             command_result.status_stat_policy.save()
             raise
-        job_instance.status = "Started"
+        job_instance.status = 'Running'
         job_instance.update_status = timezone.now()
         job_instance.save()
         command_result.status_stat_policy.response = json.dumps(None)
@@ -3624,7 +3623,7 @@ class ClientThread(threading.Thread):
     @staticmethod
     def register_scenario_instance(scenario, args):
         scenario_instance = Scenario_Instance(scenario=scenario)
-        scenario_instance.status = "Starting ..."
+        scenario_instance.status = 'Scheduling'
         scenario_instance.status_date = timezone.now()
         scenario_instance.save()
         # Enregistrer les args de l'instance de scenario
@@ -3787,7 +3786,7 @@ class ClientThread(threading.Thread):
             entry['wait_for_finished'])
         ofi = scenario_instance.openbach_function_instance_set.get(
             openbach_function_instance_id=ofi_id)
-        ofi.status = 'Waiting ...'
+        ofi.status = 'Scheduled'
         ofi.status_date = timezone.now()
         ofi.save()
         t = threading.currentThread()
@@ -3803,7 +3802,7 @@ class ClientThread(threading.Thread):
             else:
                 waited_ids.remove(x)
         time.sleep(ofi.time)
-        ofi.status = 'Starting ...'
+        ofi.status = 'Running'
         ofi.status_date = timezone.now()
         ofi.save()
         try:
@@ -3850,19 +3849,17 @@ class ClientThread(threading.Thread):
             threads = function(**arguments)
         except BadRequest:
             self.stop_scenario_instance_of(scenario_instance.id,
-                                           state='Scheduling Error')
+                                           state='Finished KO') # state=Error ?
         if not t.do_run:
             ofi.status = 'Stopped'
             ofi.status_date = timezone.now()
             ofi.save()
             return
-        ofi.status = 'Finished, warning other openbach_functions ...'
+        ofi.status = 'Finished'
         ofi.status_date = timezone.now()
         ofi.save()
         for queue in launch_queues:
             queue.put(ofi_id)
-        ofi.status = 'Finished'
-        ofi.status_date = timezone.now()
         ofi.save()
         for thread in threads:
             thread.join()
@@ -3871,7 +3868,6 @@ class ClientThread(threading.Thread):
     def wait_threads_to_finish(scenario_instance_id, threads):
         for thread in threads:
             thread.join()
-        # TODO trouver un meilleur status
         finished = True
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
@@ -3880,12 +3876,12 @@ class ClientThread(threading.Thread):
                 finished = False
                 break
         if finished:
-            scenario_instance.status = "Finished"
+            scenario_instance.status = 'Finished OK'
             scenario_instance.status_date = timezone.now()
             scenario_instance.is_stopped = True
             scenario_instance.save()
         else:
-            scenario_instance.status = "All Openbach Functions launched"
+            scenario_instance.status = 'Running'
             scenario_instance.status_date = timezone.now()
             scenario_instance.save()
 
@@ -3961,6 +3957,7 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         scenario_instance.status = state
+        scenario_instance.status_date = timezone.now()
         scenario_instance.save()
 
     def stop_scenario_instance_action(self, scenario_instance_id, date=None,
@@ -4004,12 +4001,12 @@ class ClientThread(threading.Thread):
                                   'scenario_name': scenario_name})
         if scenario_instance.is_stopped:
             return None, 204
-        scenario_instance.status = "Stopped"
+        scenario_instance.status = 'Stopped'
         with ThreadManager() as threads:
             try:
                 scenario_threads = threads[scenario_instance_id]
             except KeyError:
-                scenario_instance.status = "Stopped, out of controll"
+                scenario_instance.status = 'Finished KO' # Stopped, out of controll
             else:
                 for ofi_id, thread in scenario_threads.items():
                     if not ofi_id:
@@ -4023,7 +4020,7 @@ class ClientThread(threading.Thread):
                     result, returncode = self.watch_job_instance_action(
                         job_instance.id, stop='now')
                 except BadRequest:
-                    scenario_instance.status = "Running, out of controll"
+                    scenario_instance.status = 'Running' # Running, out of controll
         scenario_instance.status_date = timezone.now()
         scenario_instance.is_stopped = True
         scenario_instance.save()
@@ -4484,7 +4481,7 @@ def handle_message_from_status_manager(clientsocket):
                 if 0 in threads[scenario_instance.id]:
                     thread = threads[scenario_instance.id][0]
                     if not thread.isActive():
-                        scenario_instance.status = "Finished"
+                        scenario_instance.status = 'Finished OK'
                         scenario_instance.status_date = timezone.now()
                         scenario_instance.is_stopped = True
                         scenario_instance.save()

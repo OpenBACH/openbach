@@ -199,9 +199,9 @@ def status_job(job_name, job_instance_id):
                 os.remove(filename)
     else:
         if isinstance(job.trigger, DateTrigger):
-            status = 'Programmed on {}'.format(datetime_repr(job.trigger.run_date))
+            status = 'Scheduled' #'Programmed on {}'.format(datetime_repr(job.trigger.run_date))
         elif isinstance(job.trigger, IntervalTrigger):
-            status = 'Programmed every {}'.format(job.trigger.interval_length)
+            status = 'Running' #'Programmed every {}'.format(job.trigger.interval_length)
 
     # Connexion au service de collecte de l'agent
     os.environ['JOB_NAME'] = 'openbach-agent'

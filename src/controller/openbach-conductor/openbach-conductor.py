@@ -71,6 +71,7 @@ from openbach_django.utils import send_all, recv_fifo
 
 def signal_term_handler(signal, frame):
     """ Function that handle the kill of the Conductor """
+    # Update the status of all running scenario instances to 'Stopped'
     for scenario_instance in Scenario_Instance.objects.all():
         if not scenario_instance.is_stopped:
             scenario_instance.status = 'Stopped'
@@ -130,15 +131,18 @@ class ClientThread(threading.Thread):
 
     def execute_request(self, data):
         """ Function that redirect the received data to the asked action """
+        # Get the request type
         request = '{}_action'.format(data.pop('command'))
 
         # From this point on, request should contain the
         # name of one of the following method: call it
         try:
+            # Get the request
             function = getattr(self, request)
         except AttributeError:
             raise BadRequest('Function {} not implemented yet'.format(request),
                              500)
+        # Execute the request
         return function(**data)
 
     def add_collector_action(self, address, username, password, name,
@@ -155,6 +159,7 @@ class ClientThread(threading.Thread):
     def add_collector(self, address, username, password, name, logs_port=None,
                       stats_port=None):
         """ Function that adds a Collector """
+        # Set the command result to 'running'
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -166,12 +171,14 @@ class ClientThread(threading.Thread):
             command_result.save()
         else:
             command_result.status_add.reset()
+        # Create the Collector
         collector = Collector(address=address)
         if logs_port:
             collector.logs_port = logs_port
         if stats_port:
             collector.stats_port = stats_port
         collector.save()
+        # Build the host file and the var file
         host_filename = self.playbook_builder.write_hosts(
             address, 'add_collector', 'Collector')
         with self.playbook_builder.extra_vars_file() as extra_vars:
@@ -179,6 +186,7 @@ class ClientThread(threading.Thread):
             print('logstash_logs_port:', collector.logs_port, file=extra_vars)
             print('logstash_stats_port:', collector.stats_port, file=extra_vars)
         try:
+            # Launch the installation of the Collector
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {0} '
                 '-e @/opt/openbach-controller/configs/ips '
@@ -194,6 +202,7 @@ class ClientThread(threading.Thread):
                 .format(host_filename, address, extra_vars.name, username,
                         password))
         except BadRequest as e:
+            # Update the command result and exit
             collector.delete()
             response = e.infos
             response['error'] = e.reason
@@ -202,8 +211,10 @@ class ClientThread(threading.Thread):
             command_result.status_add.save()
             raise
         try:
+            # A Collector always have an Agent on it, so install an Agent
             self.install_agent(address, address, username, password, name)
         except BadRequest as e:
+            # Update the command result and exit
             collector.delete()
             response = e.infos
             response['error'] = e.reason
@@ -211,6 +222,7 @@ class ClientThread(threading.Thread):
             command_result.status_add.returncode = e.returncode
             command_result.status_add.save()
             raise
+        # Update the command result
         command_result.status_add.response = json.dumps(None)
         command_result.status_add.returncode = 204
         command_result.status_add.save()
@@ -227,6 +239,7 @@ class ClientThread(threading.Thread):
 
     def modify_collector(self, address, logs_port=None, stats_port=None):
         """ Function that modifies a Collector """
+        # Set the command result to 'running'
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -239,8 +252,10 @@ class ClientThread(threading.Thread):
         else:
             command_result.status_modify.reset()
         try:
+            # Get the Collector
             collector = Collector.objects.get(pk=address)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'This Collector is not in the database'
             returncode = 404
@@ -250,7 +265,8 @@ class ClientThread(threading.Thread):
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
         if logs_port == None and stats_port == None:
-            response = {'error': 'This Collector is not in the database'}
+            # Update the command result and exit
+            response = {'error': 'No modification to do'}
             returncode = 404
             command_result.status_modify.response = json.dumps(
                 response)
@@ -258,21 +274,25 @@ class ClientThread(threading.Thread):
             command_result.status_modify.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Modify the Collector
         if logs_port:
             collector.logs_port = logs_port
         if stats_port:
             collector.stats_port = stats_port
         collector.save()
+        # Update the Collector infos for each Agent
         for agent in collector.agent_set.all():
             try:
                 self.assign_collector(agent.address, address)
             except BadRequest as e:
+                # Update the command result and exit
                 response = e.infos
                 response['error'] = e.reason
                 command_result.status_modify.response = json.dumps(response)
                 command_result.status_modify.returncode = e.returncode
                 command_result.status_modify.save()
                 raise
+        # Update the command result
         command_result.status_modify.response = json.dumps(None)
         command_result.status_modify.returncode = 204
         command_result.status_modify.save()
@@ -290,8 +310,7 @@ class ClientThread(threading.Thread):
 
     def del_collector(self, address):
         """ Function that deletes a Collector """
-        # returncode is 404 only if the given address does not correspond to a
-        # collector in the database
+        # Set the command result to 'running'
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -304,8 +323,10 @@ class ClientThread(threading.Thread):
         else:
             command_result.status_del.reset()
         try:
+            # Get the Collector
             collector = Collector.objects.get(pk=address)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'This Collector is not in the database'
             returncode = 404
@@ -315,8 +336,10 @@ class ClientThread(threading.Thread):
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
         try:
+            # Get the Agent associated
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'No Agent is installed on this Collector'
             returncode = 400
@@ -325,7 +348,9 @@ class ClientThread(threading.Thread):
             command_result.status_del.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Check that there is no Agent is assigned to this Collector
         if collector.agent_set.exclude(pk=address):
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'This Collector is still associated to some Agents'
             returncode = 409
@@ -334,9 +359,11 @@ class ClientThread(threading.Thread):
             command_result.status_del.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Build the host file
         host_filename = self.playbook_builder.write_hosts(
             address, 'del_collector', 'Collector')
         try:
+            # Launch the uninstallation of the Collector
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {0} '
                 '-e @/opt/openbach-controller/configs/ips '
@@ -350,6 +377,7 @@ class ClientThread(threading.Thread):
                 ' --tags uninstall'
                 .format(host_filename, address, agent.username, agent.password))
         except BadRequest as e:
+            # Update the command result and exit
             response = e.infos
             response['error'] = e.reason
             command_result.status_del.response = json.dumps(response)
@@ -357,15 +385,19 @@ class ClientThread(threading.Thread):
             command_result.status_del.save()
             raise
         try:
+            # Uninstall it associated Agent
             self.uninstall_agent(address)
         except BadRequest as e:
+            # Update the command result and exit
             response = e.infos
             response['error'] = e.reason
             command_result.status_del.response = json.dumps(response)
             command_result.status_del.returncode = e.returncode
             command_result.status_del.save()
             raise
+        # Delete the Collector
         collector.delete()
+        # Update the command result
         command_result.status_del.response = json.dumps(None)
         command_result.status_del.returncode = 204
         command_result.status_del.save()
@@ -377,10 +409,12 @@ class ClientThread(threading.Thread):
     def get_collector(self, address):
         """ Function that gets a Collector infos """
         try:
+            # Get the Collector
             collector = Collector.objects.get(pk=address)
         except ObjectDoesNotExist:
             raise BadRequest('This Collector is not in the database', 404,
                              infos={'address': address})
+        # Build it infos
         response = {'address': collector.address, 'logs_port':
                     collector.logs_port, 'stats_port': collector.stats_port}
         return response, 200
@@ -392,6 +426,7 @@ class ClientThread(threading.Thread):
     def list_collectors(self):
         """ Function that gets all Collectors infos """
         response = []
+        # Get the infos of each Collectors
         for collector in Collector.objects.all():
             collector_info, _ = self.get_collector(collector.address)
             response.append(collector_info)
@@ -411,6 +446,7 @@ class ClientThread(threading.Thread):
     def install_agent(self, address, collector_ip, username, password, name,
                       action=False):
         """ Function that installs an Agent """
+        # Set the command result to 'running'
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -424,17 +460,21 @@ class ClientThread(threading.Thread):
             command_result.save()
         else:
             command_result.status_install.reset()
-        agent = Agent(name=name, address=address, username=username)
-        agent.set_password(password)
-        agent.reachable = True
-        agent.update_reachable = timezone.now()
-        agent.status = 'Installing ...' 
-        agent.update_status = timezone.now()
         try:
+            # Get the Collector
             collector = Collector.objects.get(pk=collector_ip)
         except DataError:
-            raise BadRequest('You must give an ip address for the Collector')
+            # Update the command result and exit
+            response = {}
+            response['error'] = 'You must give an ip address for the Collector'
+            returncode = 400
+            command_result.status_install.response = json.dumps(response)
+            command_result.status_install.returncode = returncode
+            command_result.status_install.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': collector_ip}
             response['error'] = 'This Collector is not in the database'
             returncode = 404
@@ -443,15 +483,24 @@ class ClientThread(threading.Thread):
             command_result.status_install.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Create the Agent
+        agent = Agent(name=name, address=address, username=username)
+        agent.set_password(password)
+        agent.reachable = True
+        agent.update_reachable = timezone.now()
+        agent.status = 'Installing ...' 
+        agent.update_status = timezone.now()
         agent.collector = collector
         try:
             agent.save()
         except IntegrityError:
+            # Update the command result and exit
             response = {'error': 'Name of the Agent already used'}
             command_result.status_install.response = json.dumps(response)
             command_result.status_install.returncode = 400
             command_result.status_install.save()
             raise BadRequest(response['error'])
+        # Launch the installation of the Agent
         if action:
             thread = threading.Thread(
                 target=self.launch_install_agent,
@@ -462,7 +511,9 @@ class ClientThread(threading.Thread):
 
     def launch_install_agent(self, agent, collector):
         """ Function that launches the install of an Agent """
+        # Get the command result
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
+        # Build the host file and var files
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'install_agent')
         agent_filename = self.playbook_builder.write_agent(
@@ -474,6 +525,7 @@ class ClientThread(threading.Thread):
             print('local_username:', getpass.getuser(), file=extra_vars)
             print('agent_name:', agent.name, file=extra_vars)
         try:
+            # Launch the installation
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e @{} '
                 '-e @/opt/openbach-controller/configs/ips '
@@ -486,6 +538,7 @@ class ClientThread(threading.Thread):
                 .format(host_filename, agent_filename, extra_vars.name,
                         agent=agent))
         except BadRequest as e:
+            # Update the command result and exit
             agent.delete()
             response = e.infos
             response['error'] = e.reason
@@ -493,6 +546,7 @@ class ClientThread(threading.Thread):
             command_result.status_install.returncode = e.returncode
             command_result.status_install.save()
             raise
+        # Update the status of the Agent
         agent.status = 'Available'
         agent.update_status = timezone.now()
         agent.save()
@@ -509,12 +563,14 @@ class ClientThread(threading.Thread):
                 self.install_jobs([agent.address], [job])
             except BadRequest:
                 list_jobs_failed.append(job)
+        # Format the result and returncode
         result = None
         returncode = 204
         if list_jobs_failed != []:
             result = {'warning': 'Some Jobs couldn’t be installed {}'.format(
                 ' '.join(list_jobs_failed))}
             returncode = 200
+        # Update the command result
         command_result.status_install.response = json.dumps(result)
         command_result.status_install.returncode = returncode
         command_result.status_install.save()
@@ -530,6 +586,7 @@ class ClientThread(threading.Thread):
 
     def uninstall_agent(self, address, action=False):
         """ Function that uninstalls an Agent """
+        # Set the command result to 'running'
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -544,8 +601,10 @@ class ClientThread(threading.Thread):
         else:
             command_result.status_uninstall.reset()
         try:
+            # Get the Agent
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'This Agent is not in the database'
             returncode = 404
@@ -554,6 +613,7 @@ class ClientThread(threading.Thread):
             command_result.status_uninstall.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Launch the uninstallation
         if action:
             thread = threading.Thread(
                 target=self.launch_uninstall_agent,
@@ -564,7 +624,9 @@ class ClientThread(threading.Thread):
 
     def launch_uninstall_agent(self, agent):
         """ Function that launches the uninstall of an Agent """
+        # Get the command result
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
+        # Build the host file and var files
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'uninstall_agent')
         agent_filename = self.playbook_builder.write_agent(
@@ -572,6 +634,7 @@ class ClientThread(threading.Thread):
         with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
         try:
+            # Launch the uninstallation
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e @{} '
                 '-e @/opt/openbach-controller/configs/all '
@@ -583,6 +646,7 @@ class ClientThread(threading.Thread):
                 .format(host_filename, agent_filename, extra_vars.name,
                         agent=agent))
         except BadRequest as e:
+            # Update the command result and exit
             agent.status = 'Uninstall failed'
             agent.update_status = timezone.now()
             agent.save()
@@ -592,7 +656,9 @@ class ClientThread(threading.Thread):
             command_result.status_uninstall.returncode = e.returncode
             command_result.status_uninstall.save()
             raise
+        # Delete the Agent
         agent.delete()
+        # Update the command result
         command_result.status_uninstall.response = json.dumps(None)
         command_result.status_uninstall.returncode = 204
         command_result.status_uninstall.save()
@@ -603,8 +669,10 @@ class ClientThread(threading.Thread):
 
     def list_agents(self, update=False):
         """ Function that lists the Agents infos """
+        # Get all the Agents
         agents = Agent.objects.all()
         response = []
+        # For each Agent, get it infos
         for agent in agents:
             agent_infos = agent.get_json()
             if update:
@@ -626,20 +694,22 @@ class ClientThread(threading.Thread):
     def update_agent(agent):
         """ Function that get the last infos on the Collector and update the
         local database """
+        # Request the Collector database to get the status of the Agent
         url = ClientThread.UPDATE_AGENT_URL.format(agent=agent)
         result = requests.get(url).json()
+        # Parse the response
         try:
             columns = result['results'][0]['series'][0]['columns']
             values = result['results'][0]['series'][0]['values'][0]
         except KeyError:
             raise BadRequest('Required Stats doesn\'t exist in the Database')
-
         for column, value in zip(columns, values):
             if column == 'time':
                 date = datetime.fromtimestamp(value/1000,
                         timezone.get_current_timezone())
             elif column == 'last':
                 status = value
+        # Update the status if the date is latest
         if date > agent.update_status:
             agent.update_status = date
             agent.status = status
@@ -653,6 +723,7 @@ class ClientThread(threading.Thread):
 
     def retrieve_status_agents_action(self, addresses, update=False):
         """ Action that retrieves the status of one or more Agents """
+        # Check if all the addresses given are well formed
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
@@ -667,10 +738,13 @@ class ClientThread(threading.Thread):
 
     def retrieve_status_agents(self, addresses, update=False):
         """ Function that retrieves the status of one or more Agents """
-        command_results = {}
-        for address in addresses:
+        for agent_ip in addresses:
+            # Set the command results to 'running'
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
+            except DataError:
+                raise BadRequest(
+                    'You must give an ip address for all the Agents')
             except ObjectDoesNotExist:
                 command_result = Agent_Command_Result(address=address)
             if command_result.status_retrieve_status_agent == None:
@@ -680,64 +754,73 @@ class ClientThread(threading.Thread):
                 command_result.save()
             else:
                 command_result.status_retrieve_status_agent.reset()
-            command_results[address] = command_result
-        for agent_ip in addresses:
-            command_result = command_results[agent_ip]
             try:
+                # Get the Agent
                 agent = Agent.objects.get(pk=agent_ip)
             except ObjectDoesNotExist:
+                # Update the command result and exit
                 response = {'error': 'Agent unknown'}
                 command_result.status_retrieve_status_agent.response = json.dumps(
                     response)
                 command_result.status_retrieve_status_agent.returncode = 404
                 command_result.status_retrieve_status_agent.save()
                 continue
-            host_filename = self.playbook_builder.write_hosts(
-                agent.address, 'retrieve_status_agents')
             try:
+                # Check that the agent is reachable
                 subprocess.check_output(
                         ['ping', '-c1', '-w2', agent.address])
             except subprocess.CalledProcessError:
+                # Update the status of the Agent
                 agent.reachable = False
                 agent.update_reachable = timezone.now()
                 agent.status = 'Agent unreachable'
                 agent.update_status= timezone.now()
                 agent.save()
+                # Update the command result and continue
                 command_result.status_retrieve_status_agent.response = json.dumps(
                     None)
                 command_result.status_retrieve_status_agent.returncode = 204
                 command_result.status_retrieve_status_agent.save()
                 continue
+            # Build the host file and the playbook file
+            host_filename = self.playbook_builder.write_hosts(
+                agent.address, 'retrieve_status_agents')
             with self.playbook_builder.playbook_file() as playbook:
                 playbook_name = playbook.name
-            # [Ugly hack] Reset file to remove the last line
+            ## [Ugly hack] Reset file to remove the last line
             with open(playbook_name, 'w') as playbook:
                 print('---', file=playbook)
                 print(file=playbook)
                 print('- hosts: Agents', file=playbook)
             try:
+                # Launch the playbook
                 self.playbook_builder.launch_playbook(
                     'ansible-playbook -i {} '
                     '-e ansible_ssh_user="{agent.username}" '
                     '-e ansible_ssh_pass="{agent.password}" {}'
                     .format(host_filename, playbook_name, agent=agent))
             except BadRequest:
+                # Update the status of the Agent
                 agent.reachable = False
                 agent.update_reachable = timezone.now()
                 agent.status = 'Agent reachable but connection impossible'
                 agent.update_status= timezone.now()
                 agent.save()
+                # Update the command result and continue
                 command_result.status_retrieve_status_agent.response = json.dumps(
                     None)
                 command_result.status_retrieve_status_agent.returncode = 204
                 command_result.status_retrieve_status_agent.save()
                 continue
+            # Update the status of the Agent
             agent.reachable = True
             agent.update_reachable = timezone.now()
             agent.save()
+            # Build the second playbook file
             with self.playbook_builder.playbook_file() as playbook:
                 self.playbook_builder.build_status_agent(playbook) 
             try:
+                # Launch the playbook
                 self.playbook_builder.launch_playbook(
                     'ansible-playbook -i {} '
                     '-e ansible_ssh_user="{agent.username}" '
@@ -745,6 +828,7 @@ class ClientThread(threading.Thread):
                     '-e ansible_ssh_pass="{agent.password}" {}'
                     .format(host_filename, playbook.name, agent=agent))
             except BadRequest as e:
+                # Update the command result and continue
                 response = e.infos
                 response['error'] = e.reason
                 returncode = 404
@@ -754,11 +838,13 @@ class ClientThread(threading.Thread):
                 command_result.status_retrieve_status_agent.save()
                 continue
             if update:
+                # Get the status from the Collector
                 if (agent.reachable and agent.update_status <
                     agent.update_reachable):
                     try:
                         self.update_agent(agent)
                     except BadRequest as e:
+                        # Update the command result and continue
                         response = e.infos
                         response['error'] = e.reason
                         returncode = 404
@@ -767,9 +853,10 @@ class ClientThread(threading.Thread):
                         command_result.status_retrieve_status_agent.returncode = returncode
                         command_result.status_retrieve_status_agent.save()
                         continue
-        command_result.status_retrieve_status_agent.response = json.dumps(None)
-        command_result.status_retrieve_status_agent.returncode = 204
-        command_result.status_retrieve_status_agent.save()
+            # Update the command result
+            command_result.status_retrieve_status_agent.response = json.dumps(None)
+            command_result.status_retrieve_status_agent.returncode = 204
+            command_result.status_retrieve_status_agent.save()
 
     def assign_collector_of(self, address, collector_ip):
         """ Openbach Function that assigns a Collector to an Agent """
@@ -781,6 +868,7 @@ class ClientThread(threading.Thread):
 
     def assign_collector(self, address, collector_ip, action=False):
         """ Function that assigns a Collector to an Agent """
+        # Set the command result to 'running'
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except DataError:
@@ -795,8 +883,10 @@ class ClientThread(threading.Thread):
         else:
             command_result.status_assign.reset()
         try:
+            # Get the Agent
             agent = Agent.objects.get(pk=address)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': address}
             response['error'] = 'This Agent is not in the database'
             returncode = 404
@@ -807,10 +897,21 @@ class ClientThread(threading.Thread):
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
         try:
+            # Get the Collector
             collector = Collector.objects.get(pk=collector_ip)
         except DataError:
-            raise BadRequest('You must give an ip address for the Collector')
+            # Update the command result and exit
+            response = {}
+            response['error'] = 'You must give an ip address for the Collector'
+            returncode = 400
+            command_result.status_assign.response = json.dumps(
+                response)
+            command_result.status_assign.returncode = returncode
+            command_result.status_assign.save()
+            reason = response.pop('error')
+            raise BadRequest(reason, returncode, infos=response)
         except ObjectDoesNotExist:
+            # Update the command result and exit
             response = {'address': collector_ip}
             response['error'] = 'This Collector is not in the database'
             returncode = 404
@@ -820,6 +921,7 @@ class ClientThread(threading.Thread):
             command_result.status_assign.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
+        # Launch the assignement
         if action:
             thread = threading.Thread(
                 target=self.launch_assign_collector,
@@ -831,13 +933,16 @@ class ClientThread(threading.Thread):
     def launch_assign_collector(self, agent, collector):
         """ Function that launches the assignement of a Collector to an Agent
         """
+        # Get the command result
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
+        # Build the host file, the playbook file and the var file
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'assign_collector')
         with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
             self.playbook_builder.build_assign_collector(
                 collector, playbook, extra_vars)
         try:
+            # Launch the assignement
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} '
                 '-e ansible_ssh_user="{agent.username}" '
@@ -846,6 +951,7 @@ class ClientThread(threading.Thread):
                 .format(host_filename, extra_vars.name, playbook.name,
                         agent=agent))
         except BadRequest as e:
+            # Update the command result and exit
             response = e.infos
             response['error'] = e.reason
             command_result.status_assign.response = json.dumps(
@@ -853,7 +959,9 @@ class ClientThread(threading.Thread):
             command_result.status_assign.returncode = e.returncode
             command_result.status_assign.save()
             raise
+        # Assigne the Collector to the Agent
         agent.collector = collector
+        # Update the command result
         command_result.status_assign.response = json.dumps(None)
         command_result.status_assign.returncode = 204
         command_result.status_assign.save()
@@ -864,6 +972,7 @@ class ClientThread(threading.Thread):
 
     def add_new_job(self, name, tar_path):
         """ Function a Job with it source in the tar file """
+        # Uncompress the source of the Job
         path = '/opt/openbach-controller/jobs/private_jobs/'
         try:
             with tarfile.open(tar_path) as tar_file:
@@ -871,6 +980,7 @@ class ClientThread(threading.Thread):
         except tarfile.ReadError:
             raise BadRequest('Failed to uncompress the file')
         path += name + '/'
+        # Add the Job
         return self.add_job(name, path)
 
     def add_job_action(self, name, path):
@@ -879,6 +989,7 @@ class ClientThread(threading.Thread):
 
     def add_job(self, name, path):
         """ Function a Job with it source in the path """
+        # Load the conf file
         config_prefix = os.path.join(path, 'files', name)
         config_file = '{}.yml'.format(config_prefix)
         try:
@@ -892,6 +1003,7 @@ class ClientThread(threading.Thread):
         except FileNotFoundError:
             raise BadRequest('The configuration file is not present', 404,
                              {'configuration file': config_file})
+        # Check that the conf file is well formed
         try:
             job_conf = json.dumps(content)
             job_version = content['general']['job_version']
@@ -910,17 +1022,22 @@ class ClientThread(threading.Thread):
         except KeyError:
             raise BadRequest('The configuration file of the Job is not well '
                              'formed', 409, {'configuration file': config_file})
+        # Load the help file
         try:
             with open('{}.help'.format(config_prefix)) as f:
                 help = f.read()
         except OSError:
             help = ''
+        # Create the Job
         with transaction.atomic():
             try:
+                # Delete the Job if it already exists (we are currently
+                # modifying it)
                 job = Job.objects.get(pk=name)
                 job.delete()
             except ObjectDoesNotExist:
                 pass
+            # Create the Job
             job = Job(
                 name=name,
                 path=path,
@@ -930,10 +1047,12 @@ class ClientThread(threading.Thread):
                 job_conf=job_conf
             )
             job.save()
+            # Create the Keywords
             for keyword in keywords:
                 job_keyword = Job_Keyword(name=keyword)
                 job_keyword.save()
                 job.keywords.add(job_keyword)
+            # Create the Statistics
             if type(statistics) == list:
                 try:
                     for statistic in statistics:
@@ -953,6 +1072,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest(
                     'The configuration file of the Job is not well formed', 409,
                     {'configuration file': config_file})
+            # Create the required arguments
             rank = 0
             for required_arg in required_args:
                 try:
@@ -969,6 +1089,7 @@ class ClientThread(threading.Thread):
                     raise BadRequest(
                         'The configuration file of the Job is not well formed',
                         409, {'configuration file': config_file})
+            # Create the optional arguments
             for optional_arg in optional_args:
                 try:
                     Optional_Job_Argument(
@@ -987,6 +1108,7 @@ class ClientThread(threading.Thread):
                     raise BadRequest(
                         'The configuration file of the Job is not well formed',
                         409, {'configuration file': config_file})
+        # return the created object
         return self.get_job_json(name)
 
     def del_job_action(self, name):
@@ -995,11 +1117,13 @@ class ClientThread(threading.Thread):
 
     def del_job(self, name):
         """ Function that deletes a Job """
+        # Get the Job
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404, {
                 'job_name': name })
+        # Delete it
         job.delete()
         return None, 204
 
@@ -1034,6 +1158,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('Error when looking for keyword matches', 404,
                                  {'job_name': job})
         else:
+            # Get the infos for each Jobs
             for job in Job.objects.all():
                 response.append(json.loads(job.job_conf))
         return response, 200
@@ -1044,11 +1169,15 @@ class ClientThread(threading.Thread):
 
     def get_job_json(self, name):
         """ Function that gets the description of a Job """
+        # Get the Job
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
+        # Reconstruct it conf file if json
+        # TODO do it with the attribute of the Job and stop register the json in
+        # the database
         result = json.loads(job.job_conf)
         return result, 200
 
@@ -1058,12 +1187,13 @@ class ClientThread(threading.Thread):
 
     def get_job_keywords(self, name):
         """ Function that gets the keywords of a Job """
+        # Get the Job
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
-
+        # Get its Keywords
         result = {'job_name': name, 'keywords': [
             keyword.name for keyword in job.keywords.all()
         ]}
@@ -1075,11 +1205,13 @@ class ClientThread(threading.Thread):
 
     def get_job_stats(self, name):
         """ Function that gets the statistics potentialy generate by the Job """
+        # Get the Job
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
+        # Get its Statistics
         result = {'job_name': name , 'statistics': [] }
         for stat in job.statistic_set.all():
             statistic = {'name': stat.name}
@@ -1094,24 +1226,25 @@ class ClientThread(threading.Thread):
 
     def get_job_help(self, name):
         """ Function that gets the help of the Job """
+        # Get the Job
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
+        # return it help
         return {'job_name': name, 'help': job.help}, 200
 
     def install_jobs_action(self, addresses, names, severity=4,
                             local_severity=4):
         """ Action that installs one or more Jobs on one or more Agents """
+        # Check if all the addresses given are well formed
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
             except ObjectDoesNotExist:
-                response = {'address': address}
-                returncode = 404
-                reason = 'This Agent is not in the database'
-                raise BadRequest(reason, returncode, infos=response)
+                raise BadRequest('This Agent is not in the database', 404,
+                                 {'address': address})
             except DataError:
                 raise BadRequest('You must give an ip address for all the'
                                  ' Agents')
@@ -1123,10 +1256,15 @@ class ClientThread(threading.Thread):
 
     def install_jobs(self, addresses, names, severity=4, local_severity=4):
         """ Function that installs one or more Jobs on one or more Agents """
+        # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)
+        # Get the list of the Agents that doesn't exist
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+        # Get the Jobs
         jobs = Job.objects.filter(pk__in=names)
+        # Get the list of the Jobs that doesn't exist
         no_job = set(names) - set(map(attrgetter('name'), jobs))
+        # For each unavailable Job and Agent, update the command result
         for job_name in no_job:
             for address in addresses:
                 try:
@@ -1171,8 +1309,10 @@ class ClientThread(threading.Thread):
                 command_result.status_install.returncode = 404
                 command_result.status_install.save()
         success = True
+        # For each available Agents and Jobs, install the Job
         for agent in agents:
             for job in jobs:
+                # Set the command result to 'running'
                 try:
                     command_result = Installed_Job_Command_Result.objects.get(
                         agent_ip=agent.address, job_name=job.name)
@@ -1186,9 +1326,11 @@ class ClientThread(threading.Thread):
                     command_result.save()
                 else:
                     command_result.status_install.reset()
+                # Build the host file
                 host_filename = self.playbook_builder.write_hosts(
                     agent.address, 'install_job')
                 try:
+                    # Launch the installation
                     self.playbook_builder.launch_playbook(
                         'ansible-playbook -i {} '
                         '-e @/opt/openbach-controller/configs/proxy '
@@ -1200,12 +1342,14 @@ class ClientThread(threading.Thread):
                         .format(host_filename, path_src=self.path_src,
                                 agent=agent, job=job))
                 except BadRequest as e:
+                    # Update the command result
                     success = False
                     command_result.status_install.response = json.dumps(
                         {'error': e.reason})
                     command_result.status_install.returncode = e.returncode
                     command_result.status_install.save()
                 else:
+                    # Create the Installed Job
                     installed_job = Installed_Job(
                             agent=agent, job=job,
                             severity=severity,
@@ -1215,9 +1359,11 @@ class ClientThread(threading.Thread):
                         installed_job.save()
                     except IntegrityError:
                         pass
+                    # Update the command result
                     command_result.status_install.response = json.dumps(None)
                     command_result.status_install.returncode = 204
                     command_result.status_install.save()
+        # If at least one install failed, raise an error
         if not success:
             raise BadRequest(
                 'At least one of the installation have failed', 404)
@@ -1232,10 +1378,15 @@ class ClientThread(threading.Thread):
 
     def uninstall_jobs(self, addresses, names):
         """ Function that uninstalls one or more Jobs on one or more Agents """
+        # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)
+        # Get the list of the Agents that doesn't exist
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+        # Get the Jobs
         jobs = Job.objects.filter(pk__in=names)
+        # Get the list of the Jobs that doesn't exist
         no_job = set(names) - set(map(attrgetter('name'), jobs))
+        # For each unavailable Job and Agent, update the command result
         for job_name in no_job:
             for address in addresses:
                 try:
@@ -1279,8 +1430,10 @@ class ClientThread(threading.Thread):
                 command_result.status_uninstall.response = json.dumps(response)
                 command_result.status_uninstall.returncode = 404
                 command_result.status_uninstall.save()
+        # For each available Agents and Jobs, uninstall the Job
         for agent in agents:
             for job in jobs:
+                # Set the command result to 'running'
                 try:
                     command_result = Installed_Job_Command_Result.objects.get(
                         agent_ip=agent.address, job_name=job.name)
@@ -1294,20 +1447,24 @@ class ClientThread(threading.Thread):
                     command_result.save()
                 else:
                     command_result.status_uninstall.reset()
+                # Get the Installed Job
                 installed_job_name = '{} on {}'.format(job, agent)
                 try:
                     installed_job = Installed_Job.objects.get(
                         agent=agent, job=job)
                 except ObjectDoesNotExist:
+                    # Update the command result
                     jobs_not_installed.append(installed_job_name)
                     command_result.status_uninstall.response = json.dumps(
                         {'msg': 'Job already not installed'})
                     command_result.status_uninstall.returncode = 200
                     command_result.status_uninstall.save()
                     continue
+                # Build the host file
                 host_filename = self.playbook_builder.write_hosts(
                     agent.address, 'uninstall_job')
                 try:
+                    # Launch the uninstallation
                     self.playbook_builder.launch_playbook(
                         'ansible-playbook -i {} '
                         '-e path_src={path_src} '
@@ -1319,11 +1476,13 @@ class ClientThread(threading.Thread):
                                 agent=agent, job=job))
                     installed_job.delete()
                 except BadRequest as e:
+                    # Update the command result
                     response['error'] = e.reason
                     command_result.status_uninstall.response = json.dumps(
                         response)
                     command_result.status_uninstall.returncode = e.returncode
                     command_result.status_uninstall.save()
+                # Update the command result
                 command_result.status_uninstall.response = json.dumps(None)
                 command_result.status_uninstall.returncode = 204
                 command_result.status_uninstall.save()

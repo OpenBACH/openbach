@@ -52,6 +52,8 @@ class BadRequest(Exception):
 
 
 def send_fifo(msg, socket):
+    """ Function that sends a message through a socket, and gets a fifo name in
+    return (the response will be in that fifo) """
     socket.send(json.dumps(msg).encode())
     response = socket.recv(4096).decode()
     fifoname = json.loads(response)['fifoname']
@@ -59,6 +61,9 @@ def send_fifo(msg, socket):
 
 
 def recv_fifo(socket):
+    """ Function that will receive a message through a socket, creates a fifo
+    and send the name of this fifo through the socket (return the received
+    message and the fifo name) """
     msg = socket.recv(4096).decode()
     msg = json.loads(msg)
     with tempfile.NamedTemporaryFile('w') as f:
@@ -73,11 +78,13 @@ def recv_fifo(socket):
 
 
 def send_all(fifoname, msg):
+    """ Function that send all the message through the fifo """
     with open(fifoname, 'w') as fifo:
         fifo.write(msg)
 
 
 def recv_all(fifoname):
+    """ Function that receives a message through the fifo """
     with open(fifoname, 'r') as fifo:
         msg = fifo.read()
     os.remove(fifoname)
@@ -93,5 +100,5 @@ _SEVERITY_MAPPING = {
 
 
 def convert_severity(severity):
+    """ Function that converts the syslog severity to the openbach severity """
     return _SEVERITY_MAPPING.get(severity, 8)
-

@@ -1,34 +1,34 @@
 #!/usr/bin/env python 
 # -*- coding: utf-8 -*-
 
-""" 
+"""
    OpenBACH is a generic testbed able to control/configure multiple
    network/physical entities (under test) and collect data from them. It is
    composed of an Auditorium (HMIs), a Controller, a Collector and multiple
    Agents (one for each network entity that wants to be tested).
-   
-   
+
+
    Copyright © 2016 CNES
-   
-   
+
+
    This file is part of the OpenBACH testbed.
-   
-   
+
+
    OpenBACH is a free software : you can redistribute it and/or modify it under the
    terms of the GNU General Public License as published by the Free Software
    Foundation, either version 3 of the License, or (at your option) any later
    version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
    details.
-   
+
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
-   
-   
-   
+
+
+
    @file     models.py
    @brief    Describs the data the backend uses
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
@@ -76,6 +76,8 @@ else self)
 
 
 class Command_Result(models.Model):
+    """ Class that represents the result of an action (usefull for the action
+    that might triger a timeout on the frontend) """
     response = models.TextField(default='{"state": "Running"}')
     returncode = models.IntegerField(default=202)
     date = models.DateTimeField(default=timezone.now)
@@ -92,6 +94,7 @@ class Command_Result(models.Model):
 
 
 class Collector(models.Model):
+    """ Class that represents a Collector """
     address = models.GenericIPAddressField(primary_key=True)
     logs_port = models.IntegerField(default=10514)
     stats_port = models.IntegerField(default=2222)
@@ -101,6 +104,7 @@ class Collector(models.Model):
 
 
 class Collector_Command_Result(models.Model):
+    """ Class that agregates all the command result used for a Collector """
     address = models.GenericIPAddressField(primary_key=True)
     status_add = models.ForeignKey(Command_Result, null=True, blank=True,
                                    related_name='status_add')
@@ -121,6 +125,7 @@ class Collector_Command_Result(models.Model):
 
 
 class Agent(models.Model):
+    """ Class that represents an Agent """
     name = models.CharField(max_length=500, unique=True)
     address = models.GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=500, null=True, blank=True)
@@ -153,6 +158,7 @@ class Agent(models.Model):
 
 
 class Agent_Command_Result(models.Model):
+    """ Class that agregates all the command result used for an Agent """
     address = models.GenericIPAddressField(primary_key=True)
     status_install = models.ForeignKey(Command_Result, null=True, blank=True,
                                        related_name='status_install')
@@ -183,6 +189,7 @@ class Agent_Command_Result(models.Model):
 
 
 class File_Command_Result(Command_Result):
+    """ Class that represent the command result used for a pushed file """
     filename = models.CharField(max_length=500)
     remote_path = models.CharField(max_length=500)
     address = models.GenericIPAddressField()
@@ -192,6 +199,7 @@ class File_Command_Result(Command_Result):
 
 
 class Job_Keyword(models.Model):
+    """ Class that represents a Job Keyword """
     name = models.CharField(max_length=500, primary_key=True)
 
     def __str__(self):
@@ -199,6 +207,7 @@ class Job_Keyword(models.Model):
 
 
 class Job(models.Model):
+    """ Class that represents a Job """
     name = models.CharField(max_length=500, primary_key=True)
     path = models.FilePathField(
             path="/opt/openbach-controller/jobs", recursive=True,
@@ -215,6 +224,7 @@ class Job(models.Model):
 
 
 class Statistic(models.Model):
+    """ Class that represents a Statistic """
     name = models.CharField(max_length=500)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
@@ -228,6 +238,7 @@ class Statistic(models.Model):
 
 
 class Argument(models.Model):
+    """ Class that represents a generic Argument """
     INTEGER = 'int'
     BOOL = 'bool'
     STRING = 'str'
@@ -284,6 +295,7 @@ class Argument(models.Model):
 
 
 class Required_Job_Argument(Argument):
+    """ Class that represents a Job Argument that is required """
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     rank = models.IntegerField()
 
@@ -323,6 +335,7 @@ class Required_Job_Argument(Argument):
 
 
 class Optional_Job_Argument(Argument):
+    """ Class that represents a Job Argument that is optional """
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     flag = models.CharField(max_length=500)
 
@@ -357,6 +370,7 @@ class Optional_Job_Argument(Argument):
 
 
 class Installed_Job(models.Model):
+    """ Class that represents a Job installed on an Agent """
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
     update_status = models.DateTimeField(null=True, blank=True)
@@ -373,6 +387,8 @@ class Installed_Job(models.Model):
 
 
 class Installed_Job_Command_Result(models.Model):
+    """ Class that agregates all the command result used for an Installed Job
+    """
     agent_ip = models.GenericIPAddressField()
     job_name = models.CharField(max_length=500)
     status_install = models.ForeignKey(Command_Result, null=True, blank=True,
@@ -403,6 +419,7 @@ class Installed_Job_Command_Result(models.Model):
 
 
 class Statistic_Instance(models.Model):
+    """ Class that represents a Statistic Instance """
     stat = models.ForeignKey(Statistic, on_delete=models.CASCADE)
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     storage = models.BooleanField(default=True)
@@ -416,6 +433,7 @@ class Statistic_Instance(models.Model):
 
 
 class Job_Instance(models.Model):
+    """ Class that represents a Job Instance """
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     status = models.CharField(max_length=500)
     update_status = models.DateTimeField()
@@ -423,16 +441,17 @@ class Job_Instance(models.Model):
     stop_date = models.DateTimeField(null=True, blank=True)
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)
-    openbach_function_instance = models.ForeignKey("Openbach_Function_Instance",
-                                                   null=True, blank=True)
-    scenario_instance = models.ForeignKey("Scenario_Instance", null=True,
-                                          blank=True)
+    openbach_function_instance = models.ForeignKey(
+        "Openbach_Function_Instance", null=True, blank=True)
+    scenario_instance = models.ForeignKey(
+        "Scenario_Instance", null=True, blank=True)
 
     def __str__(self):
         return 'Job Instance {} of {}'.format(self.id, self.job)
 
 
 class Job_Instance_Command_Result(models.Model):
+    """ Class that agregates all the command result used for a Job Instance """
     job_instance_id = models.IntegerField(primary_key=True)
     status_start = models.ForeignKey(Command_Result, null=True, blank=True,
                                      related_name='status_start')
@@ -457,10 +476,12 @@ class Job_Instance_Command_Result(models.Model):
 
 
 class Job_Argument_Instance(models.Model):
+    """ Class that represents a generic Job Argument Instance """
     argument_instance_id = models.AutoField(primary_key=True)
 
 
 class Required_Job_Argument_Instance(Job_Argument_Instance):
+    """ Class that represents a Job Argument Instance that is required """
     argument = models.ForeignKey(Required_Job_Argument,
                                  on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
@@ -477,7 +498,9 @@ class Required_Job_Argument_Instance(Job_Argument_Instance):
 
 
 class Optional_Job_Argument_Instance(Job_Argument_Instance):
-    argument = models.ForeignKey(Optional_Job_Argument, on_delete=models.CASCADE)
+    """ Class that represents a Job Argument Instance that is optional """
+    argument = models.ForeignKey(Optional_Job_Argument,
+                                 on_delete=models.CASCADE)
     job_instance = models.ForeignKey(Job_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -492,6 +515,7 @@ class Optional_Job_Argument_Instance(Job_Argument_Instance):
 
 
 class Argument_Value(models.Model):
+    """ Class that represents an Argument Value """
     argument_value_id = models.AutoField(primary_key=True)
     value = models.CharField(max_length=500)
 
@@ -544,6 +568,7 @@ class Argument_Value(models.Model):
 
 
 class Job_Argument_Value(Argument_Value):
+    """ Class that repreents a job Argument Value """
     job_argument_instance = models.ForeignKey(Job_Argument_Instance,
                                               on_delete=models.CASCADE)
 
@@ -565,6 +590,7 @@ class Job_Argument_Value(Argument_Value):
 
 
 class Watch(models.Model):
+    """ Class that represents a Watch on a Job Instance """
     job = models.ForeignKey(Installed_Job, on_delete=models.CASCADE)
     job_instance_id = models.IntegerField(primary_key=True)
     interval = models.IntegerField(null=True, blank=True)
@@ -575,6 +601,7 @@ class Watch(models.Model):
 
 
 class Openbach_Function(models.Model):
+    """ Class that represents an Openbach Function """
     name = models.CharField(max_length=500, primary_key=True)
 
     def __str__(self):
@@ -582,13 +609,16 @@ class Openbach_Function(models.Model):
 
 
 class Openbach_Function_Argument(Argument):
-    openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
+    """ Class that represents an Openbach Function Argument """
+    openbach_function = models.ForeignKey(
+        Openbach_Function, on_delete=models.CASCADE)
 
     class Meta:
         unique_together = (('name', 'openbach_function'))
 
 
 class Scenario(models.Model):
+    """ Class that represents a Scenario """
     name = models.CharField(max_length=500)
     description = models.TextField(null=True, blank=True)
     scenario = models.TextField()
@@ -614,6 +644,7 @@ class Scenario(models.Model):
 
 
 class Scenario_Argument(Argument):
+    """ Class that represents a Scenario Argument """
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
 
     def check_or_set_type(self, type):
@@ -635,6 +666,7 @@ class Scenario_Argument(Argument):
 
 
 class Scenario_Instance(models.Model):
+    """ Class that represents a Scenario Instance """
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
     status = models.CharField(max_length=500, null=True, blank=True)
     status_date = models.DateTimeField(null=True, blank=True)
@@ -648,6 +680,7 @@ class Scenario_Instance(models.Model):
 
 
 class Scenario_Argument_Instance(Argument_Value):
+    """ Class that represents a Scenario Argument Instance """
     argument = models.ForeignKey(Scenario_Argument, on_delete=models.CASCADE)
     scenario_instance = models.ForeignKey(Scenario_Instance,
                                           on_delete=models.CASCADE, null=True,
@@ -679,6 +712,7 @@ class Scenario_Argument_Instance(Argument_Value):
 
 
 class Operand(ContentTyped):
+    """ Class that represents an Operand """
     def get_value(self):
         if self.__class__ == Operand:
             if self.content_model:
@@ -691,6 +725,8 @@ class Operand(ContentTyped):
 
 
 class Operand_Database(Operand):
+    """ Class that represents an Operand Database, ie a value on the local
+    database """
     name = models.CharField(max_length=500)
     key = models.CharField(max_length=500)
     attribute = models.CharField(max_length=500)
@@ -702,6 +738,7 @@ class Operand_Database(Operand):
 
 
 class Operand_Value(Operand):
+    """ Class that represents an Operand Value, ie a value """
     TRUE = frozenset({'True', 'true', 'TRUE'})
     FALSE = frozenset({'False', 'false', 'FALSE'})
 
@@ -721,6 +758,8 @@ class Operand_Value(Operand):
 
 
 class Operand_Statistic(Operand):
+    """ Class that represents an Operand Statistic, ie a value on the Collector
+    database """
     UPDATE_STAT_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("{stat.field}")+FROM+"{stat.measurement}"'
     measurement = models.CharField(max_length=500)
     field = models.CharField(max_length=500)
@@ -740,6 +779,7 @@ class Operand_Statistic(Operand):
 
 
 class Condition(ContentTyped):
+    """ Class that represents a generic Condition """
     def get_value(self):
         if self.__class__ == Condition:
             if self.content_model:
@@ -752,6 +792,7 @@ class Condition(ContentTyped):
 
 
 class Condition_Not(Condition):
+    """ Class that represents a Condition Not """
     condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   related_name='not_condition')
 
@@ -760,6 +801,7 @@ class Condition_Not(Condition):
 
 
 class Condition_Or(Condition):
+    """ Class that represents a Condition Or """
     condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   related_name='or_condition1')
     condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
@@ -770,6 +812,7 @@ class Condition_Or(Condition):
 
 
 class Condition_And(Condition):
+    """ Class that represents a Condition And """
     condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   related_name='and_condition1')
     condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
@@ -780,16 +823,18 @@ class Condition_And(Condition):
 
 
 class Condition_Xor(Condition):
+    """ Class that represents a Condition Xor """
     condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   related_name='xor_condition1')
     condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   related_name='xor_condition2')
 
     def get_value(self):
-        return (self.condition1.get_value() or self.condition2.get_value()) and not (self.condition1.get_value() and self.condition2.get_value())
+        return (self.condition1.get_value() or self.condition2.get_value()) and not (self.condition1.get_value() and self.condition2.get_value()
 
 
 class Condition_Equal(Condition):
+    """ Class that represents a Condition Equal """
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='equal_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -800,6 +845,7 @@ class Condition_Equal(Condition):
 
 
 class Condition_Unequal(Condition):
+    """ Class that represents a Condition Unequal """
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='unequal_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -810,6 +856,7 @@ class Condition_Unequal(Condition):
 
 
 class Condition_Below_Or_Equal(Condition):
+    """ Class that represents a Condition Below or Equal """
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='boe_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -820,6 +867,7 @@ class Condition_Below_Or_Equal(Condition):
 
 
 class Condition_Below(Condition):
+    """ Class that represents a Condition Below """
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='below_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -830,6 +878,7 @@ class Condition_Below(Condition):
 
 
 class Condition_Upper_Or_Equal(Condition):
+    """ Class that represents a Condition Upper or Equal"""
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='uoe_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -840,6 +889,7 @@ class Condition_Upper_Or_Equal(Condition):
 
 
 class Condition_Upper(Condition):
+    """ Class that represents a Condition Upper """
     operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
                                   related_name='upper_operand1')
     operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
@@ -850,8 +900,11 @@ class Condition_Upper(Condition):
 
 
 class Openbach_Function_Instance(models.Model):
-    openbach_function = models.ForeignKey(Openbach_Function, on_delete=models.CASCADE)
-    scenario_instance = models.ForeignKey(Scenario_Instance, on_delete=models.CASCADE)
+    """ Class that represents an Openbach Function Instance """
+    openbach_function = models.ForeignKey(
+        Openbach_Function, on_delete=models.CASCADE)
+    scenario_instance = models.ForeignKey(
+        Scenario_Instance, on_delete=models.CASCADE)
     condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
@@ -869,8 +922,10 @@ class Openbach_Function_Instance(models.Model):
 
 
 class Wait_For_Launched(models.Model):
+    """ Class that represents a waiting condition 'launched' """
     openbach_function_instance_id_waited = models.IntegerField()
-    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
+    openbach_function_instance = models.ForeignKey(
+        Openbach_Function_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to be launch (Scenario_Instance \'{}\')'.format(
@@ -880,8 +935,10 @@ class Wait_For_Launched(models.Model):
 
 
 class Wait_For_Finished(models.Model):
+    """ Class that represents a waiting condition 'Finished' """
     job_instance_id_waited = models.IntegerField()
-    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance, on_delete=models.CASCADE)
+    openbach_function_instance = models.ForeignKey(
+        Openbach_Function_Instance, on_delete=models.CASCADE)
 
     def __str__(self):
         return 'OFI {} waits for OFI {} to finish (Scenario_Instance \'{}\')'.format(
@@ -891,9 +948,11 @@ class Wait_For_Finished(models.Model):
 
 
 class Openbach_Function_Argument_Instance(Argument_Value):
-    argument = models.ForeignKey(Openbach_Function_Argument, on_delete=models.CASCADE)
-    openbach_function_instance = models.ForeignKey(Openbach_Function_Instance,
-                                                   on_delete=models.CASCADE)
+    """ Class that represents an Openbach Function Argument Instance """
+    argument = models.ForeignKey(
+        Openbach_Function_Argument, on_delete=models.CASCADE)
+    openbach_function_instance = models.ForeignKey(
+        Openbach_Function_Instance, on_delete=models.CASCADE)
 
     def check_and_set_value(self, value):
         type = self.argument.type
@@ -916,6 +975,7 @@ class Openbach_Function_Argument_Instance(Argument_Value):
 
 
 class Project(models.Model):
+    """ Class that represents a Project """
     name = models.CharField(max_length=500, primary_key=True)
     description = models.TextField(null=True, blank=True)
 
@@ -937,6 +997,7 @@ class Project(models.Model):
 
 
 class Network(models.Model):
+    """ Class that represents a Network """
     name = models.CharField(max_length=500)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
 
@@ -951,6 +1012,7 @@ class Network(models.Model):
 
 
 class Entity(models.Model):
+    """ Class that represents an Entity """
     name = models.CharField(max_length=500)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
@@ -975,4 +1037,3 @@ class Entity(models.Model):
         if self.agent:
             info_json['agent'] = self.agent.get_json()
         return info_json
-

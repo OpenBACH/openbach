@@ -2107,6 +2107,8 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Job Instance isn\'t in the database', 404,
                              {'job_instance_id': job_instance_id})
         instance_infos = {
+                'name': job_instance.job.job.name,
+                'agent': job_instance.job.agent.address,
                 'id': job_instance.id,
                 'arguments': {}
         }
@@ -3811,7 +3813,8 @@ class ClientThread(threading.Thread):
             function = getattr(self, name)
         except AttributeError:
             self.stop_scenario_instance_of(scenario_instance.id,
-                                           state='Scheduling Error')
+                                           state='Finished KO') # state=Error ?
+            return
         arguments = {}
         for arg in ofi.openbach_function_argument_instance_set.all():
             if arg.argument.type == 'json':
@@ -3850,6 +3853,7 @@ class ClientThread(threading.Thread):
         except BadRequest:
             self.stop_scenario_instance_of(scenario_instance.id,
                                            state='Finished KO') # state=Error ?
+            return
         if not t.do_run:
             ofi.status = 'Stopped'
             ofi.status_date = timezone.now()
@@ -4015,10 +4019,8 @@ class ClientThread(threading.Thread):
         for ofi in scenario_instance.openbach_function_instance_set.all():
             for job_instance in ofi.job_instance_set.all():
                 try:
-                    result, returncode = self.stop_job_instance_action(
-                        [job_instance.id])
-                    result, returncode = self.watch_job_instance_action(
-                        job_instance.id, stop='now')
+                    self.stop_job_instance_action([job_instance.id])
+                    self.watch_job_instance_action(job_instance.id, stop='now')
                 except BadRequest:
                     scenario_instance.status = 'Running' # Running, out of controll
         scenario_instance.status_date = timezone.now()
@@ -4043,14 +4045,16 @@ class ClientThread(threading.Thread):
         infos['status'] = openbach_function_instance.status
         infos['status_date'] = openbach_function_instance.status_date
         if infos['name'] == 'start_job_instance':
-            try:
-                job_instance = openbach_function_instance.job_instance_set.all()[0]
-            except IndexError:
-                raise BadRequest('Integrity of the Openbach_Function_Instance '
-                                 'lost')
-            if job_instance:
-                info, _ = self.status_job_instance_action(job_instance.id)
-                infos[job_instance.job.__str__()] = info
+            if openbach_function_instance.status not in ('Scheduled',
+                                                         'Running'):
+                try:
+                    job_instance = openbach_function_instance.job_instance_set.all()[0]
+                except IndexError:
+                    raise BadRequest('Integrity of the Openbach_Function_Instance '
+                                     'lost')
+                if job_instance:
+                    info, _ = self.status_job_instance_action(job_instance.id)
+                    infos['job'] = info
         infos['arguments'] = []
         for ofai in openbach_function_instance.openbach_function_argument_instance_set.all():
             info = {'name': ofai.argument.name, 'type': ofai.argument.type,

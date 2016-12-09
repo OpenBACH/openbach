@@ -606,8 +606,8 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
 | Function           | Method          | url              | Input contents (JSON or Query string)      | Description
-| add_job            | POST            | /job             | *name*, *tar_file*                         | Add a Job to the Jobs list (with the sources in the tar file)
-| add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path)
+| add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path and already on the Controller)
+| add_new_job        | POST            | /job             | *name*, *tar_file*                         | Add a Job to the Jobs list (with the sources in the tar file)
 | del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
 | list_jobs          | GET             | /job             |                                            | Return the Jobs list. 
 | get_job_stats      | GET             | /job/*job_name*  | *type=stats*                               | Return the statistics produced by a Job.
@@ -669,7 +669,7 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 | start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *arguments*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
 | stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                       | Stop a scenario instance.
 | list_scenario_instances       | GET           | /scenario_instance                           |                                            | List all the scenario instances.
-| status_scenario_instance      | GET           | /scenario_instance/*scenario_instance_id*    |                                            | Return the status of the scenario instance
+| get_scenario_instance         | GET           | /scenario_instance/*scenario_instance_id*    |                                            | Return the infos of the scenario instance
 |===
 
 And finally, the group 8 of openbach-functions allowing to 
@@ -692,7 +692,7 @@ And finally, the group 8 of openbach-functions allowing to
 | start_scenario_instance       | POST          | /project/*project_name*/scenario/*scenario_name*/scenario_instance                        | *args*, date                          | Start a scenario instance.
 | stop_scenario_instance        | POST          | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* | date                                  | Stop a scenario instance.
 | list_scenario_instances       | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance                        |                                       | List all the scenario instances of this Scenario
-| status_scenario_instance      | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* |                                       | Return the status of the scenario instance
+| get_scenario_instance         | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* |                                       | Return the infos of the scenario instance
 |===
 
 

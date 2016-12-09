@@ -844,10 +844,9 @@ class ScenarioInstanceView(GenericView):
     """Manage action on specific scenario"""
 
     def get(self, request, id, scenario_name=None, project_name=None):
-        """compute status of a scenario instance"""
+        """get infos of a scenario instance"""
 
-        data = {'command': 'status_scenario_instance', 'scenario_instance_id':
-                id}
+        data = {'command': 'get_scenario_instance', 'scenario_instance_id': id}
         if scenario_name:
             data['scenario_name'] = scenario_name
         if project_name:

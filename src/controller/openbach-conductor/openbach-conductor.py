@@ -46,21 +46,19 @@ import json
 import parse
 import signal
 import time
+import syslog
 import re
 import tarfile
 from playbookbuilder import PlaybookBuilder
 from queue import Queue, Empty
 from operator import attrgetter
 from datetime import datetime
-from fuzzywuzzy import fuzz, process
-
-
+from fuzzywuzzy import fuzz
 import sys
 sys.path.insert(0, '/opt/openbach-controller/backend')
 from django.core.wsgi import get_wsgi_application
 os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
 application = get_wsgi_application()
-
 from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.utils import DataError
@@ -72,6 +70,7 @@ from openbach_django.utils import send_all, recv_fifo
 
 
 def signal_term_handler(signal, frame):
+    """ Function that handle the kill of the Conductor """
     for scenario_instance in Scenario_Instance.objects.all():
         if not scenario_instance.is_stopped:
             scenario_instance.status = 'Stopped'
@@ -82,11 +81,11 @@ def signal_term_handler(signal, frame):
 
 
 class ThreadManager:
+    """ Class that allows to manage the threads """
     __shared_state = {}  # Borg pattern
 
     def __init__(self, init=False):
         self.__dict__ = self.__class__.__shared_state
-        
         if init:
             self.threads = {}
             self.mutex = threading.Lock()
@@ -100,11 +99,11 @@ class ThreadManager:
 
 
 class WaitingQueueManager:
+    """ Class that allows to manage the queue """
     __shared_state = {}  # Borg pattern
 
     def __init__(self, init=False):
         self.__dict__ = self.__class__.__shared_state
-        
         if init:
             self.waiting_queues = {}
             self.mutex = threading.Lock()
@@ -118,9 +117,10 @@ class WaitingQueueManager:
 
 
 class ClientThread(threading.Thread):
+    """ Class that represents the main thread of the Conductor """
     UPDATE_AGENT_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}"'
-    UPDATE_JOB_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"0.0.{agent.name}.openbach-agent"+where+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
-    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"0.0.{agent.name}.openbach-agent+"+where+job_name+=+{}+and+job_instance_id+=+{}'
+    UPDATE_JOB_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+*+FROM+"0.0.0.{agent.name}.openbach-agent"+where+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"0.0.0.{agent.name}.openbach-agent"+where+job_name+=+\'{}\'+and+job_instance_id+=+{}'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -129,6 +129,7 @@ class ClientThread(threading.Thread):
         self.playbook_builder = PlaybookBuilder('/tmp/', self.path_src)
 
     def execute_request(self, data):
+        """ Function that redirect the received data to the asked action """
         request = '{}_action'.format(data.pop('command'))
 
         # From this point on, request should contain the
@@ -138,20 +139,22 @@ class ClientThread(threading.Thread):
         except AttributeError:
             raise BadRequest('Function {} not implemented yet'.format(request),
                              500)
-
         return function(**data)
 
     def add_collector_action(self, address, username, password, name,
                              logs_port=None, stats_port=None):
+        """ Action that adds a Collector """
+        # This action might be long and cause a timeout on the frontend, so we
+        # thread it and resend a 202 return code
         thread = threading.Thread(
             target=self.add_collector,
             args=(address, username, password, name, logs_port, stats_port))
         thread.start()
-
         return {}, 202
 
     def add_collector(self, address, username, password, name, logs_port=None,
                       stats_port=None):
+        """ Function that adds a Collector """
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -188,7 +191,8 @@ class ClientThread(threading.Thread):
                 '-e ansible_ssh_pass="{4}" '
                 '/opt/openbach-controller/install_collector/collector.yml'
                 ' --tags install'
-                .format(host_filename, address, extra_vars.name, username, password))
+                .format(host_filename, address, extra_vars.name, username,
+                        password))
         except BadRequest as e:
             collector.delete()
             response = e.infos
@@ -212,14 +216,17 @@ class ClientThread(threading.Thread):
         command_result.status_add.save()
 
     def modify_collector_action(self, address, logs_port=None, stats_port=None):
+        """ Action that modifies a Collector """
+        # This action might be long and cause a timeout on the frontend, so we
+        # thread it and resend a 202 return code
         thread = threading.Thread(
             target=self.modify_collector,
             args=(address, logs_port, stats_port))
         thread.start()
-
         return {}, 202
 
     def modify_collector(self, address, logs_port=None, stats_port=None):
+        """ Function that modifies a Collector """
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -251,8 +258,6 @@ class ClientThread(threading.Thread):
             command_result.status_modify.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
-            raise BadRequest('No modification to do')
         if logs_port:
             collector.logs_port = logs_port
         if stats_port:
@@ -273,6 +278,9 @@ class ClientThread(threading.Thread):
         command_result.status_modify.save()
 
     def del_collector_action(self, address):
+        """ Action that deletes a Collector """
+        # This action might be long and cause a timeout on the frontend, so we
+        # thread it and resend a 202 return code
         thread = threading.Thread(
             target=self.del_collector,
             args=(address,))
@@ -281,8 +289,9 @@ class ClientThread(threading.Thread):
         return {}, 202
 
     def del_collector(self, address):
-        """ returncode is 404 only if the given address does not correspond to a
-        collector in the database """
+        """ Function that deletes a Collector """
+        # returncode is 404 only if the given address does not correspond to a
+        # collector in the database
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -362,9 +371,11 @@ class ClientThread(threading.Thread):
         command_result.status_del.save()
 
     def get_collector_action(self, address):
+        """ Action that gets a Collector infos """
         return self.get_collector(address)
 
     def get_collector(self, address):
+        """ Function that gets a Collector infos """
         try:
             collector = Collector.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -375,9 +386,11 @@ class ClientThread(threading.Thread):
         return response, 200
 
     def list_collectors_action(self):
+        """ Action that gets all Collectors infos """
         return self.list_collectors()
 
     def list_collectors(self):
+        """ Function that gets all Collectors infos """
         response = []
         for collector in Collector.objects.all():
             collector_info, _ = self.get_collector(collector.address)
@@ -385,17 +398,19 @@ class ClientThread(threading.Thread):
         return response, 200
 
     def install_agent_of(self, address, collector_ip, username, password, name):
+        """ Openbach Function that installs an Agent """
         self.install_agent(address, collector_ip, username, password, name)
-
         return []
 
     def install_agent_action(self, address, collector_ip, username, password,
                              name):
+        """ Action that installs an Agent """
         return self.install_agent(address, collector_ip, username, password,
                                   name, True)
 
     def install_agent(self, address, collector_ip, username, password, name,
                       action=False):
+        """ Function that installs an Agent """
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -446,11 +461,12 @@ class ClientThread(threading.Thread):
         self.launch_install_agent(agent, collector)
 
     def launch_install_agent(self, agent, collector):
+        """ Function that launches the install of an Agent """
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'install_agent')
-        agent_filename = self.playbook_builder.write_agent(agent.address,
-                                                           'install')
+        agent_filename = self.playbook_builder.write_agent(
+            agent.address, 'install')
         with self.playbook_builder.extra_vars_file() as extra_vars:
             print('collector_ip:', collector.address, file=extra_vars)
             print('logstash_logs_port:', collector.logs_port, file=extra_vars)
@@ -467,7 +483,8 @@ class ClientThread(threading.Thread):
                 '-e ansible_sudo_pass="{agent.password}" '
                 '-e ansible_ssh_pass="{agent.password}" '
                 '/opt/openbach-controller/install_agent/agent.yml --tags install'
-                .format(host_filename, agent_filename, extra_vars.name, agent=agent))
+                .format(host_filename, agent_filename, extra_vars.name,
+                        agent=agent))
         except BadRequest as e:
             agent.delete()
             response = e.infos
@@ -479,13 +496,13 @@ class ClientThread(threading.Thread):
         agent.status = 'Available'
         agent.update_status = timezone.now()
         agent.save()
-        # Recuperer la liste des jobs a installer
+        # Get the list of the Jobs to install
         list_default_jobs = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
         list_jobs = []
         with open(list_default_jobs, 'r') as f:
             for line in f:
                 list_jobs.append(line.rstrip('\n'))
-        # Installer les jobs
+        # Install the Jobs
         list_jobs_failed = []
         for job in list_jobs:
             try:
@@ -503,14 +520,16 @@ class ClientThread(threading.Thread):
         command_result.status_install.save()
 
     def uninstall_agent_of(self, address):
+        """ Openbach Function that uninstalls an Agent """
         self.uninstall_agent(address)
-
         return []
 
     def uninstall_agent_action(self, address):
+        """ Action that uninstalls an Agent """
         return self.uninstall_agent(address, True)
 
     def uninstall_agent(self, address, action=False):
+        """ Function that uninstalls an Agent """
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -544,11 +563,12 @@ class ClientThread(threading.Thread):
         self.launch_uninstall_agent(agent)
 
     def launch_uninstall_agent(self, agent):
+        """ Function that launches the uninstall of an Agent """
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'uninstall_agent')
-        agent_filename = self.playbook_builder.write_agent(agent.address,
-                                                           'uninstall')
+        agent_filename = self.playbook_builder.write_agent(
+            agent.address, 'uninstall')
         with self.playbook_builder.extra_vars_file() as extra_vars:
             print('local_username:', getpass.getuser(), file=extra_vars)
         try:
@@ -560,7 +580,8 @@ class ClientThread(threading.Thread):
                 '-e ansible_sudo_pass="{agent.password}" '
                 '-e ansible_ssh_pass="{agent.password}"'
                 ' /opt/openbach-controller/install_agent/agent.yml --tags uninstall'
-                .format(host_filename, agent_filename, extra_vars.name, agent=agent))
+                .format(host_filename, agent_filename, extra_vars.name,
+                        agent=agent))
         except BadRequest as e:
             agent.status = 'Uninstall failed'
             agent.update_status = timezone.now()
@@ -571,27 +592,24 @@ class ClientThread(threading.Thread):
             command_result.status_uninstall.returncode = e.returncode
             command_result.status_uninstall.save()
             raise
-
         agent.delete()
         command_result.status_uninstall.response = json.dumps(None)
         command_result.status_uninstall.returncode = 204
         command_result.status_uninstall.save()
 
-#    def list_agents_of(self, update=False):
-#        self.list_agents(update)
-#
-#        return []
-
     def list_agents_action(self, update=False):
+        """ Action that lists the Agents infos """
         return self.list_agents(update)
 
     def list_agents(self, update=False):
+        """ Function that lists the Agents infos """
         agents = Agent.objects.all()
         response = []
         for agent in agents:
             agent_infos = agent.get_json()
             if update:
-                if agent.reachable and agent.update_status < agent.update_reachable:
+                if (agent.reachable and agent.update_status <
+                    agent.update_reachable):
                     try:
                         self.update_agent(agent)
                     except BadRequest as e:
@@ -602,11 +620,12 @@ class ClientThread(threading.Thread):
             agent_infos['update_status'] = agent.update_status.astimezone(
                 timezone.get_current_timezone())
             response.append(agent_infos)
-
         return response, 200
 
     @staticmethod
     def update_agent(agent):
+        """ Function that get the last infos on the Collector and update the
+        local database """
         url = ClientThread.UPDATE_AGENT_URL.format(agent=agent)
         result = requests.get(url).json()
         try:
@@ -627,25 +646,27 @@ class ClientThread(threading.Thread):
             agent.save()
 
     def retrieve_status_agents_of(self, addresses, update=False):
+        """ Openbach Function that retrieves the status of one or more Agents
+        """
         self.retrieve_status_agents(addresses, update)
-
         return []
 
     def retrieve_status_agents_action(self, addresses, update=False):
+        """ Action that retrieves the status of one or more Agents """
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
             except DataError:
-                raise BadRequest('You must give an ip address for all the'
-                                 ' Agents')
+                raise BadRequest(
+                    'You must give an ip address for all the Agents')
         thread = threading.Thread(
             target=self.retrieve_status_agents,
             args=(addresses, update))
         thread.start()
-
         return {}, 202
 
     def retrieve_status_agents(self, addresses, update=False):
+        """ Function that retrieves the status of one or more Agents """
         command_results = {}
         for address in addresses:
             try:
@@ -733,7 +754,8 @@ class ClientThread(threading.Thread):
                 command_result.status_retrieve_status_agent.save()
                 continue
             if update:
-                if agent.reachable and agent.update_status < agent.update_reachable:
+                if (agent.reachable and agent.update_status <
+                    agent.update_reachable):
                     try:
                         self.update_agent(agent)
                     except BadRequest as e:
@@ -745,18 +767,20 @@ class ClientThread(threading.Thread):
                         command_result.status_retrieve_status_agent.returncode = returncode
                         command_result.status_retrieve_status_agent.save()
                         continue
-
         command_result.status_retrieve_status_agent.response = json.dumps(None)
         command_result.status_retrieve_status_agent.returncode = 204
         command_result.status_retrieve_status_agent.save()
 
     def assign_collector_of(self, address, collector_ip):
+        """ Openbach Function that assigns a Collector to an Agent """
         self.assign_collector(address, collector_ip)
 
     def assign_collector_action(self, address, collector_ip):
+        """ Action that assigns a Collector to an Agent """
         return self.assign_collector(address, collector_ip, True)
 
     def assign_collector(self, address, collector_ip, action=False):
+        """ Function that assigns a Collector to an Agent """
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except DataError:
@@ -805,18 +829,22 @@ class ClientThread(threading.Thread):
         self.launch_assign_collector(agent)
 
     def launch_assign_collector(self, agent, collector):
+        """ Function that launches the assignement of a Collector to an Agent
+        """
         command_result = Agent_Command_Result.objects.get(pk=agent.address)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'assign_collector')
         with self.playbook_builder.playbook_file() as playbook, self.playbook_builder.extra_vars_file() as extra_vars:
-            self.playbook_builder.build_assign_collector(collector, playbook, extra_vars)
+            self.playbook_builder.build_assign_collector(
+                collector, playbook, extra_vars)
         try:
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} '
                 '-e ansible_ssh_user="{agent.username}" '
                 '-e ansible_ssh_pass="{agent.password}" '
                 '-e ansible_sudo_pass="{agent.password}" {}'
-                .format(host_filename, extra_vars.name, playbook.name, agent=agent))
+                .format(host_filename, extra_vars.name, playbook.name,
+                        agent=agent))
         except BadRequest as e:
             response = e.infos
             response['error'] = e.reason
@@ -831,9 +859,11 @@ class ClientThread(threading.Thread):
         command_result.status_assign.save()
 
     def add_new_job_action(self, name, tar_path):
+        """ Action a Job with it source in the tar file """
         return self.add_new_job(name, tar_path)
 
     def add_new_job(self, name, tar_path):
+        """ Function a Job with it source in the tar file """
         path = '/opt/openbach-controller/jobs/private_jobs/'
         try:
             with tarfile.open(tar_path) as tar_file:
@@ -844,9 +874,11 @@ class ClientThread(threading.Thread):
         return self.add_job(name, path)
 
     def add_job_action(self, name, path):
+        """ Action a Job with it source in the path """
         return self.add_job(name, path)
 
     def add_job(self, name, path):
+        """ Function a Job with it source in the path """
         config_prefix = os.path.join(path, 'files', name)
         config_file = '{}.yml'.format(config_prefix)
         try:
@@ -883,14 +915,12 @@ class ClientThread(threading.Thread):
                 help = f.read()
         except OSError:
             help = ''
-
         with transaction.atomic():
             try:
                 job = Job.objects.get(pk=name)
                 job.delete()
             except ObjectDoesNotExist:
                 pass
-
             job = Job(
                 name=name,
                 path=path,
@@ -900,14 +930,10 @@ class ClientThread(threading.Thread):
                 job_conf=job_conf
             )
             job.save()
-
             for keyword in keywords:
-                job_keyword = Job_Keyword(
-                    name=keyword
-                )
+                job_keyword = Job_Keyword(name=keyword)
                 job_keyword.save()
                 job.keywords.add(job_keyword)
-
             if type(statistics) == list:
                 try:
                     for statistic in statistics:
@@ -924,10 +950,9 @@ class ClientThread(threading.Thread):
             elif statistics == None:
                 pass
             else:
-                raise BadRequest('The configuration file of the Job is not well'
-                                 ' formed', 409, {'configuration file':
-                                                  config_file})
-
+                raise BadRequest(
+                    'The configuration file of the Job is not well formed', 409,
+                    {'configuration file': config_file})
             rank = 0
             for required_arg in required_args:
                 try:
@@ -941,10 +966,9 @@ class ClientThread(threading.Thread):
                     ).save()
                     rank += 1
                 except IntegrityError:
-                    raise BadRequest('The configuration file of the Job is not '
-                                     'well formed', 409, {'configuration file':
-                                                          config_file})
-
+                    raise BadRequest(
+                        'The configuration file of the Job is not well formed',
+                        409, {'configuration file': config_file})
             for optional_arg in optional_args:
                 try:
                     Optional_Job_Argument(
@@ -956,24 +980,21 @@ class ClientThread(threading.Thread):
                         job=job
                     ).save()
                 except IntegrityError:
-                    raise BadRequest('The configuration file of the Job is not well'
-                                     ' formed', 409, {'configuration file':
-                                                      config_file})
+                    raise BadRequest(
+                        'The configuration file of the Job is not well formed',
+                        409, {'configuration file': config_file})
                 except KeyError:
-                    raise BadRequest('The configuration file of the Job is not well'
-                                     ' formed', 409, {'configuration file':
-                                                      config_file})
+                    raise BadRequest(
+                        'The configuration file of the Job is not well formed',
+                        409, {'configuration file': config_file})
         return self.get_job_json(name)
 
-    def del_job_of(self, name):
-        self.del_job(name)
-
-        return []
-
     def del_job_action(self, name):
+        """ Action that deletes a Job """
         return self.del_job(name)
 
     def del_job(self, name):
+        """ Function that deletes a Job """
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
@@ -982,15 +1003,12 @@ class ClientThread(threading.Thread):
         job.delete()
         return None, 204
 
-#    def list_jobs_of(self):
-#        self.list_jobs()
-#
-#        return []
-
     def list_jobs_action(self, string_to_search=None, ratio=60):
+        """ Action that lists the Jobs available """
         return self.list_jobs(string_to_search, ratio)
 
     def list_jobs(self, string_to_search=None, ratio=60):
+        """ Function that lists the Jobs available """
         response = []
         if string_to_search:
             try:
@@ -999,48 +1017,47 @@ class ClientThread(threading.Thread):
                     #look for a job name matching the string
                     split_job_name=re.split('_|-',job.name)
                     for word in split_job_name:
-                        #print("Match ratio of ", fuzz.token_set_ratio(word, string_to_search), "of job ", job.name, word)
-                        if fuzz.token_set_ratio(word, string_to_search) > int(ratio):
+                        if (fuzz.token_set_ratio(word, string_to_search) >
+                            int(ratio)):
                             match=True
                             break
                     #look for job keywords matching the string
                     if not match:
                         for keyword in job.keywords.all():
-                            #print("Match ratio of ", fuzz.token_set_ratio(keyword, string_to_search), "for keyword", keyword, "of job ", job.name)
-                            if fuzz.token_set_ratio(keyword, string_to_search) > int(ratio):
+                            if (fuzz.token_set_ratio(keyword, string_to_search)
+                                > int(ratio)):
                                 match=True
                                 break
                     if match:
                         response.append(json.loads(job.job_conf))
-                    
-                    
             except:
-                raise BadRequest('Error when looking for keyword matches', 404, {'job_name': job})
-        
+                raise BadRequest('Error when looking for keyword matches', 404,
+                                 {'job_name': job})
         else:
             for job in Job.objects.all():
                 response.append(json.loads(job.job_conf))
-           
         return response, 200
 
     def get_job_json_action(self, name):
+        """ Action that gets the description of a Job """
         return self.get_job_json(name)
 
     def get_job_json(self, name):
+        """ Function that gets the description of a Job """
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
-
         result = json.loads(job.job_conf)
         return result, 200
 
-
     def get_job_keywords_action(self, name):
+        """ Action that gets the keywords of a Job """
         return self.get_job_keywords(name)
 
     def get_job_keywords(self, name):
+        """ Function that gets the keywords of a Job """
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
@@ -1051,57 +1068,42 @@ class ClientThread(threading.Thread):
             keyword.name for keyword in job.keywords.all()
         ]}
         return result, 200
-       
-
-#    def get_job_stats_of(self, name):
-#        self.get_job_stats(name)
-#
-#        return []
 
     def get_job_stats_action(self, name):
+        """ Action that gets the statistics potentialy generate by the Job """
         return self.get_job_stats(name)
 
     def get_job_stats(self, name):
+        """ Function that gets the statistics potentialy generate by the Job """
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
-
-
         result = {'job_name': name , 'statistics': [] }
         for stat in job.statistic_set.all():
             statistic = {'name': stat.name}
             statistic['description'] = stat.description
             statistic['frequency'] = stat.frequency
             result['statistics'].append(statistic)
-
         return result, 200
 
-#    def get_job_help_of(self, name):
-#        self.get_job_help(name)
-#
-#        return []
-
     def get_job_help_action(self, name):
+        """ Action that gets the help of the Job """
         return self.get_job_help(name)
 
     def get_job_help(self, name):
+        """ Function that gets the help of the Job """
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
             raise BadRequest('This Job isn\'t in the database', 404,
                              {'job_name': name})
-
         return {'job_name': name, 'help': job.help}, 200
-
-    def install_jobs_of(self, addresses, names, severity=4, local_severity=4):
-        self.install_jobs(addresses, names, severity, local_severity)
-
-        return []
 
     def install_jobs_action(self, addresses, names, severity=4,
                             local_severity=4):
+        """ Action that installs one or more Jobs on one or more Agents """
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
@@ -1117,16 +1119,14 @@ class ClientThread(threading.Thread):
             target=self.install_jobs,
             args=(addresses, names, severity, local_severity))
         thread.start()
-
         return {}, 202
 
     def install_jobs(self, addresses, names, severity=4, local_severity=4):
+        """ Function that installs one or more Jobs on one or more Agents """
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
-
         jobs = Job.objects.filter(pk__in=names)
         no_job = set(names) - set(map(attrgetter('name'), jobs))
-
         for job_name in no_job:
             for address in addresses:
                 try:
@@ -1149,7 +1149,6 @@ class ClientThread(threading.Thread):
                 command_result.status_install.response = json.dumps(response)
                 command_result.status_install.returncode = 404
                 command_result.status_install.save()
-
         for agent_ip in no_agent:
             for job_name in names:
                 try:
@@ -1171,7 +1170,6 @@ class ClientThread(threading.Thread):
                 command_result.status_install.response = json.dumps(response)
                 command_result.status_install.returncode = 404
                 command_result.status_install.save()
-
         success = True
         for agent in agents:
             for job in jobs:
@@ -1203,8 +1201,8 @@ class ClientThread(threading.Thread):
                                 agent=agent, job=job))
                 except BadRequest as e:
                     success = False
-                    command_result.status_install.response = json.dumps({
-                        'error': e.reason})
+                    command_result.status_install.response = json.dumps(
+                        {'error': e.reason})
                     command_result.status_install.returncode = e.returncode
                     command_result.status_install.save()
                 else:
@@ -1220,31 +1218,24 @@ class ClientThread(threading.Thread):
                     command_result.status_install.response = json.dumps(None)
                     command_result.status_install.returncode = 204
                     command_result.status_install.save()
-
         if not success:
-            raise BadRequest('At least one of the installation have failed',
-                             404)
-
-    def uninstall_jobs_of(self, addresses, names):
-        self.uninstall_jobs(addresses, names)
-
-        return []
+            raise BadRequest(
+                'At least one of the installation have failed', 404)
 
     def uninstall_jobs_action(self, addresses, names):
+        """ Action that uninstalls one or more Jobs on one or more Agents """
         thread = threading.Thread(
             target=self.uninstall_jobs,
             args=(addresses, names))
         thread.start()
-
         return {}, 202
 
     def uninstall_jobs(self, addresses, names):
+        """ Function that uninstalls one or more Jobs on one or more Agents """
         agents = Agent.objects.filter(pk__in=addresses)
         no_agent = set(addresses) - set(map(attrgetter('address'), agents))
-
         jobs = Job.objects.filter(pk__in=names)
         no_job = set(names) - set(map(attrgetter('name'), jobs))
-
         for job_name in no_job:
             for address in addresses:
                 try:
@@ -1267,7 +1258,6 @@ class ClientThread(threading.Thread):
                 command_result.status_uninstall.response = json.dumps(response)
                 command_result.status_uninstall.returncode = 404
                 command_result.status_uninstall.save()
-
         for agent_ip in no_agent:
             for job_name in names:
                 try:
@@ -1289,7 +1279,6 @@ class ClientThread(threading.Thread):
                 command_result.status_uninstall.response = json.dumps(response)
                 command_result.status_uninstall.returncode = 404
                 command_result.status_uninstall.save()
-
         for agent in agents:
             for job in jobs:
                 try:
@@ -1307,7 +1296,8 @@ class ClientThread(threading.Thread):
                     command_result.status_uninstall.reset()
                 installed_job_name = '{} on {}'.format(job, agent)
                 try:
-                    installed_job = Installed_Job.objects.get(agent=agent, job=job)
+                    installed_job = Installed_Job.objects.get(
+                        agent=agent, job=job)
                 except ObjectDoesNotExist:
                     jobs_not_installed.append(installed_job_name)
                     command_result.status_uninstall.response = json.dumps(
@@ -1330,22 +1320,20 @@ class ClientThread(threading.Thread):
                     installed_job.delete()
                 except BadRequest as e:
                     response['error'] = e.reason
-                    command_result.status_uninstall.response = json.dumps(response)
+                    command_result.status_uninstall.response = json.dumps(
+                        response)
                     command_result.status_uninstall.returncode = e.returncode
                     command_result.status_uninstall.save()
                 command_result.status_uninstall.response = json.dumps(None)
                 command_result.status_uninstall.returncode = 204
                 command_result.status_uninstall.save()
 
-    def list_installed_jobs_of(self, address, update=False):
-        self.list_installed_jobs(address, update)
-
-        return []
-
     def list_installed_jobs_action(self, address, update=False):
+        """ Action that lists all Jobs installed on an Agent """
         return self.list_installed_jobs(address, update)
 
     def list_installed_jobs(self, address, update=False):
+        """ Function that lists all Jobs installed on an Agent """
         try:
             agent = Agent.objects.get(pk=address)
         except DataError:
@@ -1353,7 +1341,6 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             raise BadRequest('This Agent isn\'t in the database', 404,
                              {'address': address})
-
         response = {'agent': agent.address, 'errors': []}
         if update:
             try:
@@ -1362,7 +1349,6 @@ class ClientThread(threading.Thread):
                 error = {'error': e.reason}
                 response.update(error)
                 response.update(e.infos)
-
         try:
             installed_jobs = agent.installed_job_set.all()
         except (KeyError, Installed_Job.DoesNotExist):
@@ -1384,13 +1370,10 @@ class ClientThread(threading.Thread):
                 for statistic_instance in job.statistic_instance_set.all():
                     if 'statistic_instances' not in job_infos:
                         job_infos['statistic_instances'] = []
-                    job_infos['statistic_instances'].append({'name':
-                                                             statistic_instance.stat.name,
-                                                             'storage':
-                                                             statistic_instance.storage,
-                                                             'broadcast':
-                                                             statistic_instance.broadcast
-                                                             })
+                    job_infos['statistic_instances'].append(
+                        {'name': statistic_instance.stat.name, 'storage':
+                         statistic_instance.storage, 'broadcast':
+                         statistic_instance.broadcast})
                 response['installed_jobs'].append(job_infos)
         finally:
             if not response['errors']:
@@ -1399,6 +1382,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def update_jobs(agent_id):
+        """ Function that get the last list of the Jobs installed on an Agent
+        available on the Collector and update the local database """
         agent = Agent.objects.get(pk=agent_id)
         url = ClientThread.UPDATE_JOB_URL.format(agent=agent)
         result = requests.get(url).json()
@@ -1410,7 +1395,6 @@ class ClientThread(threading.Thread):
                 raise BadRequest('{}'.format(result['results'][0]['error']))
             except KeyError:
                 raise BadRequest('No data available', 404)
-
         jobs_list = []
         for column, value in zip(columns, values):
             if column == 'time':
@@ -1418,7 +1402,6 @@ class ClientThread(threading.Thread):
                         timezone.get_current_timezone())
             elif column != 'nb' and column != '_type':
                 jobs_list.append(value)
-
         for job in agent.installed_job_set.all():
             job_name = job.job.name
             if job_name not in jobs_list:
@@ -1427,7 +1410,6 @@ class ClientThread(threading.Thread):
                 job.update_status = date
                 job.save()
                 jobs_list.remove(job_name)
-
         error = False
         unknown_jobs = []
         for job_name in jobs_list:
@@ -1437,21 +1419,17 @@ class ClientThread(threading.Thread):
                 unknown_jobs.append(job_name)
                 error = True
                 continue
-            installed_job = Installed_Job(agent=agent, job=job,
-                                          udpate_status=date, severity=4,
-                                          local_severity=4)
+            installed_job = Installed_Job(
+                agent=agent, job=job, udpate_status=date, severity=4,
+                local_severity=4)
             installed_job.save()
-
         if error:
             raise BadRequest('These Jobs aren\'t in the Job list of the '
                              'Controller', 404, {'unknown_jobs': unknown_jobs})
 
-    def retrieve_status_jobs_of(self, addresses):
-        self.retrieve_status_jobs(addresses)
-
-        return []
-
     def retrieve_status_jobs_action(self, addresses):
+        """ Action that requests the agent to send the list of it installed jobs
+        to the Collector """
         for address in addresses:
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
@@ -1462,10 +1440,11 @@ class ClientThread(threading.Thread):
             target=self.retrieve_status_jobs,
             args=(addresses,))
         thread.start()
-
         return {}, 202
 
     def retrieve_status_jobs(self, addresses):
+        """ Function that requests the agent to send the list of it installed
+        jobs to the Collector """
         error = False
         unknown_agents = []
         for agent_ip in addresses:
@@ -1489,7 +1468,6 @@ class ClientThread(threading.Thread):
                 command_result.status_retrieve_status_jobs.returncode = 404
                 command_result.status_retrieve_status_jobs.save()
                 continue
-
             host_filename = self.playbook_builder.write_hosts(
                 agent.address, 'retrieve_status_jobs')
             with self.playbook_builder.playbook_file() as playbook:
@@ -1513,25 +1491,25 @@ class ClientThread(threading.Thread):
             command_result.status_retrieve_status_jobs.save()
 
     def push_file_of(self, local_path, remote_path, agent_ip):
+        """ Openbach Function that pushes a file on an Agent """
         self.push_file(local_path, remote_path, agent_ip)
-
         return []
 
     def push_file_action(self, local_path, remote_path, agent_ip):
+        """ Action that pushes a file on an Agent """
         thread = threading.Thread(
             target=self.push_file,
             args=(local_path, remote_path, agent_ip))
         thread.start()
-
         return {}, 202
 
     def push_file(self, local_path, remote_path, agent_ip):
+        """ Function that pushes a file on an Agent """
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
             raise BadRequest('This Agent isn\'t in the database', 404,
                              {'address': agent_ip})
-
         agent = Agent.objects.get(pk=agent_ip)
         host_filename = self.playbook_builder.write_hosts(
             agent.address, 'push_file')
@@ -1548,6 +1526,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def format_args(job_instance):
+        """ Function that formats the arguments of a Job Instance """
         args = ''
         for argument in job_instance.required_job_argument_instance_set.all().order_by('argument__rank'):
             for job_argument_value in argument.job_argument_value_set.all():
@@ -1567,6 +1546,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def fill_and_check_args(job_instance, instance_args):
+        """ Function that creates the objects Argument Instance and checks the
+        type """
         for arg_name, arg_values in instance_args.items():
             try:
                 argument_instance = Required_Job_Argument_Instance(
@@ -1613,9 +1594,9 @@ class ClientThread(threading.Thread):
     @staticmethod
     def fill_job_instance(job_instance, instance_args, date=None, interval=None,
                           restart=False):
+        """ Function that fills the object Job Instance """
         job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
-
         if interval:
             job_instance.start_date = timezone.now()
             job_instance.periodic = True
@@ -1630,40 +1611,34 @@ class ClientThread(threading.Thread):
                 job_instance.start_date = start_date
             job_instance.periodic = False
             job_instance.save()
-
         if restart:
             job_instance.required_job_argument_instance_set.all().delete()
             job_instance.optional_job_argument_instance_set.all().delete()
-
         ClientThread.fill_and_check_args(job_instance, instance_args)
         return date
 
     def start_job_instance_of(self, scenario_instance_id, agent_ip, job_name,
                               instance_args, ofi, finished_queues, offset=0,
                               origin=None, interval=None):
+        """ Openbach Function that starts a Job Instance """
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         if origin is None:
             origin = int(timezone.now().timestamp()*1000)
         date = origin + int(offset)*1000
-
-        result, _ = self.start_job_instance(agent_ip, job_name,
-                                            instance_args, date,
-                                            interval, scenario_instance_id)
-
+        result, _ = self.start_job_instance(
+            agent_ip, job_name, instance_args, date, interval,
+            scenario_instance_id)
         job_instance_id = result['job_instance_id']
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         job_instance.openbach_function_instance = ofi
         job_instance.scenario_instance = scenario_instance
         job_instance.save()
-
         self.watch_job_instance_action(job_instance_id, interval=2)
-
         with WaitingQueueManager() as waiting_queues:
             waiting_queues[job_instance_id] = (
                 scenario_instance_id, ofi.openbach_function_instance_id,
                 finished_queues)
-
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.connect(('', 2845))
@@ -1673,17 +1648,18 @@ class ClientThread(threading.Thread):
                    scenario_instance_id, 'job_instance_id': job_instance_id}
         sock.send(json.dumps(message).encode())
         sock.close()
-
         return []
 
     def start_job_instance_action(self, agent_ip, job_name, instance_args,
                                   date=None, interval=None,
                                   scenario_instance_id=0):
+        """ Action that starts a Job Instance """
         return self.start_job_instance(agent_ip, job_name, instance_args, date,
                                        interval, scenario_instance_id, True)
 
     def start_job_instance(self, agent_ip, job_name, instance_args, date=None,
                            interval=None, scenario_instance_id=0, action=False):
+        """ Function that starts a Job Instance """
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except DataError:
@@ -1712,7 +1688,6 @@ class ClientThread(threading.Thread):
                 owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
             else:
                 owner_scenario_instance_id = scenario_instance_id
-
         job_instance = Job_Instance(job=installed_job)
         job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
@@ -1737,7 +1712,6 @@ class ClientThread(threading.Thread):
                 args=(agent, job_instance, host_filename, playbook, extra_vars))
             thread.start()
             return {'job_instance_id': job_instance.id}, 202
-
         self.launch_job_instance(agent, job_instance, host_filename, playbook,
                                  extra_vars)
         job_instance.status = 'Running'
@@ -1747,6 +1721,7 @@ class ClientThread(threading.Thread):
 
     def launch_job_instance(self, agent, job_instance, host_filename, playbook,
                             extra_vars):
+        """ Function that launches the Job Instance """
         try:
             command_result = Job_Instance_Command_Result.objects.get(
                 pk=job_instance.id)
@@ -1781,6 +1756,7 @@ class ClientThread(threading.Thread):
 
     def stop_job_instance_of(self, openbach_function_indexes, scenario_instance,
                              date=None):
+        """ Openbach Function that stops a Job Instance """
         job_instance_ids = []
         for openbach_function_id in openbach_function_indexes:
             try:
@@ -1792,22 +1768,21 @@ class ClientThread(threading.Thread):
             for job_instance in ofi.job_instance_set.all():
                 job_instance_ids.append(job_instance.id)
         self.stop_job_instance(job_instance_ids, date)
-
         return []
 
     def stop_job_instance_action(self, job_instance_ids, date=None):
+        """ Action that stops a Job Instance """
         thread = threading.Thread(
             target=self.stop_job_instance,
             args=(job_instance_ids, date))
         thread.start()
-
         return {}, 202
 
     def stop_job_instance(self, job_instance_ids, date=None):
+        """ Function that stops a Job Instance """
         job_instances = Job_Instance.objects.filter(pk__in=job_instance_ids)
-
-        no_job_instance = set(job_instance_ids) - set(map(attrgetter('id'), job_instances))
-
+        no_job_instance = set(job_instance_ids) - set(map(attrgetter('id'),
+                                                          job_instances))
         for job_instance_id in no_job_instance:
             try:
                 command_result = Job_Instance_Command_Result.objects.get(
@@ -1826,14 +1801,12 @@ class ClientThread(threading.Thread):
             command_result.status_stop.response = json.dumps(response)
             command_result.status_stop.returncode = 404
             command_result.status_stop.save()
-
         if not date:
             date = 'now'
             stop_date = timezone.now()
         else:
             stop_date = datetime.fromtimestamp(
                 date/1000, tz=timezone.get_current_timezone())
-
         for job_instance in job_instances:
             try:
                 command_result = Job_Instance_Command_Result.objects.get(
@@ -1887,25 +1860,26 @@ class ClientThread(threading.Thread):
                 command_result.status_stop.save()
 
     def restart_job_instance_of(self, job_instance_id, scenario_instance_id,
-                             instance_args, date=None, interval=None):
+                                instance_args, date=None, interval=None):
+        """ Openbach Function that restarts a Job Instance """
         self.restart_job_instance(job_instance_id, instance_args, date,
                                   interval, scenario_instance_id)
-
         return []
 
     def restart_job_instance_action(self, job_instance_id, instance_args,
                                     date=None, interval=None,
                                     scenario_instance_id=0):
+        """ Action that restarts a Job Instance """
         thread = threading.Thread(
             target=self.restart_job_instance,
             args=(job_instance_id, instance_args, date, interval,
                   scenario_instance_id))
         thread.start()
-
         return {}, 202
 
     def restart_job_instance(self, job_instance_id, instance_args, date=None,
                              interval=None, scenario_instance_id=0):
+        """ Function that restarts a Job Instance """
         try:
             command_result = Job_Instance_Command_Result.objects.get(
                 pk=job_instance_id)
@@ -1929,9 +1903,8 @@ class ClientThread(threading.Thread):
             command_result.status_restart.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
-        date = self.fill_job_instance(job_instance, instance_args, date,
-                                      interval, True)
+        date = self.fill_job_instance(
+            job_instance, instance_args, date, interval, True)
         job = job_instance.job.job
         agent = job_instance.job.agent
         host_filename = self.playbook_builder.write_hosts(
@@ -1965,35 +1938,27 @@ class ClientThread(threading.Thread):
         command_result.status_restart.returncode = 204
         command_result.status_restart.save()
 
-    def watch_job_instance_of(self, job_instance_id, date=None, interval=None,
-                           stop=None):
-        #TODO est-ce utile ? toutes les job_instance sont lance avec une watch
-        #     dans les scenarios
-        self.watch_job_instance(job_instance_id, date, interval, stop)
-
-        return []
-
     def watch_job_instance_action(self, job_instance_id, date=None,
                                   interval=None, stop=None):
-        return self.watch_job_instance(job_instance_id, date, interval, stop,
-                                       True)
+        """ Action that starts a watch on a Job Instance """
+        return self.watch_job_instance(
+            job_instance_id, date, interval, stop, True)
 
     def watch_job_instance(self, job_instance_id, date=None, interval=None,
                            stop=None, action=False):
+        """ Function that starts a watch on a Job Instance """
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
             raise BadRequest('This Job Instance isn\'t in the database', 404,
                              {'job_instance_id': job_instance_id})
         installed_job = job_instance.job
-
         try:
             watch = Watch.objects.get(pk=job_instance_id)
             if not interval and not stop:
                 raise BadRequest('A Watch already exists in the database', 400)
         except ObjectDoesNotExist:
             watch = Watch(job=installed_job, job_instance_id=job_instance_id)
-
         should_delete_watch = True
         if interval:
             should_delete_watch = False
@@ -2004,7 +1969,6 @@ class ClientThread(threading.Thread):
             if not date:
                 date = 'now'
         watch.save()
-
         job = watch.job.job
         agent = watch.job.agent
         host_filename = self.playbook_builder.write_hosts(
@@ -2020,13 +1984,13 @@ class ClientThread(threading.Thread):
                 args=(agent, watch, host_filename, playbook, extra_vars))
             thread.start()
             return {}, 202
-
         self.launch_watch(agent, watch, host_filename, playbook, extra_vars)
         if should_delete_watch:
             watch.delete()
         return None, 204
 
     def launch_watch(self, agent, watch, host_filename, playbook, extra_vars):
+        """ Function that launches the watch """
         try:
             command_result = Job_Instance_Command_Result.objects.get(
                 pk=watch.job_instance_id)
@@ -2062,6 +2026,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def update_instance(job_instance_id):
+        """ Function that the last status available of the Job Instance on the
+        Collector """
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         url = ClientThread.UPDATE_INSTANCE_URL.format(
             job_instance.job.job.name, job_instance.id,
@@ -2075,7 +2041,6 @@ class ClientThread(threading.Thread):
                 raise BadRequest(result['results'][0]['error'])
             except KeyError:
                 raise BadRequest('No data available')
-
         for column, value in zip(columns, values):
             if column == 'time':
                 date = datetime.fromtimestamp(value / 1000,
@@ -2086,15 +2051,12 @@ class ClientThread(threading.Thread):
         job_instance.status = status
         job_instance.save()
 
-#    def status_job_instance_of(self, job_instance_id, update=False):
-#        self.status_job_instance(job_instance_id, update)
-#
-#        return []
-
     def status_job_instance_action(self, job_instance_id, update=False):
+        """ Action that returns the status of a Job Instance """
         return self.status_job_instance(job_instance_id, update)
 
     def status_job_instance(self, job_instance_id, update=False):
+        """ Function that returns the status of a Job Instance """
         error_msg = None
         if update:
             try:
@@ -2137,21 +2099,17 @@ class ClientThread(threading.Thread):
             instance_infos['job_name'] = job_instance.job.__str__()
         return instance_infos, 200
 
-#    def list_job_instances_of(self, addresses, update=False):
-#        self.list_job_instances(addresses, update)
-#
-#        return []
-
     def list_job_instances_action(self, addresses, update=False):
+        """ Action taht lists all the Job Instances of one or more Agent """
         return self.list_job_instances(addresses, update)
 
     def list_job_instances(self, addresses, update=False):
+        """ Function taht lists all the Job Instances of one or more Agent """
         if not addresses:
             agents = Agent.objects.all()
         else:
             agents = Agent.objects.filter(pk__in=addresses)
         agents = agents.prefetch_related('installed_job_set')
-
         response = {'instances': []}
         try:
             for agent in agents:
@@ -2176,21 +2134,23 @@ class ClientThread(threading.Thread):
     def set_job_log_severity_of(self, address, job_name, severity,
                                 scenario_instance_id, date=None,
                                 local_severity=None):
+        """ Openbach Function that sets the log severity of a Job """
         self.set_job_log_severity(address, job_name, severity, date,
                                   local_severity, scenario_instance_id)
-
         return []
 
     def set_job_log_severity_action(self, address, job_name, severity,
                                     date=None, local_severity=None,
                                     scenario_instance_id=0):
-        return self.set_job_log_severity(address, job_name, severity, date,
-                                         local_severity, scenario_instance_id,
-                                         True)
+        """ Action that sets the log severity of a Job """
+        return self.set_job_log_severity(
+            address, job_name, severity, date, local_severity,
+            scenario_instance_id, True)
 
     def set_job_log_severity(self, address, job_name, severity, date=None,
                              local_severity=None, scenario_instance_id=0,
                              action=False):
+        """ Function that sets the log severity of a Job """
         try:
             command_result = Installed_Job_Command_Result.objects.get(
                 agent_ip=address, job_name=job_name)
@@ -2239,7 +2199,6 @@ class ClientThread(threading.Thread):
             command_result.status_log_severity.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
         try:
             job = Job.objects.get(name='rsyslog_job')
         except ObjectDoesNotExist:
@@ -2262,14 +2221,12 @@ class ClientThread(threading.Thread):
             command_result.status_log_severity.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
         job_instance = Job_Instance(job=logs_job)
         job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
         job_instance.save(force_insert=True)
-
         if action:
             thread = threading.Thread(
                 target=self.launch_set_job_log_severity,
@@ -2277,11 +2234,14 @@ class ClientThread(threading.Thread):
                       scenario_instance_id))
             thread.start()
             return {}, 202
-        self.launch_set_job_log_severity(job_instance, job_name, severity, date,
-                                         local_severity, scenario_instance_id)
+        self.launch_set_job_log_severity(
+            job_instance, job_name, severity, date, local_severity,
+            scenario_instance_id)
 
     def launch_set_job_log_severity(self, job_instance, job_name, severity,
                                     date, local_severity, scenario_instance_id):
+        """ Function that launches the changement of the log severity of a Job
+        """
         try:
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
@@ -2300,7 +2260,6 @@ class ClientThread(threading.Thread):
         instance_args = {'job_instance_id': job_instance.id, 'job_name':
                          [job_name]}
         date = self.fill_job_instance(job_instance, instance_args, date)
-
         logs_job_path = job_instance.job.job.path
         syslogseverity = convert_severity(int(severity))
         if not local_severity:
@@ -2318,20 +2277,18 @@ class ClientThread(threading.Thread):
             if syslogseverity_local == 8:
                 disable += 2
             else:
-                print('syslogseverity_local:', syslogseverity_local, file=extra_vars)
+                print('syslogseverity_local:', syslogseverity_local,
+                      file=extra_vars)
             print('job:', job_name, file=extra_vars)
-
             argument_instance = Optional_Job_Argument_Instance(
                 argument=job_instance.job.job.optional_job_argument_set.filter(
                     name='disable_code')[0],
-                job_instance=job_instance
-            )
+                job_instance=job_instance)
             argument_instance.save()
             Job_Argument_Value(
                 value=disable,
                 job_argument_instance=argument_instance
             ).save()
-
             args = self.format_args(job_instance)
             self.playbook_builder.build_enable_log(
                     syslogseverity, syslogseverity_local,
@@ -2360,7 +2317,6 @@ class ClientThread(threading.Thread):
         installed_job.severity = severity
         installed_job.local_severity = local_severity
         installed_job.save()
-
         result = None
         returncode = 204
         if scenario_instance_id != 0:
@@ -2382,15 +2338,16 @@ class ClientThread(threading.Thread):
     def set_job_stat_policy_of(self, address, job_name, scenario_instance_id,
                               stat_name=None, storage=None, broadcast=None,
                               date=None):
+        """ Openbach Function that sets the stat policy of a Job on an Agent """
         self.set_job_stat_policy(address, job_name, stat_name,
                                  storage, broadcast, date,
                                  scenario_instance_id)
-
         return []
 
     def set_job_stat_policy_action(self, address, job_name, stat_name=None,
                                    storage=None, broadcast=None, date=None,
                                    scenario_instance_id=0):
+        """ Action that sets the stat policy of a Job on an Agent """
         return self.set_job_stat_policy(address, job_name, stat_name,
                                         storage, broadcast, date,
                                         scenario_instance_id, True)
@@ -2398,6 +2355,7 @@ class ClientThread(threading.Thread):
     def set_job_stat_policy(self, address, job_name, stat_name=None,
                             storage=None, broadcast=None, date=None,
                             scenario_instance_id=0, action=False):
+        """ Function that sets the stat policy of a Job on an Agent """
         try:
             command_result = Installed_Job_Command_Result.objects.get(
                 agent_ip=address, job_name=job_name)
@@ -2446,7 +2404,6 @@ class ClientThread(threading.Thread):
             command_result.status_stat_policy.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
         if stat_name != None:
             statistic = installed_job.job.statistic_set.filter(name=stat_name)
             if not statistic:
@@ -2460,8 +2417,8 @@ class ClientThread(threading.Thread):
                 reason = response.pop('error')
                 raise BadRequest(reason, returncode, infos=response)
             statistic = statistic[0]
-            stat = Statistic_Instance.objects.get(stat=statistic,
-                                                  job=installed_job)
+            stat = Statistic_Instance.objects.get(
+                stat=statistic, job=installed_job)
             if not stat:
                 stat = Statistic_Instance(stat=statistic, job=installed_job)
                 stat.save()
@@ -2479,7 +2436,6 @@ class ClientThread(threading.Thread):
             if storage != None:
                 installed_job.default_stat_storage = storage
         installed_job.save()
-
         try:
             job = Job.objects.get(name='rstats_job')
         except ObjectDoesNotExist:
@@ -2502,14 +2458,12 @@ class ClientThread(threading.Thread):
             command_result.status_stat_policy.save()
             reason = response.pop('error')
             raise BadRequest(reason, returncode, infos=response)
-
         job_instance = Job_Instance(job=rstats_job)
         job_instance.status = 'Scheduled' # Scheduling ?
         job_instance.update_status = timezone.now()
         job_instance.start_date = timezone.now()
         job_instance.periodic = False
         job_instance.save(force_insert=True)
-
         if action:
             thread = threading.Thread(
                 target=self.launch_set_job_stat_policy,
@@ -2517,11 +2471,13 @@ class ClientThread(threading.Thread):
                       scenario_instance_id))
             thread.start()
             return {}, 202
-        self.launch_set_job_stat_policy(job_instance, job_name, date,
-                                        scenario_instance_id)
+        self.launch_set_job_stat_policy(
+            job_instance, job_name, date, scenario_instance_id)
 
     def launch_set_job_stat_policy(self, job_instance, job_name, date,
                                    scenario_instance_id):
+        """ Function that launches the changement of the stat policy of a Job on
+        an Agent """
         try:
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
@@ -2540,7 +2496,6 @@ class ClientThread(threading.Thread):
         instance_args = {'job_instance_id': job_instance.id, 'job_name':
                          [job_name]}
         date = self.fill_job_instance(job_instance, instance_args, date)
-
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
             print('[default]', file=rstats_filter)
             print('storage =', installed_job.default_stat_storage,
@@ -2590,22 +2545,22 @@ class ClientThread(threading.Thread):
     def if_of(self, condition, openbach_functions_true,
               openbach_functions_false, table, queues, scenario_instance,
               openbach_function_instance_id):
+        """ Openbach Function 'If' """
         thread_list = []
         if condition.get_value():
             for id_ in openbach_functions_true:
                 entry = table[id_]
-                openbach_functions_only_false = [ x for x in
-                                                  openbach_functions_false if x
-                                                  not in openbach_functions_true
-                                                ]
-                entry['wait_for_launched'] = set([ x for x in
-                                                   entry['wait_for_launched']
-                                                   if x not in
-                                                   openbach_functions_only_false ])
-                entry['wait_for_finished'] = set([ x for x in
-                                                   entry['wait_for_finished']
-                                                   if x not in
-                                                   openbach_functions_only_false ])
+                openbach_functions_only_false = [x for x in
+                                                 openbach_functions_false if x
+                                                 not in openbach_functions_true]
+                entry['wait_for_launched'] = set([x for x in
+                                                  entry['wait_for_launched']
+                                                  if x not in
+                                                  openbach_functions_only_false])
+                entry['wait_for_finished'] = set([x for x in
+                                                  entry['wait_for_finished']
+                                                  if x not in
+                                                  openbach_functions_only_false])
                 try:
                     entry['wait_if_true'].remove(openbach_function_instance_id)
                     entry['wait_if_false'].remove(openbach_function_instance_id)
@@ -2626,18 +2581,17 @@ class ClientThread(threading.Thread):
         else:
             for id_ in openbach_functions_false:
                 entry = table[id_]
-                openbach_functions_only_true = [ x for x in
-                                                 openbach_functions_true if x
-                                                 not in openbach_functions_false
-                                               ]
-                entry['wait_for_launched'] = set([ x for x in
-                                                   entry['wait_for_launched']
-                                                   if x not in
-                                                   openbach_functions_only_true ])
-                entry['wait_for_finished'] = set([ x for x in
-                                                   entry['wait_for_finished']
-                                                   if x not in
-                                                   openbach_functions_only_true ])
+                openbach_functions_only_true = [x for x in
+                                                openbach_functions_true if x
+                                                not in openbach_functions_false]
+                entry['wait_for_launched'] = set([x for x in
+                                                  entry['wait_for_launched']
+                                                  if x not in
+                                                  openbach_functions_only_true])
+                entry['wait_for_finished'] = set([x for x in
+                                                  entry['wait_for_finished']
+                                                  if x not in
+                                                  openbach_functions_only_true])
                 entry['wait_if_false'].remove(openbach_function_instance_id)
                 try:
                     entry['wait_if_true'].remove(openbach_function_instance_id)
@@ -2659,6 +2613,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def check_programmable(ofi_id, table):
+        """ Function that check if and openbach_function_instance is
+        programmable """
         entry = table[ofi_id]
         if entry['wait_while']:
             entry['programmable'] = False
@@ -2674,6 +2630,7 @@ class ClientThread(threading.Thread):
     def while_of(self, condition, openbach_functions_while,
                  openbach_functions_end, table, queues, scenario_instance,
                  openbach_function_instance_id):
+        """ Openbach Function 'While' """
         threads = []
         if condition.get_value():
             table[openbach_function_instance_id]['wait_for_launched'].clear()
@@ -2747,6 +2704,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def first_check_on_scenario(scenario_json):
+        """ Function that checks if a scenario in json is valid """
         if 'name' not in scenario_json:
             return False
         if not isinstance(scenario_json['name'], str):
@@ -2809,6 +2767,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def check_reference(arg_value):
+        """ Function that checks if the 'arg_value' is a reference """
         if isinstance(arg_value, str):
             substitution_pattern = '${}'
             escaped_substitution_pattern = '\${}'
@@ -2824,11 +2783,12 @@ class ClientThread(threading.Thread):
                 return True, scenario_arg
         else:
             value = arg_value
-
         return False, value
 
     @staticmethod
     def check_type_or_get_reference(argument, arg_value):
+        """ Function that checks the type of an argument value or get the
+        reference """
         expected_type = argument.type
         is_reference, value = ClientThread.check_reference(arg_value)
         if is_reference:
@@ -2845,6 +2805,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def check_type(argument, arg_value, scenario_arguments, scenario_constants):
+        """ Function that checks the type of an argument value """
         is_reference = ClientThread.check_type_or_get_reference(
             argument, arg_value)
         if is_reference:
@@ -2870,6 +2831,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_scenario(scenario_json, name, project=None, scenario=None):
+        """ Function that register a scenario """
         try:
             description = scenario_json['description']
         except KeyError:
@@ -2884,8 +2846,8 @@ class ClientThread(threading.Thread):
             raise BadRequest('This name of Scenario \'{}\' is already'
                              ' used'.format(name), 409)
         try:
-            result = ClientThread.register_scenario_arguments(scenario,
-                                                              scenario_json)
+            result = ClientThread.register_scenario_arguments(
+                scenario, scenario_json)
         except BadRequest:
             scenario.delete()
             raise
@@ -2893,47 +2855,12 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def check_condition(condition):
+        """ Function that checks if a condition json is well formed """
         try:
             condition_type = condition.pop('type')
         except KeyError:
             raise BadRequest('This Condition is malformed (no type)')
-        if condition_type == '=':
-            try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
-        elif condition_type == '<=':
-            try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
-        elif condition_type == '<':
-            try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
-        elif condition_type == '>=':
-            try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
-        elif condition_type == '>':
+        if condition_type in ['=', '<=', '<', '>=', '>']:
             try:
                 operand1 = condition.pop('operand1')
                 operand2 = condition.pop('operand2')
@@ -2949,25 +2876,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(new_condition)
-        elif condition_type == 'or':
-            try:
-                condition1 = condition.pop('condition1')
-                condition2 = condition.pop('condition2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_condition(condition1)
-            ClientThread.check_condition(condition2)
-        elif condition_type == 'and':
-            try:
-                condition1 = condition.pop('condition1')
-                condition2 = condition.pop('condition2')
-            except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
-                                 {'condition': condition_type})
-            ClientThread.check_condition(condition1)
-            ClientThread.check_condition(condition2)
-        elif condition_type == 'xor':
+        elif condition_type is in ['or',' and', 'xor']:
             try:
                 condition1 = condition.pop('condition1')
                 condition2 = condition.pop('condition2')
@@ -2982,6 +2891,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def check_operand(operand):
+        """ Function that checks if an operand jsonis well formed """
         try:
             operand_type = operand.pop('type')
         except KeyError:
@@ -3003,7 +2913,7 @@ class ClientThread(threading.Thread):
                 measurement = operand.pop('measurement')
                 field = operand.pop('field')
             except KeyError:
-                raise BadRequest('This Operand is malformed', 404,
+                raise BadRequest('This Operad is malformed', 404,
                                  {'operand': operand_type})
         else:
             raise BadRequest('This Operand is malformed', 404,
@@ -3011,6 +2921,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_scenario_arguments(scenario, scenario_json):
+        """ Function that register the scenario arguments """
         scenario_arguments = {}
         for arg_name, description in scenario_json['arguments'].items():
             try:
@@ -3026,8 +2937,7 @@ class ClientThread(threading.Thread):
         for const_name, const_value in scenario_json['constants'].items():
             sa = Scenario_Argument(
                 name=const_name,
-                scenario=scenario
-            )
+                scenario=scenario)
             scenario_constants[const_name] = {'value': const_value,
                                               'scenario_constant': sa}
         for openbach_function in scenario_json['openbach_functions']:
@@ -3044,8 +2954,8 @@ class ClientThread(threading.Thread):
                     offset = args.pop('offset')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 400, {'name':
-                                                             'start_job_instance'})
+                                     ' are malformed', 400, 
+                                     {'name': 'start_job_instance'})
                 of_argument = of.openbach_function_argument_set.get(
                     name='agent_ip')
                 ClientThread.check_type(of_argument, agent_ip,
@@ -3058,8 +2968,8 @@ class ClientThread(threading.Thread):
                     (job_name, job_args), = args.items()
                 except ValueError:
                     raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 400, {'name':
-                                                             'start_job_instance'})
+                                     ' are malformed', 400,
+                                     {'name': 'start_job_instance'})
                 try:
                     job = Job.objects.get(name=job_name)
                 except ObjectDoesNotExist:
@@ -3079,13 +2989,12 @@ class ClientThread(threading.Thread):
                                                    'argument_name': job_arg})
                     if isinstance(job_value, list):
                         for v in job_value:
-                            ClientThread.check_type(ja, v,
-                                                    scenario_arguments,
-                                                    scenario_constants)
+                            ClientThread.check_type(
+                                ja, v, scenario_arguments, scenario_constants)
                     else:
-                        ClientThread.check_type(ja, job_value,
-                                                scenario_arguments,
-                                                scenario_constants)
+                        ClientThread.check_type(
+                            ja, job_value, scenario_arguments,
+                            scenario_constants)
             elif name == 'if':
                 try:
                     openbach_function_true_indexes = args.pop(
@@ -3106,9 +3015,9 @@ class ClientThread(threading.Thread):
                                         scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_false')
-                ClientThread.check_type(of_argument,
-                                        openbach_function_false_indexes,
-                                        scenario_arguments, scenario_constants)
+                ClientThread.check_type(
+                    of_argument, openbach_function_false_indexes,
+                    scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             elif name == 'while':
                 try:
@@ -3125,14 +3034,14 @@ class ClientThread(threading.Thread):
                                      ' are malformed', 400, {'name': 'while'})
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_while')
-                ClientThread.check_type(of_argument,
-                                        openbach_function_while_indexes,
-                                        scenario_arguments, scenario_constants)
+                ClientThread.check_type(
+                    of_argument, openbach_function_while_indexes,
+                    scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_end')
-                ClientThread.check_type(of_argument,
-                                        openbach_function_end_indexes,
-                                        scenario_arguments, scenario_constants)
+                ClientThread.check_type(
+                    of_argument, openbach_function_end_indexes,
+                    scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             else:
                 for of_arg, of_value in args.items():
@@ -3174,12 +3083,12 @@ class ClientThread(threading.Thread):
             except IntegrityError:
                 raise BadRequest('At least two constants have the same name',
                                  409, infos={'name': arg['name']})
-
         result['scenario_name'] = scenario.name
         return result, 200
 
     @staticmethod
     def get_default_value(type_):
+        """ Function that returns the default value of a type """
         if type_ == 'int':
             return 0
         elif type_ == 'bool':
@@ -3198,6 +3107,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def is_a_leaf(entry):
+        """ Function that says if and openbach function instance is a leaf, ie
+        no other openbach function instance is waiting after it """
         if entry['is_waited_for_finished']:
             return False
         if entry['is_waited_for_launched']:
@@ -3213,6 +3124,7 @@ class ClientThread(threading.Thread):
         return True
 
     def check_scenario(self, scenario):
+        """ Function that checks if a scenario is valid """
         args = {}
         for scenario_argument in scenario.scenario_argument_set.all():
             try:
@@ -3246,21 +3158,20 @@ class ClientThread(threading.Thread):
                         table[id_]['is_waited_for_finished'].remove(ofi_id)
                     del table[ofi_id]
                     has_changed = True
-
         scenario_instance.delete()
-
         if table != {}:
             raise BadRequest('Your Scenario is malformed: the tree is wrong')
 
     def create_scenario_action(self, scenario_json, project_name=None):
+        """ Action that creates a scenario """
         result = self.create_scenario(scenario_json, project_name)
         return result
 
     def create_scenario(self, scenario_json, project_name=None):
+        """ Function that creates a scenario """
         if not self.first_check_on_scenario(scenario_json):
             raise BadRequest('Your Scenario is malformed: the json is malformed')
         name = scenario_json['name']
-
         if project_name:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3269,7 +3180,6 @@ class ClientThread(threading.Thread):
                                  {'project_name': project_name})
         else:
             project = None
-
         result = self.register_scenario(scenario_json, name, project)
         scenario = Scenario.objects.get(name=name, project=project)
         try:
@@ -3277,13 +3187,14 @@ class ClientThread(threading.Thread):
         except BadRequest:
             scenario.delete()
             raise
-
         return result
 
     def del_scenario_action(self, scenario_name, project_name=None):
+        """ Action that deletes a scenario """
         return self.del_scenario(scenario_name, project_name)
 
     def del_scenario(self, scenario_name, project_name=None):
+        """ Function that deletes a scenario """
         if project_name is not None:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3298,16 +3209,16 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
-
         scenario.delete()
-
         return None, 204
 
     def modify_scenario_action(self, scenario_json, scenario_name,
                                project_name=None):
+        """ Action that modifies a scenario """
         return self.modify_scenario(scenario_json, scenario_name, project_name)
 
     def modify_scenario(self, scenario_json, scenario_name, project_name=None):
+        """ Function that modifies a scenario """
         if not self.first_check_on_scenario(scenario_json):
             raise BadRequest('Your Scenario is malformed')
         name = scenario_json['name']
@@ -3323,7 +3234,6 @@ class ClientThread(threading.Thread):
                                  {'project_name': project_name})
         else:
             project = None
-
         with transaction.atomic():
             try:
                 scenario = Scenario.objects.get(name=scenario_name,
@@ -3334,13 +3244,14 @@ class ClientThread(threading.Thread):
             self.register_scenario(scenario_json, name, project)
             scenario = Scenario.objects.get(name=scenario_name, project=project)
             self.check_scenario(scenario)
-
         return None, 204
 
     def get_scenario_action(self, scenario_name, project_name=None):
+        """ Action that returns a scenario """
         return self.get_scenario(scenario_name, project_name)
 
     def get_scenario(self, scenario_name, project_name=None):
+        """ Function that returns a scenario """
         if project_name:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3355,13 +3266,14 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Scenario is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
-
         return scenario.get_json(), 200
 
     def list_scenarios_action(self, project_name=None):
+        """ Action that returns a list of scenarios """
         return self.list_scenarios(project_name)
 
     def list_scenarios(self, project_name=None):
+        """ Function that returns a list of scenarios """
         if project_name:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3374,17 +3286,17 @@ class ClientThread(threading.Thread):
         response = []
         for scenario in scenarios:
             response.append(scenario.get_json())
-
         return response, 200
 
     @staticmethod
     def register_openbach_function_argument_instance(arg_name, arg_value,
                                                      openbach_function_instance,
                                                      scenario_instance):
+        """ Function that registers an openbach function argument instance """
         of = openbach_function_instance.openbach_function
         ofai = Openbach_Function_Argument_Instance(
-            argument=Openbach_Function_Argument.objects.get(name=arg_name,
-                                                            openbach_function=of),
+            argument=Openbach_Function_Argument.objects.get(
+                name=arg_name, openbach_function=of),
             openbach_function_instance=openbach_function_instance)
         of_argument = Openbach_Function_Argument.objects.get(
             name=arg_name, openbach_function=of)
@@ -3402,6 +3314,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def get_value(value, scenario_instance):
+        """ Function that returns the true value of an argument (get the value
+        of the reference if it is a reference, ...) """
         is_reference, value = ClientThread.check_reference(value)
         if is_reference:
             sa = scenario_instance.scenario.scenario_argument_set.get(
@@ -3418,6 +3332,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_operand(operand_json, scenario_instance):
+        """ Function that registers an operand """
         operand_type = operand_json.pop('type')
         if operand_type == 'database':
             name = operand_json.pop('name')
@@ -3435,110 +3350,70 @@ class ClientThread(threading.Thread):
             measurement = ClientThread.get_value(measurement, scenario_instance)
             field = ClientThread.get_value(field, scenario_instance)
             operand = Operand_Statistic(measurement=measurement, field=field)
-
         operand.save()
         return operand
 
     @staticmethod
     def register_condition(condition_json, scenario_instance):
+        """ Function that registers a condition """
         condition_type = condition_json.pop('type')
+        if condition_type in ['or', 'and', 'xor']:
+            condition1_json = condition_json.pop('condition1')
+            condition1 = ClientThread.register_condition(
+                condition1_json, scenario_instance)
+            condition2_json = condition_json.pop('condition2')
+            condition2 = ClientThread.register_condition(
+                condition2_json, scenario_instance)
+        elif condition_type in ['=', '!=', '>=', '>', '<=', '<']:
+            operand1_json = condition_json.pop('operand1')
+            operand1 = ClientThread.register_operand(
+                operand1_json, scenario_instance)
+            operand2_json = condition_json.pop('operand2')
+            operand2 = ClientThread.register_operand(
+                operand2_json, scenario_instance)
         if condition_type == 'not':
             new_condition_json = condition_json.pop('condition')
-            new_condition = ClientThread.register_condition(new_condition_json,
-                                                            scenario_instance)
-            condition = Condition_Not(condition=condition)
+            new_condition = ClientThread.register_condition(
+                new_condition_json, scenario_instance)
+            condition = Condition_Not(condition=new_condition)
         elif condition_type == 'or':
-            condition1_json = condition_json.pop('condition1')
-            condition1 = ClientThread.register_condition(condition1_json,
-                                            scenario_instance)
-            condition2_json = condition_json.pop('condition2')
-            condition2 = ClientThread.register_condition(condition2_json,
-                                            scenario_instance)
-            condition = Condition_Or(condition1=condition1,
-                                     condition2=condition2)
+            condition = Condition_Or(
+                condition1=condition1, condition2=condition2)
         elif condition_type == 'and':
-            condition1_json = condition_json.pop('condition1')
-            condition1 = ClientThread.register_condition(condition1_json,
-                                            scenario_instance)
-            condition2_json = condition_json.pop('condition2')
-            condition2 = ClientThread.register_condition(condition2_json,
-                                            scenario_instance)
-            condition = Condition_And(condition1=condition1,
-                                     condition2=condition2)
+            condition = Condition_And(
+                condition1=condition1, condition2=condition2)
         elif condition_type == 'xor':
-            condition1_json = condition_json.pop('condition1')
-            condition1 = ClientThread.register_condition(condition1_json,
-                                            scenario_instance)
-            condition2_json = condition_json.pop('condition2')
-            condition2 = ClientThread.register_condition(condition2_json,
-                                            scenario_instance)
-            condition = Condition_Xor(condition1=condition1,
-                                     condition2=condition2)
+            condition = Condition_Xor(
+                condition1=condition1, condition2=condition2)
         elif condition_type == '=':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
             condition = Condition_Equal(operand1=operand1, operand2=operand2)
         elif condition_type == '!=':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
             condition = Condition_Unequal(operand1=operand1, operand2=operand2)
         elif condition_type == '<=':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
-            condition = Condition_Below_Or_Equal(operand1=operand1,
-                                                 operand2=operand2)
+            condition = Condition_Below_Or_Equal(
+                operand1=operand1, operand2=operand2)
         elif condition_type == '<':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
             condition = Condition_Below(operand1=operand1, operand2=operand2)
         elif condition_type == '>=':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
-            condition = Condition_Upper_Or_Equal(operand1=operand1,
-                                                 operand2=operand2)
+            condition = Condition_Upper_Or_Equal(
+                operand1=operand1, operand2=operand2)
         elif condition_type == '>':
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(operand1_json,
-                                        scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(operand2_json,
-                                        scenario_instance)
             condition = Condition_Upper(operand1=operand1, operand2=operand2)
-
         condition.save()
         return condition
 
     @staticmethod
     def register_openbach_function_instances(scenario_instance):
+        """ Function that registers the openbach function instances """
         scenario_json = json.loads(scenario_instance.scenario.scenario)
         openbach_function_id = 1
         for openbach_function in scenario_json['openbach_functions']:
             wait = openbach_function.pop('wait', None)
             (name, args), = openbach_function.items()
             of = Openbach_Function.objects.get(pk=name)
-            ofi = Openbach_Function_Instance(openbach_function=of,
-                                             scenario_instance=scenario_instance,
-                                             openbach_function_instance_id=openbach_function_id)
+            ofi = Openbach_Function_Instance(
+                openbach_function=of, scenario_instance=scenario_instance,
+                openbach_function_instance_id=openbach_function_id)
             ofi.save()
             if name == 'start_job_instance':
                 agent_ip = args.pop('agent_ip')
@@ -3587,8 +3462,8 @@ class ClientThread(threading.Thread):
                     'openbach_functions_false',
                     openbach_function_false_indexes, ofi, scenario_instance)
                 condition_json = args.pop('condition')
-                condition = ClientThread.register_condition(condition_json,
-                                                            scenario_instance)
+                condition = ClientThread.register_condition(
+                    condition_json, scenario_instance)
                 ofi.condition = condition
             elif name == 'while':
                 openbach_function_while_indexes = args.pop(
@@ -3613,8 +3488,9 @@ class ClientThread(threading.Thread):
                 ofi.time = wait['time']
                 ofi.save()
                 for index in wait['launched_indexes']:
-                    wfl = Wait_For_Launched(openbach_function_instance=ofi,
-                                            openbach_function_instance_id_waited=index)
+                    wfl = Wait_For_Launched(
+                        openbach_function_instance=ofi,
+                        openbach_function_instance_id_waited=index)
                     wfl.save()
                 for index in wait['finished_indexes']:
                     wff = Wait_For_Finished(openbach_function_instance=ofi,
@@ -3624,11 +3500,12 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_scenario_instance(scenario, args):
+        """ Function that registers a scenario instance """
         scenario_instance = Scenario_Instance(scenario=scenario)
         scenario_instance.status = 'Scheduling'
         scenario_instance.status_date = timezone.now()
         scenario_instance.save()
-        # Enregistrer les args de l'instance de scenario
+        # Register the scenario instance's args
         for arg_name, arg_value in args.items():
             try:
                 scenario_argument = scenario.scenario_argument_set.get(
@@ -3648,13 +3525,13 @@ class ClientThread(threading.Thread):
                 except ValueError as e:
                     raise BadRequest(e.args[0], 400)
                 sai.save()
-
         ClientThread.register_openbach_function_instances(scenario_instance)
-
         return scenario_instance
 
     @staticmethod
     def build_entry(programmable=True):
+        """ Function that builds an entry for the table of openbach function
+        instance """
         return {'wait_for_launched': set(),
                 'is_waited_for_launched': set(),
                 'wait_for_finished': set(),
@@ -3671,6 +3548,8 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def build_table(scenario_instance):
+        """ Function that builds the table of openbach function instance of a
+        scenario instance """
         table = {}
         for ofi in scenario_instance.openbach_function_instance_set.all():
             ofi_id = ofi.openbach_function_instance_id
@@ -3779,11 +3658,12 @@ class ClientThread(threading.Thread):
 
     def launch_openbach_function_instance(self, scenario_instance, ofi_id,
                                           table, queues):
+        """ Function that launch an openbach function instance """
         entry = table[ofi_id]
         queue = queues[ofi_id]
         launch_queues = [ queues[id] for id in entry['is_waited_for_launched'] ]
-        finished_queues = tuple([ queues[id] for id in
-                                 entry['is_waited_for_finished'] ])
+        finished_queues = tuple([queues[id] for id in
+                                 entry['is_waited_for_finished']])
         waited_ids = entry['wait_for_launched'].union(
             entry['wait_for_finished'])
         ofi = scenario_instance.openbach_function_instance_set.get(
@@ -3812,8 +3692,8 @@ class ClientThread(threading.Thread):
             name = '{}_of'.format(name)
             function = getattr(self, name)
         except AttributeError:
-            self.stop_scenario_instance_of(scenario_instance.id,
-                                           state='Finished KO') # state=Error ?
+            self.stop_scenario_instance_of(
+                scenario_instance.id, state='Finished KO') # state=Error ?
             return
         arguments = {}
         for arg in ofi.openbach_function_argument_instance_set.all():
@@ -3851,8 +3731,8 @@ class ClientThread(threading.Thread):
         try:
             threads = function(**arguments)
         except BadRequest:
-            self.stop_scenario_instance_of(scenario_instance.id,
-                                           state='Finished KO') # state=Error ?
+            self.stop_scenario_instance_of(
+                scenario_instance.id, state='Finished KO') # state=Error ?
             return
         if not t.do_run:
             ofi.status = 'Stopped'
@@ -3870,6 +3750,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def wait_threads_to_finish(scenario_instance_id, threads):
+        """ Function that waits the threads to finish """
         for thread in threads:
             thread.join()
         finished = True
@@ -3891,10 +3772,10 @@ class ClientThread(threading.Thread):
 
     def start_scenario_instance_of(self, scenario_name, arguments, ofi,
                                    date=None):
+        """ Openbach Function that starts a scenario instance """
         project_name = ofi.scenario_instance.scenario.project.name
         result, _ = self.start_scenario_instance(scenario_name, arguments, date,
                                                  project_name)
-
         scenario_instance_id = result['scenario_instance_id']
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
@@ -3905,11 +3786,13 @@ class ClientThread(threading.Thread):
 
     def start_scenario_instance_action(self, scenario_name, arguments,
                                        date=None, project_name=None):
+        """ Action that starts a scenario instance """
         return self.start_scenario_instance(scenario_name, arguments, date,
                                             project_name)
 
     def start_scenario_instance(self, scenario_name, arguments, date=None,
                                 project_name=None):
+        """ Function that starts a scenario instance """
         if project_name:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3926,7 +3809,7 @@ class ClientThread(threading.Thread):
                                     'project_name': project_name})
         scenario_instance = self.register_scenario_instance(scenario, arguments)
         table = self.build_table(scenario_instance)
-        # lance les openbach function possible
+        # launch the openbach function programmable
         queues = {id: Queue() for id in table}
         thread_list = []
         for ofi_id, entry in table.items():
@@ -3950,14 +3833,14 @@ class ClientThread(threading.Thread):
             if scenario_instance.id not in threads:
                 threads[scenario_instance.id] = {}
             threads[scenario_instance.id][0] = thread
-
         return {'scenario_instance_id': scenario_instance.id}, 200
 
     def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
                                   date=None, scenario_name=None,
                                   project_name=None):
-        self.stop_scenario_instance(scenario_instance_id, date, scenario_name,
-                                    project_name)
+        """ Openbach Function that stops the scenario instance """
+        self.stop_scenario_instance(
+            scenario_instance_id, date, scenario_name, project_name)
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         scenario_instance.status = state
@@ -3966,11 +3849,13 @@ class ClientThread(threading.Thread):
 
     def stop_scenario_instance_action(self, scenario_instance_id, date=None,
                                       scenario_name=None, project_name=None):
-        return self.stop_scenario_instance(scenario_instance_id, date,
-                                           scenario_name, project_name)
+        """ Action that stops the scenario instance """
+        return self.stop_scenario_instance(
+            scenario_instance_id, date, scenario_name, project_name)
 
     def stop_scenario_instance(self, scenario_instance_id, date=None,
                                scenario_name=None, project_name=None):
+        """ Function that stops the scenario instance """
         if project_name is not None:
             try:
                 project = Project.objects.get(name=project_name)
@@ -3981,8 +3866,8 @@ class ClientThread(threading.Thread):
             project = None
         if scenario_name is not None:
             try:
-                scenario = Scenario.objects.get(name=scenario_name,
-                                                project=project)
+                scenario = Scenario.objects.get(
+                    name=scenario_name, project=project)
             except ObjectDoesNotExist:
                 raise BadRequest('This Scenario is not in the database', 404,
                                  infos={'scenario_name': scenario_name,
@@ -4026,10 +3911,10 @@ class ClientThread(threading.Thread):
         scenario_instance.status_date = timezone.now()
         scenario_instance.is_stopped = True
         scenario_instance.save()
-
         return None, 204
 
     def infos_openbach_function_instance(self, openbach_function_instance):
+        """ Function that returns the infos of an openbach function instance """
         infos = {}
         infos['name'] = openbach_function_instance.openbach_function.name
         if (openbach_function_instance.openbach_function.name ==
@@ -4071,6 +3956,7 @@ class ClientThread(threading.Thread):
         return infos
 
     def infos_scenario_instance(self, scenario_instance):
+        """ Function that returns the infos of a scenario instance """
         if scenario_instance.openbach_function_instance_master is not None:
             owner_scenario_instance_id = scenario_instance.openbach_function_instance_master.scenario_instance.id
         else:
@@ -4106,9 +3992,11 @@ class ClientThread(threading.Thread):
 
     def list_scenario_instances_action(self, scenario_name=None,
                                        project_name=None):
+        """ Action that lists the scenario instances """
         return self.list_scenario_instances(scenario_name, project_name)
 
     def list_scenario_instances(self, scenario_name=None, project_name=None):
+        """ Function that lists the scenario instances """
         if project_name is not None:
             try:
                 project = Project.objects.get(name=project_name)
@@ -4120,23 +4008,22 @@ class ClientThread(threading.Thread):
             scenarios = Scenario.objects.all()
         if scenario_name is not None:
             scenarios = scenarios.filter(name=scenario_name)
-
         result = []
         for scenario in scenarios:
             scenario_instances = [
                 self.infos_scenario_instance(scenario_instance)
-                for scenario_instance in scenario.scenario_instance_set.all()
-            ]
+                for scenario_instance in scenario.scenario_instance_set.all()]
             result += scenario_instances
-
         return result, 200
 
-    def status_scenario_instance_action(self, scenario_instance_id,
-                                        project_name=None):
-        return self.status_scenario_instance(scenario_instance_id, project_name)
+    def get_scenario_instance_action(self, scenario_instance_id,
+                                     project_name=None):
+        """ Action that returns the infos of a scenario instance """
+        return self.get_scenario_instance(scenario_instance_id, project_name)
 
-    def status_scenario_instance(self, scenario_instance_id, scenario_name=None,
-                                 project_name=None):
+    def get_scenario_instance(self, scenario_instance_id, scenario_name=None,
+                              project_name=None):
+        """ Function that returns the infos of a scenario instance """
         if project_name is not None:
             try:
                 project = Project.objects.get(name=project_name)
@@ -4169,14 +4056,14 @@ class ClientThread(threading.Thread):
                                  {'scenario_instance_id': scenario_instance_id,
                                  'scenario_name': scenario_name})
         result = self.infos_scenario_instance(scenario_instance)
-        result['scenario_name'] = scenario_instance.scenario.name
-
         return result, 200
 
     def kill_all_action(self, date=None):
+        """ Action that kills all scenario instances, job instances and watches """
         return self.kill_all(date)
 
     def kill_all(self, date=None):
+        """ Function that kills all scenario instances, job instances and watches """
         for scenario_instance in Scenario_Instance.objects.all():
             if not scenario_instance.is_stopped:
                 self.stop_scenario_instance_action(scenario_instance.id)
@@ -4190,13 +4077,13 @@ class ClientThread(threading.Thread):
                 result, returncode = self.watch_job_instance_action(
                     watch.job_instance.id, stop='now')
             except BadRequest:
-                #TODO mieux gerer les erreurs !
+                #TODO better handling of the errors
                 pass
-
         return None, 204
 
     @staticmethod
     def first_check_on_project(project_json):
+        """ Function that checks if a project in json is well formed """
         required_parameters = ('name', 'description', 'entity', 'network',
                                'scenario')
         try:
@@ -4218,6 +4105,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def first_check_on_entity(entity_json):
+        """ Function that check if an entity in json is well formed """
         required_parameters = ('name', 'description', 'agent', 'networks')
         try:
             for k in required_parameters:
@@ -4249,6 +4137,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def first_check_on_network(network_json):
+        """ Function that check if a network in json is well formed """
         if not isinstance(network_json, list):
             return False
         for network in network_json:
@@ -4258,6 +4147,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_entity(entity_json, project_name):
+        """ Function that register an entity """
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoeNotExist:
@@ -4265,8 +4155,7 @@ class ClientThread(threading.Thread):
         entity = Entity(
             name=entity_json['name'],
             project=project,
-            description=entity_json['description']
-        )
+            description=entity_json['description'])
         if entity_json['agent'] != None:
             try:
                 agent = Agent.objects.get(pk=entity_json['agent']['address'])
@@ -4280,8 +4169,8 @@ class ClientThread(threading.Thread):
             raise BadRequest('A Entity with this name already exists')
         for network_name in entity_json['networks']:
             try:
-                network = Network.objects.get(name=network_name,
-                                              project=project)
+                network = Network.objects.get(
+                    name=network_name, project=project)
             except ObjectDoesNotExist:
                 raise BadRequest('This network \'{}\' does not exist in the'
                                  ' database'.format(network), 404)
@@ -4289,6 +4178,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def register_network(network_json, project_name):
+        """ Function that register a network """
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoeNotExist:
@@ -4299,9 +4189,10 @@ class ClientThread(threading.Thread):
             raise BadRequest('This name of Network is already used')
 
     def register_project(self, project_json):
+        """ Function that register a project """
         name = project_json['name']
-        project = Project(name=name,
-                          description=project_json['description'])
+        project = Project(
+            name=name, description=project_json['description'])
         try:
             project.save(force_insert=True)
         except IntegrityError:
@@ -4322,8 +4213,8 @@ class ClientThread(threading.Thread):
         for entity in entities:
             if not self.first_check_on_entity(entity):
                 project.delete()
-                raise BadRequest('Your Project is malformed: the json is'
-                                 ' malformed')
+                raise BadRequest(
+                    'Your Project is malformed: the json is malformed')
             try:
                 self.register_entity(entity, name)
             except BadRequest:
@@ -4338,18 +4229,22 @@ class ClientThread(threading.Thread):
                 raise
 
     def add_project_action(self, project_json):
+        """ Action that adds a project """
         return self.add_project(project_json)
 
     def add_project(self, project_json):
+        """ Function that adds a project """
         if not self.first_check_on_project(project_json):
             raise BadRequest('Your Project is malformed: the json is malformed')
         self.register_project(project_json)
         return self.get_project(project_name)
 
     def modify_project_action(self, project_name, project_json):
+        """ Action thats modifies a project """
         return self.modify_project(project_name, project_json)
 
     def modify_project(self, project_name, project_json):
+        """ Function thats modifies a project """
         if not self.first_check_on_project(project_json):
             raise BadRequest('Your Project is malformed: the json is malformed')
         if project_name != project_json['name']:
@@ -4365,9 +4260,11 @@ class ClientThread(threading.Thread):
         return None, 204
 
     def del_project_action(self, project_name):
+        """ Action that deletes a project """
         return self.del_project(project_name)
 
     def del_project(self, project_name):
+        """ Function that deletes a project """
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoesNotExist:
@@ -4377,9 +4274,11 @@ class ClientThread(threading.Thread):
         return None, 204
 
     def get_project_action(self, project_name):
+        """ Action that returns a project """
         return self.get_project(project_name)
 
     def get_project(self, project_name):
+        """ Function that returns a project """
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoesNotExist:
@@ -4388,15 +4287,19 @@ class ClientThread(threading.Thread):
         return project.get_json(), 200
 
     def list_projects_action(self):
+        """ Action that lists all projects """
         return self.list_projects()
 
     def list_projects(self):
+        """ Function that lists all projects """
         result = []
         for project in Project.objects.all():
             result.append(project.get_json())
         return result, 200
 
     def state_collector_action(self, address):
+        """ Action that return the state of the last actions done on the
+        Collector """
         try:
             command_result = Collector_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -4406,6 +4309,8 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def state_agent_action(self, address):
+        """ Action that return the state of the last actions done on the
+        Agent """
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except ObjectDoesNotExist:
@@ -4415,6 +4320,8 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def state_job_action(self, address, job_name):
+        """ Action that return the state of the last actions done on the
+        Agent for this Job """
         try:
             command_result = Installed_Job_Command_Result.objects.get(
                 agent_ip=address, job_name=job_name)
@@ -4425,6 +4332,8 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def state_push_file_action(self, filename, remote_path, address):
+        """ Action that return the state of the last action done with this file
+        on the Agent """
         try:
             command_result = File_Command_Result.objects.get(
                 filename=filename, remote_path=remote_path, address=address)
@@ -4433,6 +4342,8 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def state_job_instance_action(self, job_instance_id):
+        """ Action that return the state of the last actions done on the
+        Job Instance """
         try:
             command_result = Job_Instance_Command_Result.objects.get(
                 job_instance_id=job_instance_id)
@@ -4441,6 +4352,7 @@ class ClientThread(threading.Thread):
         return command_result.get_json(), 200
 
     def run(self):
+        """ Main function """
         request, fifoname = recv_fifo(self.clientsocket)
         try:
             response, returncode = self.execute_request(request)
@@ -4461,12 +4373,14 @@ class ClientThread(threading.Thread):
 
 
 def listen_message_from_backend(tcp_socket):
+    """ Function that listens the messages from the Backend """
     while True:
         client_socket, _ = tcp_socket.accept()
         ClientThread(client_socket).start()
 
 
 def handle_message_from_status_manager(clientsocket):
+    """ Function that handles the messages from the Status Manager """
     playbook_builder = PlaybookBuilder('/tmp/')
     request = clientsocket.recv(4096)
     clientsocket.close()
@@ -4500,9 +4414,8 @@ def handle_message_from_status_manager(clientsocket):
             agent.address, 'handle_message_from_status_manager')
         with playbook_builder.playbook_file() as playbook, playbook_builder.extra_vars_file() as extra_vars:
             playbook_builder.build_status(
-                    job.name, job_instance_id,
-                    None, None, 'now',
-                    playbook, extra_vars)
+                job.name, job_instance_id, None, None, 'now', playbook,
+                extra_vars)
         try:
             playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e '
@@ -4518,6 +4431,7 @@ def handle_message_from_status_manager(clientsocket):
 
 
 def listen_message_from_status_manager(tcp_socket):
+    """ Function that listens the messages from the Status Manager """
     while True:
         client_socket, _ = tcp_socket.accept()
         threading.Thread(target=handle_message_from_status_manager,
@@ -4527,28 +4441,28 @@ def listen_message_from_status_manager(tcp_socket):
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, signal_term_handler)
 
-    # Ouverture de la socket d'ecoute avec le backend
+    # Open the listening socket with the Backend
     tcp_socket1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcp_socket1.bind(('', 1113))
     tcp_socket1.listen(10)
 
-    # Ouverture de la socket d'ecoute avec le status_manager
+    # Open the listening socket with the Status Manager
     tcp_socket2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcp_socket2.bind(('', 2846))
     tcp_socket2.listen(10)
 
-    # Initialiser le WaitingQueueManager
+    # Initialize the WaitingQueueManager
     WaitingQueueManager(init=True)
 
-    # Initialiser le ThreadManager
+    # Initialize the ThreadManager
     ThreadManager(init=True)
 
-    thread1 = threading.Thread(target=listen_message_from_backend,
-                               args=(tcp_socket1,))
+    # Launch the 2 mains threads
+    thread1 = threading.Thread(
+        target=listen_message_from_backend, args=(tcp_socket1,))
     thread1.start()
-    thread2 = threading.Thread(target=listen_message_from_status_manager,
-                               args=(tcp_socket2,))
+    thread2 = threading.Thread(
+        target=listen_message_from_status_manager, args=(tcp_socket2,))
     thread2.start()
-

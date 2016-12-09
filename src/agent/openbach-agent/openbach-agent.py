@@ -39,18 +39,15 @@ import time
 import socket
 import threading
 import signal
-import shutil
 import yaml
 from subprocess import DEVNULL
 from functools import partial
 from datetime import datetime
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
-from apscheduler.util import datetime_repr
-
+#from apscheduler.util import datetime_repr
 import psutil
 import collect_agent
 
@@ -78,6 +75,13 @@ except ImportError:
         r'C:\openbach\openbach-agent_filter.conf')
 
 
+# Configure logger
+syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
+
+
+signal.signal(signal.SIGTERM, signal_term_handler)
+
+
 class JobManager:
     """Context manager around job scheduling"""
     __shared_state = {}  # Borg pattern
@@ -102,11 +106,13 @@ class JobManager:
 
 
 def pid_filename(job, instance):
+    """ Function that contructs the filename of the pid file """
     filename = '{}{}.pid'.format(job, instance)
     return os.path.join(PID_FOLDER, filename)
 
 
 def list_jobs_in_dir(dirname):
+    """ Function that lists all the Jobs in the directory """
     for filename in os.listdir(dirname):
         name, ext = os.path.splitext(filename)
         if ext == '.yml':
@@ -114,6 +120,7 @@ def list_jobs_in_dir(dirname):
 
 
 def signal_term_handler(signal, frame):
+    """ Function that handle the kill of the Openbach Agent """
     scheduler = JobManager().scheduler
     scheduler.remove_all_jobs()
     with JobManager() as all_jobs:
@@ -124,7 +131,6 @@ def signal_term_handler(signal, frame):
                 scheduler.add_job(stop_job, 'date',
                         args=(name, job_instance_id, command_stop, arguments),
                         id='{}{}_stop'.format(name, job_instance_id))
-
     while scheduler.get_jobs():
         time.sleep(0.5)
     scheduler.shutdown()
@@ -136,6 +142,7 @@ def signal_term_handler(signal, frame):
 
 def launch_job(job_name, job_instance_id, scenario_instance_id,
                owner_scenario_instance_id, command, args):
+    """ Function that launches the Job Instance """
     environ = os.environ.copy()
     environ.update({'JOB_NAME': job_name, 'JOB_INSTANCE_ID': job_instance_id,
                     'SCENARIO_INSTANCE_ID': scenario_instance_id,
@@ -149,6 +156,7 @@ def launch_job(job_name, job_instance_id, scenario_instance_id,
 
 
 def stop_job(job_name, job_instance_id, command=None, args=None):
+    """ Function that stops the Job Instance """
     try:
         JobManager().scheduler.remove_job(job_name + job_instance_id)
     except JobLookupError:
@@ -158,19 +166,16 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
                 pid = int(f.read())
         except FileNotFoundError:
             return
-
         proc = psutil.Process(pid)
         for child in proc.children():
             child.terminate()
         proc.terminate()
         proc.wait()
         os.remove(filename)
-
         if command:
             psutil.Popen(
                 command.split() + args.split(),
                 stdout=DEVNULL, stderr=DEVNULL).wait()
-
     try:
         with JobManager(job_name) as job:
             del job['instances'][job_instance_id]
@@ -179,10 +184,9 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
 
 
 def status_job(job_name, job_instance_id):
-    # Construction du nom de la stat
+    """ Function that send the status of the Job Instance to the Collector """
     timestamp = round(time.time() * 1000)
-
-    # Récupération du status
+    # Get the status of the Job Instance
     job = JobManager().scheduler.get_job(job_name + job_instance_id)
     if job is None:
         filename = pid_filename(job_name, job_instance_id)
@@ -202,20 +206,19 @@ def status_job(job_name, job_instance_id):
             status = 'Scheduled' #'Programmed on {}'.format(datetime_repr(job.trigger.run_date))
         elif isinstance(job.trigger, IntervalTrigger):
             status = 'Running' #'Programmed every {}'.format(job.trigger.interval_length)
-
-    # Connexion au service de collecte de l'agent
+    # Connection to the collect agent
     os.environ['JOB_NAME'] = 'openbach-agent'
     success = COLLECT_AGENT_REGISTER_COLLECT()
     if not success:
         return
-
-    # Envoie de la stat à Rstats
+    # Send the stat
     statistics = {'job_name': job_name, 'job_instance_id': job_instance_id,
                   'status': status}
     collect_agent.send_stat(timestamp, **statistics)
 
 
 def stop_watch(job_id):
+    """ Function that stops the watch of the Job Instance """
     try:
         JobManager().scheduler.remove_job(job_id)
     except JobLookupError:
@@ -225,6 +228,7 @@ def stop_watch(job_id):
 def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
                           owner_scenario_instance_id, arguments, date_value,
                           reschedule=False):
+    """ Function that schedules a Job Instance """
     timestamp = time.time()
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
     try:
@@ -244,8 +248,7 @@ def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
             raise BadRequest('KO A job {} is already programmed'.format(job_name))
 
         with JobManager(job_name) as job:
-            # TODO: Voir si il faudrait pas l'ajouter aussi pour les jobs non
-            # persistents
+            # TODO: See if we should add it too for the non persistents jobs
             if job['persistent']:
                 job['instances'][job_instance_id] = {'args': arguments, 'type':
                                                      'date', 'date': date}
@@ -254,6 +257,7 @@ def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
 
 def schedule_job_instance_stop(job_name, job_instance_id, date_value,
                                reschedule=False):
+    """ Function that schedules the stop of the Job Instance """
     timestamp = time.time()
     date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
     with JobManager(job_name) as job:
@@ -273,12 +277,13 @@ def schedule_job_instance_stop(job_name, job_instance_id, date_value,
                                                  command_stop, arguments),
                               id='{}{}_stop'.format(job_name, job_instance_id))
         except ConflictingIdError:
-            JobManager().scheduler.reschedule_job('{}{}_stop'.format(job_name, job_instance_id),
-                                                  trigger='date', run_date=date)
+            JobManager().scheduler.reschedule_job('{}{}_stop'.format(
+                job_name, job_instance_id), trigger='date', run_date=date)
     return date
 
 
 def schedule_watch(job_name, job_instance_id, date_type, date_value):
+    """ Function that schedules the Watch on the Job Instance """
     timestamp = time.time()
     date = True
     if date_type == 'date':
@@ -292,7 +297,7 @@ def schedule_watch(job_name, job_instance_id, date_type, date_value):
             raise BadRequest('KO A watch on instance {} with '
                     'id {} is already programmed'
                     .format(job_name, job_instance_id))
-    # Programmer de regarder le status régulièrement
+    # Schedule to watch the status regularly
     elif date_type == 'interval':
         try:
             JobManager().scheduler.add_job(
@@ -303,7 +308,7 @@ def schedule_watch(job_name, job_instance_id, date_type, date_value):
             raise BadRequest('KO A watch on instance {} with '
                     'id {} is already programmed'
                     .format(job_name, job_instance_id))
-    # Déprogrammer
+    # Cancel
     elif date_type == 'stop':
         date = None if date_value < timestamp else datetime.fromtimestamp(date_value)
         status_job_id = '{}{}_status'.format(job_name, job_instance_id)
@@ -323,35 +328,35 @@ def schedule_watch(job_name, job_instance_id, date_type, date_value):
 
 
 def ls_jobs():
+    """ Function that sends to the Collector the lists of the Installed Jobs on
+    the Agent """
     timestamp = round(time.time() * 1000)
-    
-    # Récupération des jobs disponibles
+    # Get the Installed Jobs
     with JobManager() as jobs:
         count = len(jobs)
         job_names = {'job{}'.format(i): job for i, job in enumerate(jobs, 1)}
-
-    # Connexion au service de collecte de l'agent
+    # Connection to collect agent
     os.environ['JOB_NAME'] = 'openbach-agent'
     success = COLLECT_AGENT_REGISTER_COLLECT()
     if not success:
         return
-
-    # Envoie de la stat à Rstats
+    # Send the stat
     statistics = {'_type': 'job_list', 'nb': count, **job_names}
     collect_agent.send_stat(timestamp, **statistics)
 
 
 class BadRequest(ValueError):
+    """Custom exception raised when parsing of a request failed"""
     def __init__(self, reason):
         super().__init__(reason)
         self.reason = reason
 
 
 class JobConfiguration:
+    """ Class that represents the configuration of a Job """
     def __init__(self, conf_path, job_name):
         filename = '{}.yml'.format(job_name)
         conf_file = os.path.join(conf_path, filename)
-
         try:
             with open(conf_file, 'r') as stream:
                 try:
@@ -362,7 +367,6 @@ class JobConfiguration:
         except FileNotFoundError:
             raise BadRequest(
                     'KO Conf file {} does not exist'.format(filename))
-
         try:
             self.command = content['os'][OS_TYPE]['command']
             self.command_stop = content['os'][OS_TYPE]['command_stop']
@@ -388,6 +392,7 @@ class JobConfiguration:
 
 
 class ClientThread(threading.Thread):
+    """ Class that represents the main thread of the program """
     REQUIREMENTS = {
             'status_jobs_agent': (0, ''),
             'add_job_agent': (1, 'You should provide the job name'),
@@ -417,10 +422,10 @@ class ClientThread(threading.Thread):
     def start_job_instance(self, name, job_instance_id, scenario_instance_id,
                            owner_scenario_instance_id, date_type, date_value,
                            args):
+        """ Function that starts a Job Instance """
         with JobManager(name) as job:
             command = job['command']
             command_stop = job['command_stop']
-
         arguments = ' '.join(args)
         if date_type == 'date':
             date, _ = schedule_job_instance(name, job_instance_id,
@@ -428,8 +433,8 @@ class ClientThread(threading.Thread):
                                             owner_scenario_instance_id,
                                             arguments, date_value)
             if date != None:
-                filename = '{}{}{}.start'.format(self.path_scheduled_instances_job,
-                                                 name, job_instance_id)
+                filename = '{}{}{}.start'.format(
+                    self.path_scheduled_instances_job, name, job_instance_id)
                 with open(filename, 'w') as job_instance_prog:
                     print(name, job_instance_id, scenario_instance_id,
                           owner_scenario_instance_id, date_value, arguments,
@@ -444,18 +449,12 @@ class ClientThread(threading.Thread):
                             .format(name))
                 for inst_id, job_args in job['instances'].items():
                     if job_args['type'] == 'interval':
-                        # Pour ce genre de job (non persistent avec une
-                        # command_stop), un seul interval est autorisé
-                        # Pour l'instant on renvoie un message d'erreur quand on
-                        # en demande un 2eme mais on pourrait très bien
-                        # remplacer l'un par l'autre à la place
                         # [Mathias] Maybe check that instance_id != inst_id ?
                         raise BadRequest('KO A job {} is already '
                                          'programmed. It instance_id is {}.'
                                          ' Please stop it before trying to '
                                          'programme regulary this job '
                                          'again'.format(job_name, inst_id))
-
             try:
                 JobManager().scheduler.add_job(
                         launch_job, 'interval', seconds=date_value,
@@ -466,7 +465,6 @@ class ClientThread(threading.Thread):
                 raise BadRequest(
                         'KO An instance {} with the id {} '
                         'is already programmed'.format(name, job_instance_id))
-
         with JobManager(name) as job:
             job['instances'][job_instance_id] = {
                 'args': arguments,
@@ -475,60 +473,55 @@ class ClientThread(threading.Thread):
             }
 
     def parse(self, request):
+        """ Function that checks if the request is known and well formed and
+        parse the arguments """
         try:
-            # Récupération du type de la requete et du nom du job
+            # Get the type of the request and the name of the job
             request, *args = request.split()
         except ValueError:
             raise BadRequest('KO Message not formed well. It '
                     'should have at least an action')
-
         try:
             required_args, error_msg = self.REQUIREMENTS[request]
         except KeyError:
             raise BadRequest(
                     'KO Action not recognize. Actions possibles are : {}'
                     .format(' '.join(self.REQUIREMENTS.keys())))
-
         provided_args = len(args)
         if provided_args < required_args:
             raise BadRequest('KO Message not formed well. {}.'.format(error_msg))
-
         if provided_args > required_args and request not in ('start_job_instance_agent', 'restart_job_instance_agent'):
             raise BadRequest('KO Message not formed well. Too much arguments.')
-
         if request == 'add_job_agent':
             job_name = args[0]
-            # On vérifie si le job est déjà installé
+            # Check if this Job is already installed
             with JobManager() as jobs:
                 if job_name in jobs:
                     raise BadRequest(
                             'OK A job {} is already installed'
                             .format(job_name))
-            # On vérifie que ce fichier de conf contient tout ce qu'il faut
+            # Check if the conf file is well formed
             conf = JobConfiguration(self.path_jobs, job_name)
             args.append(conf.command)
             args.append(conf.command_stop)
             args.append(conf.required)
             args.append(conf.optional)
             args.append(conf.persistent)
-
         elif request == 'del_job_agent':
             job_name = args[0]
-            # On vérifie que le job soit bien installé
+            # Check that the Job is installed
             with JobManager() as jobs:
                 if job_name not in jobs:
                     raise BadRequest(
                             'OK No job {} is installed'.format(job_name))
-
         elif request == 'status_job_instance_agent':
             job_name = args[0]
-            # On vérifie que le job soit bien installé
+            # Check that the Job is installed
             with JobManager() as jobs:
                 if job_name not in jobs:
                     raise BadRequest(
                             'KO No job {} is installed'.format(job_name))
-
-            # On récupère la date ou l'interval
+            # Get the date or the interval
             if args[2] in ('date', 'stop'):
                 try:
                     args[3] = 0 if args[3] == 'now' else int(args[3]) // 1000
@@ -545,29 +538,27 @@ class ClientThread(threading.Thread):
                             'KO The interval to execute the job '
                             'should be given in seconds')
             else:
-                # TODO Gérer le 'cron' ?
                 raise BadRequest(
                         'KO Only "date", "interval" and "stop" '
                         'are allowed with the status action')
-
         elif request in ('start_job_instance_agent', 'restart_job_instance_agent'):
             job_name = args[0]
-            # On vérifie que le job soit bien installé
+            # Check that the Job is installed
             with JobManager() as jobs:
                 if job_name not in jobs:
-                    raise BadRequest('KO No job {} is installed'.format(job_name))
-
+                    raise BadRequest(
+                        'KO No job {} is installed'.format(job_name))
             job_instance_id = args[1]
-            # On vérifie si il n'est pas déjà demarré
-            # (seulement dans le cas 'start')
+            # Check if the job instance is not already started (only for the
+            # 'start')
             if request == 'start':
                 with JobManager(job_name) as job:
                     if job_instance_id in job['instances']:
                         raise BadRequest(
                                 'KO Instance {} with id {} is '
-                                'already started'.format(job_name, job_instance_id))
-
-            # On récupère la date ou l'interval
+                                'already started'.format(job_name,
+                                                         job_instance_id))
+            # Get the date or the interval
             if args[4] == 'date':
                 try:
                     args[5] = 0 if args[5] == 'now' else int(args[5]) // 1000
@@ -583,35 +574,29 @@ class ClientThread(threading.Thread):
                             'KO The interval to execute the '
                             'job should be given in seconds')
             else:
-                # TODO Gérer le 'cron' ?
                 raise BadRequest(
                         'KO Only "date" and "interval" are allowed '
                         'to be specified when executing the job')
-            # On vérifie si il au moins autant d'arguments
-            # qu'exigé pour lancer la commande
+            # Check that there is enough arguments
             with JobManager(job_name) as job:
                 nb_args = len(job['required'])
                 optional = job['optional']
-
             if len(args) < required_args + nb_args:
                 raise BadRequest(
                         'KO Job {} requires at least {} arguments'
                         .format(job_name, nb_args))
-
-            # On vérifié qu'il n'y ait pas trop d'arguments
+            # Check that there is not to much arguments
             if not optional and len(args) > required_args + nb_args:
                 raise BadRequest(
                         'KO Job {} does not require more than {} arguments'
                         .format(job_name, nb_args))
-
         elif request == 'stop_job_instance_agent':
             job_name = args[0]
-            # On vérifie que le job soit bien installé
+            # Check that the Job is installed
             with JobManager() as jobs:
                 if job_name not in jobs:
                     raise BadRequest('KO No job {} installed'.format(job_name))
-
-            # On récupère la date
+            # Get the date
             if args[2] == 'date':
                 try:
                     args[3] = 0 if args[3] == 'now' else int(args[3]) // 1000
@@ -622,18 +607,21 @@ class ClientThread(threading.Thread):
             else:
                 raise BadRequest(
                         'KO To stop a job, only a date can be specified')
-
         return request, args
 
     def execute_request(self, request):
+        """ Function that execute the request """
         request, extra_args = self.parse(request)
         getattr(self, request)(*extra_args)
 
     def status_jobs_agent(self):
+        """ Function that sends the lists of the Installed Jobs to the Collector
+        """
         JobManager().scheduler.add_job(ls_jobs, 'date', id='ls_jobs')
 
-    def add_job_agent(self, job_name, command, command_stop, required, optional, persistent):
-        # TODO Vérifier que l'appli a bien été installé ?
+    def add_job_agent(self, job_name, command, command_stop, required, optional,
+                      persistent):
+        """ Function that adds this Job to the list of Jobs """
         with JobManager() as jobs:
             jobs[job_name] = {
                     'command': command,
@@ -645,7 +633,8 @@ class ClientThread(threading.Thread):
             }
 
     def del_job_agent(self, job_name):
-        # On vérifie si le job n'est pas en train de tourner
+        """ Function that deletes this Job from the Jobs list"""
+        # Check if an instance of this Job is running
         with JobManager(job_name) as job:
             command_stop = job['command_stop']
             for job_instance_id, parameters in job['instances'].items():
@@ -653,11 +642,10 @@ class ClientThread(threading.Thread):
                     arguments = parameters['args']
                 else:
                     arguments = ''
-                JobManager().scheduler.add_job(stop_job, 'date',
-                        args=(job_name, job_instance_id, command_stop, arguments),
-                        id='{}{}_stop'.format(job_name, job_instance_id))
-
-        # TODO Vérifier que l'appli a bien été désinstallé ?
+                JobManager().scheduler.add_job(
+                    stop_job, 'date', args=(job_name, job_instance_id,
+                                            command_stop, arguments),
+                    id='{}{}_stop'.format(job_name, job_instance_id))
         with JobManager() as jobs:
             del jobs[job_name]
 
@@ -665,30 +653,38 @@ class ClientThread(threading.Thread):
                                  scenario_instance_id,
                                  owner_scenario_instance_id, date, value,
                                  *args):
+        """ Function that starts a Job Instance """
         self.start_job_instance(job, job_instance_id, scenario_instance_id,
                                 owner_scenario_instance_id, date, value, args)
 
     def stop_job_instance_agent(self, job_name, job_instance_id, _, value):
+        """ Function that stops a Job Instance """
         date = schedule_job_instance_stop(job_name, job_instance_id, value)
         if date is not None:
             filename = '{}{}{}.stop'.format(self.path_scheduled_instances_job,
                                             job_name, job_instance_id)
             with open(filename, 'w') as job_instance_stop:
-                print(job_name, job_instance_id, value, sep='\n', file=job_instance_stop)
+                print(job_name, job_instance_id, value, sep='\n',
+                      file=job_instance_stop)
 
-    def status_job_instance_agent(self, job_name, job_instance_id, date_type, date_value):
+    def status_job_instance_agent(self, job_name, job_instance_id, date_type,
+                                  date_value):
+        """ Function that schedule a watch on the Job Instance """
         date = schedule_watch(job_name, job_instance_id, date_type, date_value)
-        filename = '{}{}{}.status'.format(self.path_scheduled_instances_job, job_name, job_instance_id)
+        filename = '{}{}{}.status'.format(
+            self.path_scheduled_instances_job, job_name, job_instance_id)
         if date_type == 'stop':
             filename += '_stop'
         with open(filename, 'w') as job_instance_status:
-            print(job_name, job_instance_id, date_type, date_value, sep='\n', file=job_instance_status)
+            print(job_name, job_instance_id, date_type, date_value, sep='\n',
+                  file=job_instance_status)
 
     def restart_job_instance_agent(self, job_name, job_instance_id,
                                    scenario_instance_id,
                                    owner_scenario_instance_id, date, value,
                                    *args):
-        # Stoppe le job si il est lancé
+        """ Function that restarts a Job Instance """
+        # Stop the Job Instance if it is running
         with JobManager(job_name) as job:
             try:
                 job_params = job['instances'][job_instance_id]
@@ -698,12 +694,12 @@ class ClientThread(threading.Thread):
                 command_stop = job['command_stop']
                 arguments = job_params['args']
                 stop_job(job_name, job_instance_id, command_stop, arguments)
-
-        # Le relancer avec les nouveaux arguments (éventuellement les mêmes)
+        # Start the Job Instance with the new arguments
         self.start_job_instance(job_name, job_instance_id, scenario_instance_id,
                                 owner_scenario_instance_id, date, value, args)
 
     def run(self):
+        """ Main function """
         request = self.socket.recv(2048)
         try:
             self.execute_request(request.decode())
@@ -721,22 +717,16 @@ class ClientThread(threading.Thread):
 
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGTERM, signal_term_handler)
-
-    # TODO Syslog bug : seulement le 1er log est envoyé, les autres sont ignoré
-    # Configure logger
-    syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
-
-    # On ajoute tous les jobs déjà présent
+    # Add all the Job already installed
     with JobManager(init=True) as jobs:
         for job in list_jobs_in_dir(JOBS_FOLDER):
-            # On vérifie que ce fichier de conf contient tout ce qu'il faut
+            # Check the format of the conf file
             try:
                 conf = JobConfiguration(JOBS_FOLDER, job)
             except BadRequest as e:
                 syslog.syslog(syslog.LOG_ERR, e.reason)
             else:
-                # On ajoute le job a la liste des jobs disponibles
+                # add the Job to the Jobs list
                 jobs[job] = {
                         'command': conf.command,
                         'command_stop': conf.command_stop,
@@ -745,11 +735,7 @@ if __name__ == '__main__':
                         'instances': {},
                         'persistent': conf.persistent,
                 }
-    # [Mathias] Check that rstats will receive our messages
-    #if not JobManager().rstats_connection:
-    #	exit('No connection to rstats service available')  # Warning, error?
-
-    # On programme les instances de job deja programmee
+    # Schedule the Job Instance to schedule
     for root, _, filenames in os.walk(INSTANCES_FOLDER):
         for filename in sorted(filenames):
             fullpath = os.path.join(root, filename)
@@ -760,7 +746,9 @@ if __name__ == '__main__':
                         job_name, job_instance_id, scenario_instance_id, owner_scenario_instance_id, date_value, arguments = f.readlines()
                         date_value = float(date_value)
                     except ValueError:
-                        print('Error with the reading of {}'.format(fullpath))
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            'Error with the reading of {}'.format(fullpath)
                         continue
                     date, result = schedule_job_instance(
                             job_name, job_instance_id, scenario_instance_id,
@@ -778,7 +766,9 @@ if __name__ == '__main__':
                         job_name, job_instance_id, date_value = f.readlines()
                         date_value = float(date_value)
                     except ValueError:
-                        print('Error with the reading of {}'.format(fullpath))
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            'Error with the reading of {}'.format(fullpath)
                         continue
                     date = schedule_job_instance_stop(
                             job_name, job_instance_id,
@@ -788,15 +778,20 @@ if __name__ == '__main__':
                         job_name, job_instance_id, date_type, date_value = f.readlines()
                         date_value = float(date_value)
                     except ValueError:
-                        print('Error with the reading of {}'.format(fullpath))
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            'Error with the reading of {}'.format(fullpath)
                         continue
-                    date = schedule_watch(job_name, job_instance_id, date_type, date_value)
+                    date = schedule_watch(job_name, job_instance_id, date_type,
+                                          date_value)
                 elif ext == 'status_stop':
                     try:
                         job_name, job_instance_id, date_type, date_value = f.readlines()
                         date_value = float(date_value)
                     except ValueError:
-                        print('Error with the reading of {}'.format(fullpath))
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            'Error with the reading of {}'.format(fullpath)
                         continue
                     date = schedule_watch(job_name, job_instance_id, date_type,
                                           date_value)
@@ -807,7 +802,7 @@ if __name__ == '__main__':
             if date is None:
                 os.remove(fullpath)
 
-    # Ouverture de la socket d'ecoute
+    # Open the listening socket
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcp_socket.bind(('', 1112))

@@ -1,5 +1,5 @@
 :sectnums:
-:sectnumlevels: 3
+:sectnumlevels: 5
 
 = OpenBACH design
 :toc:
@@ -512,6 +512,7 @@ deployment and configuration management (see annex in section 17 for a compariso
 been retained because it is a simple and flexible tool that gives you the ability to automate common tasks, deploy applications and
 launch commands in different hosts from a centralized entity (in our case the OpenBACH Controller). In particular, Ansible implements
 the following features:
+
 *	Ansible is open source and written in Python, which harmonizes with the philosophy of OpenBACH of implementing the Agent and the
 Jobs in Python.
 *	A scripting system based on YAML syntax, which is easily readable and with a very fast learning.
@@ -534,11 +535,11 @@ creating the test/scenario).
  Agents or dependencies, etc…). Thus the backend needs a background process (i.e. a daemon) capable of listening/controlling
  the local post-processing tasks without time constraints.
 
- It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions” regarding information
- of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side (configure/launch a Job
+ It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions” regarding
+ information of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side (configure/launch a Job
  instances, send updated information/status, etc.). For example, as explained latter, the Controller does not schedule the Job instances
- itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend communicates to the Agents
- is discussed next.
+ itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend communicates to the Agents is discussed next.
+
 
 The openbach-conductor shall be thus in charge of listening for commands from the views, building and launching the playbooks
 (via SSH to communicate the commands and the tasks to be performed in the Agents).
@@ -549,16 +550,18 @@ Finally, it should be highlighted that the choice of Ansible does not add limita
 developed so that any other protocol/communication would replace Ansible for deploying/configuring OpenBACH with little effort (we do not
 talk here about the installation of OpenBACH and its dependencies, where Ansible probes to be an asset).
 
-===	MVC: data access
+====	MVC
+===== MVC: data access
+
 The model shall handle one database that belongs to the backend, to save user information, agents status (running or not), a jobs list per Agent,
 job instances status, scenarios (and scenario instances) information and status, etc. Some of these information are potentially continuously modified
 (i.e. job instances status). For updating the status information, the Controller shall implement an openbach-function (see next section) that when
 requested (or recursively) sends status information from the Agent to the Collector (via the collecting functions of OpenBACH: i.e. stats and logs). The
 Controller must recursively pull these status from the Collector to update its own database.
 
-Finally, the backend database shall implement different user profile types (see section 9).
+Finally, the backend database shall implement different user profile types (see section XX).
 
-===	MVC: openbach-functions views
+=====	MVC: openbach-functions views
 The "openbach-functions views" (kind of an access to the openbach-functions) available in the Controller are implemented in the backend, but the real
 implementation of the openbach-functions is available in the openbach-conductor. These functions are summarized in <<img-functions>> and detailed below
 (the input JSON contents highlighted in bold are the required ones, the other ones are optional). They are classified in 6 main groups depending on
@@ -571,7 +574,7 @@ image::functions.png[align="center"]
 {nbsp} +
 
 
-First the group 1 of openbach-functions allowing to install, delete, list and modify the available Collectors
+First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
 
 .group 1
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
@@ -609,7 +612,7 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 | add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path and already on the Controller)
 | add_new_job        | POST            | /job             | *name*, *tar_file*                         | Add a Job to the Jobs list (with the sources in the tar file)
 | del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
-| list_jobs          | GET             | /job             |                                            | Return the Jobs list. 
+| list_jobs          | GET             | /job             |                                            | Return the Jobs list.
 | get_job_stats      | GET             | /job/*job_name*  | *type=stats*                               | Return the statistics produced by a Job.
 | get_job_help       | GET             | /job/*job_name*  | *type=help*                                | Return the help of the Job
 |===
@@ -672,7 +675,7 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 | get_scenario_instance         | GET           | /scenario_instance/*scenario_instance_id*    |                                            | Return the infos of the scenario instance
 |===
 
-And finally, the group 8 of openbach-functions allowing to 
+And finally, the group 8 of openbach-functions allowing to
 
 .group 8
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
@@ -695,5 +698,146 @@ And finally, the group 8 of openbach-functions allowing to
 | get_scenario_instance         | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* |                                       | Return the infos of the scenario instance
 |===
 
+It should be noted that a user shall be able to replay stored scenarios  by simply changing the starting reference date/time (using the openbach-function
+start_scenario_instance).
+
+
+====	Scenario format (JSON)
+
+[source,json,numbered]
+----
+{ "name": "Ping",
+  "description": "First scenario (for test)",
+  "args": [ { "name": "duration", "type": "int", "description": "duree des pings" } ],
+  "body": { "parameters": [ { "name": "agentA", "value": "172.20.42.167", "type": "ip" },
+                            { "name": "agentB", "value": "172.20.42.90", "type": "ip" },
+                            { "name": "job", "value": "ping", "type": "str" },
+                            { "name": "duration", "value": "duration", "type": "arg" } ],
+            "openbach_functions": [ { "name": "start_job_instance",
+                                      "args": [ { "name": "agent_ip", "value": "agentA", "type": "parameter" },
+                                                { "name": "job_name", "value": "job", "type": "parameter",
+                                                  "args": [ { "name": "destination_ip", "value": ["agentB"], "type": ["parameter"] },
+                                                            { "name": "duration", "value": ["duration"], "type": ["parameter"] } ] },
+                                                { "name": "delta", "value": 5, "type": "int" } ],
+                                      "wait": [ { "type": "launch", "id": [], "time": 0 },
+                                                { "type": "finished", "id": [], "time": 0 } ],
+                                      "id": 1 },
+                                    { "name": "start_job_instance",
+                                      "args": [ { "name": "agent_ip", "value": "agentB", "type": "parameter" },
+                                                { "name": "job_name", "value": "job", "type": "parameter",
+                                                  "args": [ { "name": "destination_ip", "value": ["agentA"], "type": ["parameter"] },
+                                                            { "name": "duration", "value": ["duration"], "type": ["parameter"] } ] },
+                                                { "name": "delta", "value": 10, "type": "int" } ],
+                                      "wait": [ { "type": "launch", "id": [], "time": 0 },
+                                                { "type": "finished", "id": [1], "time": 0 } ],
+                                      "id": 2 }
+                                  ]
+          }
+}
+----
+
+====	Justification of Djando framework
+Django is an open-source Python web development framework.  First of all, it has been chosen since it is implemented in Python, which allows to harmonize
+with the philosophy of OpenBACH (the Agent and the Jobs are developed in Python). Among the available Python frameworks, Django is known for offering
+off-the-shelf functionalities (data access methods, optimized database structures, plugins for interfacing with different applications, profiles management,
+etc.) allowing to focus on the pure development and the core functionalities required for the backend of OpenBACH.
+
+Django is defined by their creator as a framework that encourages rapid development and clean, pragmatic design. Built by experienced developers, it takes
+care of much of the hassle of Web development, so you can focus on writing your app without needing to reinvent the wheel.
+
+
+==	Detailed conception of Collector
+
+As it has been previously presented in the overall design of OpenBACH, the Collector component shall be in charge of centralizing the collection of two main
+groups of data: the statistics/data and the logs.
+
+The Collector shall be able to receive and collect two types of stream messages: logs and stats/metrics. Each type of stream shall implement its own daemon
+and its own database. The way OpenBACH collects the two types of data has been properly distinguished within the chain of functional blocks of <<img-gen_collector>>.
+
+Both collections shall have the same functional scheme: a pure collector represented by a daemon that listens for new messages sent by the Agents, and a
+proper data base with efficient search mechanisms an access features, where the daemon stores the statistics and logs.
+
+The fact of differentiating between two different streams (and databases), one for logs and another one for stats, is necessary since the nature and the
+format of each one is very different. For example, logs need a database capable of efficiently indexing and filtering long messages depending on host/job/type/etc,
+while stats need a high precision when time stamping and storing the data.
+
+[#img-gen_collector,reftext='Figure {counter:refnum}']
+.Generic functions of the Collector and interfaces
+image::generic_collector.png[align="center"]
+{nbsp} +
+
+Regarding the interfaces of communications: the Collector daemon shall listen on a UDP/TCP socket, where all the Agents transmit their respective messages.
+The daemon shall store the data into a local data base via an HTTP API. Any external access to the data base (e.g. visualize the data in a web interfaces)
+shall be performed by means of this HTTP API.
+
+The data received can be flagged. The flag can precise if the data should:
+
+* be stored in the database
+* and/or broadcasted to the Auditorium. The broadcast is done on an TCP or UDP socket (configurable) on the port 2223.
+
+.Flag of stats
+[frame="topbot",options="header"]
+|===
+| Stored in DB | Broadcasted	     | Flag Value
+|  no          | no                | 0
+|  yes         | no                | 1
+|  no          | yes               | 2
+|  yes         | yes               | 3
+|===
+
+As detailed in the following two sections, off-the-shelf open-source software solutions have been chosen for fulfilling the needs of OpenBACH, and in order to
+have a robust collecting system at the disposal of OpenBACH. Moreover, this choice allows to focus more effort on the design and the development of an evolutive
+and robust configuration/control function (one of the critical points of this benchmark).
+
+===	Logs collection details
+Concerning the logs, the collector daemon function is performed by Logstash and the database role is carried out by Elasticsearch.
+
+Logstash is an open-source data collection (under Apache 2 license), and a data transportation pipeline. It allows to efficiently process a growing list of logs, events and unstructured data sources for distribution into a variety of outputs, including the one used herein, an Elasticsearch data base. It is capable of normalizing different data formats by means filters.
+
+Thus, once Logstash collects a log, it sends it to ElasticSearch, a database developed by the same creators of Logstash. The main features of Elasticsearch are:
+•	It has an indexing engine allowing fast search of data.
+•	Real-time analytics of the stored data
+•	It is API driven by a simple Restful API using JSON over HTTP. Log search is performed by this means.
+•	The requests/queries are returned in common text formats like JSON.
+•	It is available under Apache 2 open-source license.
+
+
+Below, it is shown an example of the way logs can be exported from ElasticSearch via the HTTP API (check Elasticsearch manuals for more information). In the example, two filters are used for:
+•	exporting the logs within a 10 seconds time range, and
+•	returning only log-type-one logs lines
+
+[source,json]
+----
+curl -XGET http://localhost:9200/playground/equipment/1?pretty
+{
+"_source": "message",
+"filter": {"type": {"value":"log-type-one"}},
+"query": {"range": {"@timestamp" : { "gte":"2015-02-20T12:02:00.632Z", "lt": "2015-02-20T12:02:00.632Z||+10s"}}}
+}
+----
+
+===	Statistics collection details
+
+In the case of the statistics collection, we take profit of InfluxDB as a database, an open-source platform for data collection and storage. We use Logstash here too as the collecting daemon. Logstash is capable of listening on a UDP/TCP socket from the Agents messages (on the port 2222), and redirects the collected data to InfluxDB using an HTTP API. Otherwise, the Agent would have had to insert the data directly into the database (via HTTP), which would have made the Agents dependant on the type of database.
+
+InfluxDB is capable of handling data time series with high precision (1ms if necessary) when the constraints of performance and availability are strong.
+
+The external access to the InfluxDB data storage is also realized by means of this HTTP API. InfluxDB comes with a web HMI allowing to visualize or add raw data for advanced users.
+
+Below, it is shown an example of writing and querying formats to be used when interacting with InfluxDB database via the HTTP API (check InfluxDB manuals for more information):
+
+*	Writing data: a POST shall be sent to the database (e.g. name mydb). The data consists of the measurement “cpu_load_short”, the tag keys host and region with the tag values “server01” and “us-west”, the field key value with a field value of “0.64”, and the Unix Timestamp  “1434055562000000000”.
+[source,json]
+----
+curl -i -XPOST 'http://localhost:8086/write?db=mydb' --data-binary 'cpu_load_short,host=server01,region=us-west value=0.64 1434055562000000000'
+----
+
+* Querying data: to perform a query, a GET request shall be sent. It shall set the URL parameter “db” as the target database, and set the URL parameter “q” as your query. The example allows to query the same data was written in the POST example.
+[source,json]
+----
+curl -G 'http://localhost:8086/query?pretty=true' --data-urlencode "db=mydb" --data-urlencode "q=SELECT value FROM cpu_load_short WHERE region='us-west'"
+----
+
+InfluxDB is released under the open-source MIT License.
 
 ==	Display of data collection

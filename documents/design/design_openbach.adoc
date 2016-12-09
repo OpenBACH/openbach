@@ -840,4 +840,46 @@ curl -G 'http://localhost:8086/query?pretty=true' --data-urlencode "db=mydb" --d
 
 InfluxDB is released under the open-source MIT License.
 
+
+==	Detailed conception of Agent
+
+The Agent component shall implement two main parts according to the main functionalities of OpenBACH, a Control-Agent for configuring and controlling
+the Agent, and the Collect-Agent for everything related to statistics and logs collection. These two main parts are represented in <<img-agent_design>>. as the
+two grey boxes.
+
+A reliable communication protocol shall be used to receive the commands and configuration from the Controller. As it has been previously
+explained, the chosen protocol is SSH. Represented as a red box in <<img-agent_design>>, we can observe the virtual SSH connection created and managed by
+Ansible (from the Controller). This methodology shall be also used to modify the configuration of log severity level and the activation/deactivation
+of statistics.
+
+The Control-Agent shall be in charge of scheduling, executing, checking and stopping the Jobs instances (green box) available in the network entity.
+As it has been previously defined, a job can be defined as a number of individual tasks, i.e. start a traffic generator, start collecting a new
+data/statistics, start a service, etc.
+
+[#img-agent_design,reftext='Figure {counter:refnum}']
+.Detailed design of OpenBACH Agent including its interfaces
+image::agent_design.png[align="center"]
+{nbsp} +
+
+===	The Control-Agent part
+
+The Control-Agent shall implement:
+* A daemon for centralizing the tasks/jobs control (“openbach-agent” in <<img-agent_design>>),
+* a generic small bash script (“openbach-baton” in <<img-agent_design>>) that the Controller uses to communicate with the daemon, and
+* a scheduler (integrated in the daemon “openbach-agent” and based on the Python library “apscheduler”) for launching/scheduling the tasks of the daemon.
+NOTE: “apscheduler”??
+
+The communication shall be performed as follows:
+
+* Step 1 (already seen in the Controller design): Depending on the “openbach-function” called in the Backend, the openbach-conductor (in the Controller)
+builds a playbook and creates an SSH connection with the Agent by means of Ansible. The playbook consist of a simple command allowing to execute the
+“openbach-baton” with a set of parameters (see an example at the end of this section XXX).
+
+* Step 2: The playbook executes the ”openbach-baton” script with the set of required parameters.
+
+* Step 3: “openbach-baton” sends the command to the daemon (“openbach-agent”) by means of a local socket.
+
+* Step 4: The daemon “openbach-agent” registers the received command and executes its tasks/actions (known as “agent-actions”). These actions are related to the
+“openbach-functions” implemented in the Controller-Backend as it is detailed next.
+
 ==	Display of data collection

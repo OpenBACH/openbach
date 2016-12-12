@@ -3301,7 +3301,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(new_condition)
-        elif condition_type is in ['or',' and', 'xor']:
+        elif condition_type in ['or',' and', 'xor']:
             try:
                 condition1 = condition.pop('condition1')
                 condition2 = condition.pop('condition2')

@@ -577,6 +577,7 @@ image::functions.png[align="center"]
 
 First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Collectors of the benchmark.
 
+[#tab-ob1,reftext='Table {counter:tabnum}']
 .group 1
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -591,6 +592,7 @@ First the group 1 of openbach-functions allowing to install, delete, list and up
 
 Second the group 2 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
 
+[#tab-ob2,reftext='Table {counter:tabnum}']
 .group 2
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -606,6 +608,7 @@ Second the group 2 of openbach-functions allowing to install, delete, list and u
 Then group 3 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
 if a user develops a new Job (or takes a new developed Job from someone) and includes it in the list of possible Jobs to be installed.
 
+[#tab-ob3,reftext='Table {counter:tabnum}']
 .group 3
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -620,6 +623,7 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 
 Then the group 4 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
 
+[#tab-ob4,reftext='Table {counter:tabnum}']
 .group 4
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -637,6 +641,7 @@ Then the group 4 of openbach-functions allowing to install/uninstall a Job in a 
 
 The group 5 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
 
+[#tab-ob5,reftext='Table {counter:tabnum}']
 .group 5
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -653,6 +658,7 @@ The group 5 of openbach-functions allowing to start/schedule/stop a Job instance
 
 The group 6 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.
 
+[#tab-ob6,reftext='Table {counter:tabnum}']
 .group 6
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -666,6 +672,7 @@ The group 6 of openbach-functions allowing to create/delete/show/modify a scenar
 
 The group 7 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
 
+[#tab-ob7,reftext='Table {counter:tabnum}']
 .group 7
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -678,6 +685,7 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 
 And finally, the group 8 of openbach-functions allowing to
 
+[#tab-ob8,reftext='Table {counter:tabnum}']
 .group 8
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
 |===
@@ -776,6 +784,7 @@ The data received can be flagged. The flag can precise if the data should:
 * be stored in the database
 * and/or broadcasted to the Auditorium. The broadcast is done on an TCP or UDP socket (configurable) on the port 2223.
 
+[#tab-flags,reftext='Table {counter:tabnum}']
 .Flag of stats
 [frame="topbot",options="header"]
 |===
@@ -903,24 +912,62 @@ The agent-actions are a group of actions implemented in the "openbach-agent" tha
 are directly related to the “openbach-functions”, since as it has been explained, in some cases, these functions need to perform actions/tasks in the Agents
 side (groups 3 and 4 shown in <<img-functions>>), and the agent-actions are their way to do it.
 
-Table 4 shows the mapping between the openbach-function of the backend, the openbach-baton commands (commands sent via Ansible) and the agent actions
+Table <<tab-agent_func>> shows the mapping between the openbach-function of the backend, the openbach-baton commands (commands sent via Ansible) and the agent actions
 implemented in the Agent.
 
-
+[#tab-agent_func,reftext='Table {counter:tabnum}']
 .Mapping between "openbach-functions" (implemented in the Controller) and the agent-actions (implemented in the openbach-agent)
-[frame="topbot",options="header", cols="22%,25%,20%,33%"]
+[frame="topbot",options="header", cols="23%,20%,27%,30%"]
 |===
-| Openbach-function (in Controller) and group   | openbach-baton commands          | agent-action/s (in Agent)                             | Objective of agent-action
-| install_job / 3                | add_job_agent + args              | add_job_agent                                       | To inform the agent about a new installed job.
-| uninstall_job / 3              | del_job_agent + args              | del_job_agent                                       | To inform the agent about a new installed job.
-| retrieve_status_jobs / 3       | status_jobs_agent + args          | status_jobs_agent                                   |  To send the status of installed jobs to the Collector.
-| start_job_instance / 4         | start_job_instance_agent + args   | 1.start_job_instance 2.schedule_job_instance        | To start a job instance in the Agent
-| stop_job_instance / 4          | stop_job_instance_agent + args    | 1.stop_job_instance 2.schedule_job_instance         | To stop a job instance in the Agent
-| restart_job_instance / 4       | restart_job_instance_agent + args | (stop+start)_job _instance                          | To restart a job instance in the Agent
-.2+| status_job_instance / 4   .2+| status_job_instance_agent + args | 1.schedule_watch 2.status_job                       | To send the status of a job instance (scheduled, running, not running ...) to the Collector. | 1. schedule_watch 2. stop_watch | To stop sending the status of a job instance to the Collector.
-
+| Openbach-function (in Controller) and group   | openbach-baton commands          | agent-action/s (in Agent)                                       | Objective of agent-action
+| install_job / 3                | add_job_agent + args              | add_job_agent                                                                 | To inform the agent about a new installed job.
+| uninstall_job / 3              | del_job_agent + args              | del_job_agent                                                                 | To inform the agent about an uninstalled job.
+| retrieve_status_jobs / 3       | status_jobs_agent                 | status_jobs_agent                                                             | To send the status of installed jobs to the Collector.
+| start_job_instance / 4         | start_job_instance_agent + args   | start_job_instance [small]*(calls schedule_job_instance(myfunc="launch_job"))*           | To start a job instance in the Agent
+| stop_job_instance / 4          | stop_job_instance_agent + args    | stop_job_instance [small]*(calls schedule_job_instance_stop(myfunc="stop_job"))*         | To stop a job instance in the Agent
+| restart_job_instance / 4       | restart_job_instance_agent + args | {stop+start}_job _instance                                                    | To restart a job instance in the Agent
+.2+| status_job_instance / 4   .2+| status_job_instance_agent + args | schedule_watch [small]*(calls status_job when type "date"/"interval")*                | To send the status of a job instance (scheduled, running, not running ...) to the Collector. | shedule_watch [small]*(calls stop_watch when type "stop")* | To stop sending the status of a job instance to the Collector.
 |===
 
+Next, it is detailed the different commands that the Control-Agent shall accept from the Controller component:
+
+[source,python]
+----
+'status_jobs_agent': (0, ''),
+'add_job_agent': (1, 'You should provide the job name'),
+'del_job_agent': (1, 'You should provide the job name'),
+'status_job_instance_agent': (4, 'You should provide a job name, an '
+                'instance id, a watch type and its value'),
+'start_job_instance_agent': (5, 'You should provide a job name, an '
+                'instance id, a execution type (a date or interval) and its value. '
+                'Optional arguments may follow (arguments of the Job)'),
+'restart_job_instance_agent': (5, 'You should provide a job name, an '
+                'instance id, a execution type (a date or interval) and its value. '
+                'Optional arguments may follow (arguments of the Job)'),
+'stop_job_instance_agent': (4, 'You should provide a job name, an '
+                'instance id, a execution type (a date or interval) and its value')
+----
+
+Below, we show an example of playbook task allowing the Controller to execute the “openbach-baton” script, which then transmits the command “start job”
+to the Agent:
+
+[source,json]
+----
+- name: Start Job instance
+  shell: /opt/openbach-agent/openbach-baton start_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} {{ job_options }}----
+----
+
+A configuration file for each job shall be implemented. This configuration file shall be used for verification purposes (e.g. check parameters/options accepted by the job) and making a job persistent
+(once it has been installed). The configuration file shall have the following format:
+
+[source,json]
+----
+[*job_name*]
+command=
+required=
+optional=
+persistent=
+----
 
 
 ==	Display of data collection

@@ -69,6 +69,9 @@ OpenBACH is designed in order to be capable of fulfilling the needs of a user th
 
 == Functional design
 
+
+[[section-term, Terminology]]
+
 === Terminology of OpenBACH
 
 === Design components
@@ -167,13 +170,12 @@ storages.
 *	A logs collector: it shall centralize the log messages collection received from the Agents and store them into data storages.
 
 
-
 === OpenBACH-functions, Jobs and scenarios (and instances)
 
 The comprehension of these main terms is one of the keys to well understand the OpenBACH design described herein and in particular,
 the way to configure the benchmark.
 
-Besides the definition of each term (see Table 3 at the beginning of section 5), the purpose of this section is to explain the
+Besides the definition of each term (see Table 3 at the beginning of section <<section-term>>), the purpose of this section is to explain the
 relationship between this terms.
 
 As it has been previously explained, the Jobs are the groups of tasks (under the form of scripts) that are deployed in the Agents.
@@ -508,10 +510,9 @@ The views are the way to execute the “openbach-functions”, which are impleme
 The installation of an Agent or a Job requires the transmission of files (scripts, daemon files, configuration files, etc.), the
 installation of dependencies (python, apt-get, software, etc.) and other needs such as the installation of a ntp client for
 synchronizing the network entity. There are several off-the-shelf frameworks available in open-source allowing for application
-deployment and configuration management (see annex in section 17 for a comparison of different solutions). The Ansible solution has
-been retained because it is a simple and flexible tool that gives you the ability to automate common tasks, deploy applications and
-launch commands in different hosts from a centralized entity (in our case the OpenBACH Controller). In particular, Ansible implements
-the following features:
+deployment and/or configuration management (Puppet, Chef, Ansible, ...). The Ansible solution hasbeen retained because it is a
+simple and flexible tool that gives you the ability to automate common tasks, deploy applications and launch commands in different
+hosts from a centralized entity (in our case the OpenBACH Controller). In particular, Ansible implements the following features:
 
 *	Ansible is open source and written in Python, which harmonizes with the philosophy of OpenBACH of implementing the Agent and the
 Jobs in Python.
@@ -574,7 +575,7 @@ image::functions.png[align="center"]
 {nbsp} +
 
 
-First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
+First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Collectors of the benchmark.
 
 .group 1
 [frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
@@ -867,7 +868,6 @@ The Control-Agent shall implement:
 * A daemon for centralizing the tasks/jobs control (“openbach-agent” in <<img-agent_design>>),
 * a generic small bash script (“openbach-baton” in <<img-agent_design>>) that the Controller uses to communicate with the daemon, and
 * a scheduler (integrated in the daemon “openbach-agent” and based on the Python library “apscheduler”) for launching/scheduling the tasks of the daemon.
-NOTE: “apscheduler”??
 
 The communication shall be performed as follows:
 
@@ -877,9 +877,50 @@ builds a playbook and creates an SSH connection with the Agent by means of Ansib
 
 * Step 2: The playbook executes the ”openbach-baton” script with the set of required parameters.
 
-* Step 3: “openbach-baton” sends the command to the daemon (“openbach-agent”) by means of a local socket.
+* Step 3: “openbach-baton” forwards the order to the daemon (“openbach-agent”) by means of a local socket.
 
 * Step 4: The daemon “openbach-agent” registers the received command and executes its tasks/actions (known as “agent-actions”). These actions are related to the
 “openbach-functions” implemented in the Controller-Backend as it is detailed next.
+
+NOTE: Justification for the need of “openbach-baton”: The shell script “openbach-baton” is only a tool to transmit the order/command from the Controller
+to the Agent. It is needed because Ansible, which is the mean of communication between the two components, needs not only a way to relay the commands to the
+Agent but also to get a proper response from the Agent (i.e. a response that Ansible would be able to interpret, e.g. OK status). Moreover, the use of
+“openbach-baton” would allow to replace the communication mechanisms if wanted (for example, introducing a communication between web services for sending
+some commands instead of Ansible.)
+
+The use of bash for this relay seems a reliable way of interfacing the entities.
+
+Below, the main features of the Agent are described:
+* The Agent shall be based on a request-to-do policy, i.e. it shall perform tasks only when the Controller asks for.
+* Within the command, the Agent may receive start/stop date-time information from the Controller, so that it will know when to execute the “agent-function”
+associated to.
+* Depending on the command type, other options can be used as described below.
+* The Agent shall manage the scheduler locally, so that it will be able to control the whole execution/status of the agent-actions.
+* The Agent scheduler shall be able to execute the agent-actions with one millisecond accuracy.
+
+=====	Agent actions
+The agent-actions are a group of actions implemented in the "openbach-agent" that allow performing different tasks regarding the OpenBACH control. These actions
+are directly related to the “openbach-functions”, since as it has been explained, in some cases, these functions need to perform actions/tasks in the Agents
+side (groups 3 and 4 shown in <<img-functions>>), and the agent-actions are their way to do it.
+
+Table 4 shows the mapping between the openbach-function of the backend, the openbach-baton commands (commands sent via Ansible) and the agent actions
+implemented in the Agent.
+
+
+.Mapping between "openbach-functions" (implemented in the Controller) and the agent-actions (implemented in the openbach-agent)
+[frame="topbot",options="header", cols="22%,25%,20%,33%"]
+|===
+| Openbach-function (in Controller) and group   | openbach-baton commands          | agent-action/s (in Agent)                             | Objective of agent-action
+| install_job / 3                | add_job_agent + args              | add_job_agent                                       | To inform the agent about a new installed job.
+| uninstall_job / 3              | del_job_agent + args              | del_job_agent                                       | To inform the agent about a new installed job.
+| retrieve_status_jobs / 3       | status_jobs_agent + args          | status_jobs_agent                                   |  To send the status of installed jobs to the Collector.
+| start_job_instance / 4         | start_job_instance_agent + args   | 1.start_job_instance 2.schedule_job_instance        | To start a job instance in the Agent
+| stop_job_instance / 4          | stop_job_instance_agent + args    | 1.stop_job_instance 2.schedule_job_instance         | To stop a job instance in the Agent
+| restart_job_instance / 4       | restart_job_instance_agent + args | (stop+start)_job _instance                          | To restart a job instance in the Agent
+.2+| status_job_instance / 4   .2+| status_job_instance_agent + args | 1.schedule_watch 2.status_job                       | To send the status of a job instance (scheduled, running, not running ...) to the Collector. | 1. schedule_watch 2. stop_watch | To stop sending the status of a job instance to the Collector.
+
+|===
+
+
 
 ==	Display of data collection

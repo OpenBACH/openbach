@@ -830,7 +830,9 @@ class Condition_Xor(Condition):
                                   related_name='xor_condition2')
 
     def get_value(self):
-        return (self.condition1.get_value() or self.condition2.get_value()) and not (self.condition1.get_value() and self.condition2.get_value()
+        return ((self.condition1.get_value() or self.condition2.get_value()) and
+                not (self.condition1.get_value() and
+                     self.condition2.get_value()))
 
 
 class Condition_Equal(Condition):

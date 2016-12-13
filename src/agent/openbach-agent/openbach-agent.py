@@ -79,6 +79,27 @@ except ImportError:
 syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
 
 
+def signal_term_handler(signal, frame):
+    """ Function that handle the kill of the Openbach Agent """
+    scheduler = JobManager().scheduler
+    scheduler.remove_all_jobs()
+    with JobManager() as all_jobs:
+        for name, job in all_jobs.items():
+            command_stop = job['command_stop']
+            for job_instance_id, parameters in job['instances'].items():
+                arguments = parameters['args']
+                scheduler.add_job(stop_job, 'date',
+                        args=(name, job_instance_id, command_stop, arguments),
+                        id='{}{}_stop'.format(name, job_instance_id))
+    while scheduler.get_jobs():
+        time.sleep(0.5)
+    scheduler.shutdown()
+    for root, _, filenames in os.walk(PID_FOLDER):
+        for filename in filenames:
+            os.remove(os.path.join(root, filename))
+    exit(0)
+
+
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 
@@ -118,27 +139,6 @@ def list_jobs_in_dir(dirname):
         name, ext = os.path.splitext(filename)
         if ext == '.yml':
             yield name
-
-
-def signal_term_handler(signal, frame):
-    """ Function that handle the kill of the Openbach Agent """
-    scheduler = JobManager().scheduler
-    scheduler.remove_all_jobs()
-    with JobManager() as all_jobs:
-        for name, job in all_jobs.items():
-            command_stop = job['command_stop']
-            for job_instance_id, parameters in job['instances'].items():
-                arguments = parameters['args']
-                scheduler.add_job(stop_job, 'date',
-                        args=(name, job_instance_id, command_stop, arguments),
-                        id='{}{}_stop'.format(name, job_instance_id))
-    while scheduler.get_jobs():
-        time.sleep(0.5)
-    scheduler.shutdown()
-    for root, _, filenames in os.walk(PID_FOLDER):
-        for filename in filenames:
-            os.remove(os.path.join(root, filename))
-    exit(0)
 
 
 def launch_job(job_name, job_instance_id, scenario_instance_id,

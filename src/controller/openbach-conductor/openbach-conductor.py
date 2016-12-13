@@ -3628,7 +3628,7 @@ class ClientThread(threading.Thread):
         # Delete the fake Scenario Instance
         scenario_instance.delete()
         # If the table is not empty, the Scenario is not valid
-        if not table:
+        if table:
             raise BadRequest('Your Scenario is not valid: the tree is wrong')
 
     def create_scenario_action(self, scenario_json, project_name=None):

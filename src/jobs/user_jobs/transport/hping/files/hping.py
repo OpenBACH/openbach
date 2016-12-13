@@ -69,6 +69,7 @@ def main(destination_ip, count, interval, destport, tcpmode):
     if not success:
         quit()
 
+    #persitent jobs that only finishes when it is stopped by OpenBACH
     while True:
         timestamp = int(round(time.time() * 1000))
         try:

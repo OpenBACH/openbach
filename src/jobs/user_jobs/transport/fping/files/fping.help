@@ -1,3 +1,5 @@
+ This Job executes the fping command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval). It sends syslog in case of error.
+
 Example:
   - Ping 172.20.0.83 : -a "destination_ip 172.20.0.83"
   - Ping 172.20.0.83 with packets of size 100 bytes : -a "destination_ip 172.20.0.83" "packetsize 100"

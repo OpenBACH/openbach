@@ -70,6 +70,7 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     if not success:
         return
 
+    #persitent jobs that only finishes when it is stopped by OpenBACH
     while True:
         timestamp = int(round(time.time() * 1000))
         try:

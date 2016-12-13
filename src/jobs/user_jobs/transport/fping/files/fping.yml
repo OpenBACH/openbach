@@ -3,7 +3,7 @@
 general:
   name:            fping
   description: >
-      This Job principaly launch the fping command and send the measured rtt delay with a frequency of count*interval.
+      This Job executes the fping command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval).
       It sends syslog in case of error.
   job_version:     0.1
   keywords:        [ping, fping, rate, rtt, round]
@@ -47,7 +47,7 @@ arguments:
       description: >
           interface is either an address, or an interface name.
           If interface is an address, it sets source address to specified interface address.
-          If interface in an interface name, it sets source interface to specified interface.
+          If interface is an interface name, it sets source interface to specified interface.
     - name:        packetsize
       type:        'int'
       count:       1
@@ -73,5 +73,5 @@ statistics:
     - name:        rtt
       description: >
           The Round trip time of ICMP packets.
-      frequency:   'every *count x interval* send packet'
+      frequency:   'every *count x interval* sent packets or every *duration* time'
 

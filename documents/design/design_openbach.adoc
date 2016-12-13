@@ -100,8 +100,8 @@ of data regarding the status of OpenBACH (in order to be sent to the Auditorium)
 logs and statistics in order to allow the visualization in the user PC screen.
 
 [#img-basic_funct_design,reftext='Figure {counter:refnum}']
-.Basic overall design of OpenBACH components
-image::basic_funct_design.png[align="center"]
+.Design of OpenBACH interfaces
+image::func_design.png[align="center"]
 {nbsp} +
 
 ===	Functional definitions
@@ -320,13 +320,17 @@ image::states_job.png[align="center"]
 =====	Job types
 NOTE: TBD (CNES/TAS/Viveris)
 
-The Jobs can be classified in different types depending on its purpose and types of actions that they aim at performing.
+The Jobs can be classified in different types depending on its purpose, domain or even the purpose they aim at performing.
 
 First of all, it has been highlighted the need of separation between Jobs related to administration tasks (herein called
-admin), the Jobs related to the telecommunications domain which are the core of OpenBACH, and other job organised by project.
+"admin_jobs"), the Jobs related to the telecommunications domain which are the core of OpenBACH (herein called 'user_jobs").
 
-The admin Jobs shall be separated among generic administration, OpenBACH administration and the acquisition of administration
-statistics, while the Telecommunication/networking Jobs shall be separated depending on the OSI layer they are related to.
+Some examples of admin_jobs are all logs related to the modification of log level or enable/disable stats, the syncrhonization,
+jobs in charge of emptying the DBs, etc.
+
+The user_jobs shall be separated on telecommunication domain: physical, access, network, transport, service, etc. Within in each
+domain, the jobs might be classified depending on the type of task the aim at performing, e.g. traffic generator, traffic monitoring,
+post-processing, though some jobs might perform one or more tasks and its classification is not straightforward.
 
 
 === Material aspects: Entities
@@ -536,10 +540,12 @@ creating the test/scenario).
  Agents or dependencies, etc…). Thus the backend needs a background process (i.e. a daemon) capable of listening/controlling
  the local post-processing tasks without time constraints.
 
- It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions” regarding
- information of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side (configure/launch a Job
- instances, send updated information/status, etc.). For example, as explained latter, the Controller does not schedule the Job instances
- itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend communicates to the Agents is discussed next.
+
+It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions”
+regarding information of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side
+(configure/launch a Job instances, send updated information/status, etc.). For example, as explained latter, the Controller does
+not schedule the Job instances itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend
+communicates to the Agents is discussed next.
 
 
 The openbach-conductor shall be thus in charge of listening for commands from the views, building and launching the playbooks
@@ -805,16 +811,16 @@ Concerning the logs, the collector daemon function is performed by Logstash and 
 Logstash is an open-source data collection (under Apache 2 license), and a data transportation pipeline. It allows to efficiently process a growing list of logs, events and unstructured data sources for distribution into a variety of outputs, including the one used herein, an Elasticsearch data base. It is capable of normalizing different data formats by means filters.
 
 Thus, once Logstash collects a log, it sends it to ElasticSearch, a database developed by the same creators of Logstash. The main features of Elasticsearch are:
-•	It has an indexing engine allowing fast search of data.
-•	Real-time analytics of the stored data
-•	It is API driven by a simple Restful API using JSON over HTTP. Log search is performed by this means.
-•	The requests/queries are returned in common text formats like JSON.
-•	It is available under Apache 2 open-source license.
+*	It has an indexing engine allowing fast search of data.
+*	Real-time analytics of the stored data
+*	It is API driven by a simple Restful API using JSON over HTTP. Log search is performed by this means.
+*	The requests/queries are returned in common text formats like JSON.
+*	It is available under Apache 2 open-source license.
 
 
 Below, it is shown an example of the way logs can be exported from ElasticSearch via the HTTP API (check Elasticsearch manuals for more information). In the example, two filters are used for:
-•	exporting the logs within a 10 seconds time range, and
-•	returning only log-type-one logs lines
+*	exporting the logs within a 10 seconds time range, and
+*	returning only log-type-one logs lines
 
 [source,json]
 ----
@@ -931,7 +937,7 @@ implemented in the Agent.
 
 Next, it is detailed the different commands that the Control-Agent shall accept from the Controller component:
 
-[source,python]
+[source,python,small]
 ----
 'status_jobs_agent': (0, ''),
 'add_job_agent': (1, 'You should provide the job name'),
@@ -957,8 +963,9 @@ to the Agent:
   shell: /opt/openbach-agent/openbach-baton start_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} {{ job_options }}----
 ----
 
-A configuration file for each job shall be implemented. This configuration file shall be used for verification purposes (e.g. check parameters/options accepted by the job) and making a job persistent
-(once it has been installed). The configuration file shall have the following format:
+A configuration file for each job shall be implemented. This configuration file shall be used for verification purposes
+(e.g. check arguments/parameters/options accepted by the job) and making a job persistent (once it has been installed). The configuration file
+format shall include 4 sections (general information, the os requirements, the accepted arguments and the to be produced statistics):
 
 [source,json]
 ----
@@ -968,13 +975,13 @@ general:
   description: >
       This Job executes the fping ...
   job_version:     0.1
-  keywords:        [ping, fping, rate, rtt, round]
-  persistent:      true
+  keywords:        [ping, fping, rate, rtt, round, trip, time]
+  persistent:      true # <1>
 
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/fping/fping.py'
+    command:       '/opt/openbach-jobs/fping/fping.py'  # <2>
     command_stop:
 
   windows:
@@ -982,7 +989,7 @@ os:
     command:       '...'
     command_stop:
 
-arguments:
+arguments:  # <3>
   required:
     - name:        destination_ip
       type:        'ip'
@@ -1003,13 +1010,156 @@ arguments:
       description: >
           Wait interval seconds between sending each packet.
 
-statistics:
+statistics:  # <4>
     - name:        rtt
       description: >
           The Round trip time of ICMP packets.
       frequency:   'every *count x interval* sent packets or every *duration* time'
 
 ----
+<1> The persistent variable should be a Boolean. It indicates if the job shall run on background or if it will only execute some tasks and finish.
+<2> Command to be executed by the “openbach-agent” daemon on the agent when starting the job instance. (i.e. the path to the job script)
+<4> Accepted "required" and "optional" arguments
+<3> Procuced statistics
+
+When the Agent crashes or if it is restarted, the job configuration files help the Agent to know its own jobs before crashing/restarting.
+
+Finally, it should be highlighted that the way the Agent has been designed would allow a user to control each Agent without a Controller, in other words, the
+current design would allow to bypass the Controller component if an advanced user needs to do so (see the debug section in OpenBACH wiki for more information ).
+
+===	The Collect-Agent part
+
+==	Interfaces
+
+The interfaces between all the components, the databases, the HMI, and the different blocks (representing different functionalities) is one of the keys to design
+reliable and robust communications protocols/APIs between all of them.
+
+As it can be seen in Figure <<img-interf_design>>, where the main interfaces are displayed and listed, HTTP shall be used for communication between most of the elements,
+mainly in the case of user-to-frontend interfaces, or for frontend-to-backend interfaces (e.g. for web services), as it is a mature technology and it is very well c
+considered among the community. Even the access to the different databases (InfluxDB and ElasticSearch) shall be carried out by means of HTTP API, which allows easy
+data portability, and fast query/request of data, etc.
+
+Sockets (well known by his efficiency and simplicity of implementation) shall be mainly used for log/statistics transmission between Agent and Collector daemons,
+and between Jobs instances and Agents. For example, the Agent obtains the logs/statistics from jobs instances by means of local UNIX sockets, and transmits them to
+the collector by means of UDP/TCP sockets.
+
+For local communication, where no data is transmitted, the elements shall communicate with simple bash/script commands (i.e. for execute/launch a task/process).
+That is the case of, for example, the Agent (controlling part)-to-job interface, or the Agent (controlling part)-to-(collecting part) interface.
+
+Finally, the communication between the Controller (mainly the Backend) and the Agents shall be performed via SSH/SFTP communications. The SSH/SFTP communication
+is managed by Ansible. Further details about Ansible are given in section .
+
+[#img-interf_design,reftext='Figure {counter:refnum}']
+.Basic overall design of OpenBACH components
+image::interfaces_design.png[align="center"]
+{nbsp} +
+
+=== Detailed Controller-Collector-Auditorium interfaces
+An overall architecture of the auditorium,  the controller and the collector and their interfaces is shown in Figure <<img-controller_collector>>, where we can observe that the main streams
+of information between these components are those related to the writing/querying of data to/from the Collector databases (both logs DB and stats DB).
+
+Indeed, once the Collector stores the logs and statistics in their databases, the Controller and the Auditorium shall be capable of pulling this data for visualization
+and post-processing. Therefore:
+
+* The frontends (both for logs ans statistics, described in Section 8) for displaying the logs and statistics shall use an HTTP API provided by the stats/logs databases
+ for getting the data to be displayed.
+* The Controller backend shall be able to query information stored in the database regarding job instances status (scheduled/started/finished) by means of a proposed HTTP
+API.
+
+[#img-controller_collector,reftext='Figure {counter:refnum}']
+.Auditorium, Controller and collector interfaces design
+image::controller_collector.png[align="center"]
+{nbsp} +
+
+
+==	Post-processing
+
+===	Import/export
+
+As it has been detailed in the OpenBACH design, the Jobs are the way to execute the post-processing tasks allowing to perform dedicated calculations of the collected statistics.
+
+A variant of the functional scheme of OpenBACH that is used for performing operations on the collected data via the post-processing jobs is shown in Figure 18 (highlighted
+in red), where:
+* After a user choses to launch a post-processing job (the same way any other Job is launched)
+* The Job instance shall pull the required data from the statistics database (InfluxDB) of the Collector (via the HTTP API), and then it shall perform the calculations
+and push the new data the same way the Job send data to the Collector. In that case, the implementation of the Job shall contain the lib to access the database.
+* Meanwhile, the user has opened the web interface of post-processing data, and the frontend has been performing get requests to obtain the data for display (still not
+available). Once the post-processing Job instance pushes the new data, the web interfaces is capable of displaying it in the web browser.
+
+Two constraints must be taken into account for correctly pushing the post-processed data into the Collector:
+* The post-processed data and the original data shall not have the same name, in order to avoid deleting the orginal data.
+* The post-processed shall be time stamped: sometimes with the same time stamp of the original data, but it could also be time stamped with a different time (depending on the user needs).
+
+===	Post-processing jobs
 
 
 ==	Display of data collection
+
+The objective of this section is to first remind the full data collection chain of OpenBACH, including the collection carried out by the jobs and the centralization
+of the data in the collector. Secondly, we aim at showing the details regarding the considered display options for the different types of data collected in OpenBACH.
+We aim at presenting the requirements and the design regarding the data display frontends (real-time data, real-time logs and offline data)
+
+=== Real-time logs
+As it has been detailed previously, the Collect-Agent daemon (Rsyslog) is in charge of collecting the different logs sent by the running job instances in a network
+entity. Those logs are then relayed to the Collector (via UDP/TCP sockets), which stores them into the chosen Logs database (i.e. Elasticsearch).
+
+Regarding the logs display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the collected logs on real-time.
+
+The Log messages displayed shall at least contain the following information:
+* Time/date of log message collection
+* Log level
+* ID of the network entity (e.g. hostname)
+* Name of the Job sending the log message
+* Scenario ID and job instance ID (if they are generated by a job instance)
+ *The message
+
+ Moreover, the logs web interface shall propose tools allowing to perform:
+* Logs research
+* Logs filtering (e.g. filters for host machine, IP, job, log level, etc.)
+* Different auto refresh intervals, from 5 seconds to several hours.
+* Calculation of number of statistics per applied filter, per time window.
+
+Kibana has been chosen as frontend for the logs web interface. It is an open-source data visualization platform that allows a user to interact with the collected data, organize
+and plot different graphics and create your own logs dashboards. It is able to use the HTTP Restful API to query logs from Elasticsearch.
+
+[#img-collect_logs,reftext='Figure {counter:refnum}']
+.Collection and display of log messages.
+image::collecting_logs.png[align="center"]
+{nbsp} +
+
+=== Real-time statistics
+
+Concerning the collection of statistics, the Collect-Agent daemon (Rstats) is in charge of collecting the different stats sent by the running jobs instances in a network entity.
+Those stats are then relayed to the Collector (via UDP/TCP sockets), which stores them into the chosen Stats database (i.e. InfluxDB).
+
+Regarding the stats display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the collected stats on real-time.
+
+The statistics name shown in the web interface shall be able to be chosen depending on:
+* The statistic name (and Job name)
+* The ID of the network entity (e.g. hostname)
+* The time/date of data sample
+* Scenario ID and job instance ID
+* The data
+
+Moreover, the stats web interface shall propose tools allowing to perform:
+* Statistics research per host and per job instance.
+* Simple calculation such as maximum/minimum/average values.
+* Different auto refresh intervals, from 5 seconds to several hours.
+* Snapshot of the graphics (in order to share them or use them in documents).
+
+Grafana has been chosen as frontend for the stats web interface. It is an open-source dashboard for data display that allows a user to visualize and interact with
+the collected data, organize and plot different types of graphics and create your own dashboards. It is able to use the HTTP API to query the statistics from InfluxDB data base.
+
+[#img-collect_stats,reftext='Figure {counter:refnum}']
+.Collection and display of real-time statistics.
+image::collecting_stats.png[align="center"]
+{nbsp} +
+
+
+=== Post-processing data statistics
+
+Regarding the offline display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the post-processed metrics and other offline statisics.
+
+The offline web interface shall propose tools allowing to perform:
+* Advanced manipulation of graphics
+* Snapshot of the graphics (in order to share them or use them in documents).

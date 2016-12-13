@@ -69,9 +69,7 @@ OpenBACH is designed in order to be capable of fulfilling the needs of a user th
 
 == Functional design
 
-
 [[section-term, Terminology]]
-
 === Terminology of OpenBACH
 
 === Design components
@@ -541,10 +539,11 @@ creating the test/scenario).
  the local post-processing tasks without time constraints.
 
 
-It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions”
+IMPORTANT: It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions”
 regarding information of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side
-(configure/launch a Job instances, send updated information/status, etc.). For example, as explained latter, the Controller does
-not schedule the Job instances itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend
+(configure/launch a Job instances, send updated information/status, etc.).
+
+For example, as explained latter, the Controller does not schedule the Job instances itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend
 communicates to the Agents is discussed next.
 
 
@@ -897,7 +896,7 @@ builds a playbook and creates an SSH connection with the Agent by means of Ansib
 * Step 4: The daemon “openbach-agent” registers the received command and executes its tasks/actions (known as “agent-actions”). These actions are related to the
 “openbach-functions” implemented in the Controller-Backend as it is detailed next.
 
-NOTE: Justification for the need of “openbach-baton”: The shell script “openbach-baton” is only a tool to transmit the order/command from the Controller
+TIP: Justification for the need of “openbach-baton”: The shell script “openbach-baton” is only a tool to transmit the order/command from the Controller
 to the Agent. It is needed because Ansible, which is the mean of communication between the two components, needs not only a way to relay the commands to the
 Agent but also to get a proper response from the Agent (i.e. a response that Ansible would be able to interpret, e.g. OK status). Moreover, the use of
 “openbach-baton” would allow to replace the communication mechanisms if wanted (for example, introducing a communication between web services for sending
@@ -906,6 +905,7 @@ some commands instead of Ansible.)
 The use of bash for this relay seems a reliable way of interfacing the entities.
 
 Below, the main features of the Agent are described:
+
 * The Agent shall be based on a request-to-do policy, i.e. it shall perform tasks only when the Controller asks for.
 * Within the command, the Agent may receive start/stop date-time information from the Controller, so that it will know when to execute the “agent-function”
 associated to.
@@ -1029,6 +1029,117 @@ current design would allow to bypass the Controller component if an advanced use
 
 ===	The Collect-Agent part
 
+The Collect-Agent shall implement two different client for collecting statistics and logs. The collection and forward of logs shall be performed by Rsyslog
+(open-source tool) and the collection and forward of stats/metrics shall be performed by the rstats client.
+
+NOTE: Rstats is a home-made program that collects stats and sends them to the Collector. Its principle is similar to the one of statsd (a simple daemon for stats aggregation)
+but modified in order to fulfill the OpenBACH requirements (in terms of accuracy, performance, etc.)
+
+Two jobs (admin_jobs) shall be dedicated to control the collecting daemons (as shown in the figure): the Job “rsyslog” and Job “rstats” which shall allow to start/stop/restart/reload
+the rsyslog and rstats daemons, as shown later.
+
+
+Regarding the logs, data and statistics to be collected, the Job instances shall be in charge of sending the logs/stats to the two daemons of the Collect-Agent (i.e.
+Rstats and Rsyslog). For that, the "collect agent API" shall be imported in the jobs script to be able use different methods (register_collect, send_log, send_stat, reload_stat, remove_stat, ...)
+allowing to send the stats from the Job instance to the Collect-Agent daemons, which will forward the stats/logs to the Collector component via UDP/TCP sockets.
+
+TIP: The collect-agent API allows to transparently treat logs and stats (independently of the clients rsyslog/rstats)
+
+=== Rsyslog
+
+Rsyslog shall be used in the Agents to handle the logs of the different running Jobs. It shall then forward the log messages to the Collector via a UDP/TCP socket.
+The configuration parameters to be used for rsyslog per Job shall be:
+
+* Collector IP Address
+* Logstash port:10514 (default port)
+* Local log severity level (to locally store in the network entity)
+* Remote log severity level (to send to the collector)
+* Job Name
+* Scenario ID and job instance ID
+
+Thus the Controller (after a user request) can specify the severity level that the Agents will use for both sending the logs to the Collector and locally store them in the network
+entity. The way these parameters are modified is explained at the end of this section.
+
+
+
+The log messages (string format), shall be handled by a Python “Rsyslog API”. The number and types of severity levels are chosen among those ones defined for Syslog standard messages,
+it is proposed to use the following ones:
+
+[#tab-flags,reftext='Table {counter:tabnum}']
+.OpenBACH Log level
+[frame="topbot",options="header"]
+|===
+| Value       | Severity	               | Keyword
+|  0          | Error                    | syslog.LOG_ERR
+|  1          | Warning                  | syslog.LOG_WARNING
+|  2          | Informational            | syslog.LOG_INFO
+|  3          | Debug                    | syslog.LOG_DEBUG
+|===
+
+=== Rstats
+
+Rstats has the same role as Rsyslog but focused on statistics collection and relay. Rstats shall fulfill the following requirements:
+
+* Aggregate the statistics/metrics sent from the available jobs.
+* Time stamp each collected statistics with one millisecond accuracy.
+* Relay the statistics to the Collector, and allow to activate/deactivate this option for each statistic.
+* Add a flag to the data, so the collector knows if it has to store and/or broadcast the received data
+* Locally store all statistics.
+
+The flag can be :
+
+* 0 for no storage and no broadcast
+* 1 for storage and no broadcast
+* 2 for no storage and broadcast
+* 3 for storage and broadcast
+
+If the flag is 0, Rstats only stores locally the statistics and does not send the data to the collector.
+
+The deactivation/activation of a statistic shall be realized by means of the following configuration file (one configuration file per statistic):
+
+[source,conf]
+----
+[default]
+storage=true
+broadcast=false
+----
+
+For example, in this configuration file, the statistics are send to the collector with a flag 1. The collector only stores the statistics in InfluxDB.
+
+Rstats communicates with the Collector on an TCP or UDP socket on the port 2222.
+
+
+==== Collect-agent API / How to use
+
+Herein, we show an example on how to use the collect-agent API in a Job script:
+
+[source,python]
+----
+
+import collect_agent    # <1>
+conffile = "/opt/openbach-jobs/job_name/job_name_rstats_filter.conf"
+success = collect_agent.register_collect(conffile)    # <2>
+
+collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % exception)  # <3>
+
+statistics = {'rtt': rtt_data}
+collect_agent.send_stat(timestamp, **statistics) # <4>
+
+----
+<1> import the API
+<2> register the job instance to collect_agent
+<3> send a log
+<4> send a stat of type "rtt" and value "rtt_data" with a timestamp
+
+==== Log severity level and activation/deactivation of stats
+This section aims at detailing the way the OpenBACH Agent modifies the loglevel severity and activates/deactivates the stats:
+
+- Step 1: After a user request asking for a new modification, the controller sends (using an Ansible playbook and a SSH connection) a new configuration file (for the aimed Job/Jobs)
+- and the command allowing to reload the job “Rstats” (for stat activation/deactivation) or restart the job ‘Rsyslog” (for a log severity level modification).
+- Step 2: The file is stored in the directory used by Rsyslog and/or Rstats clients.
+- Step 3: The openbach-agent executes the command for the concerned Job (Rstats or Rsyslog)
+- Step 4: Rsyslog and Rstats clients are restarted/reloaded in order to take the new configuration for logs and statistics.
+
 ==	Interfaces
 
 The interfaces between all the components, the databases, the HMI, and the different blocks (representing different functionalities) is one of the keys to design
@@ -1090,7 +1201,21 @@ Two constraints must be taken into account for correctly pushing the post-proces
 * The post-processed data and the original data shall not have the same name, in order to avoid deleting the orginal data.
 * The post-processed shall be time stamped: sometimes with the same time stamp of the original data, but it could also be time stamped with a different time (depending on the user needs).
 
+[#img-influxdb_data_access,reftext='Figure {counter:refnum}']
+.Class Diagram of data access for InfluxDB 
+image::influxdb_data_access.png[align="center"]
+{nbsp} +
+
+[#img-elastic_data_access,reftext='Figure {counter:refnum}']
+.Class Diagram of data access for ElasticSearch
+image::influxdb_data_access.png[align="center"]
+{nbsp} +
+
+
 ===	Post-processing jobs
+The benchmark shall include post-processing jobs allowing to compute the variance, the CDF, the interval of confidence and the average values over a time window.
+
+These jobs shall allow to extract data from the InfluxDB database, compute the required post-processed values and export them into InfluxDB.
 
 
 ==	Display of data collection

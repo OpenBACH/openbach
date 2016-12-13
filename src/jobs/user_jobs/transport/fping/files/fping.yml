@@ -6,7 +6,7 @@ general:
       This Job executes the fping command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval).
       It sends syslog in case of error.
   job_version:     0.1
-  keywords:        [ping, fping, rate, rtt, round]
+  keywords:        [ping, fping, rate, rtt, round, trip, time]
   persistent:      true
 
 os:

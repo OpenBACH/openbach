@@ -1,12 +1,10 @@
-This Job principaly launch the hping command for monitoring TCP RTT. It sends syslog in case of error.
+This Job executes the hping command to send custom TCP (e.g. SYN TCP) packets (like ping does with ICMP) and measures the rtt delay of the stream of packets (with a frequency of count packets). It sends syslog in case of error.
 
 Required Arguments:
-  - dest : it is the IP destination you want to ping
+  - dest : the destination IP address
 
 Optionnal Arguments:
-  all the arguments of the ping command are accepted
-
-Statistics: it doesn't produce any statistic
+  - rtt : The Round trip time of tcp connection (SYN)
 
 Example:
   - Ping 172.20.0.83 : -a "destination_ip 172.20.0.83"

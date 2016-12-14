@@ -309,6 +309,7 @@ class ClientThread(threading.Thread):
             try:
                 # convert job_instance_id, scenario_instance_id and new
                 data_received[3:6] = map(int, data_received[3:6])
+                data_received[7] = bool(int(data_received[7]))
             except ValueError:
                 raise BadRequest(
                         'KO Message not formed well. Forth, fifth '

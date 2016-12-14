@@ -69,8 +69,43 @@ OpenBACH is designed in order to be capable of fulfilling the needs of a user th
 
 == Functional design
 
+This sections aims at describing the overall view of the functional architecture design for OpenBACH (Benchmark Automation tools for
+Communication and Hypervision).
+
 [[section-term, Terminology]]
 === Terminology of OpenBACH
+
+First of all, the following table allows to define some terms used in this document and in particular, those that compose
+the backbone of an OpenBACH scenario:
+
+[#tab-terminology,reftext='Table {counter:tabnum}']
+.OpenBACH terminology
+[frame="topbot",cols="^.^s,.^", options="header"]
+|===
+| Terms                         | Definition
+|  Job^1^                         | A number of individual tasks (one or more) with a common purpose and to be executed in a sole Agent. A job might be able to launch/configure other software tools (e.g. ping/iperf) and OS tools (e.g. iptables), configure OS parameters, collect/generate information/stats from tools/OS, etc.
+|  Job instance                 | An execution of a job configured with a set of parameters.
+|  openbach-function            | Function defined and launched in the Controller allowing to perform tasks related to: install agents/Jobs, configure and schedule Job/scenario instances, perform information/status requests regarding Agents/Jobs/Scenarios and their instances, etc.
+|  openbach-function instance   | An execution of an openbach-function with a set of parameters.
+|  scenario                     | A set of openbach-functions that allow to perform different tasks on one or more Agents.
+|  scenario instance            | An execution of a scenario with a set of parameters.
+|===
+
+^1^ [small]*A classification of Job types depending on their purpose is defined in this document.*
+
+Other terms regarding the design of OpenBACH and used in this document are defined in the following table:
+
+[#tab-terminology-other,reftext='Table {counter:tabnum}']
+. Design terminology
+[frame="topbot", cols="^.^s,.^", options="header"]
+|===
+|  Terms                             | Definition
+|  Network Under Test               | Network under test allowing to interconnect different network entities. The real traffic (e.g. HTTP, Video streaming, etc.) is sent through this network, and it will be possibly monitored by OpenBACH
+|  Management network               | Logical or physical network independent from the Network under test (or dedicated bandwidth of the physical network) allowing to interconnect each network entity with the collector and the controller of OpenBACH. This network is used to send all the signalization/messages of control, monitoring, etc., related to OpenBACH.
+|  Frontend                         | It is the presentation layer and what the user is able to see, i.e. the interface between the user and the data access layer (in the backend). In summary, a mix of programming and layout that powers the visuals and interactions of the web.
+|  Backend                          | It is seen as the servers-side code which has access to the data, and implements functions to manipulate this data and to use it for different purposes. In the case of OpenBACH, the backend contains the intelligence of the benchmark, i.e. the functions that allow to perform different tasks.
+
+|===
 
 === Design components
 
@@ -88,7 +123,7 @@ to the Collector and/or the Controller.
 * The Auditorium component shall centralize the different frontend interfaces for configuring and monitoring (logs and
 statistics) the benchmark.
 
-A basic functional scheme of OpenBACH is represented in <<img-basic_funct_design>>. From the Auditorium, a user shall be
+A basic functional scheme of OpenBACH is represented in <<img-basic_func_design>>. From the Auditorium, a user shall be
 able to configure OpenBACH and request information of it (status of entities and components). The configuration is centralized
 at the Controller, which is in charge of deploying this configuration to the required Agents (the configuration might also
 include the deployment of new Agents and Jobs) and asking for status information. The Agents execute/schedule/stop the Jobs
@@ -97,9 +132,9 @@ all the available Agents/Jobs. Once the information is stocked in the Collector,
 of data regarding the status of OpenBACH (in order to be sent to the Auditorium), and the Auditorium is able to make requests
 logs and statistics in order to allow the visualization in the user PC screen.
 
-[#img-basic_funct_design,reftext='Figure {counter:refnum}']
+[#img-basic_func_design,reftext='Figure {counter:refnum}']
 .Design of OpenBACH interfaces
-image::func_design.png[align="center"]
+image::basic_func_design.png[align="center"]
 {nbsp} +
 
 ===	Functional definitions
@@ -108,7 +143,7 @@ image::func_design.png[align="center"]
 OpenBACH shall propose two main functionalities: the configuration of the benchmark (including the available jobs) and the
 collection of relevant data.
 
-These two types of functionalities are well identified by color in the architecture shown in <<img-funct_design>> :
+These two types of functionalities are well identified by color in the architecture shown in <<img-func_design>> :
 •	Configuration (purple boxes/arrows): includes configuration of jobs, scenarios, entities, scheduling of jobs/scenarios.
 •	Collection and display of statistics and logs/status (blue boxes/arrows) allowing to monitor the Network under Test.
 
@@ -116,11 +151,11 @@ These two types of functionalities are well identified by color in the architect
 [[section-func_blocks, Functional blocks per component]]
 ====	Functional blocks per component
 Below, we list the functional blocks per component as well as the types of data flows between them that OpenBACH shall
-implement. The functional architecture is shown in <<img-funct_design>>.
+implement. The functional architecture is shown in <<img-func_design>>.
 
-[#img-funct_design,reftext='Figure {counter:refnum}']
+[#img-func_design,reftext='Figure {counter:refnum}']
 .Design of OpenBACH components
-image::funct_design.png[align="center"]
+image::func_design.png[align="center"]
 {nbsp} +
 
 The Auditorium shall implement several frontends, one per type of display:
@@ -173,7 +208,7 @@ storages.
 The comprehension of these main terms is one of the keys to well understand the OpenBACH design described herein and in particular,
 the way to configure the benchmark.
 
-Besides the definition of each term (see Table 3 at the beginning of section <<section-term>>), the purpose of this section is to explain the
+Besides the definition of each term (see <<tab-terminology>> at the beginning of section <<section-term>>), the purpose of this section is to explain the
 relationship between this terms.
 
 As it has been previously explained, the Jobs are the groups of tasks (under the form of scripts) that are deployed in the Agents.
@@ -333,7 +368,7 @@ post-processing, though some jobs might perform one or more tasks and its classi
 
 === Material aspects: Entities
 
-The following section describes the deployment of OpenBACH in different entities. In particular, Figure 9 shows the architecture
+The following section describes the deployment of OpenBACH in different entities. In particular, <<img-entity_arch>> shows the architecture
 and the components of the proposed design. An example of network topology where OpenBACH could be deployed is available at
 the top-left corner of the figure. In such topology, the network entities are interconnected by means of heterogeneous physical
 links (satellite, terrestrial, LTE, WiFi, etc.).
@@ -584,7 +619,7 @@ First the group 1 of openbach-functions allowing to install, delete, list and up
 
 [#tab-ob1,reftext='Table {counter:tabnum}']
 .group 1
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot", cols="^.^s,^.^,.^e,.^,.^", options="header"]
 |===
 | Function                      | Method      | url                         | Input contents (JSON or Query sting)                                 | Description
 | add_collector                 | POST        | /collector                  | *address*, *username*, *password*, *name*, logs_port, stats_port     | Add a new Collector (and install an Agent on it)
@@ -599,7 +634,7 @@ Second the group 2 of openbach-functions allowing to install, delete, list and u
 
 [#tab-ob2,reftext='Table {counter:tabnum}']
 .group 2
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function                      | Method      | url                     | Input contents (JSON or Query sting)                      | Description
 | install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
@@ -615,7 +650,7 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 
 [#tab-ob3,reftext='Table {counter:tabnum}']
 .group 3
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function           | Method          | url              | Input contents (JSON or Query string)      | Description
 | add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path and already on the Controller)
@@ -630,7 +665,7 @@ Then the group 4 of openbach-functions allowing to install/uninstall a Job in a 
 
 [#tab-ob4,reftext='Table {counter:tabnum}']
 .group 4
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function                    | Method        | url                    | Input contents (JSON or Query string)                                               | Description
 | install_jobs                | POST          | /job                   | *addresses*, *names*, *action=’install’*, severity, local_severity                  | Install one or more Jobs (identified by name) in one or more network entities (identified by IP address)
@@ -648,7 +683,7 @@ The group 5 of openbach-functions allowing to start/schedule/stop a Job instance
 
 [#tab-ob5,reftext='Table {counter:tabnum}']
 .group 5
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function                    | Method        | url                       | Input contents (JSON or Query string)                                     | Description
 | start_job_instance          | POST          | /job_instance             | *agent_ip*, *job_name*, *instance_args*, *action='start'*, date, interval | Start a Job instance of the Job on the Agent.
@@ -665,7 +700,7 @@ The group 6 of openbach-functions allowing to create/delete/show/modify a scenar
 
 [#tab-ob6,reftext='Table {counter:tabnum}']
 .group 6
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function            | Method        | url               | Input contents (JSON or Query string) | Description
 | create_scenario     | POST          | /scenario         | *scenario_json*, project_name         | Create OpenBACH scenario.
@@ -679,7 +714,7 @@ The group 7 of openbach-functions allowing to start/stop a scenario instance and
 
 [#tab-ob7,reftext='Table {counter:tabnum}']
 .group 7
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function                      | Method        | url                                          | Input contents (JSON or Query string)      | Description
 | start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *arguments*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
@@ -692,7 +727,7 @@ And finally, the group 8 of openbach-functions allowing to
 
 [#tab-ob8,reftext='Table {counter:tabnum}']
 .group 8
-[frame="topbot",options="header", cols="15%,10%,15%,20%,40%"]
+[frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
 | Function                      | Method        | url                                                                                       | Input contents (JSON or Query string) | Description
 | add_project                   | POST          | /project                                                                                  | *project_json*                        | Add a new Project
@@ -791,7 +826,7 @@ The data received can be flagged. The flag can precise if the data should:
 
 [#tab-flags,reftext='Table {counter:tabnum}']
 .Flag of stats
-[frame="topbot",options="header"]
+[width=60%, grid="none", frame="topbot", options="header", cols="^.^, ^.^, ^.^"]
 |===
 | Stored in DB | Broadcasted	     | Flag Value
 |  no          | no                | 0
@@ -918,12 +953,12 @@ The agent-actions are a group of actions implemented in the "openbach-agent" tha
 are directly related to the “openbach-functions”, since as it has been explained, in some cases, these functions need to perform actions/tasks in the Agents
 side (groups 3 and 4 shown in <<img-functions>>), and the agent-actions are their way to do it.
 
-Table <<tab-agent_func>> shows the mapping between the openbach-function of the backend, the openbach-baton commands (commands sent via Ansible) and the agent actions
+<<tab-agent_func>> shows the mapping between the openbach-function of the backend, the openbach-baton commands (commands sent via Ansible) and the agent actions
 implemented in the Agent.
 
 [#tab-agent_func,reftext='Table {counter:tabnum}']
 .Mapping between "openbach-functions" (implemented in the Controller) and the agent-actions (implemented in the openbach-agent)
-[frame="topbot",options="header", cols="23%,20%,27%,30%"]
+[frame="topbot",options="header", cols="^.^, .^, .^, .^"]
 |===
 | Openbach-function (in Controller) and group   | openbach-baton commands          | agent-action/s (in Agent)                                       | Objective of agent-action
 | install_job / 3                | add_job_agent + args              | add_job_agent                                                                 | To inform the agent about a new installed job.
@@ -1067,7 +1102,7 @@ it is proposed to use the following ones:
 
 [#tab-flags,reftext='Table {counter:tabnum}']
 .OpenBACH Log level
-[frame="topbot",options="header"]
+[frame="topbot", width="60%", options="header", cols="^.^,^.^, .^"]
 |===
 | Value       | Severity	               | Keyword
 |  0          | Error                    | syslog.LOG_ERR
@@ -1145,7 +1180,7 @@ This section aims at detailing the way the OpenBACH Agent modifies the loglevel 
 The interfaces between all the components, the databases, the HMI, and the different blocks (representing different functionalities) is one of the keys to design
 reliable and robust communications protocols/APIs between all of them.
 
-As it can be seen in Figure <<img-interf_design>>, where the main interfaces are displayed and listed, HTTP shall be used for communication between most of the elements,
+As it can be seen in <<img-interf_design>>, where the main interfaces are displayed and listed, HTTP shall be used for communication between most of the elements,
 mainly in the case of user-to-frontend interfaces, or for frontend-to-backend interfaces (e.g. for web services), as it is a mature technology and it is very well c
 considered among the community. Even the access to the different databases (InfluxDB and ElasticSearch) shall be carried out by means of HTTP API, which allows easy
 data portability, and fast query/request of data, etc.
@@ -1166,7 +1201,7 @@ image::interfaces_design.png[align="center"]
 {nbsp} +
 
 === Detailed Controller-Collector-Auditorium interfaces
-An overall architecture of the auditorium,  the controller and the collector and their interfaces is shown in Figure <<img-controller_collector>>, where we can observe that the main streams
+An overall architecture of the auditorium,  the controller and the collector and their interfaces is shown in <<img-controller_collector>>, where we can observe that the main streams
 of information between these components are those related to the writing/querying of data to/from the Collector databases (both logs DB and stats DB).
 
 Indeed, once the Collector stores the logs and statistics in their databases, the Controller and the Auditorium shall be capable of pulling this data for visualization
@@ -1189,27 +1224,34 @@ image::controller_collector.png[align="center"]
 
 As it has been detailed in the OpenBACH design, the Jobs are the way to execute the post-processing tasks allowing to perform dedicated calculations of the collected statistics.
 
-A variant of the functional scheme of OpenBACH that is used for performing operations on the collected data via the post-processing jobs is shown in Figure 18 (highlighted
+A variant of the functional scheme of OpenBACH that is used for performing operations on the collected data via the post-processing jobs is shown in <<img-design_post_processing>> (highlighted
 in red), where:
+
 * After a user choses to launch a post-processing job (the same way any other Job is launched)
-* The Job instance shall pull the required data from the statistics database (InfluxDB) of the Collector (via the HTTP API), and then it shall perform the calculations
-and push the new data the same way the Job send data to the Collector. In that case, the implementation of the Job shall contain the lib to access the database.
-* Meanwhile, the user has opened the web interface of post-processing data, and the frontend has been performing get requests to obtain the data for display (still not
-available). Once the post-processing Job instance pushes the new data, the web interfaces is capable of displaying it in the web browser.
+* The Job instance shall pull the required data from the statistics/logs database (InfluxDB and/or ElasticSearch) of the Collector (via the HTTP API). Then it shall perform the calculations
+and push the new data the same way a Job instance sends data to the Collector (i.e. via collect-agent: rstats). In that case, the Job (script) shall contain a module to access the database.
+
+
+The module "CollectorConnection" ("import CollectorConnection from data_access") has been implemented in order to be capable of exporting data from InfluxDB and ElasticSearch. It contains different functions allowing to access and export
+data from the Collector. See <<img-data_access>> for a detailed view of the module functions.
+
+[#img-design_post_processing,reftext='Figure {counter:refnum}']
+.Post-processing pull (import)/push(export)
+image::design_post_processing.png[align="center"]
+{nbsp} +
+
+
+[#img-data_access,reftext='Figure {counter:refnum}']
+.Class Diagram of the data access (export of data) for logs and stats
+image::data_access.png[align="center"]
+{nbsp} +
 
 Two constraints must be taken into account for correctly pushing the post-processed data into the Collector:
-* The post-processed data and the original data shall not have the same name, in order to avoid deleting the orginal data.
-* The post-processed shall be time stamped: sometimes with the same time stamp of the original data, but it could also be time stamped with a different time (depending on the user needs).
 
-[#img-influxdb_data_access,reftext='Figure {counter:refnum}']
-.Class Diagram of data access for InfluxDB 
-image::influxdb_data_access.png[align="center"]
-{nbsp} +
+* The post-processed data and the original data shall not have the same name, in order to avoid deleting the original data.
+* The post-processed data shall be time stamped: sometimes with the same time stamp of the original data, but it could also be time stamped with a different time (depending on the user needs).
 
-[#img-elastic_data_access,reftext='Figure {counter:refnum}']
-.Class Diagram of data access for ElasticSearch
-image::influxdb_data_access.png[align="center"]
-{nbsp} +
+IMPORTANT: the developer of the post-processing job must take into account these constraints.
 
 
 ===	Post-processing jobs
@@ -1231,6 +1273,7 @@ entity. Those logs are then relayed to the Collector (via UDP/TCP sockets), whic
 Regarding the logs display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the collected logs on real-time.
 
 The Log messages displayed shall at least contain the following information:
+
 * Time/date of log message collection
 * Log level
 * ID of the network entity (e.g. hostname)
@@ -1239,6 +1282,7 @@ The Log messages displayed shall at least contain the following information:
  *The message
 
  Moreover, the logs web interface shall propose tools allowing to perform:
+
 * Logs research
 * Logs filtering (e.g. filters for host machine, IP, job, log level, etc.)
 * Different auto refresh intervals, from 5 seconds to several hours.
@@ -1260,6 +1304,7 @@ Those stats are then relayed to the Collector (via UDP/TCP sockets), which store
 Regarding the stats display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the collected stats on real-time.
 
 The statistics name shown in the web interface shall be able to be chosen depending on:
+
 * The statistic name (and Job name)
 * The ID of the network entity (e.g. hostname)
 * The time/date of data sample
@@ -1267,6 +1312,7 @@ The statistics name shown in the web interface shall be able to be chosen depend
 * The data
 
 Moreover, the stats web interface shall propose tools allowing to perform:
+
 * Statistics research per host and per job instance.
 * Simple calculation such as maximum/minimum/average values.
 * Different auto refresh intervals, from 5 seconds to several hours.
@@ -1286,5 +1332,6 @@ image::collecting_stats.png[align="center"]
 Regarding the offline display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the post-processed metrics and other offline statisics.
 
 The offline web interface shall propose tools allowing to perform:
+
 * Advanced manipulation of graphics
 * Snapshot of the graphics (in order to share them or use them in documents).

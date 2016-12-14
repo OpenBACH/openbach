@@ -98,7 +98,7 @@ bool register_collect(
 
   // Format the message to send to rstats
   std::stringstream command;
-  command << "1 " << config_file << " " << (job_name ? job_name : "job_debug") << " " << job_instance_id << " " << scenario_instance_id << " " << owner_scenario_instance_id << " " << agent_name << " " << _new;
+  command << "1 \"" << config_file << "\" \"" << (job_name ? job_name : "job_debug") << "\" " << job_instance_id << " " << scenario_instance_id << " " << owner_scenario_instance_id << " \"" << agent_name << "\" " << _new;
 
   // Send the message to rstats
   std::string result;

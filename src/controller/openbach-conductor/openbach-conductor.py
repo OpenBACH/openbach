@@ -4601,7 +4601,7 @@ class ClientThread(threading.Thread):
             sub_scenario_instance_ids.add(sub_scenario_instance.id)
         # Build the infos
         infos = {
-            'project_name': scenario_instance.scenario.project.name,
+            'project_name': scenario_instance.scenario.project.name if scenario_instance.scenario.project is not None else '',
             'scenario_name': scenario_instance.scenario.name,
             'scenario_instance_id': scenario_instance.id,
             'owner_scenario_instance_id': owner_scenario_instance_id,

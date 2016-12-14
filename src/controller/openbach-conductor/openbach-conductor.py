@@ -4514,6 +4514,7 @@ class ClientThread(threading.Thread):
                     thread.do_run = False
         # For each Openbach Function Instance, stop the associated Job Instance
         # and Watch
+        out_of_controll = False
         for ofi in scenario_instance.openbach_function_instance_set.all():
             for job_instance in ofi.job_instance_set.all():
                 try:
@@ -4523,10 +4524,12 @@ class ClientThread(threading.Thread):
                     # If an error occurs, update the status of the Scenatio
                     # Instance
                     scenario_instance.status = 'Running' # Running, out of controll
+                    out_of_controll = True
                     syslog.syslog(syslog.LOG_ERR, e.reason)
         # Update the status of the Scenatio Instance
         scenario_instance.status_date = timezone.now()
-        scenario_instance.is_stopped = True
+        if out_of_controll:
+            scenario_instance.is_stopped = True
         scenario_instance.save()
         return None, 204
 

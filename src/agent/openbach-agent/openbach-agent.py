@@ -428,13 +428,15 @@ class ClientThread(threading.Thread):
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),
             'start_job_instance_agent':
-                (5, 'You should provide a job name, an '
-                'instance id, a watch type and its value. '
-                'Optional arguments may follow'),
+                (6, 'You should provide a job name, an '
+                'owner_sceanrio_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of the start and its value. '
+                'Then the arguments of the job instance follow'),
             'restart_job_instance_agent':
-                (5, 'You should provide a job name, an '
-                'instance id, a watch type and its value. '
-                'Optional arguments may follow'),
+                (6, 'You should provide a job name, an '
+                'owner_sceanrio_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of the start and its value. '
+                'Then the arguments of the job instance may follow'),
             'stop_job_instance_agent':
                 (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),

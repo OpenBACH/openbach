@@ -948,7 +948,7 @@ associated to.
 * The Agent shall manage the scheduler locally, so that it will be able to control the whole execution/status of the agent-actions.
 * The Agent scheduler shall be able to execute the agent-actions with one millisecond accuracy.
 
-=====	Agent actions
+====	Agent actions
 The agent-actions are a group of actions implemented in the "openbach-agent" that allow performing different tasks regarding the OpenBACH control. These actions
 are directly related to the “openbach-functions”, since as it has been explained, in some cases, these functions need to perform actions/tasks in the Agents
 side (groups 3 and 4 shown in <<img-functions>>), and the agent-actions are their way to do it.
@@ -1054,8 +1054,8 @@ statistics:  # <4>
 ----
 <1> The persistent variable should be a Boolean. It indicates if the job shall run on background or if it will only execute some tasks and finish.
 <2> Command to be executed by the “openbach-agent” daemon on the agent when starting the job instance. (i.e. the path to the job script)
-<4> Accepted "required" and "optional" arguments
-<3> Procuced statistics
+<3> Accepted "required" and "optional" arguments
+<4> Produced statistics
 
 When the Agent crashes or if it is restarted, the job configuration files help the Agent to know its own jobs before crashing/restarting.
 

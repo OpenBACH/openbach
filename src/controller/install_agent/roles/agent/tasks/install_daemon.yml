@@ -99,6 +99,3 @@
   shell: systemctl daemon-reload
   when: ansible_distribution_version == "16.04"
 
-- name: Start openbach-agent
-  service: name=openbach-agent state=started
-

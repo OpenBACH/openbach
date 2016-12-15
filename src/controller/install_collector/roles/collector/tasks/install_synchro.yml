@@ -39,6 +39,9 @@
     - ntp
     - ntpdate
 
+- name: Delete all ntp pool of source servers
+  lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^pool
+
 - name: Delete all ntp source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^server
 

@@ -415,8 +415,7 @@ class ClientThread(threading.Thread):
             # reload la conf
             stats_client.reload_conf()
 
-    def change_config(self, job_instance_id, scenario_instance_id, broadcast,
-                      storage):
+    def change_config(self, scenario_instance_id, job_instance_id, broadcast, storage):
         manager = StatsManager()
         id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
         try:
@@ -426,7 +425,7 @@ class ClientThread(threading.Thread):
         stats_client._default_storage = storage
         stats_client._default_broadcast = broadcast
 
-    def execute_request(self, data): 
+    def execute_request(self, data):
         request, *args = self.parse_and_check(data)
         functions = [
                 self.create_stat,

@@ -1720,28 +1720,19 @@ class ClientThread(threading.Thread):
     @staticmethod
     def format_args(job_instance):
         """ Function that formats the arguments of a Job Instance """
-        args = ''
-        # For each required argument (in the right order)
-        for argument in job_instance.required_job_argument_instance_set.all().order_by('argument__rank'):
+        value_format = '"{}"'.format
+        concat = '{} {}'.format
+        required_args = ' '.join(
             # For each value
-            for job_argument_value in argument.job_argument_value_set.all():
-                # Add it to the list of arguments
-                if args == '':
-                    args = '{}'.format(job_argument_value.value)
-                else:
-                    args = '{} {}'.format(args, job_argument_value.value)
-        # For each optional argument
-        for optional_argument in job_instance.optional_job_argument_instance_set.all():
-            # Add the flag
-            if args == '':
-                args = '{}'.format(optional_argument.argument.flag)
-            else:
-                args = '{} {}'.format(args, optional_argument.argument.flag)
-            # Add the value(s)
-            if optional_argument.argument.type != Optional_Job_Argument.NONE:
-                for job_argument_value in optional_argument.job_argument_value_set.all():
-                    args = '{} {}'.format(args, job_argument_value.value)
-        return args
+            ' '.join(value_format(arg.value) for arg in argument.job_argument_value_set.all())
+            # For each required argument (in the right order)
+            for argument in job_instance.required_job_argument_instance_set.all().order_by('argument__rank'))
+        optional_args = ' '.join(
+            # Add the flag and the value(s)
+            concat(argument.argument.flag, ' '.join(value_format(arg.value) for arg in argument.job_argument_value_set.all()))
+            # For each optional argument
+            for argument in job_instance.optional_job_argument_instance_set.all())
+        return concat(required_args, optional_args)
 
     @staticmethod
     def fill_and_check_args(job_instance, instance_args):

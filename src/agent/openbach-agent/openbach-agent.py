@@ -40,6 +40,7 @@ import socket
 import threading
 import signal
 import yaml
+import shlex
 from subprocess import DEVNULL
 from functools import partial
 from datetime import datetime
@@ -126,6 +127,12 @@ class JobManager:
         self.mutex.release()
 
 
+def popen(command, args, **kwargs):
+    return psutils.Popen(
+            shlex.split(command) + shlex.split(args),
+            stdout=DEVNULL, stderr=DEVNULL, **kwargs)
+
+
 def pid_filename(job_name, job_instance_id):
     """ Function that contructs the filename of the pid file """
     # Return the pid filename
@@ -150,10 +157,7 @@ def launch_job(job_name, job_instance_id, scenario_instance_id,
                     'SCENARIO_INSTANCE_ID': scenario_instance_id,
                     'OWNER_SCENARIO_INSTANCE_ID': owner_scenario_instance_id})
     # Launch the Job Instance
-    proc = psutil.Popen(
-        command.split() + args.split(),
-        stdout=DEVNULL, stderr=DEVNULL,
-        env=environ)
+    proc = popen(command, args, env=environ)
     # Write the pid in the pid file
     with open(pid_filename(job_name, job_instance_id), 'w') as pid_file:
         print(proc.pid, file=pid_file)
@@ -185,9 +189,7 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
         os.remove(filename)
         # Launch the command stop if there is one
         if command:
-            psutil.Popen(
-                command.split() + args.split(),
-                stdout=DEVNULL, stderr=DEVNULL).wait()
+            popen(command, args).wait()
     # Remove the Job Instance to the JobManager
     try:
         with JobManager(job_name) as job:

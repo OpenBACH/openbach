@@ -128,7 +128,7 @@ class JobManager:
 
 
 def popen(command, args, **kwargs):
-    return psutils.Popen(
+    return psutil.Popen(
             shlex.split(command) + shlex.split(args),
             stdout=DEVNULL, stderr=DEVNULL, **kwargs)
 

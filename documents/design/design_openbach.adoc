@@ -1,8 +1,12 @@
-:sectnums:
-:sectnumlevels: 5
+
 
 = OpenBACH design
-:toc:
+David PRADAS <david.pradas@toulouse.viveris.fr>
+Copyright © 2016 CNES
+:icons: font
+:sectnums:
+:sectnumlevels: 5
+:toc2:
 :imagesdir: images
 :doctype: book
 :source-highlighter: coderayz
@@ -96,7 +100,7 @@ the backbone of an OpenBACH scenario:
 Other terms regarding the design of OpenBACH and used in this document are defined in the following table:
 
 [#tab-terminology-other,reftext='Table {counter:tabnum}']
-. Design terminology
+.Design terminology
 [frame="topbot", cols="^.^s,.^", options="header"]
 |===
 |  Terms                             | Definition
@@ -203,7 +207,7 @@ storages.
 *	A logs collector: it shall centralize the log messages collection received from the Agents and store them into data storages.
 
 
-=== OpenBACH-functions, Jobs and scenarios (and instances)
+=== Projects, scenarios, OpenBACH-functions, OpenBACH actions and Jobs (and instances)
 
 The comprehension of these main terms is one of the keys to well understand the OpenBACH design described herein and in particular,
 the way to configure the benchmark.
@@ -212,13 +216,17 @@ Besides the definition of each term (see <<tab-terminology>> at the beginning of
 relationship between this terms.
 
 As it has been previously explained, the Jobs are the groups of tasks (under the form of scripts) that are deployed in the Agents.
-An execution of this script configured with a set of parameters is known as a Job instance (a process launched by the Agent in the
-same machine). The jobs instances are scheduled with in a scenario instance and by means of the openbach-functions (ofunc). However,
-not all openbach-functions aim at perfoming tasks regarding the job instances; some are related to the installation of Agents, Jobs, etc.
+An execution of this script configured with a set of parameters is known as a Job instance (an execution of the Job launched by the Agent in the
+same machine). The job instances might be scheduled by openbach-functions (ofunc) when they are implemented within a scenario context, or openbach-actions when they
+are independent of any scenario. Later, we will focus on the different between these two types of functions.
 
-From the controller point of view (<<img-dev_controller>>), the Controller owns the openbach-function (identified by a type and a name),
-different scenarios (identified by his name, and allowing to specify different variables) and a scheduler. The scenario owns a group of
-ordered openbach-functions (identified by a position id). This openbach-function might own "wait_for" elements, which are able to add
+The openbach-functions and openbach-actions aim at performing many other tasks (other than scheduling job instances); such as the installation
+of Agents, Jobs, status requests, creation of projects, etc.
+
+==== Within a scenario context
+From the controller point of view (<<img-dev_controller>>), the Controller owns the openbach-function (identified by a type and a name), different projects (identified
+by his name and with one or more user owners capable of modifying the scenarios of a project), different scenarios (identified by his name, and allowing to specify different variables) and a scheduler.
+A project owns one or more scenarios. A scenario owns a group of ordered openbach-functions (identified by a position id). This openbach-function might own "wait_for" elements, which are able to add
 execution dependencies to the openbach-function (i.e. the openbach-function will be launched only when a specific openbach-function
 instance has been launched or when a specific job instance has finished).
 
@@ -232,7 +240,7 @@ a specific (or a group of) openbach-function instance is not fulfilled.
 The scheduler of the Controller is in charge of launching the scenario instance with all the openbach-function instances.
 
 [#img-dev_controller,reftext='Figure {counter:refnum}']
-.Relationship between scenario instances and openbach-functions in the Controller
+.Relationship between scenario instances and openbach-functions in the Controller (and project)
 image::uml_dev_controller.png[align="center"]
 {nbsp} +
 
@@ -242,7 +250,7 @@ as the Jobs with a date of execution, an id and the arguments. Finally, each Job
 context represented by an id.
 
 [#img-agent_dev,reftext='Figure {counter:refnum}']
-.Organisation of Jobs ans Job instances in the Agent
+.Organisation of Jobs and Job instances in the Agent
 image::uml_agent_dev.png[align="center"]
 {nbsp} +
 
@@ -254,28 +262,56 @@ described below and represented in <<img-chain_sce>>.
 image::chain_scenario.png[align="center"]
 {nbsp} +
 
-1.	(action 1) A user choses to launch a scenario instance from the web browser (web HMI) or the shell terminal (scripts).
-The request shall thus be sent via the configuration frontends (action 2). For that, the scenario shall be already created
+1.	(step 1) A user choses to launch 0 instance from the web browser (web HMI) or the shell terminal (scripts).
+The request shall thus be sent via the configuration frontends (step 2). For that, the scenario shall be already created
 by the user and available in the backend data base.
-2.	(action 3-4) The configuration frontend shall send a request to the backend for launching the scenario instance (via HTTP).
-3.	(action 5-6) The backend shall transfer to the openbach-conductor the order of launching the openbach-function to start the scenario
+2.	(step 3-4) The configuration frontend shall send a request to the backend for launching the scenario instance (via HTTP).
+3.	(step 5-6) The backend shall transfer to the openbach-conductor the order of launching the openbach-function to start the scenario
 instance.
-4. (action 7) When the scenario instance is launched, the openbach-function instances that are defined within the scenario shall be
+4. (step 7) When the scenario instance is launched, the openbach-function instances that are defined within the scenario shall be
 launched/scheduled by the openbach-conductor. Some of them might imply performing tasks in the Agent, and others in the backend
 (e.g. install an Agent). In fact,the openbach-functions shall specify when to launch the job instance in the Agent with respect
 to a “reference starting time” of the scenario instance plus an increment delta/offset (∆)
-5.	(action 8-9) (if at least one of these functions specifies to perform a task in the Agent) The openbach-conductor shall send the order
+5.	(step 8-9) (if at least one of these functions specifies to perform a task in the Agent) The openbach-conductor shall send the order
 to the Agent via Ansible.
-6.	(action 10-11) The Agent shall schedule the job instance when it receives the order of scheduling the job instance from
+6.	(step 10-11) The Agent shall schedule the job instance when it receives the order of scheduling the job instance from
 the Controller (openbach-conductor).
-7.	(actions 12) The launch of the Job instance is performed by the scheduler of the Control-Agent (when time = “reference
+7.	(step 12) The launch of the Job instance is performed by the scheduler of the Control-Agent (when time = “reference
 starting time” + ∆, i.e. a “reference starting time” of the scenario instance plus an increment (∆) parameter).
 
 The “reference starting time” of a scenario instance is the time at which the scenario instance shall be launched in the backend.
 
+==== openbach-functions and openbach-actions
+Both are functions the are implemented in the openbach-conductor (in the Controller), and both functions call (point to) a "core function"
+which implement the main tasks of the function (see <<img-function_action>>). The two methodologies to call the core functions are necessary in order have a direct access
+from the backend and an access through the scenario:
+* The openbach-action calls the core function and returns a proper response to the backend (in HTTP REST).
+* The openbach-function calls the core function but it also implements different tasks related to the scenario around the function.
+
+[#img-function_action,reftext='Figure {counter:refnum}']
+.Relationship between openbach-actions and openbach-functions
+image::uml_function_action.png[align="center"]
+{nbsp} +
+
+TIP: An example with the core function 'start_job_instance". If the user wants to start a job instance independently of any scenario. The openbach-action
+"start_job_instance_action" will call the core function and return a proper response to the Backend (and this to the frontend) with the "OK" status and the ID
+of the job instance, or a bad request "404". On the other hand, within a scenario context, the openbach-function "start_job_instance_action_of" might need to
+associate the openbach-function and the scenario instance to the job instance, or it might start a watch to check the status of the job instance, etc.
+
+Most core function have both an associated openbach-function and an openbach-action for evolutivity purposes. However, we find some exception, e.g.: all functions related
+to projects (add/modify/delete) only have an openbach-action associated to the core function, since it makes no sense to modify a project in a scenario. Or for example,
+in the case of the openbach-functions "if_of" and "while_of", it only makes sense to use them inside a scenario (thus they cannot be openbach-action).
+
+
+IMPORTANT: This is independent for the user of OpenBACH. OpenBACH itself is able to chose between the openbach-action and the openbach-function depending on the use
+and the prupose.
+
+
 ====	Functional definitions of a Scenario/Scenario instance
 The scenario instance is managed by the backend in the Controller and centralizes the status of all the job instances received
-from Agents through the Collector and the status of other openbach-functions (ofunc) (e.g. install job/agent). The states of a scenario instance are described below (see <<img-states_sce>>, where highlighted in black we detail the states in normal conditions and in blue those states that are used when external actions (stop/unschedule from user) or errors happen):
+from Agents through the Collector and the status of other openbach-functions (ofunc) (e.g. install job/agent). The states of a
+scenario instance are described below (see <<img-states_sce>>, where highlighted in black we detail the states in normal conditions
+and in blue those states that are used when external actions (stop/unschedule from user) or errors happen:
 
 *	*scheduling*: when a user decides to launch a scenario, the Controller starts scheduling locally some ofunc and deploying all
 the commands (via the openbach-functions)  to the different Agents.
@@ -565,6 +601,7 @@ The last one is one of the strong points of Ansible.
 
 ====	Openbach-conductor
 The Backend shall rely on a new functional item, a daemon identified as the openbach-conductor, allowing to:
+
 * launch/manage/control complex scenario instances (over several Agent and with dependencies)
 * implement a scheduler in the Controller because though the Agents control/schedule their own tasks, it is necessary also to schedule
 the launch of Ansible playbooks (e.g. in case a distant network entity is only accessible at a specific time and not at the moment of
@@ -979,14 +1016,17 @@ Next, it is detailed the different commands that the Control-Agent shall accept 
 'del_job_agent': (1, 'You should provide the job name'),
 'status_job_instance_agent': (4, 'You should provide a job name, an '
                 'instance id, a watch type and its value'),
-'start_job_instance_agent': (5, 'You should provide a job name, an '
-                'instance id, a execution type (a date or interval) and its value. '
-                'Optional arguments may follow (arguments of the Job)'),
-'restart_job_instance_agent': (5, 'You should provide a job name, an '
-                'instance id, a execution type (a date or interval) and its value. '
-                'Optional arguments may follow (arguments of the Job)'),
+'start_job_instance_agent': (6, 'You should provide a job name, an '
+                'owner_scenario_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of start (date or interval) and its value. '
+                ''Optional arguments may follow (arguments of the Job)',
+'restart_job_instance_agent': (6, 'You should provide a job name, an '
+                'owner_scenario_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of start (date or interval) and its value. '
+                'Optional arguments may follow (arguments of the Job)',
 'stop_job_instance_agent': (4, 'You should provide a job name, an '
-                'instance id, a execution type (a date or interval) and its value')
+                'instance id, the type of stop (date) and its value'),
+
 ----
 
 Below, we show an example of playbook task allowing the Controller to execute the “openbach-baton” script, which then transmits the command “start job”
@@ -995,7 +1035,7 @@ to the Agent:
 [source,json]
 ----
 - name: Start Job instance
-  shell: /opt/openbach-agent/openbach-baton start_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} {{ job_options }}----
+  shell: /opt/openbach-agent/openbach-baton start_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} {{ job_options }}
 ----
 
 A configuration file for each job shall be implemented. This configuration file shall be used for verification purposes
@@ -1235,6 +1275,8 @@ and push the new data the same way a Job instance sends data to the Collector (i
 The module "CollectorConnection" ("import CollectorConnection from data_access") has been implemented in order to be capable of exporting data from InfluxDB and ElasticSearch. It contains different functions allowing to access and export
 data from the Collector. See <<img-data_access>> for a detailed view of the module functions.
 
+NOTE: The CollectoConnection module (in data_access) is not available in the repository of openbach/openbach (main project of OpenBACH) but in openbach/openbach-api. You should obtain the sources from "git@forge.net4sat.org:openbach/openbach-api.git"
+
 [#img-design_post_processing,reftext='Figure {counter:refnum}']
 .Post-processing pull (import)/push(export)
 image::design_post_processing.png[align="center"]
@@ -1279,9 +1321,9 @@ The Log messages displayed shall at least contain the following information:
 * ID of the network entity (e.g. hostname)
 * Name of the Job sending the log message
 * Scenario ID and job instance ID (if they are generated by a job instance)
- *The message
+* The message
 
- Moreover, the logs web interface shall propose tools allowing to perform:
+Moreover, the logs web interface shall propose tools allowing to perform:
 
 * Logs research
 * Logs filtering (e.g. filters for host machine, IP, job, log level, etc.)

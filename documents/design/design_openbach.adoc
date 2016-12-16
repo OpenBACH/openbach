@@ -285,7 +285,6 @@ The “reference starting time” of a scenario instance is the time at which th
 Both are functions the are implemented in the openbach-conductor (in the Controller), and both functions call (point to) a "core function"
 which implement the main tasks of the function (see <<img-function_action>>). The two methodologies to call the core functions are necessary in order have a direct access
 from the backend and an access through the scenario:
-
 * The openbach-action calls the core function and returns a proper response to the backend (in HTTP REST).
 * The openbach-function calls the core function but it also implements different tasks related to the scenario around the function.
 
@@ -294,21 +293,22 @@ from the backend and an access through the scenario:
 image::uml_function_action.png[align="center"]
 {nbsp} +
 
-TIP: Herein and example with the core function "start_job_instance". 1. If the user wants to start a job instance independently of any scenario. The openbach-action
+TIP: An example with the core function 'start_job_instance". If the user wants to start a job instance independently of any scenario. The openbach-action
 "start_job_instance_action" will call the core function and return a proper response to the Backend (and this to the frontend) with the "OK" status and the ID
-of the job instance, or a bad request "404". 2. On the other hand, within a scenario context, the openbach-function "start_job_instance_action_of" might need to
+of the job instance, or a bad request "404". On the other hand, within a scenario context, the openbach-function "start_job_instance_action_of" might need to
 associate the openbach-function and the scenario instance to the job instance, or it might start a watch to check the status of the job instance, etc.
 
 Most core function have both an associated openbach-function and an openbach-action for evolutivity purposes. However, we find some exception, e.g.: all functions related
-to projects (add/modify/delete) only have an openbach-action associated to the core function, since it makes no sense to modify a project in a scenario via an openbach-function.
-Or for example, in the case of the openbach-functions "if_of" and "while_of", it only makes sense to use them inside a scenario (thus they cannot have an openbach-action).
+to projects (add/modify/delete) only have an openbach-action associated to the core function, since it makes no sense to modify a project in a scenario. Or for example,
+in the case of the openbach-functions "if_of" and "while_of", it only makes sense to use them inside a scenario (thus they cannot be openbach-action).
 
-IMPORTANT: This is independent for the users of OpenBACH. OpenBACH itself is able to chose between the openbach-action and the openbach-function depending on the use and the
-purpose (if the request comes from the Backend (to use openbach-action) or from the conductor itself (to use openbach-function)).
+
+IMPORTANT: This is independent for the user of OpenBACH. OpenBACH itself is able to chose between the openbach-action and the openbach-function depending on the use
+and the prupose.
 
 
 ====	Functional definitions of a Scenario/Scenario instance
-The scenario instance is managed by the Conductor and the Backend (in the Conctroller) and centralizes the status of all the job instances received
+The scenario instance is managed by the backend in the Controller and centralizes the status of all the job instances received
 from Agents through the Collector and the status of other openbach-functions (ofunc) (e.g. install job/agent). The states of a
 scenario instance are described below (see <<img-states_sce>>, where highlighted in black we detail the states in normal conditions
 and in blue those states that are used when external actions (stop/unschedule from user) or errors happen:
@@ -546,8 +546,7 @@ commands the Agents to schedule the Jobs instances to be launched within a scena
 
 As it can be observed in <<img-controller_design>> (and previously detailed, see section <<section-func_blocks>>), the controller
 shall implement different functional blocks. It mainly consists of a backend for controlling the main tasks and their configuration,
-a daemon (openbach-conductor) to interact with the Agents, a status-manager that manages the status of different job instances within the
-scenarios and a data storage for saving information related to OpenBACH (status,
+a daemon (openbach-conductor) to interact with the Agents and a data storage for saving information related to OpenBACH (status,
 profiles, users, scenarios, etc.).
 
 [#img-controller_design,reftext='Figure {counter:refnum}']
@@ -628,18 +627,6 @@ The commands between the views and the openbach-conductor shall be sent via UNIX
 Finally, it should be highlighted that the choice of Ansible does not add limitations or constraints to the OpenBACH design since it is
 developed so that any other protocol/communication would replace Ansible for deploying/configuring OpenBACH with little effort (we do not
 talk here about the installation of OpenBACH and its dependencies, where Ansible probes to be an asset).
-
-====	Status-manager
-
-The status-manager is in charge of managing the status of all job instances launched in a scenario. When the conductor launches the openbach-function "start_job_instance",
-it also says the status-manager to check the status of the associated job instance. When that status of the Job instances is "Not Running", the status-manager sends this notification
-to the conductor, so that it can launch other tasks (if these were depending on the first job instance).
-
-The conductor and status manager communicate by using the UNIX socket 2845 and 2846.
-
-
-
-
 
 ====	MVC
 ===== MVC: data access

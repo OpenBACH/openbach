@@ -89,8 +89,8 @@ the backbone of an OpenBACH scenario:
 | Terms                         | Definition
 |  Job^1^                         | A number of individual tasks (one or more) with a common purpose and to be executed in a sole Agent. A job might be able to launch/configure other software tools (e.g. ping/iperf) and OS tools (e.g. iptables), configure OS parameters, collect/generate information/stats from tools/OS, etc.
 |  Job instance                 | An execution of a job configured with a set of parameters.
-|  openbach-function            | Function defined and launched in the Controller allowing to perform tasks related to: install agents/Jobs, configure and schedule Job/scenario instances, perform information/status requests regarding Agents/Jobs/Scenarios and their instances, etc.
-|  openbach-function instance   | An execution of an openbach-function with a set of parameters.
+|  openbach-function/action     | Function defined and launched in the Controller allowing to perform tasks related to: install agents/Jobs, configure and schedule Job/scenario instances, perform information/status requests regarding Agents/Jobs/Scenarios and their instances, etc.
+|  openbach-function/action instance   | An execution of an openbach-function with a set of parameters.
 |  scenario                     | A set of openbach-functions that allow to perform different tasks on one or more Agents.
 |  scenario instance            | An execution of a scenario with a set of parameters.
 |===
@@ -181,16 +181,16 @@ The Controller shall implement:
 *	A backend: a web server allowing to listen for user interface requests (from frontend) regarding the deployment,
  the configuration and the scheduling of OpenBACH (i.e. Agents, Jobs, Jobs instances, scenarios and scenarios instances),
 as well as requests regarding OpenBACH information and status from Agents. These requests are performed using the
-“openbach-functions”. The Backend might be able to process itself some of the “openbach-functions” regarding information
-of Agents/Jobs, other “openbach-functions” need an action from the Agent side (configure/launch a Job instance, send
+“openbach-functions/actions”. The Backend might be able to process itself some of the “openbach-functions/actions” regarding information
+of Agents/Jobs, other “openbach-functions/sctions” need an action from the Agent side (configure/launch a Job instance, send
 updated information/status, etc.). In the latter case, the Backend shall use a daemon called openbach-conductor (see below).
-*	A daemon (openbach-conductor): it is in charge of taking the demands of the Backend (under the form of “openbach-functions”),
+*	A daemon (openbach-conductor): it is in charge of taking the demands of the Backend (under the form of “openbach-functions/actions”),
 and communicate them to the Agent by means of Ansible (SSH).
 
 The Agent shall implement:
 
 *	A Control-Agent: It shall be able to configure and execute/schedule/stop different Job instances depending on the Controller
-commands (openbach-functions). It also shall be able to get status/information of the Agent itself and the available Jobs, as
+commands (openbach-functions/actions). It also shall be able to get status/information of the Agent itself and the available Jobs, as
 well as the Job instances status.
 *	A Collect-Agent: it shall allow to collect statistics/data and logs from the different running Job instances of the Agent and
 relay them to the Collector and locally store them. It also shall be able to send the status/information obtained by the
@@ -286,8 +286,10 @@ Both are functions the are implemented in the openbach-conductor (in the Control
 which implement the main tasks of the function (see <<img-function_action>>). The two methodologies to call the core functions are necessary in order have a direct access
 from the backend and an access through the scenario:
 
-* The openbach-action calls the core function and returns a proper response to the backend (in HTTP REST).
+* The openbach-action calls the core function and have an HTTP REST url/method allowing to be be accessed from the Backend. It also returns a proper
+response to the backend (in HTTP REST).
 * The openbach-function calls the core function but it also implements different tasks related to the scenario around the function.
+They cannot be accessed from the Backend and they can only called by the same conductor.
 
 [#img-function_action,reftext='Figure {counter:refnum}']
 .Relationship between openbach-actions and openbach-functions
@@ -512,7 +514,7 @@ different tasks. The tasks that a user shall be able to carry out are:
 *	After the implementation of a new Job performed by a user, the user shall be able to make the Job available for installation.
 
 The configuration frontend will thus serve as user interface, allowing the user to perform different tasks (as detailed above).
-These tasks will be performed by calling the “openbach-functions” from the frontend in order to send the request to the core of
+These tasks will be performed by calling the “openbach-actions” from the frontend in order to send the request to the core of
 the Controller, also known as Backend, which will perform different actions according to the requested tasks. The benchmark shall
 implement two different configuration frontends, one for basic users, which will perform different tasks through the web interface,
 and a second frontend, based on python scripts, allowing for more flexibility and implemented for advanced users.
@@ -532,7 +534,7 @@ The web interface dedicated to configuration of the benchmark shall:
 *	Display the status of the registered network entities (with Agents) and the collector.
 *	Display the available jobs per Agent and their status.
 *	Be able to configure, launch/schedule/stop the Jobs instances within a scenario.
-*	Configure, display and launch/schedule/stop the available scenarios instances (by means of the openbach-function of the backend).
+*	Configure, display and launch/schedule/stop the available scenarios instances (by means of the openbach-actions).
 *	Be able to activate/deactivate/display the available statistics.
 *	Be able to activate/deactivate/display the logs (and change the log level).
 
@@ -570,7 +572,7 @@ In summary, the controller (of the MVC architecture) receives an action and data
 sends the data to the correct view (i.e. function), depending on the request. The view works with the model to get the appropriate
 data under objects format and handles these objects in order to perform the required actions and create an output (response) to the user.
 
-The views are the way to execute the “openbach-functions”, which are implemented in the openbach-conductor. Through these functions, the backend views shall be able to:
+The views are the way to execute the “openbach-actions”, which are implemented in the openbach-conductor. Through these functions, the backend views shall be able to:
 *	add/install (delete/remove) Agents and Jobs to/from the benchmark
 *	list the available Agents and the available jobs per Agent.
 *	create/modify/delete a scenario.
@@ -612,8 +614,8 @@ creating the test/scenario).
  the local post-processing tasks without time constraints.
 
 
-IMPORTANT: It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-functions”
-regarding information of Agents/Jobs (stored in its data storage), most “openbach-functions” need an action from the Agent side
+IMPORTANT: It must be highlighted that though the Controller (openbach-conductor) shall be able to process itself some of the “openbach-actions/functions”
+regarding information of Agents/Jobs (stored in its data storage), most “openbach-actions/functions” need an action from the Agent side
 (configure/launch a Job instances, send updated information/status, etc.).
 
 For example, as explained latter, the Controller does not schedule the Job instances itself, instead, it commands the Agent to perform the scheduling of Jobs instances. The way the backend
@@ -632,8 +634,8 @@ talk here about the installation of OpenBACH and its dependencies, where Ansible
 ====	Status-manager
 
 The status-manager is in charge of managing the status of all job instances launched in a scenario. When the conductor launches the openbach-function "start_job_instance",
-it also says the status-manager to check the status of the associated job instance. When that status of the Job instances is "Not Running", the status-manager sends this notification
-to the conductor, so that it can launch other tasks (if these were depending on the first job instance).
+it also tells the status-manager to monitor the status of the associated job instance that is "Running". When the status of the Job instances is "Not Running" anymore, the status-manager sends this notification
+to the conductor, so that it can keep launching other tasks (if these were depending on the first job instance).
 
 The conductor and status manager communicate by using the UNIX socket 2845 and 2846.
 
@@ -646,63 +648,65 @@ The conductor and status manager communicate by using the UNIX socket 2845 and 2
 
 The model shall handle one database that belongs to the backend, to save user information, agents status (running or not), a jobs list per Agent,
 job instances status, scenarios (and scenario instances) information and status, etc. Some of these information are potentially continuously modified
-(i.e. job instances status). For updating the status information, the Controller shall implement an openbach-function (see next section) that when
+(i.e. job instances status). For updating the status information, the Controller shall implement an openbach-action (see next section) that when
 requested (or recursively) sends status information from the Agent to the Collector (via the collecting functions of OpenBACH: i.e. stats and logs). The
 Controller must recursively pull these status from the Collector to update its own database.
 
 Finally, the backend database shall implement different user profile types (see section XX).
 
-=====	MVC: openbach-functions views
-The "openbach-functions views" (kind of an access to the openbach-functions) available in the Controller are implemented in the backend, but the real
-implementation of the openbach-functions is available in the openbach-conductor. These functions are summarized in <<img-functions>> and detailed below
-(the input JSON contents highlighted in bold are the required ones, the other ones are optional). They are classified in 6 main groups depending on
+=====	MVC: openbach-actions views
+The "openbach-actions views" (kind of an access to the openbach-actions) available in the Controller are implemented in the backend, but the real
+implementation of the openbach-actions is available in the openbach-conductor. These functions are summarized in <<img-functions>> and detailed below
+(the input JSON contents highlighted in bold are the required ones, the other ones are optional). They are classified in 8 main groups depending on
 the object/component they concern to, i.e. the Agents, the Jobs, the Job instances, the scenarios or the scenario instances.
+
+In the tables below, we have added a column in order to show if the openbach-actions have also an associated openbach-function.
 
 
 [#img-functions,reftext='Figure {counter:refnum}']
-.Openbach-functions classified by categories
+.Openbach-actions classified by categories
 image::functions.png[align="center"]
 {nbsp} +
 
 
-First the group 1 of openbach-functions allowing to install, delete, list and update the status of the Collectors of the benchmark.
+First the group 1 of openbach-actions allowing to install, delete, list and update the status of the Collectors of the benchmark.
 
 [#tab-ob1,reftext='Table {counter:tabnum}']
 .group 1
-[frame="topbot", cols="^.^s,^.^,.^e,.^,.^", options="header"]
+[frame="topbot", cols="^.^s,^.^,.^e,.^,.^,.^", options="header"]
 |===
-| Function                      | Method      | url                         | Input contents (JSON or Query sting)                                 | Description
-| add_collector                 | POST        | /collector                  | *address*, *username*, *password*, *name*, logs_port, stats_port     | Add a new Collector (and install an Agent on it)
-| modify_collector              | PUT         | /collector/*address*        | logs_port, stats_port                                                | Modify the Collector (and all the associated Agents)
-| del_collector                 | DELETE      | /collector/*address*        |                                                                      | Remove a Collector (but do not uninstall the Agent on it)
-| get_collector                 | GET         | /collector/*address*        |                                                                      | Return the informations of this Collector
-| list_collectors               | GET         | /collector                  |                                                                      | Return the list of Collectors available
-| state_collector               | GET         | /collector/*address*/state  |                                                                      | Return the status of the last commands on the Collector
+| Action                      | Method      | url                         | Input contents (JSON or Query sting)                                 | Description                                              | openbach-function?
+| add_collector                 | POST        | /collector                  | *address*, *username*, *password*, *name*, logs_port, stats_port     | Add a new Collector (and install an Agent on it)         | no
+| modify_collector              | PUT         | /collector/*address*        | logs_port, stats_port                                                | Modify the Collector (and all the associated Agents)     | no
+| del_collector                 | DELETE      | /collector/*address*        |                                                                      | Remove a Collector (but do not uninstall the Agent on it)      | no
+| get_collector                 | GET         | /collector/*address*        |                                                                      | Return the informations of this Collector      | no
+| list_collectors               | GET         | /collector                  |                                                                      | Return the list of Collectors available      | no
+| state_collector               | GET         | /collector/*address*/state  |                                                                      | Return the status of the last commands on the Collector      | no
 |===
 
-Second the group 2 of openbach-functions allowing to install, delete, list and update the status of the Agents of the benchmark.
+Second the group 2 of openbach-actions allowing to install, delete, list and update the status of the Agents of the benchmark.
 
 [#tab-ob2,reftext='Table {counter:tabnum}']
 .group 2
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function                      | Method      | url                     | Input contents (JSON or Query sting)                      | Description
-| install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.
-| uninstall_agent               | DELETE      | /agent/*address*        |                                                           | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.
-| list_agents                   | GET         | /agent                  | update                                                    | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.
-| retrieve_status_agents        | POST        | /agent                  | *addresses*, *action='retrieve_status'*, update           | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.
-| assign_collector              | POST        | /agent/*address*        | *collector_ip*                                            | Assign this Collector to the Agent
-| state_agent                   | GET         | /agent/*address*/state  |                                                           | Return the status of the last commands on the Agent
+| Action                      | Method      | url                     | Input contents (JSON or Query sting)                      | Description                                                          | openbach-function?
+| install_agent                 | POST        | /agent                  | *address*, *username*, *password*, *collector_ip*, *name* | Install OpenBACH Agent in a network entity (identified by IP address) and add the Agent information to the Controller database.         | yes
+| uninstall_agent               | DELETE      | /agent/*address*        |                                                           | Uninstall OpenBACH Agent from a network entity and delete the Agent information from the Controller database.          | yes
+| list_agents                   | GET         | /agent                  | update                                                    | Return the list of Agents, if update is present and True, this function pulls the last information status from Collector database.      | no
+| retrieve_status_agents        | POST        | /agent                  | *addresses*, *action='retrieve_status'*, update           | Verify if the Controller can contact a network entity (with an Agent) and request the Agent to send its status to the Collector.          | yes
+| assign_collector              | POST        | /agent/*address*        | *collector_ip*                                            | Assign this Collector to the Agent          | yes
+| state_agent                   | GET         | /agent/*address*/state  |                                                           | Return the status of the last commands on the Agent          | no
 |===
 
-Then group 3 of openbach-functions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
+Then group 3 of openbach-actions allowing to add/delete a Job to/from the list of available Jobs to install. The function “add_agent” might be used
 if a user develops a new Job (or takes a new developed Job from someone) and includes it in the list of possible Jobs to be installed.
 
 [#tab-ob3,reftext='Table {counter:tabnum}']
 .group 3
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function           | Method          | url              | Input contents (JSON or Query string)      | Description
+| Action           | Method          | url              | Input contents (JSON or Query string)      | Description                     | openbach-function?
 | add_job            | POST            | /job             | *name*, *path*                             | Add a Job to the Jobs list (the sources are on the path and already on the Controller)
 | add_new_job        | POST            | /job             | *name*, *tar_file*                         | Add a Job to the Jobs list (with the sources in the tar file)
 | del_job            | DELETE          | /job/*job_name*  |                                            | Delete a Job from the Jobs list
@@ -711,13 +715,13 @@ if a user develops a new Job (or takes a new developed Job from someone) and inc
 | get_job_help       | GET             | /job/*job_name*  | *type=help*                                | Return the help of the Job
 |===
 
-Then the group 4 of openbach-functions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
+Then the group 4 of openbach-actions allowing to install/uninstall a Job in a network entity (or Agent) or request/update the Job status (installed or not).
 
 [#tab-ob4,reftext='Table {counter:tabnum}']
 .group 4
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function                    | Method        | url                    | Input contents (JSON or Query string)                                               | Description
+| Action                    | Method        | url                    | Input contents (JSON or Query string)                                               | Description                              | openbach-function?
 | install_jobs                | POST          | /job                   | *addresses*, *names*, *action=’install’*, severity, local_severity                  | Install one or more Jobs (identified by name) in one or more network entities (identified by IP address)
 | uninstall_jobs              | POST          | /job                   | *addresses*, *names*, *action=’uninstall’*                                          | Uninstall one or more Jobs (identified by name) from one or more network entities (identified by IP address)
 | retrieve_status_jobs        | POST          | /job                   | *addresses*, *action=’retrieve_status'*                                             | Request the agent to send all installed jobs to the Collector.
@@ -729,13 +733,13 @@ Then the group 4 of openbach-functions allowing to install/uninstall a Job in a 
 | state_push_file             | GET           | /file/state            | *filename*, *path*, *agent_ip*                                                      | Return the status of the push of a file on the Agent.
 |===
 
-The group 5 of openbach-functions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
+The group 5 of openbach-actions allowing to start/schedule/stop a Job instance in a network entity (or Agent) or request/update the Job instance status.
 
 [#tab-ob5,reftext='Table {counter:tabnum}']
 .group 5
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function                    | Method        | url                       | Input contents (JSON or Query string)                                     | Description
+| Action                    | Method        | url                       | Input contents (JSON or Query string)                                     | Description                          | openbach-function?
 | start_job_instance          | POST          | /job_instance             | *agent_ip*, *job_name*, *instance_args*, *action='start'*, date, interval | Start a Job instance of the Job on the Agent.
 | stop_job_instance           | POST          | /job_instance             | *ids*, *action=’stop’*, date                                              | Stop one or more job instances using their instance id.
 | restart_job_instance        | POST          | /job_instance/*id*        | *instance_args*, *action=’restart’*, date, interval                       | Stop then start an Instance. If instance_args is an empty list, the new Job instance will have the same arguments as the old one.
@@ -746,13 +750,13 @@ The group 5 of openbach-functions allowing to start/schedule/stop a Job instance
 | kill_all                    | POST          | /job_instance             | *action=kill*, date                                                       | Stop all the scenario instance, job instances and watchs.
 |===
 
-The group 6 of openbach-functions allowing to create/delete/show/modify a scenario of the backend.
+The group 6 of openbach-actions allowing to create/delete/show/modify a scenario of the backend.
 
 [#tab-ob6,reftext='Table {counter:tabnum}']
 .group 6
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function            | Method        | url               | Input contents (JSON or Query string) | Description
+| Action            | Method        | url               | Input contents (JSON or Query string) | Description                         | openbach-function?
 | create_scenario     | POST          | /scenario         | *scenario_json*, project_name         | Create OpenBACH scenario.
 | del_scenario        | DELETE        | /scenario/*name*  |                                       | Delete OpenBACH scenario. The Scenario deleted is the one that is not associated to a Project, use the other route otherwise.
 | modify_scenario     | PUT           | /scenario/*name*  | *scenario_json*, project_name         | Replace the json of the scenario identifed by the given id.
@@ -760,26 +764,26 @@ The group 6 of openbach-functions allowing to create/delete/show/modify a scenar
 | list_scenarios      | GET           | /scenario         |                                       | List all available scenarios.
 |===
 
-The group 7 of openbach-functions allowing to start/stop a scenario instance and request for a list of scenario instance status.
+The group 7 of openbach-actions allowing to start/stop a scenario instance and request for a list of scenario instance status.
 
 [#tab-ob7,reftext='Table {counter:tabnum}']
 .group 7
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function                      | Method        | url                                          | Input contents (JSON or Query string)      | Description
+| Action                      | Method        | url                                          | Input contents (JSON or Query string)      | Description                   | openbach-function?
 | start_scenario_instance       | POST          | /scenario_instance                           | *scenario_name*, *arguments*, date         | Start a scenario instance. The Scenario should not be associated to a Project, use the other route for that.
 | stop_scenario_instance        | POST          | /scenario_instance/*scenario_instance_id*    | date                                       | Stop a scenario instance.
 | list_scenario_instances       | GET           | /scenario_instance                           |                                            | List all the scenario instances.
 | get_scenario_instance         | GET           | /scenario_instance/*scenario_instance_id*    |                                            | Return the infos of the scenario instance
 |===
 
-And finally, the group 8 of openbach-functions allowing to
+And finally, the group 8 of openbach-actions allowing to manage projects.
 
 [#tab-ob8,reftext='Table {counter:tabnum}']
 .group 8
 [frame="topbot",options="header", cols="^.^s,^.^,.^e,.^,.^"]
 |===
-| Function                      | Method        | url                                                                                       | Input contents (JSON or Query string) | Description
+| Action                      | Method        | url                                                                                       | Input contents (JSON or Query string) | Description                       | openbach-function?
 | add_project                   | POST          | /project                                                                                  | *project_json*                        | Add a new Project
 | modify_project                | PUT           | /project/*project_name*                                                                   | *project_json*                        | Modify an existant Project
 | del_project                   | DELETE        | /project/*project_name*                                                                   |                                       | Delete a Project
@@ -797,43 +801,138 @@ And finally, the group 8 of openbach-functions allowing to
 | get_scenario_instance         | GET           | /project/*project_name*/scenario/*scenario_name*/scenario_instance/*scenario_instance_id* |                                       | Return the infos of the scenario instance
 |===
 
-It should be noted that a user shall be able to replay stored scenarios  by simply changing the starting reference date/time (using the openbach-function
+It should be noted that a user shall be able to replay stored scenarios by simply changing the starting reference date/time (using the openbach-action
 start_scenario_instance).
 
 
 ====	Scenario format (JSON)
 
+The scenario backbone (in JSON) is described as follows:
+
 [source,json,numbered]
 ----
-{ "name": "Ping",
-  "description": "First scenario (for test)",
-  "args": [ { "name": "duration", "type": "int", "description": "duree des pings" } ],
-  "body": { "parameters": [ { "name": "agentA", "value": "172.20.42.167", "type": "ip" },
-                            { "name": "agentB", "value": "172.20.42.90", "type": "ip" },
-                            { "name": "job", "value": "ping", "type": "str" },
-                            { "name": "duration", "value": "duration", "type": "arg" } ],
-            "openbach_functions": [ { "name": "start_job_instance",
-                                      "args": [ { "name": "agent_ip", "value": "agentA", "type": "parameter" },
-                                                { "name": "job_name", "value": "job", "type": "parameter",
-                                                  "args": [ { "name": "destination_ip", "value": ["agentB"], "type": ["parameter"] },
-                                                            { "name": "duration", "value": ["duration"], "type": ["parameter"] } ] },
-                                                { "name": "delta", "value": 5, "type": "int" } ],
-                                      "wait": [ { "type": "launch", "id": [], "time": 0 },
-                                                { "type": "finished", "id": [], "time": 0 } ],
-                                      "id": 1 },
-                                    { "name": "start_job_instance",
-                                      "args": [ { "name": "agent_ip", "value": "agentB", "type": "parameter" },
-                                                { "name": "job_name", "value": "job", "type": "parameter",
-                                                  "args": [ { "name": "destination_ip", "value": ["agentA"], "type": ["parameter"] },
-                                                            { "name": "duration", "value": ["duration"], "type": ["parameter"] } ] },
-                                                { "name": "delta", "value": 10, "type": "int" } ],
-                                      "wait": [ { "type": "launch", "id": [], "time": 0 },
-                                                { "type": "finished", "id": [1], "time": 0 } ],
-                                      "id": 2 }
-                                  ]
-          }
+
+{
+  "name": "Ping",  # <1>
+  "description": "First scenario (for test)", # <2>
+  "arguments": { # <3>
+     "duration": "duration of pings"
+  },
+  "constants": { # <4>
+    "agentA": "172.20.42.167",
+    "agentB": "172.20.42.90"
+  },
+  "openbach_functions": [ # <5>
+    {
+      "start_job_instance": { # <6>
+        "agent_ip": "$agentA", # <7>
+        "ping": { # <8>
+          "destination_ip": "$agentB", # <9>
+          "duration": [ # <10>
+            "$duration" #
+          ]
+       },
+       "offset": 5 # <11>
+     },
+     "wait": { # <12>
+       "time": 0, # <13>
+       "launched_indexes": [], # <14>
+       "finished_indexes": [] # <15>
+     }
+   },
+   {
+     "start_job_instance": { <16>
+       "agent_ip": "$agentB",
+       "ping": {
+         "destination_ip": "$agentA",
+         "duration": [
+            "$duration"
+         ]
+       },
+       "offset": 0
+     },
+     "wait": {
+       "time": 10,  # <17>
+       "launched_indexes": [],
+       "finished_indexes": [0] # <18>
+     }
+   }
+ ]
 }
+
 ----
+<1> "name": the name of the scenario
+<2> "description": a description of the scenario.
+<3> "arguments": a list of arguments. An argument owns a name and a description.
+<4> "constants": a list of constants. A constant owns a name and a value.
+<5> "openbach_functions": a list of openbach-functions.
+<6> the name of the openbach-function ("start_job_instance"). Each openbach-function has different elements (see later)
+<11> "offset": the openbach-function will be launched a time "offset" after the beginning of the scenario.
+<12> "wait": a structure used by the conductor to wait for a specific action (see below) before launching the current openbach-function.
+<13> "time": the time that the conductor waits before launching the current openbach-function if the conditions below are fulfilled
+<14> "launched_indexes": the id of the openbach-function that should be already "Finished"" before launching the current openbach-function
+<15> "finished_indexes": the id of the job instance that should "Not running" anymore before launching the current openbach-function
+
+The elements of the openbach-function "start_job_instance" are:
+
+<7> the agent where the job instance should be scheduled/launched
+<8> the name of the job with the arguments of the job (destination ip <9> and duration <10>)
+
+
+IMPORTANT: The arguments and constants of the scenario can be used also by the openbach-functions by using the "$" followed by name of the arguments/constant (as in <7> and <9>).
+Thus a user could make the scenario arguments dynamic without modifying the scenario itself (only the arguments).
+
+TIP: Example of dependency in the scenario: the second openbach-function <16>, will be launched 10 seconds <17> after the first openbach function with id "0" <18>.
+
+===== Status of the instances for Scenarios/openbach-functions and jobs
+
+The available status of the instances in the current version of OpenBACH are (not all status shown in <<img-states_sce>> and <<img-states_job>> are already available):
+
+
+.Scenario instances status
+[width=30%, grid="none", frame="topbot", options="header", cols="^.^"]
+|===
+| Status
+| Scheduling
+| Running
+| Finished OK
+| Finished KO
+| Stopped
+|===
+
+
+.Openbach-function instances status
+[width=30%, grid="none", frame="topbot", options="header", cols="^.^"]
+|===
+| Status
+| Scheduled
+| Running
+| Finished
+| Stopped
+| Error
+|===
+
+.Job instances status
+[width=30%, grid="none", frame="topbot", options="header", cols="^.^"]
+|===
+| Status
+| Scheduled
+| Running
+| Not Running
+| Error
+|===
+
+
+=====	Validity of a scenario
+In order to check if a scenario is 'Finished OK', the conductor needs to verify that all the openbach-functions instances and the job instances
+
+
+NOTE: TODO
+
+=====	If and while
+
+NOTE: TODO
+
 
 ====	Justification of Djando framework
 Django is an open-source Python web development framework.  First of all, it has been chosen since it is implemented in Python, which allows to harmonize
@@ -844,8 +943,7 @@ etc.) allowing to focus on the pure development and the core functionalities req
 Django is defined by their creator as a framework that encourages rapid development and clean, pragmatic design. Built by experienced developers, it takes
 care of much of the hassle of Web development, so you can focus on writing your app without needing to reinvent the wheel.
 
-
-==	Detailed conception of Collector
+===	Detailed conception of Collector
 
 As it has been previously presented in the overall design of OpenBACH, the Collector component shall be in charge of centralizing the collection of two main
 groups of data: the statistics/data and the logs.
@@ -889,7 +987,7 @@ As detailed in the following two sections, off-the-shelf open-source software so
 have a robust collecting system at the disposal of OpenBACH. Moreover, this choice allows to focus more effort on the design and the development of an evolutive
 and robust configuration/control function (one of the critical points of this benchmark).
 
-===	Logs collection details
+====	Logs collection details
 Concerning the logs, the collector daemon function is performed by Logstash and the database role is carried out by Elasticsearch.
 
 Logstash is an open-source data collection (under Apache 2 license), and a data transportation pipeline. It allows to efficiently process a growing list of logs, events and unstructured data sources for distribution into a variety of outputs, including the one used herein, an Elasticsearch data base. It is capable of normalizing different data formats by means filters.
@@ -916,7 +1014,7 @@ curl -XGET http://localhost:9200/playground/equipment/1?pretty
 }
 ----
 
-===	Statistics collection details
+====	Statistics collection details
 
 In the case of the statistics collection, we take profit of InfluxDB as a database, an open-source platform for data collection and storage. We use Logstash here too as the collecting daemon. Logstash is capable of listening on a UDP/TCP socket from the Agents messages (on the port 2222), and redirects the collected data to InfluxDB using an HTTP API. Otherwise, the Agent would have had to insert the data directly into the database (via HTTP), which would have made the Agents dependant on the type of database.
 
@@ -941,7 +1039,7 @@ curl -G 'http://localhost:8086/query?pretty=true' --data-urlencode "db=mydb" --d
 InfluxDB is released under the open-source MIT License.
 
 
-==	Detailed conception of Agent
+===	Detailed conception of Agent
 
 The Agent component shall implement two main parts according to the main functionalities of OpenBACH, a Control-Agent for configuring and controlling
 the Agent, and the Collect-Agent for everything related to statistics and logs collection. These two main parts are represented in <<img-agent_design>>. as the
@@ -961,7 +1059,7 @@ data/statistics, start a service, etc.
 image::agent_design.png[align="center"]
 {nbsp} +
 
-===	The Control-Agent part
+====	The Control-Agent part
 
 The Control-Agent shall implement:
 * A daemon for centralizing the tasks/jobs control (“openbach-agent” in <<img-agent_design>>),
@@ -998,7 +1096,7 @@ associated to.
 * The Agent shall manage the scheduler locally, so that it will be able to control the whole execution/status of the agent-actions.
 * The Agent scheduler shall be able to execute the agent-actions with one millisecond accuracy.
 
-====	Agent actions
+=====	Agent actions
 The agent-actions are a group of actions implemented in the "openbach-agent" that allow performing different tasks regarding the OpenBACH control. These actions
 are directly related to the “openbach-functions”, since as it has been explained, in some cases, these functions need to perform actions/tasks in the Agents
 side (groups 3 and 4 shown in <<img-functions>>), and the agent-actions are their way to do it.
@@ -1115,7 +1213,7 @@ When the Agent crashes or if it is restarted, the job configuration files help t
 Finally, it should be highlighted that the way the Agent has been designed would allow a user to control each Agent without a Controller, in other words, the
 current design would allow to bypass the Controller component if an advanced user needs to do so (see the debug section in OpenBACH wiki for more information ).
 
-===	The Collect-Agent part
+====	The Collect-Agent part
 
 The Collect-Agent shall implement two different client for collecting statistics and logs. The collection and forward of logs shall be performed by Rsyslog
 (open-source tool) and the collection and forward of stats/metrics shall be performed by the rstats client.
@@ -1133,7 +1231,7 @@ allowing to send the stats from the Job instance to the Collect-Agent daemons, w
 
 TIP: The collect-agent API allows to transparently treat logs and stats (independently of the clients rsyslog/rstats)
 
-=== Rsyslog
+==== Rsyslog
 
 Rsyslog shall be used in the Agents to handle the logs of the different running Jobs. It shall then forward the log messages to the Collector via a UDP/TCP socket.
 The configuration parameters to be used for rsyslog per Job shall be:
@@ -1164,7 +1262,7 @@ it is proposed to use the following ones:
 |  3          | Debug                    | syslog.LOG_DEBUG
 |===
 
-=== Rstats
+==== Rstats
 
 Rstats has the same role as Rsyslog but focused on statistics collection and relay. Rstats shall fulfill the following requirements:
 
@@ -1219,7 +1317,7 @@ collect_agent.send_stat(timestamp, **statistics) # <4>
 <3> send a log
 <4> send a stat of type "rtt" and value "rtt_data" with a timestamp
 
-==== Log severity level and activation/deactivation of stats
+===== Log severity level and activation/deactivation of stats
 This section aims at detailing the way the OpenBACH Agent modifies the loglevel severity and activates/deactivates the stats:
 
 - Step 1: After a user request asking for a new modification, the controller sends (using an Ansible playbook and a SSH connection) a new configuration file (for the aimed Job/Jobs)
@@ -1228,7 +1326,7 @@ This section aims at detailing the way the OpenBACH Agent modifies the loglevel 
 - Step 3: The openbach-agent executes the command for the concerned Job (Rstats or Rsyslog)
 - Step 4: Rsyslog and Rstats clients are restarted/reloaded in order to take the new configuration for logs and statistics.
 
-==	Interfaces
+===	Interfaces
 
 The interfaces between all the components, the databases, the HMI, and the different blocks (representing different functionalities) is one of the keys to design
 reliable and robust communications protocols/APIs between all of them.
@@ -1253,7 +1351,7 @@ is managed by Ansible. Further details about Ansible are given in section .
 image::interfaces_design.png[align="center"]
 {nbsp} +
 
-=== Detailed Controller-Collector-Auditorium interfaces
+==== Detailed Controller-Collector-Auditorium interfaces
 An overall architecture of the auditorium,  the controller and the collector and their interfaces is shown in <<img-controller_collector>>, where we can observe that the main streams
 of information between these components are those related to the writing/querying of data to/from the Collector databases (both logs DB and stats DB).
 
@@ -1271,9 +1369,9 @@ image::controller_collector.png[align="center"]
 {nbsp} +
 
 
-==	Post-processing
+===	Post-processing
 
-===	Import/export
+====	Import/export
 
 As it has been detailed in the OpenBACH design, the Jobs are the way to execute the post-processing tasks allowing to perform dedicated calculations of the collected statistics.
 
@@ -1309,19 +1407,19 @@ Two constraints must be taken into account for correctly pushing the post-proces
 IMPORTANT: the developer of the post-processing job must take into account these constraints.
 
 
-===	Post-processing jobs
+====	Post-processing jobs
 The benchmark shall include post-processing jobs allowing to compute the variance, the CDF, the interval of confidence and the average values over a time window.
 
 These jobs shall allow to extract data from the InfluxDB database, compute the required post-processed values and export them into InfluxDB.
 
 
-==	Display of data collection
+===	Display of data collection
 
 The objective of this section is to first remind the full data collection chain of OpenBACH, including the collection carried out by the jobs and the centralization
 of the data in the collector. Secondly, we aim at showing the details regarding the considered display options for the different types of data collected in OpenBACH.
 We aim at presenting the requirements and the design regarding the data display frontends (real-time data, real-time logs and offline data)
 
-=== Real-time logs
+==== Real-time logs
 As it has been detailed previously, the Collect-Agent daemon (Rsyslog) is in charge of collecting the different logs sent by the running job instances in a network
 entity. Those logs are then relayed to the Collector (via UDP/TCP sockets), which stores them into the chosen Logs database (i.e. Elasticsearch).
 
@@ -1351,7 +1449,7 @@ and plot different graphics and create your own logs dashboards. It is able to u
 image::collecting_logs.png[align="center"]
 {nbsp} +
 
-=== Real-time statistics
+==== Real-time statistics
 
 Concerning the collection of statistics, the Collect-Agent daemon (Rstats) is in charge of collecting the different stats sent by the running jobs instances in a network entity.
 Those stats are then relayed to the Collector (via UDP/TCP sockets), which stores them into the chosen Stats database (i.e. InfluxDB).
@@ -1382,7 +1480,7 @@ image::collecting_stats.png[align="center"]
 {nbsp} +
 
 
-=== Post-processing data statistics
+==== Post-processing data statistics
 
 Regarding the offline display, OpenBACH shall offer a web interface (via Firefox/Google Chrome web browsers) for visualizing the post-processed metrics and other offline statisics.
 

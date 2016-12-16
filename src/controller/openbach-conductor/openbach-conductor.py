@@ -2287,7 +2287,7 @@ class ClientThread(threading.Thread):
 
     @staticmethod
     def update_instance(job_instance_id):
-        """ Function that the last status available of the Job Instance on the
+        """ Function that gets the last status available of the Job Instance on the
         Collector """
         # Get the Job Instance
         job_instance = Job_Instance.objects.get(pk=job_instance_id)

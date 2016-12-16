@@ -431,17 +431,17 @@ class ClientThread(threading.Thread):
                 'instance id, a watch type and its value'),
             'start_job_instance_agent':
                 (6, 'You should provide a job name, an '
-                'owner_sceanrio_instance_id, a scenario_instance_id, a '
-                'job_instance_id, the type of the start and its value. '
-                'Then the arguments of the job instance follow'),
+                'owner_scenario_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of start (date or interval) and its value. '
+                'Optional arguments may follow (arguments of the Job)'),
             'restart_job_instance_agent':
                 (6, 'You should provide a job name, an '
-                'owner_sceanrio_instance_id, a scenario_instance_id, a '
-                'job_instance_id, the type of the start and its value. '
-                'Then the arguments of the job instance may follow'),
+                'owner_scenario_instance_id, a scenario_instance_id, a '
+                'job_instance_id, the type of start (date or interval) and its value. '
+                'Optional arguments may follow (arguments of the Job)'),
             'stop_job_instance_agent':
                 (4, 'You should provide a job name, an '
-                'instance id, a watch type and its value'),
+                'instance id, a stop type (date) and its value'),
     }
 
     def __init__(self, client_socket, path_jobs, path_scheduled_instances_job):

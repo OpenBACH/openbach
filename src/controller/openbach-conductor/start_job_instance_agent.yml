@@ -34,4 +34,4 @@
 ---
 
 - name: Start the Job Instance
-  shell: /opt/openbach-agent/openbach-baton start_job_instance_agent {{ job_name }} {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} {{ job_options }}
+  shell: /opt/openbach-agent/openbach-baton start_job_instance_agent '{{ job_name }}' {{ job_instance_id }} {{ scenario_instance_id }} {{ owner_scenario_instance_id }} {{ date_interval }} '{{ job_options }}'

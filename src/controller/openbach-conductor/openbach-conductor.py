@@ -4889,6 +4889,7 @@ class ClientThread(threading.Thread):
             except BadRequest:
                 project.delete()
                 raise
+        return name
 
     def add_project_action(self, project_json):
         """ Action that adds a project """
@@ -4900,7 +4901,7 @@ class ClientThread(threading.Thread):
         if not self.first_check_on_project(project_json):
             raise BadRequest('Your Project is malformed: the json is malformed')
         # Register the new Project
-        self.register_project(project_json)
+        project_name = self.register_project(project_json)
         return self.get_project(project_name)
 
     def modify_project_action(self, project_name, project_json):

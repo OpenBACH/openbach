@@ -4292,8 +4292,11 @@ class ClientThread(threading.Thread):
         except BadRequest as e:
             # If an error occurs, stop the Scenario Instance and exit
             self.stop_scenario_instance_of(
-                scenario_instance.id, state='Finished KO') # state=Error ?
+                scenario_instance.id, state='Finished KO')
             syslog.syslog(syslog.LOG_ERR, e.reason)
+            ofi.status = 'Error'
+            ofi.status_date = timezone.now()
+            ofi.save()
             return
         # If the thread has been stopped, update the status of the Openbach
         # Function Instance and exit
@@ -4321,10 +4324,14 @@ class ClientThread(threading.Thread):
         # Wait that all threads are finished
         for thread in threads:
             thread.join()
-        finished = True
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
+        # If the scenario instance is already stopped, its status is already up
+        # to date
+        if scenario_instance.is_stopped:
+            return
+        finished = True
         # Check if all Job Instance launched by the Scenario Instance are
         # finished
         for job_instance in scenario_instance.job_instance_set.all():
@@ -4334,8 +4341,8 @@ class ClientThread(threading.Thread):
         # Update the status of the Scenario Instance accordingly
         if finished:
             scenario_instance.status = 'Finished OK'
-            scenario_instance.status_date = timezone.now()
             scenario_instance.is_stopped = True
+            scenario_instance.status_date = timezone.now()
             scenario_instance.save()
         else:
             scenario_instance.status = 'Running'
@@ -4519,7 +4526,7 @@ class ClientThread(threading.Thread):
                     syslog.syslog(syslog.LOG_ERR, e.reason)
         # Update the status of the Scenatio Instance
         scenario_instance.status_date = timezone.now()
-        if out_of_controll:
+        if not out_of_controll:
             scenario_instance.is_stopped = True
         scenario_instance.save()
         return None, 204
@@ -4546,6 +4553,10 @@ class ClientThread(threading.Thread):
                 'value': ofai.value
             }
             infos['arguments'].append(info)
+            if ofai.argument.name == 'agent_ip':
+                agent_ip = ofai.value
+            if ofai.argument.name == 'job_name':
+                job_name = ofai.value
         # Build the infos of the wait
         for wfl in openbach_function_instance.wait_for_launched_set.all():
             infos['wait']['launched_indexes'].append(
@@ -4566,7 +4577,7 @@ class ClientThread(threading.Thread):
             infos['scenario'] = info
         elif infos['name'] == 'start_job_instance':
             # Build the Job Instance infos
-            if infos['status'] not in ('Scheduled', 'Running'):
+            if infos['status'] in ('Finished', 'Stopped'):
                 # Get the Job Instance
                 try:
                     job_instance = openbach_function_instance.job_instance_set.all()[0]
@@ -4575,7 +4586,28 @@ class ClientThread(threading.Thread):
                                      ' lost')
                 # Get the infos
                 info, _ = self.status_job_instance_action(job_instance.id)
-                infos['job'] = info
+            elif infos['status'] in ('Error'):
+                # The Job Instance might not exist but it is not an error here
+                try:
+                    job_instance = openbach_function_instance.job_instance_set.all()[0]
+                except IndexError:
+                    # Get the infos
+                    info = {
+                        'status': 'Not Scheduled Yet',
+                        'name': job_name,
+                        'agent': agent_ip
+                    }
+                else:
+                    # Get the infos
+                    info, _ = self.status_job_instance_action(job_instance.id)
+            else:
+                # Get the infos
+                info = {
+                    'status': 'Not Scheduled Yet',
+                    'name': job_name,
+                    'agent': agent_ip
+                }
+            infos['job'] = info
         return infos
 
     def infos_scenario_instance(self, scenario_instance):

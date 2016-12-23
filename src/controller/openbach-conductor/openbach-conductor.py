@@ -78,7 +78,7 @@ def signal_term_handler(signal, frame):
     for scenario_instance in Scenario_Instance.objects.all():
         if not scenario_instance.is_stopped:
             scenario_instance.status = 'Stopped'
-            scenario_instance.status_date = timezone.now()
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.is_stopped = True
             scenario_instance.save()
     exit(0)
@@ -1976,12 +1976,12 @@ class ClientThread(threading.Thread):
         command_result.status_start.returncode = 204
         command_result.status_start.save()
 
-    def stop_job_instance_of(self, openbach_function_indexes, scenario_instance,
+    def stop_job_instance_of(self, openbach_function_ids, scenario_instance,
                              date=None):
         """ Openbach Function that stops a Job Instance """
         # For each Openbach Function Instance, get the associated Job Instance
         job_instance_ids = []
-        for openbach_function_id in openbach_function_indexes:
+        for openbach_function_id in openbach_function_ids:
             try:
                 ofi = scenario_instance.openbach_function_instance_set.get(
                     openbach_function_instance_id=openbach_function_id)
@@ -3127,30 +3127,43 @@ class ClientThread(threading.Thread):
         if 'openbach_functions' in scenario_json:
             if not isinstance(scenario_json['openbach_functions'], list):
                 return False
-            known = {'wait'}
+            known = {'wait', 'id', 'label'}
             for openbach_function in scenario_json['openbach_functions']:
                 if not isinstance(openbach_function, dict):
+                    syslog.syslog(syslog.LOG_ERR, 'Your Openbach Function is '
+                                  'not a dict')
+                    return False
+                if 'id' not in openbach_function:
+                    syslog.syslog(syslog.LOG_ERR, 'Your Openbach Function '
+                                  'has no id')
                     return False
                 if 'wait' in openbach_function:
                     if not isinstance(openbach_function['wait'], dict):
+                        syslog.syslog(syslog.LOG_ERR, 'Your Wait is not a dict')
                         return False
                     at_least_one = False
                     try:
                         if not isinstance(openbach_function['wait']['time'],
                                           int):
-                            return False
+                            try:
+                                openbach_function['wait']['time'] = int(
+                                    openbach_function['wait']['time'])
+                            except ValueError:
+                                syslog.syslog(syslog.LOG_ERR, 'Your Wait Time '
+                                              'is not an int')
+                                return False
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
-                        if not isinstance(openbach_function['wait']['finished_indexes'],
+                        if not isinstance(openbach_function['wait']['finished_ids'],
                                           list):
                             return False
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
-                        if not isinstance(openbach_function['wait']['launched_indexes'],
+                        if not isinstance(openbach_function['wait']['launched_ids'],
                                           list):
                             return False
                     except KeyError:
@@ -3363,8 +3376,10 @@ class ClientThread(threading.Thread):
         # For each Openbach Function, check if the Scenario Arguments or
         # Scenario Constants are referenced and check if the type matches
         for openbach_function in scenario_json['openbach_functions']:
-            # Pop the waits
+            # Get the waits, id and label
             openbach_function.pop('wait', None)
+            _id = openbach_function.pop('id')
+            label = openbach_function.pop('label', None)
             # Get the Openbach Function name and args
             (name, args), = openbach_function.items()
             # Get the Openbach Function
@@ -3379,11 +3394,11 @@ class ClientThread(threading.Thread):
                 # Check the type of 'agent_ip' and 'offset'
                 try:
                     agent_ip = args.pop('agent_ip')
-                    offset = args.pop('offset')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
                                      ' are malformed', 400, 
                                      {'name': 'start_job_instance'})
+                offset = args.pop('offset', 0)
                 of_argument = of.openbach_function_argument_set.get(
                     name='agent_ip')
                 ClientThread.check_type(of_argument, agent_ip,
@@ -3433,10 +3448,10 @@ class ClientThread(threading.Thread):
             elif name == 'if':
                 # Get the expected arguments
                 try:
-                    openbach_function_true_indexes = args.pop(
-                        'openbach_function_true_indexes')
-                    openbach_function_false_indexes = args.pop(
-                        'openbach_function_false_indexes')
+                    openbach_function_true_ids = args.pop(
+                        'openbach_function_true_ids')
+                    openbach_function_false_ids = args.pop(
+                        'openbach_function_false_ids')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3449,21 +3464,21 @@ class ClientThread(threading.Thread):
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_true')
                 ClientThread.check_type(
-                    of_argument, openbach_function_true_indexes,
+                    of_argument, openbach_function_true_ids,
                     scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_false')
                 ClientThread.check_type(
-                    of_argument, openbach_function_false_indexes,
+                    of_argument, openbach_function_false_ids,
                     scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             elif name == 'while':
                 # Get the expected arguments
                 try:
-                    openbach_function_while_indexes = args.pop(
-                        'openbach_function_while_indexes')
-                    openbach_function_end_indexes = args.pop(
-                        'openbach_function_end_indexes')
+                    openbach_function_while_ids = args.pop(
+                        'openbach_function_while_ids')
+                    openbach_function_end_ids = args.pop(
+                        'openbach_function_end_ids')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3476,12 +3491,12 @@ class ClientThread(threading.Thread):
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_while')
                 ClientThread.check_type(
-                    of_argument, openbach_function_while_indexes,
+                    of_argument, openbach_function_while_ids,
                     scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_end')
                 ClientThread.check_type(
-                    of_argument, openbach_function_end_indexes,
+                    of_argument, openbach_function_end_ids,
                     scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             else:
@@ -3720,7 +3735,7 @@ class ClientThread(threading.Thread):
             self.register_scenario(scenario_json, name, project)
             scenario = Scenario.objects.get(name=scenario_name, project=project)
             self.check_scenario(scenario)
-        return None, 204
+        return self.get_scenario(name, project_name)
 
     def get_scenario_action(self, scenario_name, project_name=None):
         """ Action that returns a scenario """
@@ -3918,11 +3933,12 @@ class ClientThread(threading.Thread):
         """ Function that registers the openbach function instances """
         # Get the json of the Scenario
         scenario_json = json.loads(scenario_instance.scenario.scenario)
-        # Initialize the id of the Openbach Function that we currently handle
-        openbach_function_id = 1
         # For each Openbach Function in the Scenario, create the Openbach
         # Function Instance associated
         for openbach_function in scenario_json['openbach_functions']:
+            # Get the id and label
+            _id = openbach_function.pop('id')
+            label = openbach_function.pop('label', None)
             # Get the wait infos
             wait = openbach_function.pop('wait', None)
             # Get the name of the Openbach Function and its arguments
@@ -3932,7 +3948,7 @@ class ClientThread(threading.Thread):
             # Create the Openbach Function Instance
             ofi = Openbach_Function_Instance(
                 openbach_function=of, scenario_instance=scenario_instance,
-                openbach_function_instance_id=openbach_function_id)
+                openbach_function_instance_id=_id, label=label)
             ofi.save()
             # Create the Openbach Function Argument Instance (depending on the
             # name of the Openbach Function, we expect some specific arguments)
@@ -3940,7 +3956,7 @@ class ClientThread(threading.Thread):
                 agent_ip = args.pop('agent_ip')
                 ClientThread.register_openbach_function_argument_instance(
                     'agent_ip', agent_ip, ofi, scenario_instance)
-                offset = args.pop('offset')
+                offset = args.pop('offset', 0)
                 ClientThread.register_openbach_function_argument_instance(
                     'offset', offset, ofi, scenario_instance)
                 (job_name, job_args), = args.items()
@@ -3972,31 +3988,31 @@ class ClientThread(threading.Thread):
                     raise BadRequest(e.args[0], 400)
                 ofai.save()
             elif name == 'if':
-                openbach_function_true_indexes = args.pop(
-                    'openbach_function_true_indexes')
+                openbach_function_true_ids = args.pop(
+                    'openbach_function_true_ids')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_true',
-                    openbach_function_true_indexes, ofi, scenario_instance)
-                openbach_function_false_indexes = args.pop(
-                    'openbach_function_false_indexes')
+                    openbach_function_true_ids, ofi, scenario_instance)
+                openbach_function_false_ids = args.pop(
+                    'openbach_function_false_ids')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_false',
-                    openbach_function_false_indexes, ofi, scenario_instance)
+                    openbach_function_false_ids, ofi, scenario_instance)
                 condition_json = args.pop('condition')
                 condition = ClientThread.register_condition(
                     condition_json, scenario_instance)
                 ofi.condition = condition
             elif name == 'while':
-                openbach_function_while_indexes = args.pop(
-                    'openbach_function_while_indexes')
+                openbach_function_while_ids = args.pop(
+                    'openbach_function_while_ids')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_while',
-                    openbach_function_while_indexes, ofi, scenario_instance)
-                openbach_function_end_indexes = args.pop(
-                    'openbach_function_end_indexes')
+                    openbach_function_while_ids, ofi, scenario_instance)
+                openbach_function_end_ids = args.pop(
+                    'openbach_function_end_ids')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_end',
-                    openbach_function_end_indexes, ofi, scenario_instance)
+                    openbach_function_end_ids, ofi, scenario_instance)
                 condition_json = args.pop('condition')
                 condition = ClientThread.register_condition(condition_json,
                                                             scenario_instance)
@@ -4007,19 +4023,26 @@ class ClientThread(threading.Thread):
                         arg_name, arg_value, ofi, scenario_instance)
             # Create the Waits
             if wait is not None:
-                ofi.time = wait['time']
+                try:
+                    ofi.time = wait['time']
+                except KeyError:
+                    pass
                 ofi.save()
-                for index in wait['launched_indexes']:
-                    wfl = Wait_For_Launched(
-                        openbach_function_instance=ofi,
-                        openbach_function_instance_id_waited=index)
-                    wfl.save()
-                for index in wait['finished_indexes']:
-                    wff = Wait_For_Finished(openbach_function_instance=ofi,
-                                            job_instance_id_waited=index)
-                    wff.save()
-            # Go to the next Openbach Function
-            openbach_function_id += 1
+                try:
+                    for _id in wait['launched_ids']:
+                        wfl = Wait_For_Launched(
+                            openbach_function_instance=ofi,
+                            openbach_function_instance_id_waited=_id)
+                        wfl.save()
+                except KeyError:
+                    pass
+                try:
+                    for _id in wait['finished_ids']:
+                        wff = Wait_For_Finished(openbach_function_instance=ofi,
+                                                job_instance_id_waited=_id)
+                        wff.save()
+                except KeyError:
+                    pass
 
     @staticmethod
     def register_scenario_instance(scenario, args):
@@ -4028,7 +4051,6 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance(scenario=scenario)
         # Update is status
         scenario_instance.status = 'Scheduling'
-        scenario_instance.status_date = timezone.now()
         scenario_instance.save()
         # Register the Scenario Instance's args
         for arg_name, arg_value in args.items():
@@ -4215,7 +4237,6 @@ class ClientThread(threading.Thread):
             openbach_function_instance_id=ofi_id)
         # Update it status
         ofi.status = 'Scheduled'
-        ofi.status_date = timezone.now()
         ofi.save()
         # Get the current thread
         t = threading.currentThread()
@@ -4229,7 +4250,6 @@ class ClientThread(threading.Thread):
                 # Function Instance and exit
                 if not t.do_run:
                     ofi.status = 'Stopped'
-                    ofi.status_date = timezone.now()
                     ofi.save()
                     return
             else:
@@ -4239,7 +4259,7 @@ class ClientThread(threading.Thread):
         time.sleep(ofi.time)
         # Update the Openbach Function Instance status
         ofi.status = 'Running'
-        ofi.status_date = timezone.now()
+        ofi.launch_date = timezone.now()
         ofi.save()
         # Get the function to execute
         try:
@@ -4295,19 +4315,16 @@ class ClientThread(threading.Thread):
                 scenario_instance.id, state='Finished KO')
             syslog.syslog(syslog.LOG_ERR, e.reason)
             ofi.status = 'Error'
-            ofi.status_date = timezone.now()
             ofi.save()
             return
         # If the thread has been stopped, update the status of the Openbach
         # Function Instance and exit
         if not t.do_run:
             ofi.status = 'Stopped'
-            ofi.status_date = timezone.now()
             ofi.save()
             return
         # Update the status of the Openbach Function Instance
         ofi.status = 'Finished'
-        ofi.status_date = timezone.now()
         ofi.save()
         # Inform the waiting Openbach Function Instance that the current
         # Openbach Function Instance is launched
@@ -4342,11 +4359,11 @@ class ClientThread(threading.Thread):
         if finished:
             scenario_instance.status = 'Finished OK'
             scenario_instance.is_stopped = True
-            scenario_instance.status_date = timezone.now()
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.save()
         else:
             scenario_instance.status = 'Running'
-            scenario_instance.status_date = timezone.now()
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.save()
 
     def start_scenario_instance_of(self, scenario_name, arguments, ofi,
@@ -4396,6 +4413,9 @@ class ClientThread(threading.Thread):
                                     'project_name': project_name})
         # Create the Scenario Instance
         scenario_instance = self.register_scenario_instance(scenario, arguments)
+        # Set the start date
+        scenario_instance.start_date = timezone.now()
+        scenario_instance.save()
         # Build it table of Openbach Function
         table = self.build_table(scenario_instance)
         # Initialize the queues list
@@ -4445,7 +4465,7 @@ class ClientThread(threading.Thread):
             pk=scenario_instance_id)
         # Update the status
         scenario_instance.status = state
-        scenario_instance.status_date = timezone.now()
+        scenario_instance.stop_date = timezone.now()
         scenario_instance.save()
 
     def stop_scenario_instance_action(self, scenario_instance_id, date=None,
@@ -4525,7 +4545,7 @@ class ClientThread(threading.Thread):
                     out_of_controll = True
                     syslog.syslog(syslog.LOG_ERR, e.reason)
         # Update the status of the Scenatio Instance
-        scenario_instance.status_date = timezone.now()
+        scenario_instance.stop_date = timezone.now()
         if not out_of_controll:
             scenario_instance.is_stopped = True
         scenario_instance.save()
@@ -4535,14 +4555,16 @@ class ClientThread(threading.Thread):
         """ Function that returns the infos of an openbach function instance """
         # Build the infos
         infos = {
+            'id': openbach_function_instance.openbach_function_instance_id,
+            'label': openbach_function_instance.label,
             'name': openbach_function_instance.openbach_function.name,
             'status': openbach_function_instance.status,
-            'status_date': openbach_function_instance.status_date,
+            'launch_date': openbach_function_instance.launch_date,
             'arguments': [],
             'wait': {
                 'time': openbach_function_instance.time,
-                'launched_indexes': [],
-                'finished_indexes': []
+                'launched_ids': [],
+                'finished_ids': []
             }
         }
         # Build the infos of the arguments
@@ -4559,10 +4581,10 @@ class ClientThread(threading.Thread):
                 job_name = ofai.value
         # Build the infos of the wait
         for wfl in openbach_function_instance.wait_for_launched_set.all():
-            infos['wait']['launched_indexes'].append(
+            infos['wait']['launched_ids'].append(
                 wfl.openbach_function_instance_id_waited)
         for wff in openbach_function_instance.wait_for_finished_set.all():
-            infos['wait']['finished_indexes'].append(
+            infos['wait']['finished_ids'].append(
                 wff.job_instance_id_waited)
         # Build the Scenario Instance infos
         if infos['name'] == 'start_scenario_instance':
@@ -4586,7 +4608,7 @@ class ClientThread(threading.Thread):
                                      ' lost')
                 # Get the infos
                 info, _ = self.status_job_instance_action(job_instance.id)
-            elif infos['status'] in ('Error'):
+            elif infos['status'] in ('Error', ):
                 # The Job Instance might not exist but it is not an error here
                 try:
                     job_instance = openbach_function_instance.job_instance_set.all()[0]
@@ -4633,7 +4655,8 @@ class ClientThread(threading.Thread):
             'owner_scenario_instance_id': owner_scenario_instance_id,
             'sub_scenario_instance_ids': list(sub_scenario_instance_ids),
             'status': scenario_instance.status,
-            'status_date': scenario_instance.status_date,
+            'start_date': scenario_instance.start_date,
+            'stop_date': scenario_instance.stop_date,
             'arguments': [],
             'openbach_functions': []
         }
@@ -4647,8 +4670,13 @@ class ClientThread(threading.Thread):
             try:
                 info = self.infos_openbach_function_instance(ofi)
             except BadRequest as e:
-                info = {'name': ofi.openbach_function.name, 'error': e.reason}
+                info = {'name': ofi.openbach_function.name, 'error': e.reason,
+                        'launch_date': ofi.launch_date}
             infos['openbach_functions'].append(info)
+        # Sort the list of Openbach Functions by launch_date
+        infos['openbach_functions'] = sorted(
+            infos['openbach_functions'], key=lambda ofi: ofi['launch_date']
+            if ofi['launch_date'] is not None else timezone.now())
         return infos
 
     def list_scenario_instances_action(self, scenario_name=None,
@@ -4679,6 +4707,9 @@ class ClientThread(threading.Thread):
                 self.infos_scenario_instance(scenario_instance)
                 for scenario_instance in scenario.scenario_instance_set.all()]
             result += scenario_instances
+        # Sort the list of Scenario Instances by start_date
+        result = sorted(result, key=lambda scenario_instance: scenario_instance['start_date']
+               if scenario_instance['start_date'] is not None else timezone.now())
         return result, 200
 
     def get_scenario_instance_action(self, scenario_instance_id,
@@ -4794,7 +4825,8 @@ class ClientThread(threading.Thread):
         if entity_json['agent'] != None:
             if not isinstance(entity_json['agent'], dict):
                 return False
-            required_parameters = ('address', 'name', 'username', 'collector')
+            required_parameters = ('address', 'name', 'username',
+                                   'collector_ip')
             try:
                 for k in required_parameters:
                     entity_json['agent'][k]
@@ -4806,7 +4838,7 @@ class ClientThread(threading.Thread):
                 return False
             if not isinstance(entity_json['agent']['username'], str):
                 return False
-            if not isinstance(entity_json['agent']['collector'], str):
+            if not isinstance(entity_json['agent']['collector_ip'], str):
                 return False
         return ClientThread.first_check_on_network(entity_json['networks'])
 
@@ -4960,7 +4992,7 @@ class ClientThread(threading.Thread):
             project.delete()
             # Register the new Project
             self.register_project(project_json)
-        return None, 204
+        return self.get_project(project_name)
 
     def del_project_action(self, project_name):
         """ Action that deletes a project """
@@ -5130,7 +5162,7 @@ def handle_message_from_status_manager(clientsocket):
                     thread = threads[scenario_instance.id][0]
                     if not thread.isActive():
                         scenario_instance.status = 'Finished OK'
-                        scenario_instance.status_date = timezone.now()
+                        scenario_instance.stop_date = timezone.now()
                         scenario_instance.is_stopped = True
                         scenario_instance.save()
     elif type_ == 'Error':

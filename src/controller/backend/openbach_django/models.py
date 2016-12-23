@@ -669,7 +669,8 @@ class Scenario_Instance(models.Model):
     """ Class that represents a Scenario Instance """
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE)
     status = models.CharField(max_length=500, null=True, blank=True)
-    status_date = models.DateTimeField(null=True, blank=True)
+    start_date = models.DateTimeField(null=True, blank=True)
+    stop_date = models.DateTimeField(null=True, blank=True)
     is_stopped = models.BooleanField(default=False)
     openbach_function_instance_master = models.ForeignKey(
         "Openbach_Function_Instance", null=True, blank=True,
@@ -910,8 +911,9 @@ class Openbach_Function_Instance(models.Model):
     condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
                                   null=True, blank=True)
     openbach_function_instance_id = models.IntegerField()
+    label = models.CharField(max_length=500, null=True, blank=True)
     status = models.CharField(max_length=500, null=True, blank=True)
-    status_date = models.DateTimeField(null=True, blank=True)
+    launch_date = models.DateTimeField(null=True, blank=True)
     time = models.IntegerField(default=0)
 
     def __str__(self):
@@ -920,7 +922,9 @@ class Openbach_Function_Instance(models.Model):
             self.openbach_function_instance_id, self.scenario_instance.id)
 
     class Meta:
-        unique_together = (('openbach_function_instance_id', 'scenario_instance'))
+        unique_together = (('openbach_function_instance_id',
+                            'scenario_instance'),
+                           ('label', 'scenario_instance'))
 
 
 class Wait_For_Launched(models.Model):

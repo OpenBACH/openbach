@@ -182,7 +182,7 @@ def create_openbach_functions(apps, schema_editor):
     # stop_job_instance
     stop_job_instance = Openbach_Function(name='stop_job_instance')
     stop_job_instance.save()
-    Openbach_Function_Argument(name='openbach_function_indexes', description='',
+    Openbach_Function_Argument(name='openbach_function_ids', description='',
                                type='list',
                                openbach_function=stop_job_instance).save()
     Openbach_Function_Argument(name='date', description='', type='str',

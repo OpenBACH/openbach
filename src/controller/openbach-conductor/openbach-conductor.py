@@ -2478,7 +2478,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': installed_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'This Installed_Job isn\'t in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
@@ -2504,7 +2504,7 @@ class ClientThread(threading.Thread):
             logs_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': 'rsyslog_job on {}'.format(address)}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'The Installed_Job rsyslog isn\'t in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
@@ -2714,7 +2714,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': installed_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'This Installed_Job isn\'t in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
@@ -2781,7 +2781,7 @@ class ClientThread(threading.Thread):
             rstats_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': rstat_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'The Installed_Job rstats_job isn\'t in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
@@ -3104,43 +3104,49 @@ class ClientThread(threading.Thread):
     def first_check_on_scenario(scenario_json):
         """ Function that checks if a scenario in json is valid """
         if 'name' not in scenario_json:
-            return False
+            raise BadRequest('Your Scenario is malformed: It should have a name')
         if not isinstance(scenario_json['name'], str):
-            return False
+            raise BadRequest('Your Scenario is malformed: The name should be a'
+                             ' string')
         if 'description' in scenario_json:
             if not isinstance(scenario_json['description'], str):
-                return False
+                raise BadRequest('Your Scenario is malformed: The description'
+                                 ' should be a string')
         if 'arguments' in scenario_json:
             if not isinstance(scenario_json['arguments'], dict):
-                return False
+                raise BadRequest('Your Scenario is malformed: The arguments'
+                                 ' should be a dictionary')
             for argument, description in scenario_json['arguments'].items():
                 if not isinstance(argument, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each argument'
+                                     ' key should be a string')
                 if not isinstance(description, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each argument'
+                                     ' value should be a string')
         if 'constants' in scenario_json:
             if not isinstance(scenario_json['constants'], dict):
-                return False
+                raise BadRequest('Your Scenario is malformed: The constants'
+                                 ' should be a dictionary')
             for constant, _ in scenario_json['constants'].items():
                 if not isinstance(constant, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each constant'
+                                     ' key should be a string')
         if 'openbach_functions' in scenario_json:
             if not isinstance(scenario_json['openbach_functions'], list):
-                return False
+                raise BadRequest('Your Scenario is malformed: The '
+                                 ' openbach_functions should be a list')
             known = {'wait', 'id', 'label'}
             for openbach_function in scenario_json['openbach_functions']:
                 if not isinstance(openbach_function, dict):
-                    syslog.syslog(syslog.LOG_ERR, 'Your Openbach Function is '
-                                  'not a dict')
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each '
+                                     'openbach_functions should be a dictionary')
                 if 'id' not in openbach_function:
-                    syslog.syslog(syslog.LOG_ERR, 'Your Openbach Function '
-                                  'has no id')
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each '
+                                     'openbach_functions should have an id')
                 if 'wait' in openbach_function:
                     if not isinstance(openbach_function['wait'], dict):
-                        syslog.syslog(syslog.LOG_ERR, 'Your Wait is not a dict')
-                        return False
+                        raise BadRequest('Your Scenario is malformed: The wait '
+                                         ' should be a dictionay')
                     at_least_one = False
                     try:
                         if not isinstance(openbach_function['wait']['time'],
@@ -3149,32 +3155,38 @@ class ClientThread(threading.Thread):
                                 openbach_function['wait']['time'] = int(
                                     openbach_function['wait']['time'])
                             except ValueError:
-                                syslog.syslog(syslog.LOG_ERR, 'Your Wait Time '
-                                              'is not an int')
-                                return False
+                                raise BadRequest('Your Scenario is malformed: '
+                                                 'The time in your wait should '
+                                                 'be an integer')
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
                         if not isinstance(openbach_function['wait']['finished_ids'],
                                           list):
-                            return False
+                            raise BadRequest('Your Scenario is malformed: '
+                                             'The finished_ids in your wait '
+                                             'be a list of integer')
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
                         if not isinstance(openbach_function['wait']['launched_ids'],
                                           list):
-                            return False
+                            raise BadRequest('Your Scenario is malformed: '
+                                             'The launched_ids in your wait '
+                                             'be a list of integer')
                     except KeyError:
                         if not at_least_one:
-                            return False
+                            raise BadRequest('Your Scenario is malformed: Your '
+                                             'wait is empty')
                 other = [k for k in openbach_function if k not in known]
                 if len(other) != 1:
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Unknown keys '
+                                     'in your openbach_function dictionary')
                 if not isinstance(openbach_function[other[0]], dict):
-                    return False
-        return True
+                    raise BadRequest('Your Scenario is malformed: You Openbach '
+                                     'Function should be a dictionary')
 
     @staticmethod
     def check_reference(arg_value):
@@ -3644,8 +3656,7 @@ class ClientThread(threading.Thread):
     def create_scenario(self, scenario_json, project_name=None):
         """ Function that creates a scenario """
         # Check that the json of the Scenario is well formed
-        if not self.first_check_on_scenario(scenario_json):
-            raise BadRequest('Your Scenario is malformed: the json is malformed')
+        self.first_check_on_scenario(scenario_json)
         # Get the name of the Scenario
         name = scenario_json['name']
         # Get the Project
@@ -3703,8 +3714,7 @@ class ClientThread(threading.Thread):
     def modify_scenario(self, scenario_json, scenario_name, project_name=None):
         """ Function that modifies a scenario """
         # Check is the json of the Scenario is well formed
-        if not self.first_check_on_scenario(scenario_json):
-            raise BadRequest('Your Scenario is malformed')
+        self.first_check_on_scenario(scenario_json)
         # Get the name of the Scenario from the json
         name = scenario_json['name']
         # Verify it is the same as the one given
@@ -4313,7 +4323,6 @@ class ClientThread(threading.Thread):
             # If an error occurs, stop the Scenario Instance and exit
             self.stop_scenario_instance_of(
                 scenario_instance.id, state='Finished KO')
-            syslog.syslog(syslog.LOG_ERR, e.reason)
             ofi.status = 'Error'
             ofi.save()
             return
@@ -4543,7 +4552,6 @@ class ClientThread(threading.Thread):
                     # Instance
                     scenario_instance.status = 'Running' # Running, out of controll
                     out_of_controll = True
-                    syslog.syslog(syslog.LOG_ERR, e.reason)
         # Update the status of the Scenatio Instance
         scenario_instance.stop_date = timezone.now()
         if not out_of_controll:
@@ -4784,7 +4792,7 @@ class ClientThread(threading.Thread):
                     watch.job_instance.id, stop='now')
             except BadRequest as e:
                 #TODO better handling of the errors
-                syslog.syslog(syslog.LOG_ERR, e.reason)
+                pass
         return None, 204
 
     @staticmethod
@@ -4796,18 +4804,24 @@ class ClientThread(threading.Thread):
             for k in required_parameters:
                 project_json[k]
         except KeyError:
-            return False
+            raise BadRequest('Your Project is malformed: The Project does not '
+                             'have all the required keys. Required keys are: '
+                             + ' '.join(required_parameters))
         if not isinstance(project_json['name'], str):
-            return False
+            raise BadRequest('Your Project is malformed: The name should be a '
+                             'string')
         if not isinstance(project_json['description'], str):
-            return False
+            raise BadRequest('Your Project is malformed: The description '
+                             'should be a string')
         if not isinstance(project_json['entity'], list):
-            return False
+            raise BadRequest('Your Project is malformed: The entity '
+                             'should be a list')
         if not isinstance(project_json['network'], list):
-            return False
+            raise BadRequest('Your Project is malformed: The network '
+                             'should be a list')
         if not isinstance(project_json['scenario'], list):
-            return False
-        return True
+            raise BadRequest('Your Project is malformed: The scenario '
+                             'should be a list')
 
     @staticmethod
     def first_check_on_entity(entity_json):
@@ -4817,40 +4831,51 @@ class ClientThread(threading.Thread):
             for k in required_parameters:
                 entity_json[k]
         except KeyError:
-            return False
+            raise BadRequest('Your Entity is malformed: It has not all required'
+                             ' keys. Required keys are: ' + ' '.join(
+                                 required_parameters))
         if not isinstance(entity_json['name'], str):
-            return False
+            raise BadRequest('Your Entity is malformed: The name should be a '
+                             'string')
         if not isinstance(entity_json['description'], str):
-            return False
+            raise BadRequest('Your Entity is malformed: The description should '
+                             'be a string')
         if entity_json['agent'] != None:
             if not isinstance(entity_json['agent'], dict):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent should '
+                                 'be a dictionary')
             required_parameters = ('address', 'name', 'username',
                                    'collector_ip')
             try:
                 for k in required_parameters:
                     entity_json['agent'][k]
             except KeyError:
-                return False
+                raise BadRequest('Your Entity is malformed: The agent has not '
+                                 'all required keys. Required keys are: '
+                                 + ' '.join(required_parameters))
             if not isinstance(entity_json['agent']['address'], str):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'address should  be a string')
             if not isinstance(entity_json['agent']['name'], str):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent\'s name '
+                                 'should be a string')
             if not isinstance(entity_json['agent']['username'], str):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'username should be a string')
             if not isinstance(entity_json['agent']['collector_ip'], str):
-                return False
-        return ClientThread.first_check_on_network(entity_json['networks'])
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'collector_ip should be a string')
+        ClientThread.first_check_on_network(entity_json['networks'])
 
     @staticmethod
     def first_check_on_network(network_json):
         """ Function that check if a network in json is well formed """
         if not isinstance(network_json, list):
-            return False
+            raise BadRequest('Your Network is malformed: It should be a list')
         for network in network_json:
             if not isinstance(network, str):
-                return False
-        return True
+                raise BadRequest('Your Network is malformed: Each element '
+                                 'should be a string')
 
     @staticmethod
     def register_entity(entity_json, project_name):
@@ -4919,10 +4944,11 @@ class ClientThread(threading.Thread):
         # Get the Networks json
         networks_json = project_json['network']
         # Check that the json is well formed
-        if not self.first_check_on_network(networks_json):
+        try:
+            self.first_check_on_network(networks_json)
+        except BadRequest:
             project.delete()
-            raise BadRequest('Your Project is malformed: the json is'
-                             ' malformed')
+            raise
         # Create the Networks
         for network_json in networks_json:
             try:
@@ -4934,10 +4960,11 @@ class ClientThread(threading.Thread):
         entities_json = project_json['entity']
         for entity_json in entities_json:
             # Check that the json is well formed
-            if not self.first_check_on_entity(entity_json):
+            try:
+                self.first_check_on_entity(entity_json)
+            except BadRequest:
                 project.delete()
-                raise BadRequest(
-                    'Your Project is malformed: the json is malformed')
+                raise
             # Create the entity
             try:
                 self.register_entity(entity_json, name)
@@ -4962,8 +4989,7 @@ class ClientThread(threading.Thread):
     def add_project(self, project_json):
         """ Function that adds a project """
         # Check that the json is well formed
-        if not self.first_check_on_project(project_json):
-            raise BadRequest('Your Project is malformed: the json is malformed')
+        self.first_check_on_project(project_json)
         # Register the new Project
         project_name = self.register_project(project_json)
         return self.get_project(project_name)
@@ -4975,8 +5001,7 @@ class ClientThread(threading.Thread):
     def modify_project(self, project_name, project_json):
         """ Function thats modifies a project """
         # Check that the json is well formed
-        if not self.first_check_on_project(project_json):
-            raise BadRequest('Your Project is malformed: the json is malformed')
+        self.first_check_on_project(project_json)
         # Check that names are the same
         if project_name != project_json['name']:
             raise BadRequest('Your Project is malformed: the name given does '
@@ -5191,7 +5216,7 @@ def handle_message_from_status_manager(clientsocket):
                         agent=agent))
         except BadRequest as e:
             # TODO see how to handle this
-            syslog.syslog(syslog.LOG_ERR, e.reason)
+            pass
         # Remove the Watch
         watch.delete()
 

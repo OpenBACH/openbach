@@ -1,0 +1,2 @@
+if $programname == 'rstats' and $syslogseverity <= '3' then \
+  @{{ collector_ip }}:{{ logstash_logs_port }}

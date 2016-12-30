@@ -37,6 +37,7 @@
 import os
 import tempfile
 import json
+import syslog
 
 
 class BadRequest(Exception):
@@ -49,6 +50,7 @@ class BadRequest(Exception):
             self.infos = infos
         else:
             self.infos = {}
+        syslog.syslog(syslog.LOG_ERR, self.reason)
 
 
 def send_fifo(msg, socket):

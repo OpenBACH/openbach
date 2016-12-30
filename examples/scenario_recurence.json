@@ -11,19 +11,16 @@
   },
   "openbach_functions": [
     {
+      "id": 1,
       "status_agents": {
         "addresses": [
           "$agentA"
         ],
         "update": true
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 2,
       "while": {
         "condition": {
           "type": "=",
@@ -38,46 +35,37 @@
             "value": "Available"
           }
         },
-        "openbach_function_while_indexes": [
+        "openbach_function_while_ids": [
           3
         ],
-        "openbach_function_end_indexes": [
+        "openbach_function_end_ids": [
           4
         ]
       },
       "wait": {
-        "time": 0,
-        "launched_indexes": [
+        "launched_ids": [
           1
-        ],
-        "finished_indexes": []
+        ]
       }
     },
     {
+      "id": 3,
       "start_scenario_instance": {
         "scenario_name": "$scenario",
         "args": {}
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 4,
       "status_agents": {
         "addresses": [
           "$agentA"
         ],
         "update": true
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 5,
       "status_agents": {
         "addresses": [
           "$agentB"
@@ -85,11 +73,9 @@
         "update": true
       },
       "wait": {
-        "time": 0,
-        "launched_indexes": [
+        "launched_ids": [
           3
-        ],
-        "finished_indexes": []
+        ]
       }
     }
   ]

@@ -86,6 +86,7 @@
       },
       "openbach_functions": [
         {
+          "id": 1,
           "start_job_instance": {
             "agent_ip": "172.20.34.39",
             "fping": {
@@ -94,12 +95,11 @@
             "offset": 5
           },
           "wait": {
-            "time": 5,
-            "launched_indexes": [],
-            "finished_indexes": []
+            "time": 5
           }
         },
         {
+          "id": 2,
           "start_job_instance": {
             "agent_ip": "172.20.34.39",
             "hping": {
@@ -108,9 +108,7 @@
             "offset": 5
           },
           "wait": {
-            "time": 5,
-            "launched_indexes": [],
-            "finished_indexes": []
+            "time": 5
           }
         }
       ]
@@ -122,6 +120,7 @@
       "constants": {},
       "openbach_functions": [
         {
+          "id": 1,
           "start_job_instance": {
             "agent_ip": "192.168.0.2",
             "pep": {
@@ -129,14 +128,10 @@
               "pep_port": 3000
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 2,
           "start_job_instance": {
             "agent_ip": "192.168.0.7",
             "iperf": {
@@ -145,14 +140,10 @@
               "port": 5000
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 3,
           "start_job_instance": {
             "agent_ip": "192.168.0.7",
             "iperf": {
@@ -160,14 +151,10 @@
               "port": 5001
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 4,
           "start_job_instance": {
             "agent_ip": "192.168.0.7",
             "tcpprobe_monitoring": {
@@ -176,14 +163,10 @@
               "path": "/tcp/tcpprobe.out"
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 5,
           "start_job_instance": {
             "agent_ip": "192.168.0.7",
             "rate_monitoring": {
@@ -195,14 +178,10 @@
               "source_port": 5001
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 6,
           "start_job_instance": {
             "agent_ip": "192.168.0.5",
             "iperf": {
@@ -214,17 +193,17 @@
           },
           "wait": {
             "time": 5,
-            "launched_indexes": [
-              0,
+            "launched_ids": [
               1,
               2,
               3,
-              4
-            ],
-            "finished_indexes": []
+              4,
+              5
+            ]
           }
         },
         {
+          "id": 7,
           "start_job_instance": {
             "agent_ip": "192.168.0.5",
             "iperf": {
@@ -235,47 +214,45 @@
           },
           "wait": {
             "time": 5,
-            "launched_indexes": [
-              0,
+            "launched_ids": [
               1,
               2,
               3,
-              4
-            ],
-            "finished_indexes": []
+              4,
+              5
+            ]
           }
         },
         {
+          "id": 8,
           "stop_job_instance": {
-            "openbach_function_indexes": [
+            "openbach_function_ids": [
               5,
               6
             ]
           },
           "wait": {
             "time": 500,
-            "launched_indexes": [
-              5,
-              6
-            ],
-            "finished_indexes": []
+            "launched_ids": [
+              6,
+              7
+            ]
           }
         },
         {
+          "id": 9,
           "stop_job_instance": {
-            "openbach_function_indexes": [
-              0,
+            "openbach_function_ids": [
               1,
               2,
               3,
-              4
+              4,
+              5
             ]
           },
           "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": [
-              7
+            "finished_ids": [
+              8
             ]
           }
         }

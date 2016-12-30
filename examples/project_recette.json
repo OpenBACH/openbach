@@ -60,20 +60,17 @@
       },
       "openbach_functions": [
         {
+          "id": 1,
           "start_job_instance": {
             "agent_ip": "$gw0",
             "iperf": {
               "mode": "-s"
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 2,
           "start_job_instance": {
             "agent_ip": "$st1",
             "iperf": {
@@ -82,12 +79,13 @@
             "offset": 0
           },
           "wait": {
-            "time": 0,
-            "launched_indexes": [1],
-            "finished_indexes": []
+            "launched_ids": [
+              1
+            ]
           }
         },
         {
+          "id": 3,
           "start_job_instance": {
             "agent_ip": "$st1",
             "ping": {
@@ -95,25 +93,16 @@
               "destination_ip": "$gw0"
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         },
         {
+          "id": 4,
           "start_job_instance": {
             "agent_ip": "$st1",
             "ping": {
               "destination_ip": "$gw0"
             },
             "offset": 0
-          },
-          "wait": {
-            "time": 0,
-            "launched_indexes": [],
-            "finished_indexes": []
           }
         }
       ]

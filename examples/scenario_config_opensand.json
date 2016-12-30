@@ -14,6 +14,7 @@
   },
   "openbach_functions": [
     {
+      "id": 1,
       "start_job_instance": {
         "agent_ip": "$manager",
         "opensand_requirements": {
@@ -21,14 +22,10 @@
         	"service-interface": "$service_interface"
         },
         "offset": 0
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 2,
       "start_job_instance": {
         "agent_ip": "$sat",
         "opensand_sat_configuration": {
@@ -38,14 +35,10 @@
         	"network-emulation-ipv4": "192.170.18.15/24"
         },
         "offset": 0
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 3,
       "start_job_instance": {
         "agent_ip": "$gw0",
         "opensand_gw_configuration": {
@@ -57,14 +50,10 @@
         	"network-lan-ipv4": "192.170.42.1/24"
         },
         "offset": 0
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 5,
       "start_job_instance": {
         "agent_ip": "$st1",
         "opensand_st_configuration": {
@@ -76,11 +65,6 @@
         	"network-lan-ipv4": "192.170.19.1/24"
         },
         "offset": 0
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     }
   ]

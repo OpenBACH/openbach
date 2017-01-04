@@ -1366,6 +1366,13 @@ class ClientThread(threading.Thread):
                     command_result.status_install.response = json.dumps(None)
                     command_result.status_install.returncode = 204
                     command_result.status_install.save()
+                    # Activate the send of log to ElasticSearch and local
+                    # register
+                    try:
+                        self.set_job_log_severity(agent.address, job.name, 0,
+                                                  local_severity=0)
+                    except BadRequest:
+                        pass
         # If at least one install failed, raise an error
         if not success:
             raise BadRequest(

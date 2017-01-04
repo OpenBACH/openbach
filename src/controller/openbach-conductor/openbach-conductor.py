@@ -1238,8 +1238,8 @@ class ClientThread(threading.Thread):
         # return it help
         return {'job_name': name, 'help': job.help}, 200
 
-    def install_jobs_action(self, addresses, names, severity=4,
-                            local_severity=4):
+    def install_jobs_action(self, addresses, names, severity=0,
+                            local_severity=0):
         """ Action that installs one or more Jobs on one or more Agents """
         # Check if all the addresses given are well formed
         for address in addresses:
@@ -1257,7 +1257,7 @@ class ClientThread(threading.Thread):
         thread.start()
         return {}, 202
 
-    def install_jobs(self, addresses, names, severity=4, local_severity=4):
+    def install_jobs(self, addresses, names, severity=0, local_severity=0):
         """ Function that installs one or more Jobs on one or more Agents """
         # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)
@@ -1369,8 +1369,9 @@ class ClientThread(threading.Thread):
                     # Activate the send of log to ElasticSearch and local
                     # register
                     try:
-                        self.set_job_log_severity(agent.address, job.name, 0,
-                                                  local_severity=0)
+                        self.set_job_log_severity(agent.address, job.name,
+                                                  severity,
+                                                  local_severity=local_severity)
                     except BadRequest:
                         pass
         # If at least one install failed, raise an error
@@ -2567,7 +2568,7 @@ class ClientThread(threading.Thread):
         # Get the severities
         logs_job_path = job_instance.job.job.path
         syslogseverity = convert_severity(int(severity))
-        if not local_severity:
+        if local_severity is None:
             local_severity = installed_job.local_severity
         syslogseverity_local = convert_severity(int(local_severity))
         disable = 0

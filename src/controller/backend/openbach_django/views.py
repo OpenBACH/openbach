@@ -559,7 +559,7 @@ class JobView(BaseJobView):
                 'job_name': name, 'severity': severity}
 
         local_severity = self.request.JSON.get('local_severity', None)
-        if local_severity:
+        if local_severity is not None:
             data['local_severity'] = local_severity
         date = self.request.JSON.get('date', None)
         if date:

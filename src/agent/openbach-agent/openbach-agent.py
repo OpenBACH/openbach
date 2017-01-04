@@ -179,8 +179,8 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
             return
         # Get the process
         proc = psutil.Process(pid)
-        # Kill all it childs
-        for child in proc.children():
+        # Kill all its childs
+        for child in proc.children(recursive=True):
             child.terminate()
         # Kill the process
         proc.terminate()

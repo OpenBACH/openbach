@@ -55,7 +55,7 @@ def handle_exception(exception, timestamp):
     collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % exception)
 
 
-def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
+def main(destination_ip, count, interval, interface, packetsize, ttl):
     conffile = "/opt/openbach-jobs/fping/fping_rstats_filter.conf"
 
     cmd = ['fping', destination_ip]
@@ -64,7 +64,6 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, duration):
     cmd.extend(command_line_flag_for_argument(interface, '-I'))
     cmd.extend(command_line_flag_for_argument(packetsize, '-s'))
     cmd.extend(command_line_flag_for_argument(ttl, '-t'))
-    cmd.extend(command_line_flag_for_argument(duration, '-w'))
 
     success = collect_agent.register_collect(conffile)
     if not success:
@@ -105,8 +104,6 @@ if __name__ == "__main__":
                         help='')
     parser.add_argument('-t', '--ttl', type=int,
                         help='')
-    parser.add_argument('-w', '--duration', type=int,
-                        help='')
 
     # get args
     args = parser.parse_args()
@@ -116,7 +113,5 @@ if __name__ == "__main__":
     interface = args.interface
     packetsize = args.packetsize
     ttl = args.ttl
-    duration = args.duration
 
-    main(destination_ip, count, interval, interface, packetsize, ttl, duration)
-
+    main(destination_ip, count, interval, interface, packetsize, ttl)

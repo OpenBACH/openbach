@@ -56,37 +56,18 @@ class BadRequest(Exception):
 def send_fifo(msg, socket):
     """ Function that sends a message through a socket, and gets a fifo name in
     return (the response will be in that fifo) """
-    socket.send(json.dumps(msg).encode())
-    response = socket.recv(4096).decode()
-    fifoname = json.loads(response)['fifoname']
-    return fifoname
-
-
-def recv_fifo(socket):
-    """ Function that will receive a message through a socket, creates a fifo
-    and send the name of this fifo through the socket (return the received
-    message and the fifo name) """
-    msg = socket.recv(4096).decode()
-    msg = json.loads(msg)
     with tempfile.NamedTemporaryFile('w') as f:
-        pass
+        fifoname = f.name
     try:
-        os.mkfifo(f.name)
+        os.mkfifo(fifoname)
     except OSError as e:
         raise BadRequest('Impossible to create the Fifo', 400, {'error': e})
-    response = {'fifoname': f.name}
+    os.chmod(fifoname, 0o666)
+    response = {'fifoname': fifoname}
     socket.send(json.dumps(response).encode())
-    return msg, f.name
-
-
-def send_all(fifoname, msg):
-    """ Function that send all the message through the fifo """
     with open(fifoname, 'w') as fifo:
-        fifo.write(msg)
-
-
-def recv_all(fifoname):
-    """ Function that receives a message through the fifo """
+        fifo.write(json.dumps(msg))
+    response = socket.recv(4096).decode()
     with open(fifoname, 'r') as fifo:
         msg = fifo.read()
     os.remove(fifoname)

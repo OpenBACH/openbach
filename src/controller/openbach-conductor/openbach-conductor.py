@@ -66,7 +66,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
 from openbach_django.utils import BadRequest, convert_severity
-from openbach_django.utils import send_all, recv_fifo
 
 
 syslog.openlog('openbach-conductor', syslog.LOG_PID, syslog.LOG_USER)
@@ -4383,7 +4382,7 @@ class ClientThread(threading.Thread):
             scenario_instance.stop_date = timezone.now()
             scenario_instance.save()
 
-    def start_scenario_instance_of(self, scenario_name, arguments, ofi,
+    def start_scenario_instance_of(self, scenario_name, ofi, arguments={},
                                    date=None):
         """ Openbach Function that starts a scenario instance """
         # Get the Project name
@@ -4470,10 +4469,19 @@ class ClientThread(threading.Thread):
         # Return the id of the Scenario Instance
         return {'scenario_instance_id': scenario_instance.id}, 200
 
-    def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
+    def stop_scenario_instance_of(self, openbach_function_id, state='Stopped',
                                   date=None, scenario_name=None,
                                   project_name=None):
         """ Openbach Function that stops the scenario instance """
+        # For each Openbach Function Instance, get the associated Job Instance
+        try:
+            ofi = scenario_instance.openbach_function_instance_set.get(
+                openbach_function_instance_id=openbach_function_id)
+        except ObjectDoesNotExist:
+            #TODO see how to handle this error
+            pass
+        for scenario_instance in ofi.openbach_function_instance_master.all():
+            scenario_instance_id = scenario_instance.id
         # Stop the Scenario Instance
         self.stop_scenario_instance(
             scenario_instance_id, date, scenario_name, project_name)
@@ -4725,7 +4733,8 @@ class ClientThread(threading.Thread):
             result += scenario_instances
         # Sort the list of Scenario Instances by start_date
         result = sorted(result, key=lambda scenario_instance: scenario_instance['start_date']
-               if scenario_instance['start_date'] is not None else timezone.now())
+               if scenario_instance['start_date'] is not None else
+                        timezone.now(), reverse=True)
         return result, 200
 
     def get_scenario_instance_action(self, scenario_instance_id,
@@ -5134,7 +5143,10 @@ class ClientThread(threading.Thread):
     def run(self):
         """ Main function """
         # Receive the message from the Backend
-        request, fifoname = recv_fifo(self.clientsocket)
+        fifo_infos = self.clientsocket.recv(4096).decode()
+        fifoname = json.loads(fifo_infos)['fifoname']
+        with open(fifoname, 'r') as fifo:
+            request = json.loads(fifo.read())
         try:
             # Execute the request
             response, returncode = self.execute_request(request)
@@ -5153,8 +5165,10 @@ class ClientThread(threading.Thread):
             result = {'response': response, 'returncode': returncode}
         finally:
             # Send the response
+            self.clientsocket.send('Done'.encode())
             msg = json.dumps(result, cls=DjangoJSONEncoder)
-            send_all(fifoname, msg)
+            with open(fifoname, 'w') as fifo:
+                fifo.write(msg)
             self.clientsocket.close()
 
 

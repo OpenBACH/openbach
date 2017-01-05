@@ -290,7 +290,7 @@ def create_openbach_functions(apps, schema_editor):
     # stop_scenario_instance
     stop_scenario_instance = Openbach_Function(name='stop_scenario_instance')
     stop_scenario_instance.save()
-    Openbach_Function_Argument(name='scenario_instance_id', description='',
+    Openbach_Function_Argument(name='openbach_function_id', description='',
                                type='int',
                                openbach_function=stop_scenario_instance).save()
 

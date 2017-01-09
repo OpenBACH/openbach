@@ -830,35 +830,35 @@ The scenario backbone (in JSON) is described as follows:
         "ping": { # <8>
           "destination_ip": "$agentB", # <9>
           "duration": [ # <10>
-            "$duration" #
-          ]
-       },
-       "offset": 5 # <11>
-     },
-     "wait": { # <12>
-       "time": 0, # <13>
-       "launched_indexes": [], # <14>
-       "finished_indexes": [] # <15>
-     }
-   },
-   {
-     "start_job_instance": { <16>
-       "agent_ip": "$agentB",
-       "ping": {
-         "destination_ip": "$agentA",
-         "duration": [
             "$duration"
-         ]
-       },
-       "offset": 0
-     },
-     "wait": {
-       "time": 10,  # <17>
-       "launched_indexes": [],
-       "finished_indexes": [0] # <18>
-     }
-   }
- ]
+          ]
+        },
+        "offset": 5 # <11>
+      },
+      "wait": { # <12>
+        "time": 0, # <13>
+        "launched_ids": [], # <14>
+        "finished_ids": [] # <15>
+      }
+    },
+    {
+      "start_job_instance": { <16>
+        "agent_ip": "$agentB",
+        "ping": {
+          "destination_ip": "$agentA",
+          "duration": [
+             "$duration"
+          ]
+        },
+        "offset": 0
+      },
+      "wait": {
+        "time": 10,  # <17>
+        "launched_ids": [],
+        "finished_ids": [0] # <18>
+      }
+    }
+  ]
 }
 
 ----

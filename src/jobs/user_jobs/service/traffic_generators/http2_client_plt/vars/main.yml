@@ -33,5 +33,5 @@
 
 ---
 
-job_name: traffic_monitor_http2_client
+job_name: http2_client_plt
 

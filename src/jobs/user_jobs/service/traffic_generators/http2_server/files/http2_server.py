@@ -37,15 +37,14 @@
 
 import subprocess
 import argparse
+import os
 
 
-def main(port, no_tls):
-    cmd = 'nghttpd {}'.format(port)
-    if no_tls:
-        cmd = '{} --no-tls'.format(cmd)
-
-    p = subprocess.Popen(cmd, shell=True)
-    p.wait()
+def main(port):
+    #need to change dir in order to access all the content/files of server
+    os.chdir("/opt/openbach-jobs/http2_server/")
+    #not tls by default
+    subprocess.call(["nghttpd", str(port), "--no-tls"])
 
 
 if __name__ == "__main__":
@@ -55,13 +54,10 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('port', metavar='port', type=int,
                         help='Port where the server id available')
-    parser.add_argument('-n', '--no-tls', action='store_true',
-                        help='Disable SSL/TLS')
 
     # get args
     args = parser.parse_args()
     port = args.port
-    no_tls = args.no_tls
 
-    main(port, no_tls)
+    main(port)
 

@@ -26,8 +26,8 @@
 #   
 #   
 #   
-#   @file     uninstall_traffic_monitor_http2_client.yml
-#   @brief    Playbook that install the Job traffic_monitor_http2_client
+#   @file     uninstall_http2_client_plt.yml
+#   @brief    Playbook that install the Job http2_client_plt
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: traffic_monitor_http2_client.yml
+    - job_conf: http2_client_plt.yml
   
   tasks:
   - name: Delete HTTP2 Client repository

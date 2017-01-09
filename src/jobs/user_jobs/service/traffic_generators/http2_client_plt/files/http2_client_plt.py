@@ -29,8 +29,8 @@
 
 
 
-   @file     traffic_monitor_http2_client.py
-   @brief    Sources of the Job traffic_monitor_http2_client
+   @file     http2_client_plt.py
+   @brief    Sources of the Job http2_client_plt
    @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 """
 
@@ -54,19 +54,19 @@ def signal_term_handler(signal, frame):
 signal.signal(signal.SIGTERM, signal_term_handler)
 
 
-def worker_loop(q, server_address, simu_name, page):
+def worker_loop(q, server_address, page):
     try:
         while Running:
             try:
                 q.get(timeout=1)
-                get_url(server_address, simu_name, page)
+                get_url(server_address, page)
             except Empty:
-                pass
-    except:
-        pass
+                collect_agent.send_log(syslog.LOG_ERR, "ERROR on workers queue")
+    except Exception as ex:
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR on worker do get_url: %s" + ex)
 
 
-def get_url(server_address, simu_name, page):
+def get_url(server_address, page):
     try:
         start_time = time.time()
         if page == 0:
@@ -76,49 +76,69 @@ def get_url(server_address, simu_name, page):
         call(["nghttp","-a","-n","-W 25","-w 20","http://"+server_address+url])
         conntime = round(time.time() - start_time,3)
         timestamp = int(round(time.time() * 1000))
-        collect_agent.send_log(syslog.LOG_NOTICE, "NOTICE: Delai = " + str(conntime))
+        collect_agent.send_log(syslog.LOG_NOTICE, "The Page Load Time (sec) is = " + str(conntime))
         try:
-            # Envoie de la stat au collecteur
+            # Send stat to rstats 
             statistics = {'value': conntime}
             r = collect_agent.send_stat(timestamp, **statistics)
-        except Exception as ex: 
-            print "Erreur: %s" % ex
-
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR sending stat: %s" + ex)
     except:
-        pass
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR getting url (the server might not be running)")
 
-def main(server_address, simu_name, lambd, sim_t, n_req, page):
+def main(server_address, mode, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
-    conffile = "/opt/openbach-jobs.traffic_monitor_http2_client/traffic_monitor_http2_client_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs.http2_client_plt/http2_client_plt_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)
     if not success:
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR connecting to collect-agent")
         quit()
+        
+    #mode with inter-arrivals (following an exponential law) 
+    if mode == 1:
+        N_workers = 150
+        Running = True
+        # create queue
+        q = Queue()
+        # start workers
+        thread_pool = []
+        for i in range(N_workers):
+            t = Thread(target=worker_loop,args=(q, server_address, page))
+            t.start()
+            thread_pool.append(t)
 
-    N_workers = 150
-    Running = True
-    # create queue
-    q = Queue()
-    # start workers
-    thread_pool = []
-    for i in range(N_workers):
-        t = Thread(target=worker_loop,args=(q, server_address, simu_name, page))
-        t.start()
-        thread_pool.append(t)
+        # calculate arrival times
+        arriv_times = []
+        while not (sum(arriv_times) > sim_t or (n_req and n_req <= len(arriv_times))):
+            arriv_times.append(random.expovariate(lambd))
+        
+        #add arrivals to queue
+        try:
+            for wait_time in arriv_times:
+                time.sleep(wait_time)
+                q.put(1)
+                while q.qsize()>10:
+                    q.get()
+        except Exception as ex:
+            Running = False
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR adding arrivals to queue:" + str(ex))
+            
+        Running = False
+        for t in thread_pool:
+            t.join()
 
-    # calculate arrival times
-    arriv_times = []
-    while not (sum(arriv_times) > sim_t or (n_req and n_req <= len(arriv_times))):
-        arriv_times.append(random.expovariate(lambd))
-    try:
-        for wait_time in arriv_times:
-            time.sleep(wait_time)
-            q.put(1)
-            while q.qsize()>10:
-                q.get()
-
-    Running = False
-    for t in thread_pool:
-        t.join()
+    #in this mode, we perform one request once the previous one has already been received
+    elif mode == 0:
+        init_time = time.time()
+        n=0
+        while (round(time.time() - init_time,3) < sim_t) or (n_req > n):
+            get_url(server_address, page)
+            n += 1
+            
+    else:
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR: mode value not known (mode must be 0 or 1")
+            
+     
 
 
 if __name__ == "__main__":
@@ -128,9 +148,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('server-address', metavar='server-address', type=str,
                         help='The IP address of the server')
-    parser.add_argument('-s', '--simu-name', type=str,
-                        default='traffic_monitor_http2_client',
-                        help='Name of the generated statistic')
+    parser.add_argument('-m', '--mode', type=int, default=0, help='Two modes of performing requests (mode=0 for normal'
+                        'http requests one after another, mode=1 for requests following and exponential law')
     parser.add_argument('-l', '--lambd', type=float, default=1.0,
                         help='Exponential law lambda')
     parser.add_argument('--sim-t', type=float, default=60.0,
@@ -143,10 +162,10 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
     server_address = args.server_address
-    simu_name = args.simu_name
+    mode = args.mode
     lambd = args.lambd
     sim_t = args.sim_t
     n_req = args.n_req
     page = args.page
 
-    main(server_address, simu_name, lambd, sim_t, n_req, page)
+    main(server_address, mode, lambd, sim_t, n_req, page)

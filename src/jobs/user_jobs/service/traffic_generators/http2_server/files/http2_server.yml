@@ -4,7 +4,7 @@ general:
   name:            http2_server
   description: >
       This Job will start an HTTP2 server in order to generate traffic.
-      It only launchs the nghttpd command.
+      It launchs the nghttpd command (without tls).
   job_version:     0.1
   keywords:        [http2, server]
   persistent:      True
@@ -27,12 +27,6 @@ arguments:
       description: >
           Port where the server is available
   optional:
-    - name:        no_tls
-      type:        'None'
-      count:       0
-      flag:        '--no-tls'
-      description: >
-          Disable SSL/TLS.
-
+          
 statistics:
 

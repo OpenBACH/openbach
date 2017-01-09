@@ -26,8 +26,8 @@
 #   
 #   
 #   
-#   @file     install_traffic_monitor_http2_client.yml
-#   @brief    Playbook that install the Job traffic_monitor_http2_client
+#   @file     install_http2_client_plt.yml
+#   @brief    Playbook that install the Job http2_client_plt
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
@@ -37,7 +37,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    - job_conf: traffic_monitor_http2_client.yml
+    - job_conf: http2_client_plt.yml
   
   tasks:
   - name: Create HTTP2 Client repository
@@ -116,11 +116,11 @@
     when: nghttp_check_deb.rc == 1
  
   - name: Install HTTP2 Client
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/{{ job_name }}/ mode=0644
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/{{ job_name }}/ mode={{ item.mode }}
     with_items:
-      - "{{ job_name }}.py"
-      - "{{ job_name }}.help"
-      - "{{ job_name }}_rstats_filter.conf"
+      - { file: '{{ job_name }}.py', mode: '0755' }
+      - { file: '{{ job_name }}.help', mode: '0644' }
+      - { file: '{{ job_name }}_rstats_filter.conf', mode: '0644' }
     become: yes
     
   - name: Install HTTP2 Client configuration file

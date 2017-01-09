@@ -60,7 +60,7 @@ def worker_loop(q, server_address, page):
                 q.get(timeout=1)
                 get_url(server_address, port, page)
             except Empty:
-                collect_agent.send_log(syslog.LOG_ERR, "ERROR on workers queue")
+                collect_agent.send_log(syslog.LOG_DEBUG, "No more workers on queue")
     except Exception as ex:
         collect_agent.send_log(syslog.LOG_ERR, "ERROR on worker do get_url: %s" + ex)
 

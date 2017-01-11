@@ -83,7 +83,7 @@ class ScenarioManager:
 
 class ClientThread(threading.Thread):
     """ Class that represents the main thread of the Status Manager """
-    UPDATE_INSTANCE_URL = 'http://{agent.collector}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"{agent.name}.{}"+WHERE+job_instance_id+=+{}'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"0.0.0.{agent.name}.openbach-agent"+where+job_name+=+\'{}\'+and+job_instance_id+=+{}'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -97,7 +97,7 @@ class ClientThread(threading.Thread):
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         # Request the last status to the Collector
         url = ClientThread.UPDATE_INSTANCE_URL.format(
-                job_instance.job.job.name, job_instance.id,
+            job_instance.job.job.name, job_instance.id,
             agent=job_instance.job.agent)
         result = requests.get(url).json()
         # Parse the response
@@ -119,12 +119,14 @@ class ClientThread(threading.Thread):
         # Inform the Conductor is the Job Instance is finished or if an error
         # occurs
         type_= None
-        if status == 'Not Running':
+        if status == 'Not Running' or status == 'Finished':
             type_ = 'Finished'
-        elif status == 'Finished':
-            type_ = 'Finished'
+            job_instance.is_stopped = True
+            job_instance.save()
         elif status == 'Error':
             type_ = 'Error'
+            job_instance.is_stopped = True
+            job_instance.save()
         if type_ is not None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:

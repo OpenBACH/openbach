@@ -2096,10 +2096,6 @@ class ClientThread(threading.Thread):
                 command_result.status_stop.save()
                 continue
             else:
-                # Update the status of the Job Instance
-                if stop_date <= timezone.now():
-                    job_instance.is_stopped = True
-                    job_instance.save()
                 # Update the command result
                 command_result.status_stop.response = json.dumps(None)
                 command_result.status_stop.returncode = 204
@@ -3281,14 +3277,21 @@ class ClientThread(threading.Thread):
             description = None
         # Copy the json of the Scenario
         scenario_string = json.dumps(scenario_json)
-        # Create the Scenario
-        scenario = Scenario(name=name, description=description,
-                            scenario=scenario_string, project=project)
-        try:
-            scenario.save(force_insert=True)
-        except IntegrityError:
-            raise BadRequest('This name of Scenario \'{}\' is already'
-                             ' used'.format(name), 409)
+        # Create the Scenario (or modify)
+        if scenario is None:
+            scenario = Scenario(name=name, description=description,
+                                scenario=scenario_string, project=project)
+            try:
+                scenario.save(force_insert=True)
+            except IntegrityError:
+                raise BadRequest('This name of Scenario \'{}\' is already'
+                                 ' used'.format(name), 409)
+        else:
+            scenario.description = description
+            scenario.scenario = scenario_string
+            scenario.save()
+            for argument in scenario.scenario_argument_set.all():
+                argument.delete()
         # Register the Scenario Arguments
         try:
             result = ClientThread.register_scenario_arguments(
@@ -3308,15 +3311,15 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Condition is malformed (no type)')
         # Check it has all the attributs needed and that the attributs are well
         # formed too
-        if condition_type in ['=', '<=', '<', '>=', '>']:
+        if condition_type in ['==', '=', '<=', '<', '>=', '>', '!=']:
             try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
+                left_operand = condition.pop('left_operand')
+                right_operand = condition.pop('right_operand')
             except KeyError:
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
+            ClientThread.check_operand(left_operand)
+            ClientThread.check_operand(right_operand)
         elif condition_type == 'not':
             try:
                 new_condition = condition.pop('condition')
@@ -3326,13 +3329,13 @@ class ClientThread(threading.Thread):
             ClientThread.check_condition(new_condition)
         elif condition_type in ['or',' and', 'xor']:
             try:
-                condition1 = condition.pop('condition1')
-                condition2 = condition.pop('condition2')
+                left_condition = condition.pop('left_condition')
+                right_condition = condition.pop('right_condition')
             except KeyError:
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
-            ClientThread.check_condition(condition1)
-            ClientThread.check_condition(condition2)
+            ClientThread.check_condition(left_condition)
+            ClientThread.check_condition(right_condition)
         else:
             raise BadRequest('The type of the Condition is unknown',
                              404, {'name': 'if', 'type': condition_type})
@@ -3746,10 +3749,8 @@ class ClientThread(threading.Thread):
                                                 project=project)
             except ObjectDoesNotExist:
                 raise BadRequest('This Scenario does not exist', 404)
-            # Delete it
-            scenario.delete()
-            # Recreate it
-            self.register_scenario(scenario_json, name, project)
+            # Modify it
+            self.register_scenario(scenario_json, name, project, scenario)
             scenario = Scenario.objects.get(name=scenario_name, project=project)
             self.check_scenario(scenario)
         return self.get_scenario(name, project_name)
@@ -3887,21 +3888,21 @@ class ClientThread(threading.Thread):
         # Get the type of the Condition
         condition_type = condition_json.pop('type')
         if condition_type in ['or', 'and', 'xor']:
-            # Get the condition1 and condition2 and register them
-            condition1_json = condition_json.pop('condition1')
-            condition1 = ClientThread.register_condition(
-                condition1_json, scenario_instance)
-            condition2_json = condition_json.pop('condition2')
-            condition2 = ClientThread.register_condition(
-                condition2_json, scenario_instance)
-        elif condition_type in ['=', '!=', '>=', '>', '<=', '<']:
-            # Get the operand1 and operand2 and register them
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(
-                operand1_json, scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(
-                operand2_json, scenario_instance)
+            # Get the left and ritgh conditions and register them
+            left_condition_json = condition_json.pop('left_condition')
+            let_condition = ClientThread.register_condition(
+                left_condition_json, scenario_instance)
+            right_condition_json = condition_json.pop('right_condition')
+            right_condition = ClientThread.register_condition(
+                right_condition_json, scenario_instance)
+        elif condition_type in ['=', '==', '!=', '>=', '>', '<=', '<']:
+            # Get the left and right operands and register them
+            left_operand_json = condition_json.pop('left_operand')
+            left_operand = ClientThread.register_operand(
+                left_operand_json, scenario_instance)
+            right_operand_json = condition_json.pop('right_operand')
+            right_operand = ClientThread.register_operand(
+                right_operand_json, scenario_instance)
         if condition_type == 'not':
             # Get the new condition and register it
             new_condition_json = condition_json.pop('condition')
@@ -3912,35 +3913,39 @@ class ClientThread(threading.Thread):
         elif condition_type == 'or':
             # Create the Condition_Or
             condition = Condition_Or(
-                condition1=condition1, condition2=condition2)
+                left_condition=left_condition, right_condition=right_condition)
         elif condition_type == 'and':
             # Create the Condition_And
             condition = Condition_And(
-                condition1=condition1, condition2=condition2)
+                left_condition=left_condition, right_condition=right_condition)
         elif condition_type == 'xor':
             # Create the Condition_Xor
             condition = Condition_Xor(
-                condition1=condition1, condition2=condition2)
-        elif condition_type == '=':
+                left_condition=left_condition, right_condition=right_condition)
+        elif condition_type == '=' or condition_type == '==':
             # Create the Condition_Equal
-            condition = Condition_Equal(operand1=operand1, operand2=operand2)
+            condition = Condition_Equal(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '!=':
             # Create the Condition_Unequal
-            condition = Condition_Unequal(operand1=operand1, operand2=operand2)
+            condition = Condition_Unequal(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '<=':
             # Create the Condition_Below_Or_Equal
             condition = Condition_Below_Or_Equal(
-                operand1=operand1, operand2=operand2)
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '<':
             # Create the Condition_Below
-            condition = Condition_Below(operand1=operand1, operand2=operand2)
+            condition = Condition_Below(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '>=':
             # Create the Condition_Upper_Or_Equal
             condition = Condition_Upper_Or_Equal(
-                operand1=operand1, operand2=operand2)
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '>':
             # Create the Condition_Upper
-            condition = Condition_Upper(operand1=operand1, operand2=operand2)
+            condition = Condition_Upper(
+                left_operand=left_operand, right_operand=right_operand)
         # Save the Condition and return it
         condition.save()
         return condition
@@ -4234,6 +4239,9 @@ class ClientThread(threading.Thread):
     def launch_openbach_function_instance(self, scenario_instance, ofi_id,
                                           table, queues):
         """ Function that launch an openbach function instance """
+        # Set the status of the Scenario Instance to 'Running'
+        scenario_instance.status = 'Running'
+        scenario_instance.save()
         # Get the entry of this Openbach Function Instance
         entry = table[ofi_id]
         # Get the queue of this Openbach Function Instance
@@ -4285,8 +4293,13 @@ class ClientThread(threading.Thread):
             function = getattr(self, name)
         except AttributeError:
             # If an error occurs, stop the Scenario Instance and exit
-            self.stop_scenario_instance_of(
-                scenario_instance.id, state='Finished KO') # state=Error ?
+            self.stop_scenario_instance(
+                scenario_instance.id)
+            # Update the status
+            scenario_instance.status = 'Finished KO' # state=Error ?
+            scenario_instance.is_stopped = True
+            scenario_instance.stop_date = timezone.now()
+            scenario_instance.save()
             return
         # Get the arguments
         arguments = {}
@@ -4304,7 +4317,8 @@ class ClientThread(threading.Thread):
             arguments['scenario_instance_id'] = scenario_instance.id
             arguments['ofi'] = ofi
             arguments['finished_queues'] = finished_queues
-        elif ofi.openbach_function.name == 'stop_job_instance':
+        elif (ofi.openbach_function.name == 'stop_job_instance' or
+              ofi.openbach_function.name == 'stop_scenario_instance'):
             arguments['scenario_instance'] = scenario_instance
         elif (ofi.openbach_function.name == 'if' or ofi.openbach_function.name
               == 'while'):
@@ -4328,8 +4342,13 @@ class ClientThread(threading.Thread):
             threads = function(**arguments)
         except BadRequest as e:
             # If an error occurs, stop the Scenario Instance and exit
-            self.stop_scenario_instance_of(
-                scenario_instance.id, state='Finished KO')
+            self.stop_scenario_instance(
+                scenario_instance.id)
+            # Update the status
+            scenario_instance.status = 'Finished KO' # state=Error ?
+            scenario_instance.is_stopped = True
+            scenario_instance.stop_date = timezone.now()
+            scenario_instance.save()
             ofi.status = 'Error'
             ofi.save()
             return
@@ -4364,13 +4383,20 @@ class ClientThread(threading.Thread):
         # to date
         if scenario_instance.is_stopped:
             return
-        finished = True
         # Check if all Job Instance launched by the Scenario Instance are
         # finished
+        finished = True
         for job_instance in scenario_instance.job_instance_set.all():
             if not job_instance.is_stopped:
                 finished = False
                 break
+        # Check if all Scenario Instance launched by the current Scenario
+        # Instance are finished (Only if there is no Job Instance running)
+        if finished:
+            for job_instance in scenario_instance.job_instance_set.all():
+                if not job_instance.is_stopped:
+                    finished = False
+                    break
         # Update the status of the Scenario Instance accordingly
         if finished:
             scenario_instance.status = 'Finished OK'
@@ -4379,7 +4405,6 @@ class ClientThread(threading.Thread):
             scenario_instance.save()
         else:
             scenario_instance.status = 'Running'
-            scenario_instance.stop_date = timezone.now()
             scenario_instance.save()
 
     def start_scenario_instance_of(self, scenario_name, ofi, arguments={},
@@ -4469,9 +4494,8 @@ class ClientThread(threading.Thread):
         # Return the id of the Scenario Instance
         return {'scenario_instance_id': scenario_instance.id}, 200
 
-    def stop_scenario_instance_of(self, openbach_function_id, state='Stopped',
-                                  date=None, scenario_name=None,
-                                  project_name=None):
+    def stop_scenario_instance_of(self, openbach_function_id, scenario_instance,
+                                  date=None):
         """ Openbach Function that stops the scenario instance """
         # For each Openbach Function Instance, get the associated Job Instance
         try:
@@ -4484,12 +4508,13 @@ class ClientThread(threading.Thread):
             scenario_instance_id = scenario_instance.id
         # Stop the Scenario Instance
         self.stop_scenario_instance(
-            scenario_instance_id, date, scenario_name, project_name)
+            scenario_instance_id, date)
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         # Update the status
         scenario_instance.status = state
+        scenario_instance.is_stopped = True
         scenario_instance.stop_date = timezone.now()
         scenario_instance.save()
 
@@ -4568,9 +4593,9 @@ class ClientThread(threading.Thread):
                     # Instance
                     scenario_instance.status = 'Running' # Running, out of controll
                     out_of_controll = True
-        # Update the status of the Scenatio Instance
-        scenario_instance.stop_date = timezone.now()
+        # Update the status of the Scenario Instance
         if not out_of_controll:
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.is_stopped = True
         scenario_instance.save()
         return None, 204
@@ -4729,7 +4754,8 @@ class ClientThread(threading.Thread):
         for scenario in scenarios:
             scenario_instances = [
                 self.infos_scenario_instance(scenario_instance)
-                for scenario_instance in scenario.scenario_instance_set.all()]
+                for scenario_instance in scenario.scenario_instance_set.all() if
+                scenario_instance.openbach_function_instance_master is None]
             result += scenario_instances
         # Sort the list of Scenario Instances by start_date
         result = sorted(result, key=lambda scenario_instance: scenario_instance['start_date']
@@ -5202,12 +5228,26 @@ def handle_message_from_status_manager(clientsocket):
             queue.put(ofi_id)
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(pk=si_id)
+        # Check if all Job Instance launched by the Scenario Instance are
+        # finished
+        finished = True
+        for job_instance in scenario_instance.job_instance_set.all():
+            if not job_instance.is_stopped:
+                finished = False
+                break
+        # Check if all Scenario Instance launched by the current Scenario
+        # Instance are finished (Only if there is no Job Instance running)
+        if finished:
+            for job_instance in scenario_instance.job_instance_set.all():
+                if not job_instance.is_stopped:
+                    finished = False
+                    break
         # Update the status of the Scenario Instance if it is finished
-        if scenario_instance.job_instance_set.all().count() == 0:
+        if finished:
             with ThreadManager() as threads:
                 if 0 in threads[scenario_instance.id]:
                     thread = threads[scenario_instance.id][0]
-                    if not thread.isActive():
+                    if not thread.is_alive():
                         scenario_instance.status = 'Finished OK'
                         scenario_instance.stop_date = timezone.now()
                         scenario_instance.is_stopped = True

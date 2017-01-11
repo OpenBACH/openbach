@@ -803,103 +803,104 @@ class Condition_Not(Condition):
 
 class Condition_Or(Condition):
     """ Class that represents a Condition Or """
-    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='or_condition1')
-    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='or_condition2')
+    left_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                       related_name='or_left_condition')
+    right_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                        related_name='or_right_condition')
 
     def get_value(self):
-        return self.condition1.get_value() or self.condition2.get_value()
+        return self.left_condition.get_value() or self.right_condition.get_value()
 
 
 class Condition_And(Condition):
     """ Class that represents a Condition And """
-    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='and_condition1')
-    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='and_condition2')
+    left_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                       related_name='and_left_condition')
+    right_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                        related_name='and_right_condition')
 
     def get_value(self):
-        return self.condition1.get_value() and self.condition2.get_value()
+        return self.left_condition.get_value() and self.right_condition.get_value()
 
 
 class Condition_Xor(Condition):
     """ Class that represents a Condition Xor """
-    condition1 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='xor_condition1')
-    condition2 = models.ForeignKey(Condition, on_delete=models.CASCADE,
-                                  related_name='xor_condition2')
+    left_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                       related_name='xor_left_condition')
+    right_condition = models.ForeignKey(Condition, on_delete=models.CASCADE,
+                                        related_name='xor_right_condition')
 
     def get_value(self):
-        return ((self.condition1.get_value() or self.condition2.get_value()) and
-                not (self.condition1.get_value() and
-                     self.condition2.get_value()))
+        return ((self.left_condition.get_value() or
+                 self.right_condition.get_value()) and not
+                (self.left_condition.get_value() and
+                 self.right_condition.get_value()))
 
 
 class Condition_Equal(Condition):
     """ Class that represents a Condition Equal """
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='equal_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='equal_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='equal_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='equal_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() == self.operand2.get_value()
+        return self.left_operand.get_value() == self.right_operand.get_value()
 
 
 class Condition_Unequal(Condition):
     """ Class that represents a Condition Unequal """
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='unequal_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='unequal_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='unequal_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='unequal_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() != self.operand2.get_value()
+        return self.left_operand.get_value() != self.right_operand.get_value()
 
 
 class Condition_Below_Or_Equal(Condition):
     """ Class that represents a Condition Below or Equal """
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='boe_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='boe_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='boe_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='boe_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() <= self.operand2.get_value()
+        return self.left_operand.get_value() <= self.right_operand.get_value()
 
 
 class Condition_Below(Condition):
     """ Class that represents a Condition Below """
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='below_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='below_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='below_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='below_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() < self.operand2.get_value()
+        return self.left_operand.get_value() < self.right_operand.get_value()
 
 
 class Condition_Upper_Or_Equal(Condition):
     """ Class that represents a Condition Upper or Equal"""
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='uoe_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='uoe_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='uoe_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='uoe_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() >= self.operand2.get_value()
+        return self.left_operand.get_value() >= self.right_operand.get_value()
 
 
 class Condition_Upper(Condition):
     """ Class that represents a Condition Upper """
-    operand1 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='upper_operand1')
-    operand2 = models.ForeignKey(Operand, on_delete=models.CASCADE,
-                                  related_name='upper_operand2')
+    left_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                     related_name='upper_left_operand')
+    right_operand = models.ForeignKey(Operand, on_delete=models.CASCADE,
+                                      related_name='upper_right_operand')
 
     def get_value(self):
-        return self.operand1.get_value() > self.operand2.get_value()
+        return self.left_operand.get_value() > self.right_operand.get_value()
 
 
 class Openbach_Function_Instance(models.Model):

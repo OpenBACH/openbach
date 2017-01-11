@@ -119,7 +119,7 @@ class GenericView(base.View):
         return result['response'], returncode
 
 
-    def _install_jobs(self, addresses, names, severity=4, local_severity=4):
+    def _install_jobs(self, addresses, names, severity=0, local_severity=0):
         """Helper function used to create an agent or a job"""
 
         data = {'addresses': addresses, 'names': names, 'severity': severity,

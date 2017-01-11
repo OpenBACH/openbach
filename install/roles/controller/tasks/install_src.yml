@@ -248,11 +248,8 @@
   shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/openbach-backend.py shell
   ignore_errors: yes
 
-- name: Create IHM repository (temporary here, soon on the Auditorium)
+- name: Create static file repository
   file: path=/opt/openbach-controller/backend/static state=directory
-
-- name: Install of the IHM (temporary here, soon on the Auditorium)
-  copy: src=../src/auditorium/ihm/ dest=/opt/openbach-controller/backend/static/
 
 - name: Deployement of static files
   shell: yes yes | /opt/openbach-controller/backend/openbach-backend.py collectstatic -l

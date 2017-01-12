@@ -1,0 +1,78 @@
+---
+
+general:
+  name:            mptcp
+  description: >
+      This Job executes the mptcp command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval).
+      It sends syslog in case of error.
+  job_version:     0.1
+  keywords:        [mptcp, tcp, multipath, routing, hybrid]
+  persistent:      true
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       'python3 /opt/openbach-jobs/mptcp/mptcp.py'
+    command_stop:
+
+  windows:
+    requirements:  'Windows 2010'
+    command:       '...'
+    command_stop:
+
+arguments:
+  required:
+    - name:        iface_link1
+      type:        'str'
+      count:       1
+      description: >
+          The interface name of link1
+    - name:        iface_link2
+      type:        'str'
+      count:       1
+      description: >
+          The interface of link2
+    - name:        network_link1
+      type:        'str'
+      count:       1
+      description: >
+          The network IP address of link1
+    - name:        network_link2
+      type:        'str'
+      count:       1
+      description: >
+          The nework IP address of link2
+           
+    - name:        gw_link1
+      type:        'str'
+      count:       1
+      description: >
+          The gateway IP address of link1
+     
+    - name:        gw_link2
+      type:        'str'
+      count:       1
+      description: >
+          The gateway IP address of link2
+     
+    - name:        ip_link1
+      type:        'str'
+      count:       1
+      description: >
+          The IP address of link1
+     
+    - name:        ip_link2
+      type:        'str'
+      count:       1
+      description: >
+          The IP address of link2
+
+  optional:
+    - name:        conf_up
+      type:        'int'
+      count:       1
+      flag:        '-c'
+      description: >
+          Enable (1) or disable(0) mptcp and routing. Default=1
+
+statistics:

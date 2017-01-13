@@ -26,18 +26,12 @@
 #
 #
 #
-#   @file     start_daemon.yml
-#   @brief    Tasks that starts the daemon
+#   @file     uninstall_ihm.yml 
+#   @brief    Tasks that uninstall the IHM
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Restart Rsyslog
-  service: name=rsyslog state=restarted
-
-- name: Start Rstats
-  service: name=rstats state=restarted
-
-- name: Start the service
-  service: name=openbach-agent state=restarted
+- name: Uninstall Nginx
+  apt: pkg=nginx state=absent purge=yes

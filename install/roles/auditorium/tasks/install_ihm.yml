@@ -26,18 +26,21 @@
 #
 #
 #
-#   @file     start_daemon.yml
-#   @brief    Tasks that starts the daemon
+#   @file     install_ihm.yml 
+#   @brief    Tasks that install the IHM
 #   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
 
 
 ---
 
-- name: Restart Rsyslog
-  service: name=rsyslog state=restarted
+- name: Install Nginx
+  apt: pkg=nginx state=installed update_cache=false
 
-- name: Start Rstats
-  service: name=rstats state=restarted
+- name: Install the IHM
+  copy: src=../src/auditorium/ihm/ dest=/usr/share/nginx/html/
 
-- name: Start the service
-  service: name=openbach-agent state=restarted
+- name: Configure Nginx
+  template: src=default.j2 dest=/etc/nginx/sites-available/default
+
+- name: Start Nginx
+  service: name=nginx state=restarted

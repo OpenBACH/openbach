@@ -10,6 +10,7 @@
   },
   "openbach_functions": [
     {
+      "id": 1,
       "start_job_instance": {
         "agent_ip": "$agentA",
         "ping": {
@@ -19,14 +20,10 @@
           ]
         },
         "offset": 5
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 2,
       "start_job_instance": {
         "agent_ip": "$agentB",
         "ping": {
@@ -39,8 +36,9 @@
       },
       "wait": {
         "time": 10,
-        "launched_indexes": [],
-        "finished_indexes": [0]
+        "finished_ids": [
+          0
+        ]
       }
     }
   ]

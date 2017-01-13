@@ -44,7 +44,7 @@ import tempfile
 from django.views.generic import base
 from django.http import JsonResponse, HttpResponse
 import traceback
-from .utils import send_fifo, recv_all
+from .utils import send_fifo
 
 class GenericView(base.View):
     """Base class for our own class-based views"""
@@ -112,15 +112,14 @@ class GenericView(base.View):
 
         conductor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conductor.connect(('localhost', 1113))
-        fifoname = send_fifo(command, conductor)
-        recv = recv_all(fifoname)
+        recv = send_fifo(command, conductor)
         result = json.loads(recv)
         returncode = result.pop('returncode')
         conductor.close()
         return result['response'], returncode
 
 
-    def _install_jobs(self, addresses, names, severity=4, local_severity=4):
+    def _install_jobs(self, addresses, names, severity=0, local_severity=0):
         """Helper function used to create an agent or a job"""
 
         data = {'addresses': addresses, 'names': names, 'severity': severity,
@@ -559,7 +558,7 @@ class JobView(BaseJobView):
                 'job_name': name, 'severity': severity}
 
         local_severity = self.request.JSON.get('local_severity', None)
-        if local_severity:
+        if local_severity is not None:
             data['local_severity'] = local_severity
         date = self.request.JSON.get('date', None)
         if date:

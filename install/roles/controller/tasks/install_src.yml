@@ -167,6 +167,16 @@
     - { name: 'restart_job_instance_agent.yml', mode: '0644' }
     - { name: 'status_job_instance_agent.yml', mode: '0644' }
 
+- name: Configure Rsyslog
+  template: src={{ item.name }} dest=/etc/rsyslog.d/{{ item.dest }} mode=0644
+  with_items:
+    - { name: 'openbach-conductor.j2', dest: 'openbach-conductor.conf' }
+    - { name: 'openbach-conductor_local.j2', dest: 'openbach-conductor_local.conf' }
+    - { name: 'openbach-backend.j2', dest: 'openbach-backend.conf' }
+    - { name: 'openbach-backend_local.j2', dest: 'openbach-backend_local.conf' }
+    - { name: 'status-manager.j2', dest: 'status-manager.conf' }
+    - { name: 'status-manager_local.j2', dest: 'status-manager_local.conf' }
+
 - name: Packs Collect-Agent client sources
   local_action: command tar -cvzf ../src/agent/collect-agent/client_api.tar.gz -C ../src/agent/collect-agent client_api/
   become: no
@@ -238,11 +248,8 @@
   shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach-controller/backend/openbach-backend.py shell
   ignore_errors: yes
 
-- name: Create IHM repository (temporary here, soon on the Auditorium)
+- name: Create static file repository
   file: path=/opt/openbach-controller/backend/static state=directory
-
-- name: Install of the IHM (temporary here, soon on the Auditorium)
-  copy: src=../src/auditorium/ihm/ dest=/opt/openbach-controller/backend/static/
 
 - name: Deployement of static files
   shell: yes yes | /opt/openbach-controller/backend/openbach-backend.py collectstatic -l
@@ -275,6 +282,9 @@
   shell: systemctl daemon-reload
   when: ansible_distribution_version == "16.04"
 
+- name: Restart Rsyslog
+  service: name=rsyslog state=restarted
+
 - name: Start status-manager
   service: name=status-manager state=restarted
 
@@ -283,4 +293,3 @@
 
 - name: Start openbach-backend
   service: name=openbach-backend state=restarted
-

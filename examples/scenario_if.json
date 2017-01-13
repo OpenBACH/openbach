@@ -9,19 +9,16 @@
   },
   "openbach_functions": [
     {
+      "id": 1,
       "status_agents": {
         "addresses": [
           "$agentA"
         ],
         "update": true
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 2,
       "if": {
         "condition": {
           "type": "=",
@@ -36,95 +33,81 @@
             "value": "Available"
           }
         },
-        "openbach_function_true_indexes": [
+        "openbach_function_true_ids": [
           3,
           4
         ],
-        "openbach_function_false_indexes": [
+        "openbach_function_false_ids": [
           5
         ]
       },
       "wait": {
-        "time": 0,
-        "launched_indexes": [
+        "launched_ids": [
           1
-        ],
-        "finished_indexes": []
+        ]
       }
     },
     {
+      "id": 3,
       "start_job_instance": {
         "agent_ip": "$agentA",
-        "ping": {
+        "fping": {
           "destination_ip": "$agentB",
           "duration": 60
         },
         "offset": 5
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 4,
       "start_job_instance": {
         "agent_ip": "$agentB",
-        "ping": {
+        "fping": {
           "destination_ip": "$agentA",
           "duration": 60
         },
         "offset": 5
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 5,
       "start_job_instance": {
         "agent_ip": "$agentB",
-        "ping": {
+        "fping": {
           "destination_ip": "$agentC",
           "duration": 60
         },
         "offset": 5
-      },
-      "wait": {
-        "time": 0,
-        "launched_indexes": [],
-        "finished_indexes": []
       }
     },
     {
+      "id": 6,
       "stop_job_instance": {
-        "openbach_function_indexes": [
+        "openbach_function_ids": [
           3,
           4
         ]
       },
       "wait": {
         "time": 10,
-        "launched_indexes": [
+        "launched_ids": [
           3,
           4
-        ],
-        "finished_indexes": []
+        ]
       }
     },
     {
+      "id": 7,
       "stop_job_instance": {
-        "openbach_function_indexes": [
+        "openbach_function_ids": [
           5
         ]
       },
       "wait": {
         "time": 10,
-        "launched_indexes": [
+        "launched_ids": [
           5
-        ],
-        "finished_indexes": []
+        ]
       }
     }
   ]

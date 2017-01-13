@@ -66,7 +66,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import *
 from openbach_django.utils import BadRequest, convert_severity
-from openbach_django.utils import send_all, recv_fifo
 
 
 syslog.openlog('openbach-conductor', syslog.LOG_PID, syslog.LOG_USER)
@@ -78,7 +77,7 @@ def signal_term_handler(signal, frame):
     for scenario_instance in Scenario_Instance.objects.all():
         if not scenario_instance.is_stopped:
             scenario_instance.status = 'Stopped'
-            scenario_instance.status_date = timezone.now()
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.is_stopped = True
             scenario_instance.save()
     exit(0)
@@ -744,7 +743,7 @@ class ClientThread(threading.Thread):
         for agent_ip in addresses:
             # Set the command results to 'running'
             try:
-                command_result = Agent_Command_Result.objects.get(pk=address)
+                command_result = Agent_Command_Result.objects.get(pk=agent_ip)
             except DataError:
                 raise BadRequest(
                     'You must give an ip address for all the Agents')
@@ -1238,8 +1237,8 @@ class ClientThread(threading.Thread):
         # return it help
         return {'job_name': name, 'help': job.help}, 200
 
-    def install_jobs_action(self, addresses, names, severity=4,
-                            local_severity=4):
+    def install_jobs_action(self, addresses, names, severity=0,
+                            local_severity=0):
         """ Action that installs one or more Jobs on one or more Agents """
         # Check if all the addresses given are well formed
         for address in addresses:
@@ -1257,7 +1256,7 @@ class ClientThread(threading.Thread):
         thread.start()
         return {}, 202
 
-    def install_jobs(self, addresses, names, severity=4, local_severity=4):
+    def install_jobs(self, addresses, names, severity=0, local_severity=0):
         """ Function that installs one or more Jobs on one or more Agents """
         # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)
@@ -1366,6 +1365,14 @@ class ClientThread(threading.Thread):
                     command_result.status_install.response = json.dumps(None)
                     command_result.status_install.returncode = 204
                     command_result.status_install.save()
+                    # Activate the send of log to ElasticSearch and local
+                    # register
+                    try:
+                        self.set_job_log_severity(agent.address, job.name,
+                                                  severity,
+                                                  local_severity=local_severity)
+                    except BadRequest:
+                        pass
         # If at least one install failed, raise an error
         if not success:
             raise BadRequest(
@@ -1731,7 +1738,13 @@ class ClientThread(threading.Thread):
             # Add the flag and the value(s)
             concat(argument.argument.flag, ' '.join(value_format(arg.value) for arg in argument.job_argument_value_set.all()))
             # For each optional argument
-            for argument in job_instance.optional_job_argument_instance_set.all())
+            for argument in
+            job_instance.optional_job_argument_instance_set.all() if
+            argument.argument.type != 'None')
+        for argument in job_instance.optional_job_argument_instance_set.all():
+            if argument.argument.type == 'None':
+                if argument.job_argument_value_set.all()[0].value == 'True':
+                    optional_args += ' ' + argument.argument.flag
         return concat(required_args, optional_args)
 
     @staticmethod
@@ -1976,12 +1989,12 @@ class ClientThread(threading.Thread):
         command_result.status_start.returncode = 204
         command_result.status_start.save()
 
-    def stop_job_instance_of(self, openbach_function_indexes, scenario_instance,
+    def stop_job_instance_of(self, openbach_function_ids, scenario_instance,
                              date=None):
         """ Openbach Function that stops a Job Instance """
         # For each Openbach Function Instance, get the associated Job Instance
         job_instance_ids = []
-        for openbach_function_id in openbach_function_indexes:
+        for openbach_function_id in openbach_function_ids:
             try:
                 ofi = scenario_instance.openbach_function_instance_set.get(
                     openbach_function_instance_id=openbach_function_id)
@@ -2089,10 +2102,6 @@ class ClientThread(threading.Thread):
                 command_result.status_stop.save()
                 continue
             else:
-                # Update the status of the Job Instance
-                if stop_date <= timezone.now():
-                    job_instance.is_stopped = True
-                    job_instance.save()
                 # Update the command result
                 command_result.status_stop.response = json.dumps(None)
                 command_result.status_stop.returncode = 204
@@ -2478,7 +2487,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': installed_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'This Installed_Job isn\'t in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
@@ -2504,7 +2513,7 @@ class ClientThread(threading.Thread):
             logs_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': 'rsyslog_job on {}'.format(address)}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'The Installed_Job rsyslog isn\'t in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
@@ -2560,7 +2569,7 @@ class ClientThread(threading.Thread):
         # Get the severities
         logs_job_path = job_instance.job.job.path
         syslogseverity = convert_severity(int(severity))
-        if not local_severity:
+        if local_severity is None:
             local_severity = installed_job.local_severity
         syslogseverity_local = convert_severity(int(local_severity))
         disable = 0
@@ -2714,7 +2723,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': installed_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'This Installed_Job isn\'t in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
@@ -2781,7 +2790,7 @@ class ClientThread(threading.Thread):
             rstats_job = Installed_Job.objects.get(job=job, agent=agent)
         except ObjectDoesNotExist:
             # Update the command result and exit
-            response = {'job_name': rstat_job}
+            response = {'job_name': job.name, 'agent_ip': agent.address}
             response['error'] = 'The Installed_Job rstats_job isn\'t in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
@@ -3053,10 +3062,10 @@ class ClientThread(threading.Thread):
                     thread.do_run = True
                     thread.start()
                     # Add the new thread to the ThreadManager
-                    with ThreadManager() as threads:
-                        if scenario_instance.id not in threads:
-                            threads[scenario_instance.id] = {}
-                        threads[scenario_instance.id][ofi_id] = thread
+                    with ThreadManager() as threads_dict:
+                        if scenario_instance.id not in threads_dict:
+                            threads_dict[scenario_instance.id] = {}
+                        threads_dict[scenario_instance.id][ofi_id] = thread
                     # Add the new thread to the list of generate threads
                     threads.append(thread)
             # Relaunch the 'while' Openbach Function when it is programmable
@@ -3068,10 +3077,10 @@ class ClientThread(threading.Thread):
                 thread.do_run = True
                 thread.start()
                 # Add the new thread to the ThreadManager
-                with ThreadManager() as threads:
-                    if scenario_instance.id not in threads:
-                        threads[scenario_instance.id] = {}
-                    threads[scenario_instance.id][ofi_id] = thread
+                with ThreadManager() as threads_dict:
+                    if scenario_instance.id not in threads_dict:
+                        threads_dict[scenario_instance.id] = {}
+                    threads_dict[scenario_instance.id][ofi_id] = thread
                 # Add the new thread to the list of generate threads
                 threads.append(thread)
         else:
@@ -3091,10 +3100,10 @@ class ClientThread(threading.Thread):
                     thread.do_run = True
                     thread.start()
                     # Add the new thread to the ThreadManager
-                    with ThreadManager() as threads:
-                        if scenario_instance.id not in threads:
-                            threads[scenario_instance.id] = {}
-                        threads[scenario_instance.id][ofi_id] = thread
+                    with ThreadManager() as threads_dict:
+                        if scenario_instance.id not in threads_dict:
+                            threads_dict[scenario_instance.id] = {}
+                        threads_dict[scenario_instance.id][ofi_id] = thread
                     # Add the new thread to the list of generate threads
                     threads.append(thread)
         # Return the list of generate threads
@@ -3104,64 +3113,89 @@ class ClientThread(threading.Thread):
     def first_check_on_scenario(scenario_json):
         """ Function that checks if a scenario in json is valid """
         if 'name' not in scenario_json:
-            return False
+            raise BadRequest('Your Scenario is malformed: It should have a name')
         if not isinstance(scenario_json['name'], str):
-            return False
+            raise BadRequest('Your Scenario is malformed: The name should be a'
+                             ' string')
         if 'description' in scenario_json:
             if not isinstance(scenario_json['description'], str):
-                return False
+                raise BadRequest('Your Scenario is malformed: The description'
+                                 ' should be a string')
         if 'arguments' in scenario_json:
             if not isinstance(scenario_json['arguments'], dict):
-                return False
+                raise BadRequest('Your Scenario is malformed: The arguments'
+                                 ' should be a dictionary')
             for argument, description in scenario_json['arguments'].items():
                 if not isinstance(argument, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each argument'
+                                     ' key should be a string')
                 if not isinstance(description, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each argument'
+                                     ' value should be a string')
         if 'constants' in scenario_json:
             if not isinstance(scenario_json['constants'], dict):
-                return False
+                raise BadRequest('Your Scenario is malformed: The constants'
+                                 ' should be a dictionary')
             for constant, _ in scenario_json['constants'].items():
                 if not isinstance(constant, str):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each constant'
+                                     ' key should be a string')
         if 'openbach_functions' in scenario_json:
             if not isinstance(scenario_json['openbach_functions'], list):
-                return False
-            known = {'wait'}
+                raise BadRequest('Your Scenario is malformed: The '
+                                 ' openbach_functions should be a list')
+            known = {'wait', 'id', 'label'}
             for openbach_function in scenario_json['openbach_functions']:
                 if not isinstance(openbach_function, dict):
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Each '
+                                     'openbach_functions should be a dictionary')
+                if 'id' not in openbach_function:
+                    raise BadRequest('Your Scenario is malformed: Each '
+                                     'openbach_functions should have an id')
                 if 'wait' in openbach_function:
                     if not isinstance(openbach_function['wait'], dict):
-                        return False
+                        raise BadRequest('Your Scenario is malformed: The wait '
+                                         ' should be a dictionay')
                     at_least_one = False
                     try:
                         if not isinstance(openbach_function['wait']['time'],
                                           int):
-                            return False
+                            try:
+                                openbach_function['wait']['time'] = int(
+                                    openbach_function['wait']['time'])
+                            except ValueError:
+                                raise BadRequest('Your Scenario is malformed: '
+                                                 'The time in your wait should '
+                                                 'be an integer')
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
-                        if not isinstance(openbach_function['wait']['finished_indexes'],
+                        if not isinstance(openbach_function['wait']['finished_ids'],
                                           list):
-                            return False
+                            raise BadRequest('Your Scenario is malformed: '
+                                             'The finished_ids in your wait '
+                                             'be a list of integer')
                         at_least_one = True
                     except KeyError:
                         pass
                     try:
-                        if not isinstance(openbach_function['wait']['launched_indexes'],
+                        if not isinstance(openbach_function['wait']['launched_ids'],
                                           list):
-                            return False
+                            raise BadRequest('Your Scenario is malformed: '
+                                             'The launched_ids in your wait '
+                                             'be a list of integer')
                     except KeyError:
                         if not at_least_one:
-                            return False
+                            raise BadRequest('Your Scenario is malformed: Your '
+                                             'wait is empty')
                 other = [k for k in openbach_function if k not in known]
                 if len(other) != 1:
-                    return False
+                    raise BadRequest('Your Scenario is malformed: Unknown keys '
+                                     'in your openbach_function dictionary')
                 if not isinstance(openbach_function[other[0]], dict):
-                    return False
-        return True
+                    raise BadRequest('Your Scenario is malformed: You Openbach '
+                                     'Function should be a dictionary')
 
     @staticmethod
     def check_reference(arg_value):
@@ -3249,14 +3283,21 @@ class ClientThread(threading.Thread):
             description = None
         # Copy the json of the Scenario
         scenario_string = json.dumps(scenario_json)
-        # Create the Scenario
-        scenario = Scenario(name=name, description=description,
-                            scenario=scenario_string, project=project)
-        try:
-            scenario.save(force_insert=True)
-        except IntegrityError:
-            raise BadRequest('This name of Scenario \'{}\' is already'
-                             ' used'.format(name), 409)
+        # Create the Scenario (or modify)
+        if scenario is None:
+            scenario = Scenario(name=name, description=description,
+                                scenario=scenario_string, project=project)
+            try:
+                scenario.save(force_insert=True)
+            except IntegrityError:
+                raise BadRequest('This name of Scenario \'{}\' is already'
+                                 ' used'.format(name), 409)
+        else:
+            scenario.description = description
+            scenario.scenario = scenario_string
+            scenario.save()
+            for argument in scenario.scenario_argument_set.all():
+                argument.delete()
         # Register the Scenario Arguments
         try:
             result = ClientThread.register_scenario_arguments(
@@ -3276,15 +3317,15 @@ class ClientThread(threading.Thread):
             raise BadRequest('This Condition is malformed (no type)')
         # Check it has all the attributs needed and that the attributs are well
         # formed too
-        if condition_type in ['=', '<=', '<', '>=', '>']:
+        if condition_type in ['==', '=', '<=', '<', '>=', '>', '!=']:
             try:
-                operand1 = condition.pop('operand1')
-                operand2 = condition.pop('operand2')
+                left_operand = condition.pop('left_operand')
+                right_operand = condition.pop('right_operand')
             except KeyError:
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
-            ClientThread.check_operand(operand1)
-            ClientThread.check_operand(operand2)
+            ClientThread.check_operand(left_operand)
+            ClientThread.check_operand(right_operand)
         elif condition_type == 'not':
             try:
                 new_condition = condition.pop('condition')
@@ -3292,18 +3333,18 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(new_condition)
-        elif condition_type in ['or',' and', 'xor']:
+        elif condition_type in ['or', 'and', 'xor']:
             try:
-                condition1 = condition.pop('condition1')
-                condition2 = condition.pop('condition2')
+                left_condition = condition.pop('left_condition')
+                right_condition = condition.pop('right_condition')
             except KeyError:
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
-            ClientThread.check_condition(condition1)
-            ClientThread.check_condition(condition2)
+            ClientThread.check_condition(left_condition)
+            ClientThread.check_condition(right_condition)
         else:
             raise BadRequest('The type of the Condition is unknown',
-                             404, {'name': 'if', 'type': condition_type})
+                             404, {'type': condition_type})
 
     @staticmethod
     def check_operand(operand):
@@ -3363,8 +3404,10 @@ class ClientThread(threading.Thread):
         # For each Openbach Function, check if the Scenario Arguments or
         # Scenario Constants are referenced and check if the type matches
         for openbach_function in scenario_json['openbach_functions']:
-            # Pop the waits
+            # Get the waits, id and label
             openbach_function.pop('wait', None)
+            _id = openbach_function.pop('id')
+            label = openbach_function.pop('label', None)
             # Get the Openbach Function name and args
             (name, args), = openbach_function.items()
             # Get the Openbach Function
@@ -3379,11 +3422,11 @@ class ClientThread(threading.Thread):
                 # Check the type of 'agent_ip' and 'offset'
                 try:
                     agent_ip = args.pop('agent_ip')
-                    offset = args.pop('offset')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
                                      ' are malformed', 400, 
                                      {'name': 'start_job_instance'})
+                offset = args.pop('offset', 0)
                 of_argument = of.openbach_function_argument_set.get(
                     name='agent_ip')
                 ClientThread.check_type(of_argument, agent_ip,
@@ -3433,10 +3476,10 @@ class ClientThread(threading.Thread):
             elif name == 'if':
                 # Get the expected arguments
                 try:
-                    openbach_function_true_indexes = args.pop(
-                        'openbach_function_true_indexes')
-                    openbach_function_false_indexes = args.pop(
-                        'openbach_function_false_indexes')
+                    openbach_function_true_ids = args.pop(
+                        'openbach_functions_true')
+                    openbach_function_false_ids = args.pop(
+                        'openbach_functions_false')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3449,21 +3492,21 @@ class ClientThread(threading.Thread):
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_true')
                 ClientThread.check_type(
-                    of_argument, openbach_function_true_indexes,
+                    of_argument, openbach_function_true_ids,
                     scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_false')
                 ClientThread.check_type(
-                    of_argument, openbach_function_false_indexes,
+                    of_argument, openbach_function_false_ids,
                     scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             elif name == 'while':
                 # Get the expected arguments
                 try:
-                    openbach_function_while_indexes = args.pop(
-                        'openbach_function_while_indexes')
-                    openbach_function_end_indexes = args.pop(
-                        'openbach_function_end_indexes')
+                    openbach_function_while_ids = args.pop(
+                        'openbach_functions_while')
+                    openbach_function_end_ids = args.pop(
+                        'openbach_functions_end')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3476,12 +3519,12 @@ class ClientThread(threading.Thread):
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_while')
                 ClientThread.check_type(
-                    of_argument, openbach_function_while_indexes,
+                    of_argument, openbach_function_while_ids,
                     scenario_arguments, scenario_constants)
                 of_argument = of.openbach_function_argument_set.get(
                     name='openbach_functions_end')
                 ClientThread.check_type(
-                    of_argument, openbach_function_end_indexes,
+                    of_argument, openbach_function_end_ids,
                     scenario_arguments, scenario_constants)
                 ClientThread.check_condition(condition)
             else:
@@ -3629,8 +3672,7 @@ class ClientThread(threading.Thread):
     def create_scenario(self, scenario_json, project_name=None):
         """ Function that creates a scenario """
         # Check that the json of the Scenario is well formed
-        if not self.first_check_on_scenario(scenario_json):
-            raise BadRequest('Your Scenario is malformed: the json is malformed')
+        self.first_check_on_scenario(scenario_json)
         # Get the name of the Scenario
         name = scenario_json['name']
         # Get the Project
@@ -3688,8 +3730,7 @@ class ClientThread(threading.Thread):
     def modify_scenario(self, scenario_json, scenario_name, project_name=None):
         """ Function that modifies a scenario """
         # Check is the json of the Scenario is well formed
-        if not self.first_check_on_scenario(scenario_json):
-            raise BadRequest('Your Scenario is malformed')
+        self.first_check_on_scenario(scenario_json)
         # Get the name of the Scenario from the json
         name = scenario_json['name']
         # Verify it is the same as the one given
@@ -3714,13 +3755,11 @@ class ClientThread(threading.Thread):
                                                 project=project)
             except ObjectDoesNotExist:
                 raise BadRequest('This Scenario does not exist', 404)
-            # Delete it
-            scenario.delete()
-            # Recreate it
-            self.register_scenario(scenario_json, name, project)
+            # Modify it
+            self.register_scenario(scenario_json, name, project, scenario)
             scenario = Scenario.objects.get(name=scenario_name, project=project)
             self.check_scenario(scenario)
-        return None, 204
+        return self.get_scenario(name, project_name)
 
     def get_scenario_action(self, scenario_name, project_name=None):
         """ Action that returns a scenario """
@@ -3855,21 +3894,21 @@ class ClientThread(threading.Thread):
         # Get the type of the Condition
         condition_type = condition_json.pop('type')
         if condition_type in ['or', 'and', 'xor']:
-            # Get the condition1 and condition2 and register them
-            condition1_json = condition_json.pop('condition1')
-            condition1 = ClientThread.register_condition(
-                condition1_json, scenario_instance)
-            condition2_json = condition_json.pop('condition2')
-            condition2 = ClientThread.register_condition(
-                condition2_json, scenario_instance)
-        elif condition_type in ['=', '!=', '>=', '>', '<=', '<']:
-            # Get the operand1 and operand2 and register them
-            operand1_json = condition_json.pop('operand1')
-            operand1 = ClientThread.register_operand(
-                operand1_json, scenario_instance)
-            operand2_json = condition_json.pop('operand2')
-            operand2 = ClientThread.register_operand(
-                operand2_json, scenario_instance)
+            # Get the left and ritgh conditions and register them
+            left_condition_json = condition_json.pop('left_condition')
+            left_condition = ClientThread.register_condition(
+                left_condition_json, scenario_instance)
+            right_condition_json = condition_json.pop('right_condition')
+            right_condition = ClientThread.register_condition(
+                right_condition_json, scenario_instance)
+        elif condition_type in ['=', '==', '!=', '>=', '>', '<=', '<']:
+            # Get the left and right operands and register them
+            left_operand_json = condition_json.pop('left_operand')
+            left_operand = ClientThread.register_operand(
+                left_operand_json, scenario_instance)
+            right_operand_json = condition_json.pop('right_operand')
+            right_operand = ClientThread.register_operand(
+                right_operand_json, scenario_instance)
         if condition_type == 'not':
             # Get the new condition and register it
             new_condition_json = condition_json.pop('condition')
@@ -3880,35 +3919,39 @@ class ClientThread(threading.Thread):
         elif condition_type == 'or':
             # Create the Condition_Or
             condition = Condition_Or(
-                condition1=condition1, condition2=condition2)
+                left_condition=left_condition, right_condition=right_condition)
         elif condition_type == 'and':
             # Create the Condition_And
             condition = Condition_And(
-                condition1=condition1, condition2=condition2)
+                left_condition=left_condition, right_condition=right_condition)
         elif condition_type == 'xor':
             # Create the Condition_Xor
             condition = Condition_Xor(
-                condition1=condition1, condition2=condition2)
-        elif condition_type == '=':
+                left_condition=left_condition, right_condition=right_condition)
+        elif condition_type == '=' or condition_type == '==':
             # Create the Condition_Equal
-            condition = Condition_Equal(operand1=operand1, operand2=operand2)
+            condition = Condition_Equal(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '!=':
             # Create the Condition_Unequal
-            condition = Condition_Unequal(operand1=operand1, operand2=operand2)
+            condition = Condition_Unequal(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '<=':
             # Create the Condition_Below_Or_Equal
             condition = Condition_Below_Or_Equal(
-                operand1=operand1, operand2=operand2)
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '<':
             # Create the Condition_Below
-            condition = Condition_Below(operand1=operand1, operand2=operand2)
+            condition = Condition_Below(
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '>=':
             # Create the Condition_Upper_Or_Equal
             condition = Condition_Upper_Or_Equal(
-                operand1=operand1, operand2=operand2)
+                left_operand=left_operand, right_operand=right_operand)
         elif condition_type == '>':
             # Create the Condition_Upper
-            condition = Condition_Upper(operand1=operand1, operand2=operand2)
+            condition = Condition_Upper(
+                left_operand=left_operand, right_operand=right_operand)
         # Save the Condition and return it
         condition.save()
         return condition
@@ -3918,11 +3961,12 @@ class ClientThread(threading.Thread):
         """ Function that registers the openbach function instances """
         # Get the json of the Scenario
         scenario_json = json.loads(scenario_instance.scenario.scenario)
-        # Initialize the id of the Openbach Function that we currently handle
-        openbach_function_id = 1
         # For each Openbach Function in the Scenario, create the Openbach
         # Function Instance associated
         for openbach_function in scenario_json['openbach_functions']:
+            # Get the id and label
+            _id = openbach_function.pop('id')
+            label = openbach_function.pop('label', None)
             # Get the wait infos
             wait = openbach_function.pop('wait', None)
             # Get the name of the Openbach Function and its arguments
@@ -3932,7 +3976,7 @@ class ClientThread(threading.Thread):
             # Create the Openbach Function Instance
             ofi = Openbach_Function_Instance(
                 openbach_function=of, scenario_instance=scenario_instance,
-                openbach_function_instance_id=openbach_function_id)
+                openbach_function_instance_id=_id, label=label)
             ofi.save()
             # Create the Openbach Function Argument Instance (depending on the
             # name of the Openbach Function, we expect some specific arguments)
@@ -3940,7 +3984,7 @@ class ClientThread(threading.Thread):
                 agent_ip = args.pop('agent_ip')
                 ClientThread.register_openbach_function_argument_instance(
                     'agent_ip', agent_ip, ofi, scenario_instance)
-                offset = args.pop('offset')
+                offset = args.pop('offset', 0)
                 ClientThread.register_openbach_function_argument_instance(
                     'offset', offset, ofi, scenario_instance)
                 (job_name, job_args), = args.items()
@@ -3972,31 +4016,31 @@ class ClientThread(threading.Thread):
                     raise BadRequest(e.args[0], 400)
                 ofai.save()
             elif name == 'if':
-                openbach_function_true_indexes = args.pop(
-                    'openbach_function_true_indexes')
+                openbach_function_true_ids = args.pop(
+                    'openbach_functions_true')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_true',
-                    openbach_function_true_indexes, ofi, scenario_instance)
-                openbach_function_false_indexes = args.pop(
-                    'openbach_function_false_indexes')
+                    openbach_function_true_ids, ofi, scenario_instance)
+                openbach_function_false_ids = args.pop(
+                    'openbach_functions_false')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_false',
-                    openbach_function_false_indexes, ofi, scenario_instance)
+                    openbach_function_false_ids, ofi, scenario_instance)
                 condition_json = args.pop('condition')
                 condition = ClientThread.register_condition(
                     condition_json, scenario_instance)
                 ofi.condition = condition
             elif name == 'while':
-                openbach_function_while_indexes = args.pop(
-                    'openbach_function_while_indexes')
+                openbach_function_while_ids = args.pop(
+                    'openbach_functions_while')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_while',
-                    openbach_function_while_indexes, ofi, scenario_instance)
-                openbach_function_end_indexes = args.pop(
-                    'openbach_function_end_indexes')
+                    openbach_function_while_ids, ofi, scenario_instance)
+                openbach_function_end_ids = args.pop(
+                    'openbach_functions_end')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_end',
-                    openbach_function_end_indexes, ofi, scenario_instance)
+                    openbach_function_end_ids, ofi, scenario_instance)
                 condition_json = args.pop('condition')
                 condition = ClientThread.register_condition(condition_json,
                                                             scenario_instance)
@@ -4007,19 +4051,26 @@ class ClientThread(threading.Thread):
                         arg_name, arg_value, ofi, scenario_instance)
             # Create the Waits
             if wait is not None:
-                ofi.time = wait['time']
+                try:
+                    ofi.time = wait['time']
+                except KeyError:
+                    pass
                 ofi.save()
-                for index in wait['launched_indexes']:
-                    wfl = Wait_For_Launched(
-                        openbach_function_instance=ofi,
-                        openbach_function_instance_id_waited=index)
-                    wfl.save()
-                for index in wait['finished_indexes']:
-                    wff = Wait_For_Finished(openbach_function_instance=ofi,
-                                            job_instance_id_waited=index)
-                    wff.save()
-            # Go to the next Openbach Function
-            openbach_function_id += 1
+                try:
+                    for _id in wait['launched_ids']:
+                        wfl = Wait_For_Launched(
+                            openbach_function_instance=ofi,
+                            openbach_function_instance_id_waited=_id)
+                        wfl.save()
+                except KeyError:
+                    pass
+                try:
+                    for _id in wait['finished_ids']:
+                        wff = Wait_For_Finished(openbach_function_instance=ofi,
+                                                job_instance_id_waited=_id)
+                        wff.save()
+                except KeyError:
+                    pass
 
     @staticmethod
     def register_scenario_instance(scenario, args):
@@ -4028,7 +4079,6 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance(scenario=scenario)
         # Update is status
         scenario_instance.status = 'Scheduling'
-        scenario_instance.status_date = timezone.now()
         scenario_instance.save()
         # Register the Scenario Instance's args
         for arg_name, arg_value in args.items():
@@ -4195,6 +4245,9 @@ class ClientThread(threading.Thread):
     def launch_openbach_function_instance(self, scenario_instance, ofi_id,
                                           table, queues):
         """ Function that launch an openbach function instance """
+        # Set the status of the Scenario Instance to 'Running'
+        scenario_instance.status = 'Running'
+        scenario_instance.save()
         # Get the entry of this Openbach Function Instance
         entry = table[ofi_id]
         # Get the queue of this Openbach Function Instance
@@ -4215,7 +4268,6 @@ class ClientThread(threading.Thread):
             openbach_function_instance_id=ofi_id)
         # Update it status
         ofi.status = 'Scheduled'
-        ofi.status_date = timezone.now()
         ofi.save()
         # Get the current thread
         t = threading.currentThread()
@@ -4229,7 +4281,6 @@ class ClientThread(threading.Thread):
                 # Function Instance and exit
                 if not t.do_run:
                     ofi.status = 'Stopped'
-                    ofi.status_date = timezone.now()
                     ofi.save()
                     return
             else:
@@ -4239,7 +4290,7 @@ class ClientThread(threading.Thread):
         time.sleep(ofi.time)
         # Update the Openbach Function Instance status
         ofi.status = 'Running'
-        ofi.status_date = timezone.now()
+        ofi.launch_date = timezone.now()
         ofi.save()
         # Get the function to execute
         try:
@@ -4248,8 +4299,13 @@ class ClientThread(threading.Thread):
             function = getattr(self, name)
         except AttributeError:
             # If an error occurs, stop the Scenario Instance and exit
-            self.stop_scenario_instance_of(
-                scenario_instance.id, state='Finished KO') # state=Error ?
+            self.stop_scenario_instance(
+                scenario_instance.id)
+            # Update the status
+            scenario_instance.status = 'Finished KO' # state=Error ?
+            scenario_instance.is_stopped = True
+            scenario_instance.stop_date = timezone.now()
+            scenario_instance.save()
             return
         # Get the arguments
         arguments = {}
@@ -4267,7 +4323,8 @@ class ClientThread(threading.Thread):
             arguments['scenario_instance_id'] = scenario_instance.id
             arguments['ofi'] = ofi
             arguments['finished_queues'] = finished_queues
-        elif ofi.openbach_function.name == 'stop_job_instance':
+        elif (ofi.openbach_function.name == 'stop_job_instance' or
+              ofi.openbach_function.name == 'stop_scenario_instance'):
             arguments['scenario_instance'] = scenario_instance
         elif (ofi.openbach_function.name == 'if' or ofi.openbach_function.name
               == 'while'):
@@ -4291,23 +4348,24 @@ class ClientThread(threading.Thread):
             threads = function(**arguments)
         except BadRequest as e:
             # If an error occurs, stop the Scenario Instance and exit
-            self.stop_scenario_instance_of(
-                scenario_instance.id, state='Finished KO')
-            syslog.syslog(syslog.LOG_ERR, e.reason)
+            self.stop_scenario_instance(
+                scenario_instance.id)
+            # Update the status
+            scenario_instance.status = 'Finished KO' # state=Error ?
+            scenario_instance.is_stopped = True
+            scenario_instance.stop_date = timezone.now()
+            scenario_instance.save()
             ofi.status = 'Error'
-            ofi.status_date = timezone.now()
             ofi.save()
             return
         # If the thread has been stopped, update the status of the Openbach
         # Function Instance and exit
         if not t.do_run:
             ofi.status = 'Stopped'
-            ofi.status_date = timezone.now()
             ofi.save()
             return
         # Update the status of the Openbach Function Instance
         ofi.status = 'Finished'
-        ofi.status_date = timezone.now()
         ofi.save()
         # Inform the waiting Openbach Function Instance that the current
         # Openbach Function Instance is launched
@@ -4331,25 +4389,31 @@ class ClientThread(threading.Thread):
         # to date
         if scenario_instance.is_stopped:
             return
-        finished = True
         # Check if all Job Instance launched by the Scenario Instance are
         # finished
+        finished = True
         for job_instance in scenario_instance.job_instance_set.all():
             if not job_instance.is_stopped:
                 finished = False
                 break
+        # Check if all Scenario Instance launched by the current Scenario
+        # Instance are finished (Only if there is no Job Instance running)
+        if finished:
+            for job_instance in scenario_instance.job_instance_set.all():
+                if not job_instance.is_stopped:
+                    finished = False
+                    break
         # Update the status of the Scenario Instance accordingly
         if finished:
             scenario_instance.status = 'Finished OK'
             scenario_instance.is_stopped = True
-            scenario_instance.status_date = timezone.now()
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.save()
         else:
             scenario_instance.status = 'Running'
-            scenario_instance.status_date = timezone.now()
             scenario_instance.save()
 
-    def start_scenario_instance_of(self, scenario_name, arguments, ofi,
+    def start_scenario_instance_of(self, scenario_name, ofi, arguments={},
                                    date=None):
         """ Openbach Function that starts a scenario instance """
         # Get the Project name
@@ -4396,6 +4460,9 @@ class ClientThread(threading.Thread):
                                     'project_name': project_name})
         # Create the Scenario Instance
         scenario_instance = self.register_scenario_instance(scenario, arguments)
+        # Set the start date
+        scenario_instance.start_date = timezone.now()
+        scenario_instance.save()
         # Build it table of Openbach Function
         table = self.build_table(scenario_instance)
         # Initialize the queues list
@@ -4433,19 +4500,28 @@ class ClientThread(threading.Thread):
         # Return the id of the Scenario Instance
         return {'scenario_instance_id': scenario_instance.id}, 200
 
-    def stop_scenario_instance_of(self, scenario_instance_id, state='Stopped',
-                                  date=None, scenario_name=None,
-                                  project_name=None):
+    def stop_scenario_instance_of(self, openbach_function_id, scenario_instance,
+                                  date=None):
         """ Openbach Function that stops the scenario instance """
+        # For each Openbach Function Instance, get the associated Job Instance
+        try:
+            ofi = scenario_instance.openbach_function_instance_set.get(
+                openbach_function_instance_id=openbach_function_id)
+        except ObjectDoesNotExist:
+            #TODO see how to handle this error
+            pass
+        for scenario_instance in ofi.openbach_function_instance_master.all():
+            scenario_instance_id = scenario_instance.id
         # Stop the Scenario Instance
         self.stop_scenario_instance(
-            scenario_instance_id, date, scenario_name, project_name)
+            scenario_instance_id, date)
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         # Update the status
         scenario_instance.status = state
-        scenario_instance.status_date = timezone.now()
+        scenario_instance.is_stopped = True
+        scenario_instance.stop_date = timezone.now()
         scenario_instance.save()
 
     def stop_scenario_instance_action(self, scenario_instance_id, date=None,
@@ -4511,22 +4587,19 @@ class ClientThread(threading.Thread):
                         continue
                     thread.do_run = False
         # For each Openbach Function Instance, stop the associated Job Instance
-        # and Watch
         out_of_controll = False
         for ofi in scenario_instance.openbach_function_instance_set.all():
             for job_instance in ofi.job_instance_set.all():
                 try:
                     self.stop_job_instance_action([job_instance.id])
-                    self.watch_job_instance_action(job_instance.id, stop='now')
                 except BadRequest as e:
                     # If an error occurs, update the status of the Scenatio
                     # Instance
                     scenario_instance.status = 'Running' # Running, out of controll
                     out_of_controll = True
-                    syslog.syslog(syslog.LOG_ERR, e.reason)
-        # Update the status of the Scenatio Instance
-        scenario_instance.status_date = timezone.now()
+        # Update the status of the Scenario Instance
         if not out_of_controll:
+            scenario_instance.stop_date = timezone.now()
             scenario_instance.is_stopped = True
         scenario_instance.save()
         return None, 204
@@ -4535,14 +4608,16 @@ class ClientThread(threading.Thread):
         """ Function that returns the infos of an openbach function instance """
         # Build the infos
         infos = {
+            'id': openbach_function_instance.openbach_function_instance_id,
+            'label': openbach_function_instance.label,
             'name': openbach_function_instance.openbach_function.name,
             'status': openbach_function_instance.status,
-            'status_date': openbach_function_instance.status_date,
+            'launch_date': openbach_function_instance.launch_date,
             'arguments': [],
             'wait': {
                 'time': openbach_function_instance.time,
-                'launched_indexes': [],
-                'finished_indexes': []
+                'launched_ids': [],
+                'finished_ids': []
             }
         }
         # Build the infos of the arguments
@@ -4559,10 +4634,10 @@ class ClientThread(threading.Thread):
                 job_name = ofai.value
         # Build the infos of the wait
         for wfl in openbach_function_instance.wait_for_launched_set.all():
-            infos['wait']['launched_indexes'].append(
+            infos['wait']['launched_ids'].append(
                 wfl.openbach_function_instance_id_waited)
         for wff in openbach_function_instance.wait_for_finished_set.all():
-            infos['wait']['finished_indexes'].append(
+            infos['wait']['finished_ids'].append(
                 wff.job_instance_id_waited)
         # Build the Scenario Instance infos
         if infos['name'] == 'start_scenario_instance':
@@ -4571,7 +4646,7 @@ class ClientThread(threading.Thread):
                 scenario_instance = openbach_function_instance.openbach_function_instance_master.all()[0]
             except IndexError:
                 raise BadRequest('Integrity of the Openbach_Function_Instance '
-                                 'lost')
+                                 'lost', severity=7)
             # Get the infos
             info = self.infos_scenario_instance(scenario_instance)
             infos['scenario'] = info
@@ -4583,10 +4658,10 @@ class ClientThread(threading.Thread):
                     job_instance = openbach_function_instance.job_instance_set.all()[0]
                 except IndexError:
                     raise BadRequest('Integrity of the Openbach_Function_Instance'
-                                     ' lost')
+                                     ' lost', severity=7)
                 # Get the infos
                 info, _ = self.status_job_instance_action(job_instance.id)
-            elif infos['status'] in ('Error'):
+            elif infos['status'] in ('Error', ):
                 # The Job Instance might not exist but it is not an error here
                 try:
                     job_instance = openbach_function_instance.job_instance_set.all()[0]
@@ -4633,7 +4708,8 @@ class ClientThread(threading.Thread):
             'owner_scenario_instance_id': owner_scenario_instance_id,
             'sub_scenario_instance_ids': list(sub_scenario_instance_ids),
             'status': scenario_instance.status,
-            'status_date': scenario_instance.status_date,
+            'start_date': scenario_instance.start_date,
+            'stop_date': scenario_instance.stop_date,
             'arguments': [],
             'openbach_functions': []
         }
@@ -4647,8 +4723,13 @@ class ClientThread(threading.Thread):
             try:
                 info = self.infos_openbach_function_instance(ofi)
             except BadRequest as e:
-                info = {'name': ofi.openbach_function.name, 'error': e.reason}
+                info = {'name': ofi.openbach_function.name, 'error': e.reason,
+                        'launch_date': ofi.launch_date}
             infos['openbach_functions'].append(info)
+        # Sort the list of Openbach Functions by launch_date
+        infos['openbach_functions'] = sorted(
+            infos['openbach_functions'], key=lambda ofi: ofi['launch_date']
+            if ofi['launch_date'] is not None else timezone.now())
         return infos
 
     def list_scenario_instances_action(self, scenario_name=None,
@@ -4677,8 +4758,13 @@ class ClientThread(threading.Thread):
         for scenario in scenarios:
             scenario_instances = [
                 self.infos_scenario_instance(scenario_instance)
-                for scenario_instance in scenario.scenario_instance_set.all()]
+                for scenario_instance in scenario.scenario_instance_set.all() if
+                scenario_instance.openbach_function_instance_master is None]
             result += scenario_instances
+        # Sort the list of Scenario Instances by start_date
+        result = sorted(result, key=lambda scenario_instance: scenario_instance['start_date']
+               if scenario_instance['start_date'] is not None else
+                        timezone.now(), reverse=True)
         return result, 200
 
     def get_scenario_instance_action(self, scenario_instance_id,
@@ -4753,7 +4839,7 @@ class ClientThread(threading.Thread):
                     watch.job_instance.id, stop='now')
             except BadRequest as e:
                 #TODO better handling of the errors
-                syslog.syslog(syslog.LOG_ERR, e.reason)
+                pass
         return None, 204
 
     @staticmethod
@@ -4765,18 +4851,24 @@ class ClientThread(threading.Thread):
             for k in required_parameters:
                 project_json[k]
         except KeyError:
-            return False
+            raise BadRequest('Your Project is malformed: The Project does not '
+                             'have all the required keys. Required keys are: '
+                             + ' '.join(required_parameters))
         if not isinstance(project_json['name'], str):
-            return False
+            raise BadRequest('Your Project is malformed: The name should be a '
+                             'string')
         if not isinstance(project_json['description'], str):
-            return False
+            raise BadRequest('Your Project is malformed: The description '
+                             'should be a string')
         if not isinstance(project_json['entity'], list):
-            return False
+            raise BadRequest('Your Project is malformed: The entity '
+                             'should be a list')
         if not isinstance(project_json['network'], list):
-            return False
+            raise BadRequest('Your Project is malformed: The network '
+                             'should be a list')
         if not isinstance(project_json['scenario'], list):
-            return False
-        return True
+            raise BadRequest('Your Project is malformed: The scenario '
+                             'should be a list')
 
     @staticmethod
     def first_check_on_entity(entity_json):
@@ -4786,39 +4878,51 @@ class ClientThread(threading.Thread):
             for k in required_parameters:
                 entity_json[k]
         except KeyError:
-            return False
+            raise BadRequest('Your Entity is malformed: It has not all required'
+                             ' keys. Required keys are: ' + ' '.join(
+                                 required_parameters))
         if not isinstance(entity_json['name'], str):
-            return False
+            raise BadRequest('Your Entity is malformed: The name should be a '
+                             'string')
         if not isinstance(entity_json['description'], str):
-            return False
+            raise BadRequest('Your Entity is malformed: The description should '
+                             'be a string')
         if entity_json['agent'] != None:
             if not isinstance(entity_json['agent'], dict):
-                return False
-            required_parameters = ('address', 'name', 'username', 'collector')
+                raise BadRequest('Your Entity is malformed: The agent should '
+                                 'be a dictionary')
+            required_parameters = ('address', 'name', 'username',
+                                   'collector_ip')
             try:
                 for k in required_parameters:
                     entity_json['agent'][k]
             except KeyError:
-                return False
+                raise BadRequest('Your Entity is malformed: The agent has not '
+                                 'all required keys. Required keys are: '
+                                 + ' '.join(required_parameters))
             if not isinstance(entity_json['agent']['address'], str):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'address should  be a string')
             if not isinstance(entity_json['agent']['name'], str):
-                return False
+                raise BadRequest('Your Entity is malformed: The agent\'s name '
+                                 'should be a string')
             if not isinstance(entity_json['agent']['username'], str):
-                return False
-            if not isinstance(entity_json['agent']['collector'], str):
-                return False
-        return ClientThread.first_check_on_network(entity_json['networks'])
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'username should be a string')
+            if not isinstance(entity_json['agent']['collector_ip'], str):
+                raise BadRequest('Your Entity is malformed: The agent\'s '
+                                 'collector_ip should be a string')
+        ClientThread.first_check_on_network(entity_json['networks'])
 
     @staticmethod
     def first_check_on_network(network_json):
         """ Function that check if a network in json is well formed """
         if not isinstance(network_json, list):
-            return False
+            raise BadRequest('Your Network is malformed: It should be a list')
         for network in network_json:
             if not isinstance(network, str):
-                return False
-        return True
+                raise BadRequest('Your Network is malformed: Each element '
+                                 'should be a string')
 
     @staticmethod
     def register_entity(entity_json, project_name):
@@ -4887,10 +4991,11 @@ class ClientThread(threading.Thread):
         # Get the Networks json
         networks_json = project_json['network']
         # Check that the json is well formed
-        if not self.first_check_on_network(networks_json):
+        try:
+            self.first_check_on_network(networks_json)
+        except BadRequest:
             project.delete()
-            raise BadRequest('Your Project is malformed: the json is'
-                             ' malformed')
+            raise
         # Create the Networks
         for network_json in networks_json:
             try:
@@ -4902,10 +5007,11 @@ class ClientThread(threading.Thread):
         entities_json = project_json['entity']
         for entity_json in entities_json:
             # Check that the json is well formed
-            if not self.first_check_on_entity(entity_json):
+            try:
+                self.first_check_on_entity(entity_json)
+            except BadRequest:
                 project.delete()
-                raise BadRequest(
-                    'Your Project is malformed: the json is malformed')
+                raise
             # Create the entity
             try:
                 self.register_entity(entity_json, name)
@@ -4930,8 +5036,7 @@ class ClientThread(threading.Thread):
     def add_project(self, project_json):
         """ Function that adds a project """
         # Check that the json is well formed
-        if not self.first_check_on_project(project_json):
-            raise BadRequest('Your Project is malformed: the json is malformed')
+        self.first_check_on_project(project_json)
         # Register the new Project
         project_name = self.register_project(project_json)
         return self.get_project(project_name)
@@ -4943,8 +5048,7 @@ class ClientThread(threading.Thread):
     def modify_project(self, project_name, project_json):
         """ Function thats modifies a project """
         # Check that the json is well formed
-        if not self.first_check_on_project(project_json):
-            raise BadRequest('Your Project is malformed: the json is malformed')
+        self.first_check_on_project(project_json)
         # Check that names are the same
         if project_name != project_json['name']:
             raise BadRequest('Your Project is malformed: the name given does '
@@ -4960,7 +5064,7 @@ class ClientThread(threading.Thread):
             project.delete()
             # Register the new Project
             self.register_project(project_json)
-        return None, 204
+        return self.get_project(project_name)
 
     def del_project_action(self, project_name):
         """ Action that deletes a project """
@@ -5069,7 +5173,10 @@ class ClientThread(threading.Thread):
     def run(self):
         """ Main function """
         # Receive the message from the Backend
-        request, fifoname = recv_fifo(self.clientsocket)
+        fifo_infos = self.clientsocket.recv(4096).decode()
+        fifoname = json.loads(fifo_infos)['fifoname']
+        with open(fifoname, 'r') as fifo:
+            request = json.loads(fifo.read())
         try:
             # Execute the request
             response, returncode = self.execute_request(request)
@@ -5088,8 +5195,10 @@ class ClientThread(threading.Thread):
             result = {'response': response, 'returncode': returncode}
         finally:
             # Send the response
+            self.clientsocket.send('Done'.encode())
             msg = json.dumps(result, cls=DjangoJSONEncoder)
-            send_all(fifoname, msg)
+            with open(fifoname, 'w') as fifo:
+                fifo.write(msg)
             self.clientsocket.close()
 
 
@@ -5124,15 +5233,31 @@ def handle_message_from_status_manager(clientsocket):
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(pk=si_id)
         # Update the status of the Scenario Instance if it is finished
-        if scenario_instance.job_instance_set.all().count() == 0:
-            with ThreadManager() as threads:
-                if 0 in threads[scenario_instance.id]:
-                    thread = threads[scenario_instance.id][0]
-                    if not thread.isActive():
-                        scenario_instance.status = 'Finished OK'
-                        scenario_instance.status_date = timezone.now()
-                        scenario_instance.is_stopped = True
-                        scenario_instance.save()
+        if not scenario_instance.is_stopped:
+            # Check if all Job Instance launched by the Scenario Instance are
+            # finished
+            finished = True
+            for job_instance in scenario_instance.job_instance_set.all():
+                if not job_instance.is_stopped:
+                    finished = False
+                    break
+            # Check if all Scenario Instance launched by the current Scenario
+            # Instance are finished (Only if there is no Job Instance running)
+            if finished:
+                for job_instance in scenario_instance.job_instance_set.all():
+                    if not job_instance.is_stopped:
+                        finished = False
+                        break
+            # Update the status of the Scenario Instance if it is finished
+            if finished:
+                with ThreadManager() as threads:
+                    if 0 in threads[scenario_instance.id]:
+                        thread = threads[scenario_instance.id][0]
+                        if not thread.is_alive():
+                            scenario_instance.status = 'Finished OK'
+                            scenario_instance.stop_date = timezone.now()
+                            scenario_instance.is_stopped = True
+                            scenario_instance.save()
     elif type_ == 'Error':
         # TODO Stop the scenario
         pass
@@ -5159,7 +5284,7 @@ def handle_message_from_status_manager(clientsocket):
                         agent=agent))
         except BadRequest as e:
             # TODO see how to handle this
-            syslog.syslog(syslog.LOG_ERR, e.reason)
+            pass
         # Remove the Watch
         watch.delete()
 

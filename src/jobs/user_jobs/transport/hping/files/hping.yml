@@ -27,24 +27,6 @@ arguments:
       count:       1
       description: >
           The destination IP of the hping3
-    - name:        count
-      type:        'int'
-      count:       1
-      flag:        '-c'
-      description: >
-          Stop after sending count packets.
-    - name:        destport
-      type:        'int'
-      count:       1
-      flag:        '-p'
-      description: >
-          destination port for TCP SYN 
-    - name:        tcpmode 
-      type:        'None'
-      count:       0
-      flag:        "-S"
-      description: >
-          In order to send a SYN TCP
   optional:
     - name:        interval
       type:        'int'
@@ -52,6 +34,18 @@ arguments:
       flag:        '-i'
       description: >
           Wait interval seconds between sending each packet.
+    - name:        count
+      type:        'int'
+      count:       1
+      flag:        '-c'
+      description: >
+          Stop after sending count packets. (default=3)
+    - name:        destport
+      type:        'int'
+      count:       1
+      flag:        '-p'
+      description: >
+          destination port for TCP SYN  (default=443)
 
 statistics:
     - name:        rtt

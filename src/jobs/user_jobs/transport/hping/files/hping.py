@@ -52,18 +52,16 @@ def get_simple_cmd_output(cmd, stderr=STDOUT):
     return Popen(args, stdout=PIPE, stderr=stderr).communicate()[0]
 
 
-def main(destination_ip, count, interval, destport, tcpmode):
+def main(destination_ip, count, interval, destport):
     conffile = "/opt/openbach-jobs/hping/hping_rstats_filter.conf"
 
-    cmd = 'hping3 {}'.format(destination_ip)
+    cmd = 'hping3 {} -S'.format(destination_ip)
     if destport:
         cmd = '{} -p {}'.format(cmd, destport)
     if count:
         cmd = '{} -c {}'.format(cmd, count)
     if interval:
         cmd = '{} -i {}'.format(cmd, interval)
-    if tcpmode:
-        cmd = '{} -S'.format(cmd)
 
     success = collect_agent.register_collect(conffile)
     if not success:
@@ -98,8 +96,6 @@ if __name__ == "__main__":
                         help='', default=3)
     parser.add_argument('-i', '--interval', type=int,
                         help='')
-    parser.add_argument('-S', '--tcpmode', action='store_true',
-                        help='to send TCP SYN packet')
 
     # get args
     args = parser.parse_args()
@@ -107,6 +103,5 @@ if __name__ == "__main__":
     destination_ip = args.destination_ip
     count = args.count
     interval = args.interval
-    tcpmode = args.tcpmode
 
-    main(destination_ip, count, interval, destport, tcpmode)
+    main(destination_ip, count, interval, destport)

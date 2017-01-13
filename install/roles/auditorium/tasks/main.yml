@@ -58,12 +58,18 @@
 - include: uninstall_frontend_scripts.yml
   tags:
     - install
+- include: install_ihm.yml
+  tags:
+    - install
 - include: install_finished.yml
   tags:
     - install
 
 # Uninstall
 - include: uninstall_running.yml
+  tags:
+    - uninstall
+- include: uninstall_ihm.yml
   tags:
     - uninstall
 - include: del_services_to_boot.yml

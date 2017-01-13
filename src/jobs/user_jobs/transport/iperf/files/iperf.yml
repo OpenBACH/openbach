@@ -22,10 +22,15 @@ arguments:
   required:
     - name:        mode
       type:        'str'
-      count:       '1-2'
+      count:       '1'
       description: >
           To start the iperf in server mode, use '-s'
           To start the iperf in client mode, use '-c *server_ip*'
+    - name:        server_ip
+      type:        'str'
+      count:       '1'
+      description: >
+          Only for the client mode
   optional:
     - name:        interval
       type:        'int'
@@ -51,6 +56,13 @@ arguments:
       flag:        '-u'
       description: >
           Use UDP rather than TCP
+    - name:        bandwidth
+      type:        'float'
+      count:       1
+      flag:        '-b'
+      description: >
+          Set target bandwidth to n bits/sec (default 1 Mbit/sec). This setting
+          requires UDP (-u) and client mode.
 
 statistics:
 

@@ -62,16 +62,9 @@ arguments:
       flag:        '-t'
       description: >
           Set the IP Time to Live.
-    - name:        duration
-      type:        'int'
-      count:       1
-      flag:        '-w'
-      description: >
-          Duration of the fping
 
 statistics:
     - name:        rtt
       description: >
           The Round trip time of ICMP packets.
-      frequency:   'every *count x interval* sent packets or every *duration* time'
-
+      frequency:   'every *count x interval* sent packets'

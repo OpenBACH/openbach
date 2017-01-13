@@ -110,8 +110,7 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
         ansible_sudo_pass: {{a.{0}_password}}""").format(agent)
     with tempfile.NamedTemporaryFile('w') as extra_vars:
         print(template.format(a=args), file=extra_vars)
-        if agent == 'auditorium':
-            print('collector_ip:', args.collector_ip, file=extra_vars)
+        print('collector_ip:', args.collector_ip, file=extra_vars)
         # Flush the file so ansible can read it
         print(file=extra_vars, flush=True)
 

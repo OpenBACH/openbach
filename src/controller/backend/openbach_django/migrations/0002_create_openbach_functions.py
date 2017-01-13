@@ -76,9 +76,9 @@ def create_openbach_functions(apps, schema_editor):
     Openbach_Function_Argument(name='update', description='', type='bool',
                                openbach_function=list_agents).save()
 
-    # status_agents
-    status_agents = Openbach_Function(name='status_agents')
-    status_agents.save()
+    # retrieve_status_agents
+    retrieve_status_agents = Openbach_Function(name='retrieve_status_agents')
+    retrieve_status_agents.save()
     Openbach_Function_Argument(name='addresses', description='', type='list',
                                openbach_function=status_agents).save()
     Openbach_Function_Argument(name='update', description='', type='bool',
@@ -149,9 +149,9 @@ def create_openbach_functions(apps, schema_editor):
     Openbach_Function_Argument(name='verbosity', description='', type='int',
                                openbach_function=list_installed_jobs).save()
 
-    # status_jobs
-    status_jobs = Openbach_Function(name='status_jobs')
-    status_jobs.save()
+    # retrieve_status_jobs
+    retrieve_status_jobs = Openbach_Function(name='retrieve_status_jobs')
+    retrieve_status_jobs.save()
     Openbach_Function_Argument(name='addresses', description='', type='list',
                                openbach_function=status_jobs).save()
 

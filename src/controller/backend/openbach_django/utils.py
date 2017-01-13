@@ -42,7 +42,8 @@ import syslog
 
 class BadRequest(Exception):
     """Custom exception raised when parsing of a request failed"""
-    def __init__(self, reason, returncode=400, infos=None):
+    def __init__(self, reason, returncode=400, infos=None,
+                 severity=syslog.LOG_ERR):
         super().__init__(reason)
         self.reason = reason
         self.returncode = returncode
@@ -50,7 +51,7 @@ class BadRequest(Exception):
             self.infos = infos
         else:
             self.infos = {}
-        syslog.syslog(syslog.LOG_ERR, self.reason)
+        syslog.syslog(severity, self.reason)
 
 
 def send_fifo(msg, socket):

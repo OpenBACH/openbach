@@ -743,7 +743,7 @@ class ClientThread(threading.Thread):
         for agent_ip in addresses:
             # Set the command results to 'running'
             try:
-                command_result = Agent_Command_Result.objects.get(pk=address)
+                command_result = Agent_Command_Result.objects.get(pk=agent_ip)
             except DataError:
                 raise BadRequest(
                     'You must give an ip address for all the Agents')
@@ -1738,7 +1738,13 @@ class ClientThread(threading.Thread):
             # Add the flag and the value(s)
             concat(argument.argument.flag, ' '.join(value_format(arg.value) for arg in argument.job_argument_value_set.all()))
             # For each optional argument
-            for argument in job_instance.optional_job_argument_instance_set.all())
+            for argument in
+            job_instance.optional_job_argument_instance_set.all() if
+            argument.argument.type != 'None')
+        for argument in job_instance.optional_job_argument_instance_set.all():
+            if argument.argument.type == 'None':
+                if argument.job_argument_value_set.all()[0].value == 'True':
+                    optional_args += ' ' + argument.argument.flag
         return concat(required_args, optional_args)
 
     @staticmethod
@@ -3056,10 +3062,10 @@ class ClientThread(threading.Thread):
                     thread.do_run = True
                     thread.start()
                     # Add the new thread to the ThreadManager
-                    with ThreadManager() as threads:
-                        if scenario_instance.id not in threads:
-                            threads[scenario_instance.id] = {}
-                        threads[scenario_instance.id][ofi_id] = thread
+                    with ThreadManager() as threads_dict:
+                        if scenario_instance.id not in threads_dict:
+                            threads_dict[scenario_instance.id] = {}
+                        threads_dict[scenario_instance.id][ofi_id] = thread
                     # Add the new thread to the list of generate threads
                     threads.append(thread)
             # Relaunch the 'while' Openbach Function when it is programmable
@@ -3071,10 +3077,10 @@ class ClientThread(threading.Thread):
                 thread.do_run = True
                 thread.start()
                 # Add the new thread to the ThreadManager
-                with ThreadManager() as threads:
-                    if scenario_instance.id not in threads:
-                        threads[scenario_instance.id] = {}
-                    threads[scenario_instance.id][ofi_id] = thread
+                with ThreadManager() as threads_dict:
+                    if scenario_instance.id not in threads_dict:
+                        threads_dict[scenario_instance.id] = {}
+                    threads_dict[scenario_instance.id][ofi_id] = thread
                 # Add the new thread to the list of generate threads
                 threads.append(thread)
         else:
@@ -3094,10 +3100,10 @@ class ClientThread(threading.Thread):
                     thread.do_run = True
                     thread.start()
                     # Add the new thread to the ThreadManager
-                    with ThreadManager() as threads:
-                        if scenario_instance.id not in threads:
-                            threads[scenario_instance.id] = {}
-                        threads[scenario_instance.id][ofi_id] = thread
+                    with ThreadManager() as threads_dict:
+                        if scenario_instance.id not in threads_dict:
+                            threads_dict[scenario_instance.id] = {}
+                        threads_dict[scenario_instance.id][ofi_id] = thread
                     # Add the new thread to the list of generate threads
                     threads.append(thread)
         # Return the list of generate threads
@@ -3327,7 +3333,7 @@ class ClientThread(threading.Thread):
                 raise BadRequest('This Condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(new_condition)
-        elif condition_type in ['or',' and', 'xor']:
+        elif condition_type in ['or', 'and', 'xor']:
             try:
                 left_condition = condition.pop('left_condition')
                 right_condition = condition.pop('right_condition')
@@ -3338,7 +3344,7 @@ class ClientThread(threading.Thread):
             ClientThread.check_condition(right_condition)
         else:
             raise BadRequest('The type of the Condition is unknown',
-                             404, {'name': 'if', 'type': condition_type})
+                             404, {'type': condition_type})
 
     @staticmethod
     def check_operand(operand):
@@ -3471,9 +3477,9 @@ class ClientThread(threading.Thread):
                 # Get the expected arguments
                 try:
                     openbach_function_true_ids = args.pop(
-                        'openbach_function_true_ids')
+                        'openbach_functions_true')
                     openbach_function_false_ids = args.pop(
-                        'openbach_function_false_ids')
+                        'openbach_functions_false')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3498,9 +3504,9 @@ class ClientThread(threading.Thread):
                 # Get the expected arguments
                 try:
                     openbach_function_while_ids = args.pop(
-                        'openbach_function_while_ids')
+                        'openbach_functions_while')
                     openbach_function_end_ids = args.pop(
-                        'openbach_function_end_ids')
+                        'openbach_functions_end')
                     condition = args.pop('condition')
                 except KeyError:
                     raise BadRequest('The arguments of this Openbach_Function'
@@ -3890,7 +3896,7 @@ class ClientThread(threading.Thread):
         if condition_type in ['or', 'and', 'xor']:
             # Get the left and ritgh conditions and register them
             left_condition_json = condition_json.pop('left_condition')
-            let_condition = ClientThread.register_condition(
+            left_condition = ClientThread.register_condition(
                 left_condition_json, scenario_instance)
             right_condition_json = condition_json.pop('right_condition')
             right_condition = ClientThread.register_condition(
@@ -4011,12 +4017,12 @@ class ClientThread(threading.Thread):
                 ofai.save()
             elif name == 'if':
                 openbach_function_true_ids = args.pop(
-                    'openbach_function_true_ids')
+                    'openbach_functions_true')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_true',
                     openbach_function_true_ids, ofi, scenario_instance)
                 openbach_function_false_ids = args.pop(
-                    'openbach_function_false_ids')
+                    'openbach_functions_false')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_false',
                     openbach_function_false_ids, ofi, scenario_instance)
@@ -4026,12 +4032,12 @@ class ClientThread(threading.Thread):
                 ofi.condition = condition
             elif name == 'while':
                 openbach_function_while_ids = args.pop(
-                    'openbach_function_while_ids')
+                    'openbach_functions_while')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_while',
                     openbach_function_while_ids, ofi, scenario_instance)
                 openbach_function_end_ids = args.pop(
-                    'openbach_function_end_ids')
+                    'openbach_functions_end')
                 ClientThread.register_openbach_function_argument_instance(
                     'openbach_functions_end',
                     openbach_function_end_ids, ofi, scenario_instance)
@@ -4581,13 +4587,11 @@ class ClientThread(threading.Thread):
                         continue
                     thread.do_run = False
         # For each Openbach Function Instance, stop the associated Job Instance
-        # and Watch
         out_of_controll = False
         for ofi in scenario_instance.openbach_function_instance_set.all():
             for job_instance in ofi.job_instance_set.all():
                 try:
                     self.stop_job_instance_action([job_instance.id])
-                    self.watch_job_instance_action(job_instance.id, stop='now')
                 except BadRequest as e:
                     # If an error occurs, update the status of the Scenatio
                     # Instance
@@ -4642,7 +4646,7 @@ class ClientThread(threading.Thread):
                 scenario_instance = openbach_function_instance.openbach_function_instance_master.all()[0]
             except IndexError:
                 raise BadRequest('Integrity of the Openbach_Function_Instance '
-                                 'lost')
+                                 'lost', severity=7)
             # Get the infos
             info = self.infos_scenario_instance(scenario_instance)
             infos['scenario'] = info
@@ -4654,7 +4658,7 @@ class ClientThread(threading.Thread):
                     job_instance = openbach_function_instance.job_instance_set.all()[0]
                 except IndexError:
                     raise BadRequest('Integrity of the Openbach_Function_Instance'
-                                     ' lost')
+                                     ' lost', severity=7)
                 # Get the infos
                 info, _ = self.status_job_instance_action(job_instance.id)
             elif infos['status'] in ('Error', ):
@@ -5228,30 +5232,32 @@ def handle_message_from_status_manager(clientsocket):
             queue.put(ofi_id)
         # Get the Scenario Instance
         scenario_instance = Scenario_Instance.objects.get(pk=si_id)
-        # Check if all Job Instance launched by the Scenario Instance are
-        # finished
-        finished = True
-        for job_instance in scenario_instance.job_instance_set.all():
-            if not job_instance.is_stopped:
-                finished = False
-                break
-        # Check if all Scenario Instance launched by the current Scenario
-        # Instance are finished (Only if there is no Job Instance running)
-        if finished:
+        # Update the status of the Scenario Instance if it is finished
+        if not scenario_instance.is_stopped:
+            # Check if all Job Instance launched by the Scenario Instance are
+            # finished
+            finished = True
             for job_instance in scenario_instance.job_instance_set.all():
                 if not job_instance.is_stopped:
                     finished = False
                     break
-        # Update the status of the Scenario Instance if it is finished
-        if finished:
-            with ThreadManager() as threads:
-                if 0 in threads[scenario_instance.id]:
-                    thread = threads[scenario_instance.id][0]
-                    if not thread.is_alive():
-                        scenario_instance.status = 'Finished OK'
-                        scenario_instance.stop_date = timezone.now()
-                        scenario_instance.is_stopped = True
-                        scenario_instance.save()
+            # Check if all Scenario Instance launched by the current Scenario
+            # Instance are finished (Only if there is no Job Instance running)
+            if finished:
+                for job_instance in scenario_instance.job_instance_set.all():
+                    if not job_instance.is_stopped:
+                        finished = False
+                        break
+            # Update the status of the Scenario Instance if it is finished
+            if finished:
+                with ThreadManager() as threads:
+                    if 0 in threads[scenario_instance.id]:
+                        thread = threads[scenario_instance.id][0]
+                        if not thread.is_alive():
+                            scenario_instance.status = 'Finished OK'
+                            scenario_instance.stop_date = timezone.now()
+                            scenario_instance.is_stopped = True
+                            scenario_instance.save()
     elif type_ == 'Error':
         # TODO Stop the scenario
         pass

@@ -1,31 +1,32 @@
 {
-  "name": "Pre-Recette",
-  "description": "Pre-Recette 07/11/2016",
+  "name": "Recette",
+  "description": "Recette 16/01/2017",
   "entity": [
     {
       "name": "Sat",
       "description": "The satellite",
       "agent": {
-          "name": "p2-sat",
-          "address": "172.20.34.26",
+          "name": "p5-sat",
+          "address": "172.20.42.69",
           "username": "opensand",
-          "collector": "172.20.34.37"
+          "collector_ip": "172.20.42.64"
       },
       "networks": [
-        "emu"
+        "st_sat",
+        "gw_sat"
       ]
     },
     {
       "name": "gw0",
       "description": "Gateway",
       "agent": {
-          "name": "p2-gw0",
-          "address": "172.20.34.38",
+          "name": "p5-gw0",
+          "address": "172.20.42.60",
           "username": "opensand",
-          "collector": "172.20.34.37"
+          "collector_ip": "172.20.42.64"
       },
       "networks": [
-        "emu",
+        "gw_sat",
         "lan_gw"
       ]
     },
@@ -33,86 +34,51 @@
       "name": "st1",
       "description": "Satellite terminal 1",
       "agent":  {
-          "name": "p2-st1",
-          "address": "172.20.34.30",
+          "name": "p5-st1",
+          "address": "172.20.42.61",
           "username": "opensand",
-          "collector": "172.20.34.37"
+          "collector_ip": "172.20.42.64"
     },
       "networks": [
-        "emu",
+        "st_sat",
         "lan_st"
+      ]
+    },
+    {
+      "name": "gw0-ws1",
+      "description": "WorkStation 1 of GW0",
+      "agent":  {
+          "name": "p5-gw0-ws1",
+          "address": "172.20.42.62",
+          "username": "opensand",
+          "collector_ip": "172.20.42.64"
+    },
+      "networks": [
+        "lan_gw",
+        "lan_ws"
+      ]
+    },
+    {
+      "name": "st1-ws1",
+      "description": "WorkStation 1 of ST1",
+      "agent":  {
+          "name": "p5-st1-ws1",
+          "address": "172.20.42.63",
+          "username": "opensand",
+          "collector_ip": "172.20.42.64"
+    },
+      "networks": [
+        "lan_st",
+        "lan_ws"
       ]
     }
   ],
   "network": [
-    "emu",
+    "gw_sat",
+    "st_sat",
     "lan_gw",
-    "lan_st"
+    "lan_st",
+    "lan_ws"
   ],
-  "scenario": [
-    {
-      "name": "Ping",
-      "description": "Comparaison between 2 ping Jobs",
-      "arguments": {},
-      "constants": {
-          "gw0": "172.20.34.38",
-          "st1": "172.20.34.30"
-      },
-      "openbach_functions": [
-        {
-          "id": 1,
-          "start_job_instance": {
-            "agent_ip": "$gw0",
-            "iperf": {
-              "mode": "-s"
-            },
-            "offset": 0
-          }
-        },
-        {
-          "id": 2,
-          "start_job_instance": {
-            "agent_ip": "$st1",
-            "iperf": {
-              "mode": "-c 172.20.34.38"
-            },
-            "offset": 0
-          },
-          "wait": {
-            "launched_ids": [
-              1
-            ]
-          }
-        },
-        {
-          "id": 3,
-          "start_job_instance": {
-            "agent_ip": "$st1",
-            "ping": {
-              "count": "3",
-              "destination_ip": "$gw0"
-            },
-            "offset": 0
-          }
-        },
-        {
-          "id": 4,
-          "start_job_instance": {
-            "agent_ip": "$st1",
-            "ping": {
-              "destination_ip": "$gw0"
-            },
-            "offset": 0
-          }
-        }
-      ]
-    },
-    {
-      "name": "Sandbox",
-      "description": "Sandbox",
-      "arguments": {},
-      "constants": {},
-      "openbach_functions": []
-    }
-  ]
+  "scenario": []
 }

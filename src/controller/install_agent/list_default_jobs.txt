@@ -1,3 +1,8 @@
 rsyslog_job
 rstats_job
 synchronization
+rate_monitoring
+tcpprobe_monitoring
+fping
+hping
+iperf

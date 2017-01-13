@@ -41,8 +41,8 @@ arguments:
       description: >
           The name of the stat that shall be postprocessed
     - name:        job_instance_ids
-      type:        'int'
-      count:       '+' 
+      type:        'str'
+      count:       1 
       description: >
           The IDs of the job instances that have generated the stat
 

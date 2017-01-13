@@ -84,12 +84,12 @@ def main(scenario_instance_id, agent_name, job_instance_ids, job_name, stat_name
     }
     conf_filename =write_conf_file(collector_infos) 
     requester = CollectorConnection(conf_filename)
+    job_instance_ids = job_instance_ids.split(',')
     for job_instance_id in job_instance_ids:
-        
         #Import results from Collector Database
         try:
             job_inst_results = requester.get_job_instance_values(scenario_instance_id, agent_name,
-                                            job_instance_id, job_name, None,
+                                            int(job_instance_id), job_name, None,
                                             [stat_name])
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "Error getting stats from collector" + str(ex))
@@ -161,8 +161,9 @@ if __name__ == "__main__":
     parser.add_argument('stat_name', metavar='stat_name', type=str,
                         help='The name of the stat that shall be postprocessed')
     
-    parser.add_argument('job_instance_ids', nargs='+', type=int, help='The IDs of \
-                        the job instances that have generated the stat')
+    parser.add_argument('job_instance_ids', type=str, help='The IDs of \
+                        the job instances that have generated the stat \
+                        (separated by commas)')
    
     parser.add_argument('-m', '--export-mode', type=int, help='The type of export')
 

@@ -43,21 +43,22 @@ import syslog
 from subprocess import call
 import collect_agent
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use('Agg')
+import matplotlib.pyplot as ppp
 from math import sqrt
 from scipy import stats
 import scipy as sp
 import numpy as np
 import time
 
-#from opt.openbach-api.data_access import CollectorConnection
 import sys
-sys.path.insert(0, '/opt/openbach-api')
 from data_access import CollectorConnection
 
 
 def write_conf_file(collector_infos):
-    """ Function that write the collector configuration file """
+    """ Function that writes the collector configuration file """
     with tempfile.NamedTemporaryFile('w', delete=False) as conf_file:
         print('---\n', file=conf_file)
         for key, value in collector_infos.items():
@@ -103,22 +104,6 @@ def main(scenario_instance_id, agent_name, job_instance_ids, job_name, stat_name
         std = sqrt(var)
         confidence_interval = stats.norm.interval(0.9,loc=mean,scale= std/sqrt(len(list_data)))
         
-        # Compute, plot and save figure of CDF 
-        plt.figure(figsize=(12, 8), dpi=80, facecolor='w',
-                   edgecolor='k')
-        plt.ylabel('CDF')
-        plt.xlabel('Page load time (s)')
-        plt.title('CDF of web page load time')
-        n_bins = 1000
-        n, bins, patches = plt.hist(list_data, n_bins, normed=1,
-                                    cumulative=True)
-        try:
-            path = '/tmp/cdf_'+ str(scenario_instance_id) + '_' + str(job_instance_id) + '_' + job_name + '_' + stat_name + '.png'
-            plt.savefig(path)
-            collect_agent.send_log(syslog.LOG_DEBUG, "Plot file saved in " + path)
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "Error saving plot files" + str(ex))
-        
         #Send stats mean/var/and ci to Collector 
         timestamp = round(time.time() * 1000)
         try:
@@ -136,12 +121,29 @@ def main(scenario_instance_id, agent_name, job_instance_ids, job_name, stat_name
                           confidence_interval[1]}
             r = collect_agent.send_stat(timestamp, **statistics)
             
-
-            
         except Exception as ex: 
             collect_agent.send_log(syslog.LOG_ERR, "ERROR sending stats" +
                                    str(ex))
 
+        # Compute, plot and save figure of CDF 
+        try:
+            ppp.figure(figsize=(12, 8), dpi=80, facecolor='w',
+                   edgecolor='k')
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "Matplotlib problem:" +
+                                    str(ex))
+        ppp.ylabel('CDF')
+        ppp.xlabel('Page load time (s)')
+        ppp.title('CDF of web page load time')
+        n_bins = 1000
+        n, bins, patches = ppp.hist(list_data, n_bins, normed=1, cumulative=True)
+        try:
+            path = '/tmp/cdf_'+ str(scenario_instance_id) + '_' + str(job_instance_id) + '_' + job_name + '_' + stat_name + '.png'
+            ppp.savefig(path)
+            collect_agent.send_log(syslog.LOG_DEBUG, "Plot file saved in " + path)
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "Error saving plot files" + str(ex))
+        
 
     
 if __name__ == "__main__":

@@ -35,6 +35,7 @@
 
 - name: Uninstall logstash-output-influxdb
   shell: bin/plugin uninstall logstash-output-influxdb chdir=/opt/logstash
+  ignore_errors: yes
 
 - name: Uninstall InfluxDB (64bits)
   shell: dpkg -P influxdb

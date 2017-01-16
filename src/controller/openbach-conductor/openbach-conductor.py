@@ -640,6 +640,7 @@ class ClientThread(threading.Thread):
             self.playbook_builder.launch_playbook(
                 'ansible-playbook -i {} -e @{} -e @{} '
                 '-e @/opt/openbach-controller/configs/all '
+                '-e @/opt/openbach-controller/configs/ips '
                 '-e @/opt/openbach-controller/configs/proxy '
                 '-e ansible_ssh_user="{agent.username}" '
                 '-e ansible_sudo_pass="{agent.password}" '

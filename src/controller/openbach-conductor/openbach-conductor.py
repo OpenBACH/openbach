@@ -3978,7 +3978,12 @@ class ClientThread(threading.Thread):
             ofi = Openbach_Function_Instance(
                 openbach_function=of, scenario_instance=scenario_instance,
                 openbach_function_instance_id=_id, label=label)
-            ofi.save()
+            try:
+                ofi.save()
+            except IntegrityError as e:
+                raise BadRequest(
+                    'This id \'{}\' or this label \'{}\' is used twice'.format(
+                        _id, label))
             # Create the Openbach Function Argument Instance (depending on the
             # name of the Openbach Function, we expect some specific arguments)
             if name == 'start_job_instance':

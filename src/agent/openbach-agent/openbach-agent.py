@@ -161,6 +161,7 @@ def launch_job(job_name, job_instance_id, scenario_instance_id,
     # Write the pid in the pid file
     with open(pid_filename(job_name, job_instance_id), 'w') as pid_file:
         print(proc.pid, file=pid_file)
+    proc.wait()
 
 
 def stop_job(job_name, job_instance_id, command=None, args=None):

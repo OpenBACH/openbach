@@ -1257,7 +1257,7 @@ class ClientThread(threading.Thread):
         thread.start()
         return {}, 202
 
-    def install_jobs(self, addresses, names, severity=0, local_severity=0):
+    def install_jobs(self, addresses, names, severity=1, local_severity=1):
         """ Function that installs one or more Jobs on one or more Agents """
         # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)

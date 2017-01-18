@@ -76,10 +76,10 @@ def send_fifo(msg, socket):
 
 
 _SEVERITY_MAPPING = {
-    0: 3,   # Error
-    1: 4,   # Warning
-    2: 6,   # Informational
-    3: 7,   # Debug
+    1: 3,   # Error
+    2: 4,   # Warning
+    3: 6,   # Informational
+    4: 7,   # Debug
 }
 
 

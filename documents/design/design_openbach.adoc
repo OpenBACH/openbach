@@ -1256,11 +1256,11 @@ it is proposed to use the following ones:
 .OpenBACH Log level
 [frame="topbot", width="60%", options="header", cols="^.^,^.^, .^"]
 |===
-| Value       | Severity	               | Keyword
-|  0          | Error                    | syslog.LOG_ERR
-|  1          | Warning                  | syslog.LOG_WARNING
-|  2          | Informational            | syslog.LOG_INFO
-|  3          | Debug                    | syslog.LOG_DEBUG
+| Value       | Severity                 | Keyword
+|  1          | Error                    | syslog.LOG_ERR
+|  2          | Warning                  | syslog.LOG_WARNING
+|  3          | Informational            | syslog.LOG_INFO
+|  4          | Debug                    | syslog.LOG_DEBUG
 |===
 
 ==== Rstats

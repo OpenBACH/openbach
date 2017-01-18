@@ -80,9 +80,9 @@ def create_openbach_functions(apps, schema_editor):
     retrieve_status_agents = Openbach_Function(name='retrieve_status_agents')
     retrieve_status_agents.save()
     Openbach_Function_Argument(name='addresses', description='', type='list',
-                               openbach_function=status_agents).save()
+                               openbach_function=retrieve_status_agents).save()
     Openbach_Function_Argument(name='update', description='', type='bool',
-                               openbach_function=status_agents).save()
+                               openbach_function=retrieve_status_agents).save()
 
     # add_job
     add_job = Openbach_Function(name='add_job')
@@ -153,7 +153,7 @@ def create_openbach_functions(apps, schema_editor):
     retrieve_status_jobs = Openbach_Function(name='retrieve_status_jobs')
     retrieve_status_jobs.save()
     Openbach_Function_Argument(name='addresses', description='', type='list',
-                               openbach_function=status_jobs).save()
+                               openbach_function=retrieve_status_jobs).save()
 
     # push_file
     push_file = Openbach_Function(name='push_file')

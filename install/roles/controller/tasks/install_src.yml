@@ -188,6 +188,7 @@
   copy: src=../src/agent/{{ item.src }} dest=/opt/openbach-controller/src_agent/{{ item.dest }}
   with_items:
     - {'src': 'openbach-agent/', 'dest': 'openbach-agent/'}
+    - {'src': 'openbach-api/', 'dest': 'openbach-api/'}
     - {'src': 'collect-agent/client_api.tar.gz', 'dest': 'collect-agent/'}
     - {'src': 'collect-agent/collect_agent.py', 'dest': 'collect-agent/'}
     - {'src': 'rstats/rstats_reload.py', 'dest': 'rstats/'}

@@ -13,10 +13,6 @@ os:
     requirements:  'Ubuntu 14.04/16.04'
     command:       'python3 /opt/openbach-jobs/postprocess_stats/postprocess_stats.py'
     command_stop:
-  windows:
-    requirements:  'Windows 2010'
-    command:       '...'
-    command_stop:
 
 arguments:
   required:

@@ -13,10 +13,6 @@ os:
     requirements:  'Ubuntu 14.04/16.04'
     command:       '/opt/openbach-jobs/pep/set_pep.py'
     command_stop:  '/opt/openbach-jobs/pep/unset_pep.sh'
-  windows:
-    requirements:  'Windows 2010'
-    command:       '...'
-    command_stop:
 
 arguments:
   required:

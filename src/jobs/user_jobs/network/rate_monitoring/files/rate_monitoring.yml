@@ -12,10 +12,6 @@ os:
     requirements:  'Ubuntu 14.04/16.04'
     command:       'python /opt/openbach-jobs/rate_monitoring/rate_monitoring.py'
     command_stop:
-  windows:
-    requirements:  'Windows 2010'
-    command:       '...'
-    command_stop:
 
 arguments:
   required:

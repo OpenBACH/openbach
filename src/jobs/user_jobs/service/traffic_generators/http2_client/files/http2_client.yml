@@ -14,10 +14,6 @@ os:
     requirements:  'Ubuntu 14.04/16.04'
     command:       'python /opt/openbach-jobs/http2_client/http2_client.py'
     command_stop:
-  windows:
-    requirements:  'Windows 2010'
-    command:       '...'
-    command_stop:
 
 arguments:
   required:

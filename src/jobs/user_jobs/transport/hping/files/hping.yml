@@ -15,11 +15,6 @@ os:
     command:       '/opt/openbach-jobs/hping/hping.py'
     command_stop:
 
-  windows:
-    requirements:  'Windows 2010'
-    command:       '...'
-    command_stop:
-
 arguments:
   required:
     - name:        destination_ip

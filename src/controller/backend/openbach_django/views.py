@@ -119,11 +119,14 @@ class GenericView(base.View):
         return result['response'], returncode
 
 
-    def _install_jobs(self, addresses, names, severity=0, local_severity=0):
+    def _install_jobs(self, addresses, names, severity=None, local_severity=None):
         """Helper function used to create an agent or a job"""
 
-        data = {'addresses': addresses, 'names': names, 'severity': severity,
-                'local_severity': local_severity, 'command': 'install_jobs'}
+        data = {'addresses': addresses, 'names': names, 'command': 'install_jobs'}
+        if severity is not None:
+            data['severity'] = severity
+        if local_severity is not None:
+            data['local_severity'] = local_severity
 
         return self.conductor_execute(data)
 
@@ -385,8 +388,8 @@ class BaseJobView(GenericView):
     def _action_install(self, names, addresses):
         """Install jobs on some agents"""
 
-        severity = self.request.JSON.get('severity', 4)
-        local_severity = self.request.JSON.get('local_severity', 4)
+        severity = self.request.JSON.get('severity', None)
+        local_severity = self.request.JSON.get('local_severity', None)
 
         return self._install_jobs(addresses, names, severity, local_severity)
 

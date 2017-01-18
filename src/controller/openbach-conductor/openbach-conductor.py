@@ -1369,9 +1369,9 @@ class ClientThread(threading.Thread):
                     # Activate the send of log to ElasticSearch and local
                     # register
                     try:
-                        self.set_job_log_severity(agent.address, job.name,
-                                                  severity,
-                                                  local_severity=local_severity)
+                        self.set_job_log_severity(
+                            agent.address, job.name, severity,
+                            local_severity=local_severity)
                     except BadRequest:
                         pass
         # If at least one install failed, raise an error

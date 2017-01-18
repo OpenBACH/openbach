@@ -56,6 +56,9 @@
 - include: install_ssh_key.yml
   tags:
     - install
+- include: install_openbach_api.yml
+  tags:
+    - install
 - include: start_daemon.yml
   tags:
     - install
@@ -65,6 +68,9 @@
 
 # Uninstall
 - include: del_services_to_boot.yml
+  tags:
+    - uninstall
+- include: uninstall_openbach_api.yml
   tags:
     - uninstall
 - include: uninstall_synchro.yml

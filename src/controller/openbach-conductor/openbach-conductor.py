@@ -1811,7 +1811,7 @@ class ClientThread(threading.Thread):
             job_instance.periodic = True
             job_instance.save()
         else:
-            if not date:
+            if date is None or date == 'now':
                 job_instance.start_date = timezone.now()
                 date = 'now'
             else:

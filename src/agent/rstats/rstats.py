@@ -137,32 +137,32 @@ class Rstats:
 
     def _send_tcp(self, data):
         try:
-            # Creer la socket tcp
+            # Create TCP SOCKET
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error:
             raise BadRequest('Failed to create socket')
 
         try:
-            # Se connecter au serveur
+            # Connect to server
             s.connect((self.conf.host, int(self.conf.port)))
         except socket.error:
             raise BadRequest('Failed to connect to server')
 
-        # Envoyer les donnees
+        # Send data
         s.send(data.encode())
 
-        # Fermer la socket
+        # Close socket
         s.close()
 
     def _send_udp(self, data):
         try:
-            # Creer la socket udp
+            # Create the UDP socket
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         except socket.error:
             raise BadRequest('Failed to create socket')
 
         try:
-            # Envoyer la commande
+            # Send the command
             s.sendto(data.encode(), (self.conf.host, int(self.conf.port)))
         except socket.error as msg:
             raise BadRequest('Error code: {}, Message {}'.format(*msg))
@@ -175,7 +175,7 @@ class Rstats:
         if suffix is not None:
             measurement_name = '{}.{}'.format(measurement_name, suffix)
 
-        # recuperation des stats
+        # Stats recovery
         time = str(stats['time'])
         del stats['time']
 
@@ -189,8 +189,8 @@ class Rstats:
             try:
                 statistic = {stat_name: float(value)}
             except ValueError:
-                # TODO: Gerer les vrais booleens dans influxdb (voir avec la
-                #       conf de logstash aussi)
+                # TODO: Manage the real boolean in InfluxDB (e.g. see
+                #       the conf of logstash)
                 if value in BOOLEAN_TRUE:
                     statistic = {stat_name: True}
                 elif value in BOOLEAN_FALSE:
@@ -366,11 +366,11 @@ class ClientThread(threading.Thread):
 
             manager[id] = stats_client
 
-        # envoyer OK
+        # Send OK
         return id
 
     def send_stat(self, id, time, *extra_stats):
-        # recuperer le rstatsclient et son mutex
+        # Get the rstats_client and the mutex
         try:
             stats_client = StatsManager()[id]
         except KeyError:
@@ -378,28 +378,28 @@ class ClientThread(threading.Thread):
                     'KO The given id doesn\'t '
                     'represent an open connection')
 
-        # Recuperer l'eventuel suffix
+        # Get the suffix
         if len(extra_stats) % 2:
             suffix = extra_stats[-1]
             extra_stats = extra_stats[:-1]
         else:
             suffix = None
 
-        # recuperer les stats
+        # Get the stats
         stats = {key: value for key, value in grouper(extra_stats, 2)}
         stats['time'] = time
-        # send les stats
+        # Send stats
         stats_client.send_stat(suffix, stats)
 
     def reload_stat(self, id):
-        # recuperer le rstatsclient et son mutex
+        # Get the rstats_client and the mutex
         try:
             stats_client = StatsManager()[id]
         except KeyError:
             raise BadRequest(
                     'KO The given id doesn\'t '
                     'represent an open connection')
-        # reload la conf
+        # reload the configuration
         stats_client.reload_conf()
 
     def remove_stat(self, id):
@@ -412,7 +412,7 @@ class ClientThread(threading.Thread):
 
     def reload_stats(self):
         for _, stats_client in StatsManager():
-            # reload la conf
+            # reload the configuration
             stats_client.reload_conf()
 
     def change_config(self, scenario_instance_id, job_instance_id, broadcast, storage):

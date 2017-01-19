@@ -59,28 +59,28 @@ def monitor():
     global previous_bytes_count
     global previous_timestamp
 
-    # Refresh de la table (pour avoir des stats a jour)
+    # Refresh the table (allowing to update the stats)
     table = iptc.Table(iptc.Table.FILTER)
     table.refresh()
 
-    # Recuperation de la rule (Attention, il faut qu'elle soit en 1ere position)
+    # Get the rule (Attention, the rule shall be in first position)
     rule = chain.rules[0]
 
-    # Recuperation des stats
+    # Get the stats
     timestamp = int(round(time.time() * 1000))
     bytes_count = rule.get_counters()[1]
 
-    # Calcul du debit
+    # Compute data rate
     mutex.acquire()
     diff_timestamp = float(timestamp - previous_timestamp) / 1000 # in seconds
     rate = float(bytes_count - previous_bytes_count)/diff_timestamp
     mutex.release()
 
-    # Envoie de la stat au collecteur
+    # Send the stat to the Collector
     statistics = {'rate': rate}
     r = collect_agent.send_stat(timestamp, **statistics)
 
-    # Mise a jour des vieilles stats pour le prochain calcul de debit
+    # Update the old stats for the next computation of the data rate
     mutex.acquire()
     previous_bytes_count = bytes_count
     previous_timestamp = timestamp
@@ -93,15 +93,15 @@ def main(rule, interval):
     global previous_bytes_count
     global previous_timestamp
 
-    # On insere la règle
+    # To add the rule
     chain.insert_rule(rule)
 
-    # On enregistre les premieres stats pour le calcul du debit
+    # Save the first stats for computing the rate
     mutex = threading.Lock()
     previous_timestamp = int(round(time.time() * 1000))
     previous_bytes_count = rule.get_counters()[1]
 
-    # On monitor
+    # Monitoring
     sched = BlockingScheduler()
     sched.add_job(monitor, 'interval', seconds=interval)
     sched.start()
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     global chain
     conffile = "/opt/openbach-jobs/rate_monitoring/rate_monitoring_rstats_filter.conf"
 
-    # Connexion au service de collecte de l'agent
+    # Connect to collect agent
     success = collect_agent.register_collect(conffile)
     if not success:
         quit()
@@ -177,10 +177,10 @@ if __name__ == "__main__":
     else:
         sport = None
 
-    # Recuperation de la Table (ce sera toujours 'filter')
+    # Get the table ('filter')
     table = iptc.Table(iptc.Table.FILTER)
 
-    # Recuperation de la Chain
+    # Get the chain
     chain = None
     for c in table.chains:
         if c.name == chain_name:
@@ -190,10 +190,10 @@ if __name__ == "__main__":
         collect_agent.send_log(syslog.LOG_ERR, "ERROR: " + chain_name + " does not exist in FILTER table")
         exit(1)
 
-    # Creation de la Rule
+    # Creation of the Rule
     rule = iptc.Rule(chain=chain)
 
-    # Ajout des Matchs
+    # Add Matchs
     if source != None:
        rule.src = source 
     if destination != None:
@@ -213,7 +213,7 @@ if __name__ == "__main__":
         match.dport = dport
         rule.add_match(match)
 
-    # Ajout de la Target
+    # Add the Target
     if jump != None:
         rule.create_target(jump)
     else:

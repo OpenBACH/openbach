@@ -94,7 +94,7 @@ def get_url(server_address, port, page):
         collect_agent.send_log(syslog.LOG_NOTICE, "The Page Load Time is= " + str(conntime))
         timestamp = int(round(time.time() * 1000))
         try:
-            # Envoie de la stat au collecteur
+            # Send the stat to the Collector
             statistics = {'load_time': conntime}
             r = collect_agent.send_stat(timestamp, **statistics)
         except Exception as ex: 

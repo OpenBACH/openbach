@@ -48,7 +48,7 @@ def parse_command_line(default_controller_ip):
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
             '--controller-ip', metavar='ADDRESS', default=default_controller_ip,
-            help='IP Address of the controller [default: IP of first (not lo) interface]')
+            help='IP Address of the controller [default: ' + default_controller_ip + ']')
     parser.add_argument(
             '--controller-username', metavar='NAME', default='openbach',
             help='username to connect to the controller [default: openbach]')

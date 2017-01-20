@@ -259,7 +259,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'This Collector is not in the database'
+            response['error'] = 'The Collector ' + address + ' is not in the database'
             returncode = 404
             command_result.status_modify.response = json.dumps(response)
             command_result.status_modify.returncode = returncode
@@ -330,7 +330,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'This Collector is not in the database'
+            response['error'] = 'The Collector ' + address + ' is not in the database' 
             returncode = 404
             command_result.status_del.response = json.dumps(response)
             command_result.status_del.returncode = returncode
@@ -343,7 +343,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'No Agent is installed on this Collector'
+            response['error'] = 'No Agent is installed on the Collector' + str(address)
             returncode = 400
             command_result.status_del.response = json.dumps(response)
             command_result.status_del.returncode = returncode
@@ -354,7 +354,7 @@ class ClientThread(threading.Thread):
         if collector.agent_set.exclude(pk=address):
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'This Collector is still associated to some Agents'
+            response['error'] = 'The Collector ' + address + ' is still associated to some Agents'
             returncode = 409
             command_result.status_del.response = json.dumps(response)
             command_result.status_del.returncode = returncode
@@ -414,7 +414,7 @@ class ClientThread(threading.Thread):
             # Get the Collector
             collector = Collector.objects.get(pk=address)
         except ObjectDoesNotExist:
-            raise BadRequest('This Collector is not in the database', 404,
+            raise BadRequest('The collector ' + address + ' is not in the database', 404,
                              infos={'address': address})
         # Build it infos
         response = {'address': collector.address, 'logs_port':
@@ -478,7 +478,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': collector_ip}
-            response['error'] = 'This Collector is not in the database'
+            response['error'] = 'The Collector ' + address + ' is not in the database'
             returncode = 404
             command_result.status_install.response = json.dumps(response)
             command_result.status_install.returncode = returncode
@@ -497,7 +497,7 @@ class ClientThread(threading.Thread):
             agent.save()
         except IntegrityError:
             # Update the command result and exit
-            response = {'error': 'Name of the Agent already used'}
+            response = {'error': 'The agent name ' + name + ' is already taken'}
             command_result.status_install.response = json.dumps(response)
             command_result.status_install.returncode = 400
             command_result.status_install.save()
@@ -569,7 +569,7 @@ class ClientThread(threading.Thread):
         result = None
         returncode = 204
         if list_jobs_failed != []:
-            result = {'warning': 'Some Jobs couldn’t be installed {}'.format(
+            result = {'warning': 'Some Jobs could not be installed {}'.format(
                 ' '.join(list_jobs_failed))}
             returncode = 200
         # Update the command result
@@ -608,7 +608,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'This Agent is not in the database'
+            response['error'] = 'The Agent ' + address + ' is not in the database'
             returncode = 404
             command_result.status_uninstall.response = json.dumps(response)
             command_result.status_uninstall.returncode = returncode
@@ -705,7 +705,7 @@ class ClientThread(threading.Thread):
             columns = result['results'][0]['series'][0]['columns']
             values = result['results'][0]['series'][0]['values'][0]
         except KeyError:
-            raise BadRequest('Required Stats doesn\'t exist in the Database')
+            raise BadRequest('Required Stats does not exist in the Database')
         for column, value in zip(columns, values):
             if column == 'time':
                 date = datetime.fromtimestamp(value/1000,
@@ -875,7 +875,8 @@ class ClientThread(threading.Thread):
         try:
             command_result = Agent_Command_Result.objects.get(pk=address)
         except DataError:
-            raise BadRequest('You must give an ip address for the Agent')
+            raise BadRequest('You must give an ip address for the Agent ' +
+                             address )
         except ObjectDoesNotExist:
             command_result = Agent_Command_Result(address=address)
         if command_result.status_assign == None:
@@ -891,7 +892,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': address}
-            response['error'] = 'This Agent is not in the database'
+            response['error'] = 'The Agent ' + address + ' is not in the database'
             returncode = 404
             command_result.status_assign.response = json.dumps(
                 response)
@@ -916,7 +917,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'address': collector_ip}
-            response['error'] = 'This Collector is not in the database'
+            response['error'] = 'The Collector ' + collector_ip + ' is not in the database'
             returncode = 404
             command_result.status_assign.response = json.dumps(
                 response)
@@ -1124,7 +1125,7 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404, {
+            raise BadRequest('The job ' + name + ' is not in the database', 404, {
                 'job_name': name })
         # Delete it
         job.delete()
@@ -1176,7 +1177,7 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
-            raise BadRequest('This Job isn\'t in the database', 404,
+            raise BadRequest('The Job ' + name + ' is not in the database', 404,
                              {'job_name': name})
         # Reconstruct it conf file if json
         # TODO do it with the attribute of the Job and stop register the json in
@@ -1194,7 +1195,7 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExists:
-            raise BadRequest('This Job isn\'t in the database', 404,
+            raise BadRequest('The Job ' + name + ' is not in the database', 404,
                              {'job_name': name})
         # Get its Keywords
         result = {'job_name': name, 'keywords': [
@@ -1212,7 +1213,7 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404,
+            raise BadRequest('The Job ' + name + ' is not in the database', 404,
                              {'job_name': name})
         # Get its Statistics
         result = {'job_name': name , 'statistics': [] }
@@ -1233,7 +1234,7 @@ class ClientThread(threading.Thread):
         try:
             job = Job.objects.get(pk=name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404,
+            raise BadRequest('The Job ' + name + ' is not in the database', 404,
                              {'job_name': name})
         # return it help
         return {'job_name': name, 'help': job.help}, 200
@@ -1246,7 +1247,7 @@ class ClientThread(threading.Thread):
             try:
                 command_result = Agent_Command_Result.objects.get(pk=address)
             except ObjectDoesNotExist:
-                raise BadRequest('This Agent is not in the database', 404,
+                raise BadRequest('The Agent ' + address + ' is not in the database', 404,
                                  {'address': address})
             except DataError:
                 raise BadRequest('You must give an ip address for all the'
@@ -1510,7 +1511,7 @@ class ClientThread(threading.Thread):
         except DataError:
             raise BadRequest('You must give an ip address for the Agent')
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent isn\'t in the database', 404,
+            raise BadRequest('The Agent ' + address + ' is not in the database', 404,
                              {'address': address})
         response = {'agent': agent.address, 'errors': []}
         # Update the list of Installed Job of the local database (from the
@@ -1708,7 +1709,7 @@ class ClientThread(threading.Thread):
         try:
             agent = Agent.objects.get(pk=agent_ip)
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent isn\'t in the database', 404,
+            raise BadRequest('The Agent ' + agent_ip + ' is not in the database', 404,
                              {'address': agent_ip})
         # Build the host file and playbook
         host_filename = self.playbook_builder.write_hosts(
@@ -1887,19 +1888,20 @@ class ClientThread(threading.Thread):
         except DataError:
             raise BadRequest('You must give an ip address for the Agent')
         except ObjectDoesNotExist:
-            raise BadRequest('This Agent isn\'t in the database', 404,
+            raise BadRequest('The Agent' + agent_ip + 'is not in the database', 404,
                              {'address': agent_ip})
         # Get the Job
         try:
             job = Job.objects.get(pk=job_name)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job isn\'t in the database', 404,
+            raise BadRequest('The Job ' + job_name + ' is not in the database', 404,
                              {'job_name': job_name})
         # Get the Installed Job
         try:
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
-            raise BadRequest('This Installed_Job isn\'t in the database', 404,
+            raise BadRequest('The job' + job_name + 'is not installed in agent' +
+                             agent, 404,
                              {'job_name': '{} on {}'.format(
                                  job_name, agent_ip)})
         # Get the owner_scenario_instance_id
@@ -2148,7 +2150,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_instance_id': job_instance_id}
-            response['error'] = 'This Job Instance isn\'t in the database'
+            response['error'] = 'The Job Instance ' +  str(job_instance_id) + ' is not in the database'
             returncode = 404
             command_result.status_restart.response = json.dumps(response)
             command_result.status_restart.returncode = returncode
@@ -2211,7 +2213,7 @@ class ClientThread(threading.Thread):
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job Instance isn\'t in the database', 404,
+            raise BadRequest('The Job Instance ' + str(job_instance_id) + ' is not in the database', 404,
                              {'job_instance_id': job_instance_id})
         # Get the associated Installed Job
         installed_job = job_instance.job
@@ -2343,7 +2345,7 @@ class ClientThread(threading.Thread):
         try:
             job_instance = Job_Instance.objects.get(pk=job_instance_id)
         except ObjectDoesNotExist:
-            raise BadRequest('This Job Instance isn\'t in the database', 404,
+            raise BadRequest('The Job Instance ' + str(job_instance_id) + ' is not in the database', 404,
                              {'job_instance_id': job_instance_id})
         # Build the infos of the Job Instance
         instance_infos = {
@@ -2463,7 +2465,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': job_name}
-            response['error'] = 'This Job isn\'t in the database'
+            response['error'] = 'The Job ' + job_name + ' is not in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
             command_result.status_log_severity.returncode = returncode
@@ -2476,7 +2478,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'agent_ip': address}
-            response['error'] = 'This Agent isn\'t in the database'
+            response['error'] = 'The Agent ' + address + ' is not in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
             command_result.status_log_severity.returncode = returncode
@@ -2489,7 +2491,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': job.name, 'agent_ip': agent.address}
-            response['error'] = 'This Installed_Job isn\'t in the database'
+            response['error'] = 'The Installed_Job ' + job.name + ' is not in the database of Agent ' + agent.address
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
             command_result.status_log_severity.returncode = returncode
@@ -2502,7 +2504,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': 'rsyslog_job'}
-            response['error'] = 'The Job rsyslog_job isn\'t in the database'
+            response['error'] = 'The Job rsyslog_job is not in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
             command_result.status_log_severity.returncode = returncode
@@ -2515,7 +2517,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': job.name, 'agent_ip': agent.address}
-            response['error'] = 'The Installed_Job rsyslog isn\'t in the database'
+            response['error'] = 'The Installed_Job rsyslog is not in the database'
             returncode = 404
             command_result.status_log_severity.response = json.dumps(response)
             command_result.status_log_severity.returncode = returncode
@@ -2699,7 +2701,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': job_name}
-            response['error'] = 'This Job isn\'t in the database'
+            response['error'] = 'The Job ' + job_name + ' is not in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
             command_result.status_stat_policy.returncode = returncode
@@ -2712,7 +2714,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'agent_ip': address}
-            response['error'] = 'This Agent isn\'t in the database'
+            response['error'] = 'The Agent ' + address + ' is not in the database'
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
             command_result.status_stat_policy.returncode = returncode
@@ -2725,7 +2727,7 @@ class ClientThread(threading.Thread):
         except ObjectDoesNotExist:
             # Update the command result and exit
             response = {'job_name': job.name, 'agent_ip': agent.address}
-            response['error'] = 'This Installed_Job isn\'t in the database'
+            response['error'] = 'The Installed_Job ' + job.name + ' is not in the database of Agent ' + agent.address
             returncode = 404
             command_result.status_stat_policy.response = json.dumps(response)
             command_result.status_stat_policy.returncode = returncode
@@ -2738,7 +2740,7 @@ class ClientThread(threading.Thread):
             statistic = installed_job.job.statistic_set.filter(name=stat_name)
             if not statistic:
                 # Update the command result and exit
-                response = {'error': 'The statistic \'{}\' isn\'t produce by '
+                response = {'error': 'The statistic \'{}\' is not produce by '
                             'the Job \'{}\''.format(stat_name, job_name)}
                 returncode = 400
                 command_result.status_stat_policy.response = json.dumps(
@@ -3291,7 +3293,7 @@ class ClientThread(threading.Thread):
             try:
                 scenario.save(force_insert=True)
             except IntegrityError:
-                raise BadRequest('This name of Scenario \'{}\' is already'
+                raise BadRequest('The name of Scenario \'{}\' is already'
                                  ' used'.format(name), 409)
         else:
             scenario.description = description
@@ -3315,7 +3317,7 @@ class ClientThread(threading.Thread):
         try:
             condition_type = condition.pop('type')
         except KeyError:
-            raise BadRequest('This Condition is malformed (no type)')
+            raise BadRequest('The condition is malformed (no type)')
         # Check it has all the attributs needed and that the attributs are well
         # formed too
         if condition_type in ['==', '=', '<=', '<', '>=', '>', '!=']:
@@ -3323,7 +3325,7 @@ class ClientThread(threading.Thread):
                 left_operand = condition.pop('left_operand')
                 right_operand = condition.pop('right_operand')
             except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
+                raise BadRequest('A condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_operand(left_operand)
             ClientThread.check_operand(right_operand)
@@ -3331,7 +3333,7 @@ class ClientThread(threading.Thread):
             try:
                 new_condition = condition.pop('condition')
             except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
+                raise BadRequest('A Condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(new_condition)
         elif condition_type in ['or', 'and', 'xor']:
@@ -3339,7 +3341,7 @@ class ClientThread(threading.Thread):
                 left_condition = condition.pop('left_condition')
                 right_condition = condition.pop('right_condition')
             except KeyError:
-                raise BadRequest('This Condition is malformed', 404,
+                raise BadRequest('A condition is malformed', 404,
                                  {'condition': condition_type})
             ClientThread.check_condition(left_condition)
             ClientThread.check_condition(right_condition)
@@ -3354,7 +3356,7 @@ class ClientThread(threading.Thread):
         try:
             operand_type = operand.pop('type')
         except KeyError:
-            raise BadRequest('This Operand is malformed (no type)')
+            raise BadRequest('An Operand is malformed (no type)')
         # Check it has all the attributs needed
         if operand_type == 'database':
             try:
@@ -3362,21 +3364,21 @@ class ClientThread(threading.Thread):
                 key = operand.pop('key')
                 attribute = operand.pop('attribute')
             except KeyError:
-                raise BadRequest('This Operand is malformed', 404,
+                raise BadRequest('An Operand is malformed', 404,
                                  {'operand': operand_type})
         elif operand_type == 'value':
             if 'value' not in operand:
-                raise BadRequest('This Operand is malformed', 404,
+                raise BadRequest('An Operand is malformed', 404,
                                  {'operand': operand_type})
         elif operand_type == 'statistic':
             try:
                 measurement = operand.pop('measurement')
                 field = operand.pop('field')
             except KeyError:
-                raise BadRequest('This Operad is malformed', 404,
+                raise BadRequest('An Operand is malformed', 404,
                                  {'operand': operand_type})
         else:
-            raise BadRequest('This Operand is malformed', 404,
+            raise BadRequest('An Operand is malformed', 404,
                              {'operand': operand_type})
 
     @staticmethod
@@ -3415,7 +3417,7 @@ class ClientThread(threading.Thread):
             try:
                 of = Openbach_Function.objects.get(pk=name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Openbach_Function doesn\'t exist', 400,
+                raise BadRequest('The Openbach_Function ' + name + ' does not exist', 400,
                                  {'name': openbach_function['name']})
             # Check if references are made in the Openbach Function Argument and
             # if the type matches
@@ -3424,9 +3426,8 @@ class ClientThread(threading.Thread):
                 try:
                     agent_ip = args.pop('agent_ip')
                 except KeyError:
-                    raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 400, 
-                                     {'name': 'start_job_instance'})
+                    raise BadRequest('The arguments of the Openbach_Function' + name + ' are' 
+                                     'malformed', 400, {'name': 'start_job_instance'})
                 offset = args.pop('offset', 0)
                 of_argument = of.openbach_function_argument_set.get(
                     name='agent_ip')
@@ -3440,14 +3441,14 @@ class ClientThread(threading.Thread):
                 try:
                     (job_name, job_args), = args.items()
                 except ValueError:
-                    raise BadRequest('The arguments of this Openbach_Function'
-                                     ' are malformed', 400,
+                    raise BadRequest('The arguments of the Openbach_Function' + name + ' are'
+                                     'malformed', 400,
                                      {'name': 'start_job_instance'})
                 # Get the Job
                 try:
                     job = Job.objects.get(name=job_name)
                 except ObjectDoesNotExist:
-                    raise BadRequest('This Job does not exist', 400,
+                    raise BadRequest('The Job ' + job_name + ' does not exist', 400,
                                      {'name': job_name})
                 # Check the format of the Job arguments
                 if not isinstance(job_args, dict):
@@ -3462,7 +3463,7 @@ class ClientThread(threading.Thread):
                         try:
                             ja = job.optional_job_argument_set.get(name=job_arg)
                         except ObjectDoesNotExist:
-                            raise BadRequest('This Job_Argument does not exist',
+                            raise BadRequest('The Job_Argument does not exist',
                                              400, {'job_name': job_name,
                                                    'argument_name': job_arg})
                     # Check the type
@@ -3483,11 +3484,11 @@ class ClientThread(threading.Thread):
                         'openbach_functions_false')
                     condition = args.pop('condition')
                 except KeyError:
-                    raise BadRequest('The arguments of this Openbach_Function'
+                    raise BadRequest('The arguments of the Openbach_Function'
                                      ' are malformed', 400, {'name': 'if'})
                 # If there is more, raise an error
                 if args:
-                    raise BadRequest('The arguments of this Openbach_Function'
+                    raise BadRequest('The arguments of the Openbach_Function'
                                      ' are malformed', 400, {'name': 'if'})
                 # Check the type of the arguments
                 of_argument = of.openbach_function_argument_set.get(
@@ -3510,11 +3511,11 @@ class ClientThread(threading.Thread):
                         'openbach_functions_end')
                     condition = args.pop('condition')
                 except KeyError:
-                    raise BadRequest('The arguments of this Openbach_Function'
+                    raise BadRequest('The arguments of the Openbach_Function'
                                      ' are malformed', 400, {'name': 'while'})
                 # If there is more, raise an error
                 if args:
-                    raise BadRequest('The arguments of this Openbach_Function'
+                    raise BadRequest('The arguments of the Openbach_Function'
                                      ' are malformed', 400, {'name': 'while'})
                 # Check the type of the arguments
                 of_argument = of.openbach_function_argument_set.get(
@@ -3536,8 +3537,8 @@ class ClientThread(threading.Thread):
                         of_argument = Openbach_Function_Argument.objects.get(
                             name=of_arg, openbach_function=of)
                     except ObjectDoesNotExist:
-                        raise BadRequest('This Openbach_Function doesn\'t have'
-                                         ' this argument', 400,
+                        raise BadRequest('The Openbach_Function ' + name + ' does not have'
+                                         ' the argument' + str(of_arg), 400,
                                          {'name': name, 'argument': of_arg})
                 # Check the type
                 ClientThread.check_type(of_argument, of_value,
@@ -3569,7 +3570,7 @@ class ClientThread(threading.Thread):
             try:
                 sai.check_and_set_value(value)
             except ValueError:
-                raise BadRequest('This constant does not have the good type',
+                raise BadRequest('The constant ' + sc.name + ' does not have the good type',
                                  409, {'constant': sc.name, 'expected_type':
                                        sc.type})
             # Save it
@@ -3681,7 +3682,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -3708,7 +3709,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -3716,7 +3717,7 @@ class ClientThread(threading.Thread):
         try:
             scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario is not in the database', 404,
+            raise BadRequest('The Scenario ' + scenario_name + ' is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
         # Delete the Scenario
@@ -3744,7 +3745,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -3755,7 +3756,7 @@ class ClientThread(threading.Thread):
                 scenario = Scenario.objects.get(name=scenario_name,
                                                 project=project)
             except ObjectDoesNotExist:
-                raise BadRequest('This Scenario does not exist', 404)
+                raise BadRequest('The Scenario ' + scenario_name + ' does not exist', 404)
             # Modify it
             self.register_scenario(scenario_json, name, project, scenario)
             scenario = Scenario.objects.get(name=scenario_name, project=project)
@@ -3773,7 +3774,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -3781,7 +3782,7 @@ class ClientThread(threading.Thread):
         try:
             scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario is not in the database', 404,
+            raise BadRequest('The Scenario ' + scenario_name + ' is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
         # Return the Scenario infos
@@ -3798,7 +3799,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
             scenarios = Scenario.objects.filter(project=project)
         else:
@@ -4453,7 +4454,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -4461,7 +4462,7 @@ class ClientThread(threading.Thread):
         try:
             scenario = Scenario.objects.get(name=scenario_name, project=project)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario is not in the database', 404,
+            raise BadRequest('The Scenario ' + scenario_name + 'is not in the database', 404,
                              infos={'scenario_name': scenario_name,
                                     'project_name': project_name})
         # Create the Scenario Instance
@@ -4544,7 +4545,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -4554,7 +4555,7 @@ class ClientThread(threading.Thread):
                 scenario = Scenario.objects.get(
                     name=scenario_name, project=project)
             except ObjectDoesNotExist:
-                raise BadRequest('This Scenario is not in the database', 404,
+                raise BadRequest('The Scenario ' + scenario_name + ' is not in the database', 404,
                                  infos={'scenario_name': scenario_name,
                                         'project_name': project_name})
         else:
@@ -4565,13 +4566,13 @@ class ClientThread(threading.Thread):
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario_Instance does not exist in the '
+            raise BadRequest('The Scenario_Instance ' + str(scenario_instance_id) + ' does not exist in the '
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
         # Check that the Scenario Instance is an instance of the Scenario
         if scenario is not None:
             if scenario_instance.scenario.scenario == scenario:
-                raise BadRequest('This Scenario_Instance does not match the'
+                raise BadRequest('The Scenario_Instance  ' + str(scenario_instance_id) + ' does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
                                   'scenario_name': scenario_name})
@@ -4751,7 +4752,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
             scenarios = Scenario.objects.filter(project=project)
         else:
@@ -4786,7 +4787,7 @@ class ClientThread(threading.Thread):
             try:
                 project = Project.objects.get(name=project_name)
             except ObjectDoesNotExist:
-                raise BadRequest('This Project does not exist', 404,
+                raise BadRequest('The Project ' + project_name + ' does not exist', 404,
                                  {'project_name': project_name})
         else:
             project = None
@@ -4796,7 +4797,7 @@ class ClientThread(threading.Thread):
                 scenario = Scenario.objects.get(name=scenario_name,
                                                 project=project)
             except ObjectDoesNotExist:
-                raise BadRequest('This Scenario is not in the database', 404,
+                raise BadRequest('The Scenario ' + scenario_name + ' is not in the database', 404,
                                  infos={'scenario_name': scenario_name,
                                         'project_name': project_name})
         else:
@@ -4806,13 +4807,13 @@ class ClientThread(threading.Thread):
             scenario_instance = Scenario_Instance.objects.get(
                 pk=scenario_instance_id)
         except ObjectDoesNotExist:
-            raise BadRequest('This Scenario_Instance does not exist in the '
+            raise BadRequest('The Scenario_Instance ' + str(scenario_instance_id) + ' does not exist in the '
                              'database', 404, {'scenario_instance_id':
                                                scenario_instance_id})
         # Check that the Scenario Instance matches the Project
         if project is not None:
             if scenario_instance.scenario.project != project:
-                raise BadRequest('This Scenario_Instance does not match the'
+                raise BadRequest('The Scenario_Instance ' + str(scenario_instance_id) + ' does not match the'
                                  ' specified Scenario', 400,
                                  {'scenario_instance_id': scenario_instance_id,
                                  'scenario_name': scenario_name})
@@ -4937,7 +4938,7 @@ class ClientThread(threading.Thread):
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoeNotExist:
-            raise BadRequest('This Project is not on the database', 404)
+            raise BadRequest('The Project ' + project_name + ' is not on the database', 404)
         # Create the Entity
         entity = Entity(
             name=entity_json['name'],
@@ -4975,7 +4976,7 @@ class ClientThread(threading.Thread):
         try:
             project = Project.objects.get(pk=project_name)
         except ObjectDoeNotExist:
-            raise BadRequest('This Project is not on the database', 404)
+            raise BadRequest('The Project  ' + project_name + ' is not on the database', 404)
         # Create the Network
         try:
             Network(name=network_json, project=project).save()

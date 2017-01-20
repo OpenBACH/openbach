@@ -1023,7 +1023,8 @@ class Entity(models.Model):
     name = models.CharField(max_length=500)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     description = models.TextField(null=True, blank=True)
-    agent = models.ForeignKey(Agent, null=True, blank=True)
+    agent = models.ForeignKey(Agent, null=True, blank=True,
+                              on_delete=models.SET_NULL)
     networks = models.ManyToManyField(Network)
 
     class Meta:

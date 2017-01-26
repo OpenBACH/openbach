@@ -17,7 +17,7 @@ build/libcollectagent.so: ./build/collectagent.o
 install: all
 	mkdir -p ${DESTINATION}/{lib,include}/
 	cp build/libcollectagent.so ${DESTINATION}/lib/
-	cp src/collectagent.h src/lib_export.h ${DESTINATION}/include/
+	cp src/collectagent.h ${DESTINATION}/include/
 
 clean:
 	@rm -f build/*.o
@@ -25,4 +25,4 @@ clean:
 
 uninstall:
 	@rm -f ${DESTINATION}/lib/libcollectagent.so
-	@rm -f ${DESTINATION}/include/{collectagent,lib_export}.h
+	@rm -f ${DESTINATION}/include/collectagent.h

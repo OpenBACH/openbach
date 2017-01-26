@@ -72,7 +72,7 @@ __inline int c99_snprintf(char *outBuf, size_t size, const char *format, ...)
 
 static BOOL initialized = FALSE;
 static int log_mask = 0xFF;
-static char *syslog_ident;
+static char *syslog_ident = 0;
 static int syslog_facility;
 static char str_pid[ 40 ];
 static SOCKADDR_IN sa_logger;
@@ -190,6 +190,8 @@ void closelog()
         return;
     closesocket( sock );
     WSACleanup();
+	free(syslog_ident);
+	syslog_ident = 0;
     initialized = FALSE;
 }
 
@@ -260,7 +262,13 @@ void openlog( const char* ident, int option, int facility )
     if( atexit( closelog ) )
         goto done;
 
-    syslog_ident = ident;
+	if (ident) {
+        syslog_ident = (char*) malloc((strlen(ident) + 1) * sizeof(char));
+		if (syslog_ident) {
+			strcpy(syslog_ident, ident);
+			syslog_ident[strlen(ident)] = '\0';
+		}
+	}
     syslog_facility = facility;
     failed = FALSE;
 

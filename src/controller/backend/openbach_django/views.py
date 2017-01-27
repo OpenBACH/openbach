@@ -119,18 +119,6 @@ class GenericView(base.View):
         return result['response'], returncode
 
 
-    def _install_jobs(self, addresses, names, severity=None, local_severity=None):
-        """Helper function used to create an agent or a job"""
-
-        data = {'addresses': addresses, 'names': names, 'command': 'install_jobs'}
-        if severity is not None:
-            data['severity'] = severity
-        if local_severity is not None:
-            data['local_severity'] = local_severity
-
-        return self.conductor_execute(data)
-
-
     def _debug(self):
         """Use me when creating new routes to check that everything is OK"""
 
@@ -388,10 +376,15 @@ class BaseJobView(GenericView):
     def _action_install(self, names, addresses):
         """Install jobs on some agents"""
 
-        severity = self.request.JSON.get('severity', None)
-        local_severity = self.request.JSON.get('local_severity', None)
+        data = {'addresses': addresses, 'names': names, 'command': 'install_jobs'}
+        try:
+            data['severity'] = self.request.JSON['severity']
+        except KeyError:
+            pass
+        try:
+            data['local_severity'] = self.request.JSON['local_severity']
 
-        return self._install_jobs(addresses, names, severity, local_severity)
+        return self.conductor_execute(data)
 
 
     def _action_uninstall(self, names, addresses):

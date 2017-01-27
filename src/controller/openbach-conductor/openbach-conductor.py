@@ -1263,7 +1263,7 @@ class ClientThread(threading.Thread):
         # Get the Agents
         agents = Agent.objects.filter(pk__in=addresses)
         # Get the list of the Agents that doesn't exist
-        no_agent = set(addresses) - set(map(attrgetter('address'), agents))
+        no_agent = set(addresses) - set(a.address for a in agents)
         # Get the Jobs
         jobs = Job.objects.filter(pk__in=names)
         # Get the list of the Jobs that doesn't exist

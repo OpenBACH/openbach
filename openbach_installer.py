@@ -37,7 +37,7 @@
 
 
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 import tempfile
 import subprocess
 import textwrap
@@ -48,7 +48,16 @@ CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'configs')
 INSTALL_DIR = os.path.join(os.path.dirname(__file__), 'install')
 
 
-def parse_command_line(default_controller_ip):
+def set_default(self, name, value):
+    if getattr(self, name, None) is None:
+        setattr(self, name, value)
+
+
+# Monkey patch argparse's return value for easier usage
+Namespace.set_default = set_default
+
+
+def build_parser(default_controller_ip):
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
             '--controller-ip', metavar='ADDRESS', default=default_controller_ip,
@@ -94,17 +103,16 @@ def parse_command_line(default_controller_ip):
     subparser.add_parser('uninstall', help='uninstall previously installed OpenBACH machines')
     subparser.add_parser('status', help='get the status of OpenBACH on the Controller and Auditorium')
 
+    return parser
+
+
+def parse_command_line(parser):
     args = parser.parse_args()
 
     if args.action is None:
         parser.error('missing action')
 
     return args
-
-
-def set_default(args, arg_name, default_value):
-    if getattr(args, arg_name, None) is None:
-        setattr(args, arg_name, default_value)
 
 
 def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=False):
@@ -149,14 +157,14 @@ def machine_ips():
 
 
 def populate_default_args(args):
-    set_default(args, 'collector_ip', args.controller_ip)
-    set_default(args, 'auditorium_ip', args.controller_ip)
-    set_default(args, 'collector_username', args.controller_username)
-    set_default(args, 'auditorium_username', args.controller_username)
-    set_default(args, 'collector_password', args.controller_password)
-    set_default(args, 'auditorium_password', args.controller_password)
-    set_default(args, 'collector_name', args.controller_name)
-    set_default(args, 'auditorium_name', args.controller_name)
+    args.set_default('collector_ip', args.controller_ip)
+    args.set_default('auditorium_ip', args.controller_ip)
+    args.set_default('collector_username', args.controller_username)
+    args.set_default('auditorium_username', args.controller_username)
+    args.set_default('collector_password', args.controller_password)
+    args.set_default('auditorium_password', args.controller_password)
+    args.set_default('collector_name', args.controller_name)
+    args.set_default('auditorium_name', args.controller_name)
 
 
 def main(args, is_controller_local):
@@ -219,6 +227,7 @@ def main(args, is_controller_local):
 if __name__ == '__main__':
     ips_list = machine_ips()
     # if controller IP is not specififed, take the first interface IP
-    args = parse_command_line(ips_list[0])
+    parser = build_parser(ips_list[0])
+    args = parse_command_line(parser)
     populate_default_args(args)
     main(args, args.controller_ip in ips_list)

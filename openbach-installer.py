@@ -48,7 +48,7 @@ def parse_command_line(default_controller_ip):
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
             '--controller-ip', metavar='ADDRESS', default=default_controller_ip,
-            help='IP Address of the controller [default: ' + default_controller_ip + ']')
+            help='IP Address of the controller [default: {}]'.format(default_controller_ip))
     parser.add_argument(
             '--controller-username', metavar='NAME', default='openbach',
             help='username to connect to the controller [default: openbach]')
@@ -132,17 +132,17 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
         subprocess.check_call(arguments)
 
 
-if __name__ == '__main__':
+def machine_ips():
     try:
         process_output = subprocess.check_output(
             ['hostname', '-I'], stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         process_output = subprocess.check_output(
             ['hostname', '-i'], stderr=subprocess.DEVNULL)
-    ips_list = process_output.decode().split()
+    return process_output.decode().split()
 
-    # if controller IP is not specififed, take the first interface IP
-    args = parse_command_line(ips_list[0])
+
+def populate_default_args(args):
     set_default(args, 'collector_ip', args.controller_ip)
     set_default(args, 'auditorium_ip', args.controller_ip)
     set_default(args, 'collector_username', args.controller_username)
@@ -152,6 +152,8 @@ if __name__ == '__main__':
     set_default(args, 'collector_name', args.controller_name)
     set_default(args, 'auditorium_name', args.controller_name)
 
+
+def main(args, is_controller_local):
     if args.action == 'install':
         with tempfile.NamedTemporaryFile('w', delete=False) as extra_vars:
             print('---\n', file=extra_vars)
@@ -191,7 +193,7 @@ if __name__ == '__main__':
 
     common_command = partial(run_command, extra_vars_name, proxy_vars.name, hosts.name)
     commands = [
-        partial(common_command, 'controller', args, args.controller_ip in ips_list),
+        partial(common_command, 'controller', args, is_controller_local),
         partial(common_command, 'auditorium', args),
     ]
     if args.action == 'uninstall':
@@ -206,3 +208,11 @@ if __name__ == '__main__':
         os.remove(hosts.name)
         if extra_vars_name:
             os.remove(extra_vars_name)
+
+
+if __name__ == '__main__':
+    # if controller IP is not specififed, take the first interface IP
+    ips_list = machine_ips()
+    args = parse_command_line(ips_list[0])
+    populate_default_args(args)
+    main(args, args.controller_ip in ips_list)

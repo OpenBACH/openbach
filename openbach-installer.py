@@ -44,6 +44,10 @@ import textwrap
 from functools import partial
 
 
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'configs')
+INSTALL_DIR = os.path.join(os.path.dirname(__file__), 'install')
+
+
 def parse_command_line(default_controller_ip):
     parser = ArgumentParser(description='OpenBach (un)installation script')
     parser.add_argument(
@@ -116,7 +120,9 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
 
         arguments = [
             'ansible-playbook', '-i', hosts_name,
-            '-e', '@configs/ips', '-e', '@configs/all',
+            '-e', '@{}/ips'.format(CONFIG_DIR),
+            '-e', '@{}/proxy'.format(CONFIG_DIR),
+            '-e', '@{}/all'.format(CONFIG_DIR),
             '-e', '@{}'.format(extra_vars.name),
             '-e', '@{}'.format(proxy_vars_name),
         ]
@@ -124,7 +130,7 @@ def run_command(extra_vars_name, proxy_vars_name, hosts_name, agent, args, skip=
         if extra_vars_name is not None:
             arguments.extend(['-e', '@{}'.format(extra_vars_name)])
 
-        arguments.extend(['install/{}.yml'.format(agent), '--tags', args.action])
+        arguments.extend(['{}/{}.yml'.format(INSTALL_DIR, agent), '--tags', args.action])
 
         if skip:
             arguments.extend(['--skip-tag', 'only-controller'])
@@ -171,7 +177,7 @@ def main(args, is_controller_local):
     else:
         extra_vars_name = None
 
-    with open('configs/proxy', 'w') as proxy_vars:
+    with open('{}/proxy'.format(CONFIG_DIR), 'w') as proxy_vars:
         print('---\n', file=proxy_vars)
         print('proxy_env:', file=proxy_vars)
         if args.proxy is not None:
@@ -186,7 +192,7 @@ def main(args, is_controller_local):
         print('[Auditorium]', file=hosts)
         print(args.auditorium_ip, file=hosts)
 
-    with open('configs/ips', 'w') as ips:
+    with open('{}/ips'.format(CONFIG_DIR), 'w') as ips:
         print('---\n', file=ips)
         print('controller_ip:', "'{}'".format(args.controller_ip), file=ips)
         print('auditorium_ip:', "'{}'".format(args.auditorium_ip), file=ips)
@@ -211,8 +217,8 @@ def main(args, is_controller_local):
 
 
 if __name__ == '__main__':
-    # if controller IP is not specififed, take the first interface IP
     ips_list = machine_ips()
+    # if controller IP is not specififed, take the first interface IP
     args = parse_command_line(ips_list[0])
     populate_default_args(args)
     main(args, args.controller_ip in ips_list)

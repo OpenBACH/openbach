@@ -383,6 +383,8 @@ class BaseJobView(GenericView):
             pass
         try:
             data['local_severity'] = self.request.JSON['local_severity']
+        except KeyError:
+            pass
 
         return self.conductor_execute(data)
 

@@ -36,8 +36,6 @@
 
 
 import ctypes
-import syslog
-import json
 
 
 try:
@@ -75,8 +73,7 @@ _change_config.restype = ctypes.c_char_p
 _change_config.argtypes = [ctypes.c_bool, ctypes.c_bool]
 
 
-def register_collect(config_file, log_option=syslog.LOG_PID,
-                     log_facility=syslog.LOG_USER, new=False):
+def register_collect(config_file, log_option=0x01, log_facility=1<<3, new=False):
     return _register_collect(
             config_file.encode(),
             log_option,

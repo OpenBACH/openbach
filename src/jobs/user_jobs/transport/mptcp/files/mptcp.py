@@ -34,6 +34,8 @@
    @author   David PRADAS <david.pradas@toulouse.viveris.com>
 """
 
+SCHEDULERS = {'default', 'roundrobin', 'redundant'}
+PATH_MANAGERS = {'default', 'fullmesh', 'ndiffports', 'binder'}
 
 import subprocess
 import argparse
@@ -42,8 +44,8 @@ import syslog
 import collect_agent
 
 
-def main(iface_link1, iface_link2, network_link1, network_link2, gw_link1, 
-         gw_link2, ip_link1, ip_link2, conf_up):
+def main(iface_link1, iface_link2, iface_on1, iface_on2,
+         conf_up, checksum, syn_retries, path_manager, scheduler):
     
     conffile = "/opt/openbach-jobs/mptcp/mptcp_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)
@@ -51,64 +53,112 @@ def main(iface_link1, iface_link2, network_link1, network_link2, gw_link1,
         collect_agent.send_log(syslog.LOG_ERR, "ERROR connecting to collect-agent")
         quit()
 
-    #Configure MPTCP routing
-    if conf_up == 1:
-        #Add mptcp routes for link1
-        try:
-            subprocess.call(["ip", "route", "add", "table", "1", "to",
-                             network_link1, "dev", iface_link1, "scope", "link"])
-    
-            subprocess.call(["ip", "route", "add", "table", "1", "default", "via",
-                             gw_link1, "dev", iface_link1])
-    
-            subprocess.call(["ip", "rule", "add", "from", ip_link1, "table", "1"])
-    
-            #Add mptcp routes for link2
-            subprocess.call(["ip", "route", "add", "table", "2", "to",
-                             network_link2, "dev", iface_link2, "scope", "link"])
-    
-            subprocess.call(["ip", "route", "add", "table", "2", "default", "via",
-                             gw_link2, "dev", iface_link2])
-    
-            subprocess.call(["ip", "rule", "add", "from", ip_link2, "table", "2"])
+    # Check if valid scheduler and path_manager values
+    if path_manager and (path_manager not in PATH_MANAGERS):
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR invalid path-manager")
+        quit()
+    if scheduler and (scheduler not in SCHEDULERS):
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR scheduler")
+        quit()
 
-    
-        
-            #enable both interfaces for mptcp
-            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath", "on"])
-            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath", "on"])
-            collect_agent.send_log(syslog.LOG_DEBUG, "Added routes")
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying ip route " + str(ex))
-        
-        #enable mptcp
+    # Configure MPTCP routing
+    if conf_up == 1:
+        # Enable mptcp
         try: 
             subprocess.call(["sysctl", "-w", "net.mptcp.mptcp_enabled=1"])
             subprocess.call(["sysctl", "-p"])
             collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP is enabled ")
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
-        
-        
     else:
         try:
-            #delete routes/tables
-            subprocess.call(["ip", "rule", "del", "table", "1"])
-            subprocess.call(["ip", "route", "flush", "table", "1"])
-            subprocess.call(["ip", "rule", "del", "table", "2"])
-            subprocess.call(["ip", "route", "flush", "table", "2"])
-        
-            #disable both interfaces for mptcp
-            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath", "off"])
-            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath", "off"])
-        
-            #disable mptcp
+            # Disable mptcp
             subprocess.call(["sysctl", "-w", "net.mptcp.mptcp_enabled=0"])
             subprocess.call(["sysctl", "-p"])
             
             collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP is disabled ")
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR removing routes and mptcp" + str(ex))
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR disabling mptcp" + str(ex))
+    # Change checksum
+    if checksum is not None:
+        try: 
+            subprocess.call(["sysctl", "-w",
+                             "net.mptcp.mptcp_checksum=%d" % checksum])
+            subprocess.call(["sysctl", "-p"])
+            collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP checksum updated")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
+    # Change syn_retries
+    if syn_retries is not None:
+        try: 
+            subprocess.call(["sysctl", "-w",
+                             "net.mptcp.mptcp_syn_retries=%d" % syn_retries])
+            subprocess.call(["sysctl", "-p"])
+            collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP syn_retries updated")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
+    # Change path_manager
+    if path_manager is not None:
+        try: 
+            subprocess.call(["sysctl", "-w",
+                             "net.mptcp.mptcp_path_manager=%s" %
+                             path_manager])
+            subprocess.call(["sysctl", "-p"])
+            collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP path_manager updated")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
+    # Change scheduler
+    if scheduler is not None:
+        try: 
+            subprocess.call(["sysctl", "-w",
+                             "net.mptcp.mptcp_scheduler=%s" % scheduler])
+            subprocess.call(["sysctl", "-p"])
+            collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP scheduler updated")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
+    # Enable interface 1
+    if iface_on1:
+        try:
+            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath",
+                             "on"])
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting"
+                                   " multipath on interface %s" % iface_link1)
+        else:
+            collect_agent.send_log(syslog.LOG_DEBUG, "Enabled multipath on iface %s"
+                                   % iface_link1)
+    else:
+        try:
+            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath",
+                             "off"])
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting off"
+                                   " multipath on interface %s" % iface_link1)
+        else:
+            collect_agent.send_log(syslog.LOG_DEBUG, "Disabled multipath on iface %s"
+                                   % iface_link1)
+    # Enable interface 2
+    if iface_on2:
+        try:
+            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath",
+                             "on"])
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting"
+                                   " multipath on interface %s" % iface_link2)
+        else:
+            collect_agent.send_log(syslog.LOG_DEBUG, "Enabled multipath on iface %s"
+                                   % iface_link2)
+    else:
+        try:
+            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath",
+                             "off"])
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting off"
+                                   " multipath on interface %s" % iface_link2)
+        else:
+            collect_agent.send_log(syslog.LOG_DEBUG, "Disabled multipath on iface %s"
+                                   % iface_link2) 
+            
 
 if __name__ == "__main__":
     # Define Usage
@@ -118,35 +168,26 @@ if __name__ == "__main__":
                         help='')
     parser.add_argument('iface_link2', metavar='iface_link2', type=str,
                         help='')
-    parser.add_argument('network_link1', metavar='network_link1', type=str,
-                        help='')
-    parser.add_argument('network_link2', metavar='network_link2', type=str,
-                        help='')
-    parser.add_argument('gw_link1', metavar='gw_link1', type=str,
-                        help='')
-    parser.add_argument('gw_link2', metavar='gw_link2', type=str,
-                        help='')
-    parser.add_argument('ip_link1', metavar='ip_link1', type=str,
-                        help='')
-    parser.add_argument('ip_link2', metavar='ip_link2', type=str,
-                        help='')
+    parser.add_argument('-o', '--iface-on1', action='store_true', help='')
+    parser.add_argument('-O', '--iface-on2', action='store_true', help='')
     parser.add_argument('-c', '--conf_up', type=int, default=1, help='')
-
-
+    parser.add_argument('-k', '--checksum', type=int, help='')
+    parser.add_argument('-y', '--syn-retries', type=int, help='')
+    parser.add_argument('-p', '--path-manager', type=str, help='')
+    parser.add_argument('-s', '--scheduler', type=str, help='')
 
     # get args
     args = parser.parse_args()
     iface_link1 = args.iface_link1
     iface_link2 = args.iface_link2
-    network_link1 = args.network_link1
-    network_link2 = args.network_link2
-    gw_link1 = args.gw_link1
-    gw_link2 = args.gw_link2
-    ip_link1 = args.ip_link1
-    ip_link2 = args.ip_link2
+    iface_on1 = args.iface_on1
+    iface_on2 = args.iface_on2
     conf_up = args.conf_up
-    
+    checksum = args.checksum
+    syn_retries = args.syn_retries
+    path_manager = args.path_manager
+    scheduler = args.scheduler    
 
-    main(iface_link1, iface_link2, network_link1, network_link2, gw_link1,
-         gw_link2, ip_link1, ip_link2, conf_up) 
+    main(iface_link1, iface_link2, iface_on1, iface_on2, conf_up, checksum,
+         syn_retries, path_manager, scheduler) 
 

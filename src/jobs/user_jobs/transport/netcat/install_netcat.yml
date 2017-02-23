@@ -48,6 +48,10 @@
     file: path=/opt/openbach-jobs/netcat state=directory mode=0755
     become: yes
   
+  - name: Create netcat stats repository
+    file: path=/var/openbach_stats/netcat state=directory mode=0755
+    become: yes
+  
   - name: Install netcat
     copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/netcat/ mode={{ item.mode }}
     with_items:
@@ -57,7 +61,7 @@
     become: yes
 
   - name: Inform Agent that netcat is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
+    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
     become: yes
 
   - include: '{{ path_src }}/add_job.yml'

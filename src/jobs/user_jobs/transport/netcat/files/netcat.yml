@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'python3 /opt/openbach-jobs/netcat/netcat.py'
+    command:       '/opt/openbach-jobs/netcat/netcat.py'
     command_stop:
 
 arguments:
@@ -47,6 +47,12 @@ arguments:
       flag:        '-t'
       description: >
           Measure the duration of the connection (for the client)
+    - name:        n_times
+      type:        'int'
+      count:       1
+      flag:        '-n'
+      description: >
+          The number of times to repeat connection (one after another). Default = 1
     - name:        in_file
       type:        'str'
       count:       1

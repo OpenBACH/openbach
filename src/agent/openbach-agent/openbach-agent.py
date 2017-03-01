@@ -48,7 +48,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.date import DateTrigger
-#from apscheduler.util import datetime_repr
 import psutil
 import collect_agent
 
@@ -64,16 +63,20 @@ try:
     COLLECT_AGENT_REGISTER_COLLECT = partial(
         collect_agent.register_collect,
         '/opt/openbach-agent/openbach-agent_filter.conf')
+    def terminate_process(process):
+        process.terminate()
 except ImportError:
     # If we failed assure we’re on windows
     import syslog_viveris as syslog
     OS_TYPE = 'windows'
-    PID_FOLDER = r'C:\openbach\pid'
+    PID_FOLDER = r'C:\openbach\pids'
     JOBS_FOLDER = r'C:\openbach\jobs'
     INSTANCES_FOLDER = r'C:\openbach\instances'
     COLLECT_AGENT_REGISTER_COLLECT = partial(
         collect_agent.register_collect,
         r'C:\openbach\openbach-agent_filter.conf')
+    def terminate_process(process):
+        process.send_signal(signal.CTRL_C_EVENT)
 
 
 # Configure logger
@@ -102,6 +105,7 @@ def signal_term_handler(signal, frame):
 
 
 signal.signal(signal.SIGTERM, signal_term_handler)
+signal.signal(signal.SIGINT, signal_term_handler)
 
 
 class JobManager:
@@ -127,6 +131,10 @@ class JobManager:
         self.mutex.release()
 
 
+class NoSuchJobException(Exception):
+    pass
+
+
 def popen(command, args, **kwargs):
     return psutil.Popen(
             shlex.split(command) + shlex.split(args),
@@ -134,14 +142,28 @@ def popen(command, args, **kwargs):
 
 
 def pid_filename(job_name, job_instance_id):
-    """ Function that contructs the filename of the pid file """
-    # Return the pid filename
+    """Contruct the filename of a file that should contain the
+    PID for the given job.
+    """
     filename = '{}{}.pid'.format(job_name, job_instance_id)
     return os.path.join(PID_FOLDER, filename)
 
 
+def read_pid(job_name, job_instance_id):
+    """Return the PID of the given job or raise NoSuchJobException
+    if it can't be found.
+    """
+    try:
+        with open(pid_filename(job_name, job_instance_id)) as pid_file:
+            return int(pid_file.read())
+    except (IOError, ValueError):
+        raise NoSuchJobException from None
+
+
 def list_jobs_in_dir(dirname):
-    """ Function that lists all the Jobs in the directory """
+    """Generate the filename for jobs configuration files in
+    the given directory.
+    """
     for filename in os.listdir(dirname):
         name, ext = os.path.splitext(filename)
         if ext == '.yml':
@@ -164,33 +186,45 @@ def launch_job(job_name, job_instance_id, scenario_instance_id,
     proc.wait()
 
 
+def stop_job_already_running(job_name, job_instance_id):
+    try:
+        pid = read_pid(job_name, job_instance_id)
+    except NoSuchJobException:
+        return
+
+    # Get the process
+    proc = psutil.Process(pid)
+
+    # Kill all its childs
+    processes = proc.children(recursive=True)
+    for child in processes:
+        terminate_process(child)
+    _, still_alive = psutil.wait_procs(processes, timeout=1)
+    for child in still_alive:
+        child.kill()
+
+    # Kill the process
+    terminate_process(proc)
+    try:
+        proc.wait(timeout=2)
+    except psutil.TimeoutExpired:
+        proc.kill()
+
+    os.remove(pid_filename(job_name, job_instance_id))
+
+
 def stop_job(job_name, job_instance_id, command=None, args=None):
-    """ Function that stops the Job Instance """
+    """Cancels the execution of a job or stop the instance if
+    it was already scheduled.
+    """
     try:
         # Cancel the Job Instance
         JobManager().scheduler.remove_job(job_name + job_instance_id)
     except JobLookupError:
-        # Get the pid filename
-        filename = pid_filename(job_name, job_instance_id)
-        # Get the pid
-        try:
-            with open(filename) as f:
-                pid = int(f.read())
-        except FileNotFoundError:
-            return
-        # Get the process
-        proc = psutil.Process(pid)
-        # Kill all its childs
-        for child in proc.children(recursive=True):
-            child.terminate()
-        # Kill the process
-        proc.terminate()
-        proc.wait()
-        # Delate the pid file
-        os.remove(filename)
-        # Launch the command stop if there is one
-        if command:
+        stop_job_already_running(job_name, job_instance_id)
+        if command is not None:
             popen(command, args).wait()
+
     # Remove the Job Instance to the JobManager
     try:
         with JobManager(job_name) as job:
@@ -469,8 +503,8 @@ class ClientThread(threading.Thread):
             # If date has not occur yet, register the schedule in a file in case
             # the openbach-agent restarts
             if date is not None:
-                filename = '{}{}{}.start'.format(
-                    self.path_scheduled_instances_job, name, job_instance_id)
+                filename = '{}{}.start'.format(name, job_instance_id)
+                filename = os.path.join(self.path_scheduled_instances_job, filename)
                 with open(filename, 'w') as job_instance_prog:
                     print(name, job_instance_id, scenario_instance_id,
                           owner_scenario_instance_id, date_value, arguments,
@@ -593,7 +627,7 @@ class ClientThread(threading.Thread):
             job_instance_id = args[1]
             # Check if the job instance is not already started (only for the
             # 'start')
-            if request == 'start':
+            if request == 'start_job_instance_agent':
                 with JobManager(job_name) as job:
                     if job_instance_id in job['instances']:
                         raise BadRequest(
@@ -707,8 +741,8 @@ class ClientThread(threading.Thread):
         # If date has not occur yet, register the schedule in a file in case
         # the openbach-agent restarts
         if date is not None:
-            filename = '{}{}{}.stop'.format(self.path_scheduled_instances_job,
-                                            job_name, job_instance_id)
+            filename = '{}{}.stop'.format(job_name, job_instance_id)
+            filename = os.path.join(self.path_scheduled_instances_job, filename)
             with open(filename, 'w') as job_instance_stop:
                 print(job_name, job_instance_id, value, sep='\n',
                       file=job_instance_stop)
@@ -717,10 +751,10 @@ class ClientThread(threading.Thread):
                                   date_value):
         """ Function that schedule a watch on the Job Instance """
         # Schedule the watch of the Job Instance
-        date = schedule_watch(job_name, job_instance_id, date_type, date_value)
+        schedule_watch(job_name, job_instance_id, date_type, date_value)
         # Register the schedule in a file in case the openbach-agent restarts
-        filename = '{}{}{}.status'.format(
-            self.path_scheduled_instances_job, job_name, job_instance_id)
+        filename = '{}{}.status'.format(job_name, job_instance_id)
+        filename = os.path.join(self.path_scheduled_instances_job, filename)
         if date_type == 'stop':
             filename += '_stop'
         with open(filename, 'w') as job_instance_status:

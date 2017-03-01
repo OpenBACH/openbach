@@ -301,13 +301,12 @@ std::string reload_all_stats() {
  */
 std::string change_config(bool storage, bool broadcast) {
   // Get the ids
-  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
-  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
+  unsigned int job_id = from_env("JOB_INSTANCE_ID", 0);
+  unsigned int scenario_id = from_env("SCENARIO_INSTANCE_ID", 0);
 
   // Format the message
   std::stringstream command;
-  command << "6 " << (scenario_instance_id ? scenario_instance_id : "0") << " " << (job_instance_id ? job_instance_id : "0") << " ";
-  command << storage << " " << broadcast;
+  command << "6 " << scenario_id << " " << job_id << " " << storage << " " << broadcast;
 
   try {
     return rstats_messager(command.str());

@@ -63,8 +63,6 @@ try:
     COLLECT_AGENT_REGISTER_COLLECT = partial(
         collect_agent.register_collect,
         '/opt/openbach-agent/openbach-agent_filter.conf')
-    def terminate_process(process):
-        process.terminate()
 except ImportError:
     # If we failed assure we’re on windows
     import syslog_viveris as syslog
@@ -75,8 +73,6 @@ except ImportError:
     COLLECT_AGENT_REGISTER_COLLECT = partial(
         collect_agent.register_collect,
         r'C:\openbach\openbach-agent_filter.conf')
-    def terminate_process(process):
-        process.send_signal(signal.CTRL_C_EVENT)
 
 
 # Configure logger
@@ -196,15 +192,15 @@ def stop_job_already_running(job_name, job_instance_id):
     proc = psutil.Process(pid)
 
     # Kill all its childs
-    processes = proc.children(recursive=True)
-    for child in processes:
-        terminate_process(child)
-    _, still_alive = psutil.wait_procs(processes, timeout=1)
+    children = proc.children(recursive=True)
+    for child in children:
+        child.terminate()
+    _, still_alive = psutil.wait_procs(children, timeout=1)
     for child in still_alive:
         child.kill()
 
     # Kill the process
-    terminate_process(proc)
+    proc.terminate()
     try:
         proc.wait(timeout=2)
     except psutil.TimeoutExpired:
@@ -328,7 +324,7 @@ def schedule_job_instance_stop(job_name, job_instance_id, date_value,
         else:
             # Remove the Job Instance to the JobManager
             del job['instances'][job_instance_id]
-    if not reschedule or date != None:
+    if not reschedule or date is not None:
         # Schedule the stop of the Job Instance
         try:
             JobManager().scheduler.add_job(stop_job, 'date', run_date=date,

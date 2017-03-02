@@ -25,10 +25,19 @@ asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::qu
 
 
 inline unsigned int from_env(const char* name, unsigned int default_value) {
+#if defined _WIN32
+  const unsigned int ENV_VALUE_LENGTH = 1000;
+  char value[ENV_VALUE_LENGTH];
+  unsigned int retrieved = GetEnvironmentVariableA(name, value, ENV_VALUE_LENGTH);
+  if (!retrieved) {
+    return default_value;
+  }
+#else
   const char* value = std::getenv(name);
   if (!value) {
     return default_value;
   }
+#endif
   std::stringstream parser;
   parser << value;
   unsigned int parsed;

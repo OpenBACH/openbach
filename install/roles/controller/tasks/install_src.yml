@@ -225,7 +225,7 @@
   
 - name: Remove tar.gz
   file: path={{ item.src }}/jobs.tar.gz state=absent
-  with items: 
+  with_items: 
     - {'src': '/opt/openbach-controller'}
     - {'src': '../src'}
     

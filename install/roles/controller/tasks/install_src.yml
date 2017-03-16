@@ -213,9 +213,22 @@
 - name: Copy the src of APScheduler
   copy: src=../src/controller/apscheduler dest=/opt/openbach-controller/src_agent
 
-- name: Copy the src of the Jobs
-  copy: src=../src/jobs dest=/opt/openbach-controller
+- name: Pack the src of the Jobs
+  local_action: command tar -cvzf ../src/jobs.tar.gz -C ../src jobs/
+  become: no
 
+- name: Move the compressed src of the Jobs
+  copy: src=../src/jobs.tar.gz dest=/opt/openbach-controller/jobs.tar.gz
+
+- name: Uncompress the src of the Jobs
+  unarchive: src=/opt/openbach-controller/jobs.tar.gz dest=/opt/openbach-controller
+  
+- name: Remove tar.gz
+  file: path={{ item.src }}/jobs.tar.gz state=absent
+  with items: 
+    - {'src': '/opt/openbach-controller'}
+    - {'src': '../src'}
+    
 - name: Create the repository for the private Jobs
   file: path=/opt/openbach-controller/jobs/private_jobs state=directory owner={{ ansible_ssh_user }} group={{ ansible_ssh_user }}
 

@@ -33,17 +33,39 @@
 
 ---
 
+- name: Check if services are installed (agent)
+  stat: path=/etc/systemd/system/openbach-agent.service
+  register: agent_service1604
+  when: ansible_distribution_version == "16.04"
+
+- name: Check if services are installed (rstats)
+  stat: path=/etc/systemd/system/rstats.service
+  register: rstat_service1604
+  when: ansible_distribution_version == "16.04"
+
 - name: Delete services to boot
-  shell: update-rc.d -f {{ item }} remove
-  with_items:
-    - openbach-agent
-    - rstats
+  shell: systemctl disable openbach-agent
+  when: ansible_distribution_version == "16.04" and agent_service1604.stat.exists
+
+- name: Delete services to boot
+  shell: systemctl disable rstats
+  when: ansible_distribution_version == "16.04" and rstat_service1604.stat.exists
+  
+- name: Check if services are installed (agent)
+  stat: path=/etc/init.d/openbach-agent
+  register: agent_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Check if services are installed (rstat)
+  stat: path=/etc/init.d/rstat
+  register: rstat_servicenot1604
   when: ansible_distribution_version != "16.04"
 
 - name: Delete services to boot
-  shell: systemctl disable {{ item }}
-  with_items:
-    - openbach-agent
-    - rstats
-  when: ansible_distribution_version == "16.04"
+  shell: update-rc.d -f openbach-agent remove
+  when: ansible_distribution_version != "16.04" and agent_servicenot1604.stat.exists
+
+- name: Delete services to boot
+  shell: update-rc.d -f rstat remove
+  when: ansible_distribution_version != "16.04" and rstat_servicenot1604.stat.exists
 

@@ -40,6 +40,12 @@
 - name: Uninstall Collector
   shell: /opt/openbach-auditorium/frontend_scripts/del_collector.py {{ collector_ip }}
   when: delfile_status.stat.exists
+  register: collect_status
+  ignore_errors: yes
+
+- name: Debug message
+  debug: msg="The collector cannot be uninstalled because it might not be installed"
+  when: collect_status | failed
 
 - name: Uninstall Agent on the Controller
   shell: /opt/openbach-auditorium/frontend_scripts/uninstall_agent.py {{ controller_ip }}

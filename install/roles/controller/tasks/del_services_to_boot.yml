@@ -61,8 +61,8 @@
   shell: systemctl disable status-manager
   when: ansible_distribution_version == "16.04" and statusmanager_service1604.stat.exists
 
-#Other than Ubuntu 16.04
- - name: Check if services are installed (conductor)
+# Other than Ubuntu 16.04
+- name: Check if services are installed (conductor)
   stat: path=/etc/init.d/openbach-conductor
   register: conductor_servicenot1604
   when: ansible_distribution_version != "16.04"

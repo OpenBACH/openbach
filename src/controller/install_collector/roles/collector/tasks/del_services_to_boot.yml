@@ -33,20 +33,60 @@
 
 ---
 
-- name: Delete services to boot
-  shell: update-rc.d -f {{ item }} remove
-  with_items:
-    - logstash
-    - elasticsearch
-    - influxdb
-  when: ansible_distribution_version != "16.04"
-  ignore_errors: true
 
-- name: Delete services to boot
-  shell: systemctl disable {{ item }}
-  with_items:
-    - logstash
-    - elasticsearch
-    - influxdb
+# For Ubuntu 16.04 (systemd)
+- name: Check if services are installed (logstash)
+  stat: path=/etc/init.d/logstash
+  register: logstash_service1604
   when: ansible_distribution_version == "16.04"
-  ignore_errors: true
+
+- name: Check if services are installed (elasticsearch)
+  stat: path=/usr/lib/systemd/system/elasticsearch.service
+  register: elastic_service1604
+  when: ansible_distribution_version == "16.04"
+
+- name: Check if services are installed (influxdb)
+  stat: path=/lib/systemd/system/influxdb.service
+  register: influxdb_service1604
+  when: ansible_distribution_version == "16.04"
+
+- name: Delete services to boot (logstash)
+  shell: systemctl disable logstash 
+  when: ansible_distribution_version == "16.04" and logstash_service1604.stat.exists
+
+- name: Delete services to boot (elasticsearch)
+  shell: systemctl disable elasticsearch
+  when: ansible_distribution_version == "16.04" and elastic_service1604.stat.exists
+
+- name: Delete services to boot (influxdb)
+  shell: systemctl disable influxdb 
+  when: ansible_distribution_version == "16.04" and influxdb_service1604.stat.exists
+
+# Other than Ubuntu 16.04
+- name: Check if services are installed (logstash)
+  stat: path=/etc/init.d/logstash
+  register: logstash_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Check if services are installed (elasticsearch)
+  stat: path=/etc/init.d/elasticsearch
+  register: elastic_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Check if services are installed (influxdb)
+  stat: path=/etc/init.d/influxdb
+  register: influxdb_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Delete services to boot (logstash)
+  shell: update-rc.d -f logstash remove
+  when: ansible_distribution_version != "16.04" and logstash_servicenot1604.stat.exists
+
+- name: Delete services to boot (elasticsearch)
+  shell: update-rc.d -f elasticsearch remove
+  when: ansible_distribution_version != "16.04" and elastic_servicenot1604.stat.exists
+
+- name: Delete services to boot (influxdb)
+  shell: update-rc.d -f influxdb remove
+  when: ansible_distribution_version != "16.04" and influxdb_servicenot1604.stat.exists
+

@@ -33,6 +33,7 @@
 
 ---
 
+ #For Ubuntu 16.04
 - name: Check if services are installed (agent)
   stat: path=/etc/systemd/system/openbach-agent.service
   register: agent_service1604
@@ -43,14 +44,15 @@
   register: rstat_service1604
   when: ansible_distribution_version == "16.04"
 
-- name: Delete services to boot
+- name: Delete services to boot (agent)
   shell: systemctl disable openbach-agent
   when: ansible_distribution_version == "16.04" and agent_service1604.stat.exists
 
-- name: Delete services to boot
+- name: Delete services to boot (rstats)
   shell: systemctl disable rstats
   when: ansible_distribution_version == "16.04" and rstat_service1604.stat.exists
-  
+
+#Other than Ubuntu 16.04
 - name: Check if services are installed (agent)
   stat: path=/etc/init.d/openbach-agent
   register: agent_servicenot1604
@@ -61,11 +63,11 @@
   register: rstat_servicenot1604
   when: ansible_distribution_version != "16.04"
 
-- name: Delete services to boot
+- name: Delete services to boot (agent)
   shell: update-rc.d -f openbach-agent remove
   when: ansible_distribution_version != "16.04" and agent_servicenot1604.stat.exists
 
-- name: Delete services to boot
+- name: Delete services to boot (rstats)
   shell: update-rc.d -f rstat remove
   when: ansible_distribution_version != "16.04" and rstat_servicenot1604.stat.exists
 

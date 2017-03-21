@@ -73,7 +73,7 @@ def monitor():
     # Compute data rate
     mutex.acquire()
     diff_timestamp = float(timestamp - previous_timestamp) / 1000 # in seconds
-    rate = float(bytes_count - previous_bytes_count)/diff_timestamp
+    rate = float(bytes_count - previous_bytes_count)*8/diff_timestamp
     mutex.release()
 
     # Send the stat to the Collector
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('interval', metavar='interval', type=int, nargs=1,
                         help='Time interval (in sec) use to calculate rate')
     parser.add_argument('chain', metavar='chain', type=str, nargs=1,
-                        help='Chain to use (INPUT or FORWARD)')
+                        help='Chain to use (INPUT, OUPUT, FORWARD ...)')
     parser.add_argument('-j', '--jump', type=str, nargs=1,
                         help='target')
     parser.add_argument('-s', '--source', type=str, nargs=1,

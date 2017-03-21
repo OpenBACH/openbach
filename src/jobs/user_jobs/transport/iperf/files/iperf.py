@@ -65,7 +65,7 @@ if __name__ == "__main__":
     group.add_argument('-s', '--server', action='store_true',
                        help='Run in server mode')
     group.add_argument('-c', '--client', type=str,
-                       help='Run in client mode')
+                       help='Run in client mode and specify server IP address')
     parser.add_argument('-i', '--interval', type=int,
                         help='Pause *interval* seconds between periodic'
                         ' bandwidth reports')

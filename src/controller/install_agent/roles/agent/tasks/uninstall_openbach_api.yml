@@ -33,8 +33,13 @@
 
 ---
 
+- name: Check if openbach-api is installed
+  stat: path=/opt/openbach-agent/openbach-api/
+  register: api 
+
 - name: Uninstall the OpenBACH API
   shell: cat files_installed.txt | xargs rm -rf chdir=/opt/openbach-agent/openbach-api/
+  when: api.stat.exists
 
 - name: Remove the source of the OpenBACH API
   file: path=/opt/openbach-agent/openbach-api state=absent

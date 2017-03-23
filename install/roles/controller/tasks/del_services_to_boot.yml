@@ -33,21 +33,59 @@
 
 ---
 
-- name: Delete services to boot
-  shell: update-rc.d -f {{ item }} remove
-  with_items:
-    - openbach-conductor
-    - openbach-backend
-    - status-manager
-  when: ansible_distribution_version != "16.04"
-  ignore_errors: true
-
-- name: Delete services to boot
-  shell: systemctl disable {{ item }}
-  with_items:
-    - openbach-conductor
-    - openbach-backend
-    - status-manager
+# For Ubuntu 16.04 (systemd)
+- name: Check if services are installed (conductor)
+  stat: path=/etc/systemd/system/openbach-conductor.service
+  register: conductor_service1604
   when: ansible_distribution_version == "16.04"
-  ignore_errors: true
+
+- name: Check if services are installed (backend)
+  stat: path=/etc/systemd/system/openbach-backend.service
+  register: backend_service1604
+  when: ansible_distribution_version == "16.04"
+
+- name: Check if services are installed (status-manager)
+  stat: path=/etc/systemd/system/status-manager.service
+  register: statusmanager_service1604
+  when: ansible_distribution_version == "16.04"
+
+- name: Delete services to boot (conductor)
+  shell: systemctl disable openbach-conductor
+  when: ansible_distribution_version == "16.04" and conductor_service1604.stat.exists
+
+- name: Delete services to boot (backend)
+  shell: systemctl disable openbach-backend
+  when: ansible_distribution_version == "16.04" and backend_service1604.stat.exists
+
+- name: Delete services to boot (status-manager)
+  shell: systemctl disable status-manager
+  when: ansible_distribution_version == "16.04" and statusmanager_service1604.stat.exists
+
+# Other than Ubuntu 16.04
+- name: Check if services are installed (conductor)
+  stat: path=/etc/init.d/openbach-conductor
+  register: conductor_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Check if services are installed (backend)
+  stat: path=/etc/systemd/system/openbach-backend
+  register: backend_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Check if services are installed (status-manager)
+  stat: path=/etc/init.d/status-manager
+  register: statusmanager_servicenot1604
+  when: ansible_distribution_version != "16.04"
+
+- name: Delete services to boot (conductor)
+  shell: update-rc.d -f openbach-conductor remove
+  when: ansible_distribution_version != "16.04" and conductor_servicenot1604.stat.exists
+
+- name: Delete services to boot (backend)
+  shell: update-rc.d -f openbach-backend remove
+  when: ansible_distribution_version != "16.04" and backend_servicenot1604.stat.exists
+
+- name: Delete services to boot (status-manager)
+  shell: update-rc.d -f status-manager remove
+  when: ansible_distribution_version != "16.04" and statusmanager_servicenot1604.stat.exists
 

@@ -35,4 +35,5 @@
 
 - name: Delete the version file on the Controller
   file: path=/opt/openbach-controller/ state=absent
+  ignore_errors: yes
 

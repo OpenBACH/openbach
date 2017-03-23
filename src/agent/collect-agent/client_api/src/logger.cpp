@@ -122,15 +122,19 @@ static void init_logger_addr()
         /* relative path */
         char *q;
 
-        strcpy( pathname, __argv[0] );
-        p = strrchr( pathname, '\\' ) + 1;
-        q = strrchr( pathname, '/' ) + 1;
-        if( p < q )
-            *q = 0;
-        else if( p > q )
-            *p = 0;
-        else
+        if (__argc) {
+            strcpy( pathname, __argv[0] );
+            p = strrchr( pathname, '\\' ) + 1;
+            q = strrchr( pathname, '/' ) + 1;
+            if( p < q )
+                *q = 0;
+            else if( p > q )
+                *p = 0;
+            else
+                pathname[0] = 0;
+        } else {
             pathname[0] = 0;
+        }
         strcat( pathname, syslog_conf_dir );
     }
     p = &pathname[ strlen( pathname ) - 1 ];

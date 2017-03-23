@@ -25,10 +25,19 @@ asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::qu
 
 
 inline unsigned int from_env(const char* name, unsigned int default_value) {
+#if defined _WIN32
+  const unsigned int ENV_VALUE_LENGTH = 1000;
+  char value[ENV_VALUE_LENGTH];
+  unsigned int retrieved = GetEnvironmentVariableA(name, value, ENV_VALUE_LENGTH);
+  if (!retrieved) {
+    return default_value;
+  }
+#else
   const char* value = std::getenv(name);
   if (!value) {
     return default_value;
   }
+#endif
   std::stringstream parser;
   parser << value;
   unsigned int parsed;
@@ -75,30 +84,38 @@ bool register_collect(
     int log_facility,
     bool _new) {
   // Get the ids
-  const char* job_name = std::getenv("JOB_NAME");
+  const char* job = std::getenv("JOB_NAME");
+  std::string job_name(job ? job : "job_debug");
   job_instance_id = from_env("JOB_INSTANCE_ID", 0);
   scenario_instance_id = from_env("SCENARIO_INSTANCE_ID", 0);
   owner_scenario_instance_id = from_env("OWNER_SCENARIO_INSTANCE_ID", 0);
-  std::ifstream agent_name_file("/opt/openbach-agent/agent_name");
-  if (!agent_name_file) {
-    std::ifstream host_name_file("/etc/hostname");
-    if (!host_name_file) {
-      agent_name = "agent_name_not_found";
-    } else {
-      std::getline(host_name_file, agent_name);
-      host_name_file.close();
-    }
+  std::ifstream agent_name_file;
+  
+  agent_name_file.open("/opt/openbach-agent/agent_name");
+  if (agent_name_file.is_open()) {
+    goto read;
+  }
+
+  agent_name_file.open("/etc/hostname");
+  if (agent_name_file.is_open()) {
+    goto read;
+  }
+
+  agent_name_file.open("C:\\openbach\\agent_name");
+  if (!agent_name_file.is_open()) {
+    agent_name = "agent_name_not_found";
   } else {
+read:
     std::getline(agent_name_file, agent_name);
     agent_name_file.close();
   }
 
   // Open the log
-  openlog((char*)(job_name ? job_name : "job_debug"), log_option, log_facility);
+  openlog(job_name.c_str(), log_option, log_facility);
 
   // Format the message to send to rstats
   std::stringstream command;
-  command << "1 \"" << config_file << "\" \"" << (job_name ? job_name : "job_debug") << "\" " << job_instance_id << " " << scenario_instance_id << " " << owner_scenario_instance_id << " \"" << agent_name << "\" " << _new;
+  command << "1 \"" << config_file << "\" \"" << job_name << "\" " << job_instance_id << " " << scenario_instance_id << " " << owner_scenario_instance_id << " \"" << agent_name << "\" " << _new;
 
   // Send the message to rstats
   std::string result;
@@ -293,13 +310,12 @@ std::string reload_all_stats() {
  */
 std::string change_config(bool storage, bool broadcast) {
   // Get the ids
-  const char* job_instance_id = std::getenv("JOB_INSTANCE_ID");
-  const char* scenario_instance_id = std::getenv("SCENARIO_INSTANCE_ID");
+  unsigned int job_id = from_env("JOB_INSTANCE_ID", 0);
+  unsigned int scenario_id = from_env("SCENARIO_INSTANCE_ID", 0);
 
   // Format the message
   std::stringstream command;
-  command << "6 " << (scenario_instance_id ? scenario_instance_id : "0") << " " << (job_instance_id ? job_instance_id : "0") << " ";
-  command << storage << " " << broadcast;
+  command << "6 " << scenario_id << " " << job_id << " " << storage << " " << broadcast;
 
   try {
     return rstats_messager(command.str());

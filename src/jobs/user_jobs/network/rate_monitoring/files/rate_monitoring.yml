@@ -3,7 +3,7 @@
 general:
   name:            rate_monitoring
   description: >
-      This Job measures the rate (b/s)
+      This Job measures the rate (b/s) using iptables chains.
   job_version:     0.1
   keywords:        [rate, monitoring, iptables]
   persistent:      True
@@ -19,12 +19,12 @@ arguments:
       type:        'int'
       count:       1
       description: >
-          The interval the rate is mesured
+          The sampling time (in seconds) of the measured rate
     - name:        chain
       type:        'str'
       count:       1
       description: >
-          The chain (in iptables) to monitor
+          The chain (in iptables, i.e. INPUT/OUTPUT/POSTROUTING/...) to monitor
   optional:
     - name:        jump
       type:        'str'

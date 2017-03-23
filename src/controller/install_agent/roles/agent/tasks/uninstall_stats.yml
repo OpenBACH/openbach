@@ -38,14 +38,19 @@
 
 - name: Stop Rstats
   service: name=rstats state=stopped
+  when: ansible_distribution_version != "16.04" and rstat_servicenot1604.stat.exists
+
+- name: Stop Rstats
+  service: name=rstats state=stopped
+  when: ansible_distribution_version == "16.04" and rstat_service1604.stat.exists
 
 - name: Remove Rstats Service
   file: path=/etc/init.d/rstats state=absent
-  when: ansible_distribution_version != "16.04"
+  when: ansible_distribution_version != "16.04" and rstat_servicenot1604.stat.exists
 
 - name: Remove Rstats Service
   file: path=/etc/systemd/system/rstats.service state=absent
-  when: ansible_distribution_version == "16.04"
+  when: ansible_distribution_version == "16.04" and rstat_service1604.stat.exists
 
 - name: Uninstall Rstats
   file: path=/opt/rstats/ state=absent

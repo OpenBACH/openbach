@@ -1,3 +1,3 @@
 [submodule "src/agent/openbach-api"]
 	path = src/agent/openbach-api
-  url = https://forge.net4sat.org/openbach/openbach-api.git
+	url = https://forge.net4sat.org/openbach/openbach-api.git

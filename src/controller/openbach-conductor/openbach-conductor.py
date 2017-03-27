@@ -1901,7 +1901,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             raise BadRequest('The job' + job_name + 'is not installed in agent' +
-                             agent, 404,
+                             str(agent), 404,
                              {'job_name': '{} on {}'.format(
                                  job_name, agent_ip)})
         # Get the owner_scenario_instance_id

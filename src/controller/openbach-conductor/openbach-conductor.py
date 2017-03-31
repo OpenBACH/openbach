@@ -1239,8 +1239,8 @@ class ClientThread(threading.Thread):
         # return it help
         return {'job_name': name, 'help': job.help}, 200
 
-    def install_jobs_action(self, addresses, names, severity=0,
-                            local_severity=0):
+    def install_jobs_action(self, addresses, names, severity=1,
+                            local_severity=1):
         """ Action that installs one or more Jobs on one or more Agents """
         # Check if all the addresses given are well formed
         for address in addresses:

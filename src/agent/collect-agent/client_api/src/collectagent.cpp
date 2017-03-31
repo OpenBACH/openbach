@@ -85,7 +85,7 @@ bool register_collect(
     bool _new) {
   // Get the ids
   const char* job = std::getenv("JOB_NAME");
-  std::string job_name(job ? job : "job_debug");
+  const char* job_name(job ? job : "job_debug");
   job_instance_id = from_env("JOB_INSTANCE_ID", 0);
   scenario_instance_id = from_env("SCENARIO_INSTANCE_ID", 0);
   owner_scenario_instance_id = from_env("OWNER_SCENARIO_INSTANCE_ID", 0);
@@ -111,7 +111,7 @@ read:
   }
 
   // Open the log
-  openlog(job_name.c_str(), log_option, log_facility);
+  openlog(job_name, log_option, log_facility);
 
   // Format the message to send to rstats
   std::stringstream command;

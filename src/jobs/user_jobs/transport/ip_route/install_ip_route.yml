@@ -17,8 +17,8 @@
     file: path=/var/openbach_stats/ip_route state=directory mode=0755
     become: yes
 
-  - name: Install Fping Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/fping/ mode={{ item.mode }}
+  - name: Install ip_route Job
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ip_route/ mode={{ item.mode }}
     with_items:
       - { file: 'ip_route.py', mode: '0755' }
       - { file: 'ip_route.help', mode: '0644' }

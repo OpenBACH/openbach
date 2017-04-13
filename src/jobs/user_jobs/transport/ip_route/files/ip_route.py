@@ -16,9 +16,9 @@ def handle_exception(exception, timestamp):
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl):
-    conffile = "/opt/openbach-jobs/fping/fping_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs/ip_route/ip_route_rstats_filter.conf"
 
-    cmd = ['fping', destination_ip]
+    cmd = ['ip_route', destination_ip]
     cmd.extend(command_line_flag_for_argument(count, '-c'))
     cmd.extend(command_line_flag_for_argument(interval, '-i'))
     cmd.extend(command_line_flag_for_argument(interface, '-I'))

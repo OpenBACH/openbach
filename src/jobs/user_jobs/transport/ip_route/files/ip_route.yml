@@ -4,17 +4,17 @@
 ---
 
 general:
-  name:            fping
+  name:            ip_route
   description: >
-      This Job executes the fping command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval).
+      This Job executes the ip_route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
   job_version:     0.1
-  keywords:        [ping, fping, rate, rtt, round, trip, time]
+  keywords:        [ip_route, ip_route, rate, rtt, round, trip, time]
   persistent:      true
 
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/fping/fping.py'
+    command:       '/opt/openbach-jobs/ip_route/ip_route.py'
     command_stop:
 
 arguments:
@@ -23,7 +23,7 @@ arguments:
       type:        'ip'
       count:       1
       description: >
-          The destination ip of the fping
+          The destination ip of the ip_route
   optional:
     - name:        count
       type:        'int'

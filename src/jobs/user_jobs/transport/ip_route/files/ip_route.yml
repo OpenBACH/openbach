@@ -37,10 +37,3 @@ arguments:
       count:       1
       description: >
           The ip address of the first hop to reach the destination
-
-
-statistics:
-    - name:        rtt
-      description: >
-          The Round trip time of ICMP packets.
-      frequency:   'every *count x interval* sent packets'

@@ -4,17 +4,17 @@
 ---
 
 general:
-  name:            ip_route
+  name:            fping
   description: >
-      This Job executes the ip_route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
+      This Job executes the fping command to measure the rtt delay of a group of ICMP packets (with a frequency of count*interval).
   job_version:     0.1
-  keywords:        [ip_route]
-  persistent:      false
+  keywords:        [ping, fping, rate, rtt, round, trip, time]
+  persistent:      true
 
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/ip_route/ip_route.py'
+    command:       '/opt/openbach-jobs/fping/fping.py'
     command_stop:
 
 arguments:
@@ -23,62 +23,46 @@ arguments:
       type:        'ip'
       count:       1
       description: >
-          The destination ip address of the ip_route
-
-    - name:        Subnet_Mask
-      type:        'ip'
+          The destination ip of the fping
+  optional:
+    - name:        count
+      type:        'int'
       count:       1
+      flag:        '-c'
       description: >
-          The Subnet mask of the destination ip address
-
-    - name:        Gateway_ip
-      type:        'ip'
+          Stop after sending count ECHO_REQUEST packets. Default is 3.
+    - name:        interval
+      type:        'int'
       count:       1
+      flag:        '-i'
       description: >
-          The ip address of the first hop to reach the destination 
+          Wait interval seconds between sending each packet.
+    - name:        interface
+      type:        'str'
+      count:       1
+      flag:        '-I'
+      description: >
+          interface is either an address, or an interface name.
+          If interface is an address, it sets source address to specified interface address.
+          If interface is an interface name, it sets source interface to specified interface.
+    - name:        packetsize
+      type:        'int'
+      count:       1
+      flag:        '-s'
+      description: >
+          Specifies the number of data bytes to be sent.
+          The default is 56, which translates into 64 ICMP data bytes when combined with
+          the 8 bytes of ICMP header data.
+    - name:        ttl
+      type:        'int'
+      count:       1
+      flag:        '-t'
+      description: >
+          Set the IP Time to Live.
 
+statistics:
+    - name:        rtt
+      description: >
+          The Round trip time of ICMP packets.
+      frequency:   'every *count x interval* sent packets'
 
-
-#
-#
-#  optional:
-#    - name:        count
-#      type:        'int'
-#      count:       1
-#      flag:        '-c'
-#      description: >
-#          Stop after sending count ECHO_REQUEST packets. Default is 3.
-#    - name:        interval
-#      type:        'int'
-#      count:       1
-#      flag:        '-i'
-#      description: >
-#          Wait interval seconds between sending each packet.
-#    - name:        interface
-#      type:        'str'
-#      count:       1
-#      flag:        '-I'
-#      description: >
-#          interface is either an address, or an interface name.
-#          If interface is an address, it sets source address to specified interface address.
-#          If interface is an interface name, it sets source interface to specified interface.
-#    - name:        packetsize
-#      type:        'int'
-#      count:       1
-#      flag:        '-s'
-#      description: >
-#          Specifies the number of data bytes to be sent.
-#          The default is 56, which translates into 64 ICMP data bytes when combined with
-#          the 8 bytes of ICMP header data.
-#    - name:        ttl
-#      type:        'int'
-#      count:       1
-#      flag:        '-t'
-#      description: >
-#          Set the IP Time to Live.
-#
-#statistics:
-#    - name:        rtt
-#      description: >
-#          The Round trip time of ICMP packets.
-#      frequency:   'every *count x interval* sent packets'

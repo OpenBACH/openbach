@@ -1,8 +1,5 @@
 ---
 
-
----
-
 general:
   name:            iproute
   description: >
@@ -15,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/ip_route/ip_route.py'
+    command:       '/usr/bin/env python3 /opt/openbach-jobs/ip_route/ip_route.py'
     command_stop:
 
 arguments:
@@ -37,3 +34,7 @@ arguments:
       count:       1
       description: >
           The ip address of the first hop to reach the destination
+
+  optional:
+
+statistics:

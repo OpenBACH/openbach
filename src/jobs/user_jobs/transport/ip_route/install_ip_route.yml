@@ -6,7 +6,7 @@
 
   tasks:
   - name: Install ip_route
-    apt: name=ip_route state=present
+    apt: name=iproute state=present
     become: yes
 
   - name: Create ip_route repository

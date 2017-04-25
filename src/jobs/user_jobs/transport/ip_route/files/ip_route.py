@@ -27,9 +27,12 @@ def main(destination_ip, subnet_Mask, Gatewap_ip):
     cmd = ['ip_route', destination_ip]
     cmd = ['ip_route', Subnet_Mask]
     cmd = ['ip_route', Gateway_ip]
+    
+ #   cmd.extend(command_line_flag_for_argument(destination_ip, '-net'))
+ #   cmd.extend(command_line_flag_for_argument(Subnet_Mask, 'netmask'))
+ #   cmd.extend(command_line_flag_for_argument(Gateway_ip, 'gw'))
 
-
-    #non persitent jobs that finishes without being stopped manually
+    #Its a non persitent job = A job that stops alone (not manually)
 
 if __name__ == "__main__":
     # Define Usage
@@ -41,7 +44,6 @@ if __name__ == "__main__":
                         help='') 
     parser.add_argument('Gateway_ip', type=int,
                         help='')
-
 
     # get args
     args = parser.parse_args()

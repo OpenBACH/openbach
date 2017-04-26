@@ -4,62 +4,45 @@ import syslog
 import collect_agent
 
 
-"""
-def command_line_flag_for_argument(argument, flag):
-    if argument is not None:
-        yield flag
-        yield str(argument)
-"""
-"""def handle_exception(exception, timestamp):
-    statistics = {'status': 'Error'}
-    collect_agent.send_stat(timestamp, **statistics)
-    collect_agent.send_log(syslog.LOG_ERR, "ERROR: %s" % exception)
-"""
-
 def main(destination_ip, subnet_Mask, Gatewap_ip):
     conffile = "/opt/openbach-jobs/ip_route/ip_route_rstats_filter.conf"
-    success = collect_agent.register_collect(conffile)     # nme
-    if not succes:					   # nme
-        return						   # nme
+    success = collect_agent.register_collect(conffile)     
+    if not success:
+        return
 
     collect_agent.send_log(syslog.LOG_INFO, "Starting ip_route")
 
-    cmd = ['ip_route', destination_ip]
-    cmd = ['ip_route', Subnet_Mask]
-    cmd = ['ip_route', Gateway_ip]
-    
- #   cmd.extend(command_line_flag_for_argument(destination_ip, '-net'))
- #   cmd.extend(command_line_flag_for_argument(Subnet_Mask, 'netmask'))
- #   cmd.extend(command_line_flag_for_argument(Gateway_ip, 'gw'))
+    # Je défini une liste avec mes arguments et je fais ensuite appel à ma liste en utilisant le module subprocess
+    commande = ["route", "add", "-net", destination_ip, "netmask", Subnet_Mask, "gw", Gateway_ip]
+    subprocess.check_call(commande)
 
-    #Its a non persitent job = A job that stops alone (not manually)
+    collect_agent.send_log(syslog.LOG_INFO, "ip_route job done") 
+
+
+def ip(argument):
+    address = argument.split('.')
+    if len(address) != 4:
+        raise TypeError('Not an IP')
+
+    for elem in map(int, address):
+        if elem not in range(256):
+            raise ValueError('Element of IP address not in range 0 to 255')
+
+    return argument
+
 
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('destination_ip', type=int,
-                        help='')
-    parser.add_argument('Subnet_Mask', type=int,
-                        help='') 
-    parser.add_argument('Gateway_ip', type=int,
-                        help='')
-
-# if modif 1 juste ==>
-
-  #  parser.add_argument('-net', '--destination_ip', type=int,
-  #                      help='')
-  #  parser.add_argument('netmask', 'Subnet_Mask', type=int,
-  #                      help='')
-  #  parser.add_argument('gw', '--Gateway_ip', type=int,
-  #                      help='')
-
+    parser.add_argument('destination_ip', type=ip, help='')
+    parser.add_argument('Subnet_Mask', type=ip, help='') 
+    parser.add_argument('Gateway_ip', type=ip, help='')
 
     # get args
     args = parser.parse_args()
     destination_ip = args.destination_ip
     Subnet_Mask = args.Subnet_Mask
     Gateway_ip = args.Gateway_ip
-    
 
     main(destination_ip, Subnet_Mask, Gateway_ip)

@@ -3,7 +3,7 @@
 general:
   name:            iproute
   description: >
-      This Job executes the ip_route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
+      This Job executes the ip route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
 
   job_version:     0.1
   keywords:        [ip_route]
@@ -23,13 +23,13 @@ arguments:
       description: >
           The destination ip of the ip_route
 
-    - name:        Subnet_Mask
+    - name:        subnet_mask
       type:        'ip'
       count:       1
       description: >
           The Subnet mask of the destination ip address
 
-    - name:        Gateway_ip
+    - name:        gateway_ip
       type:        'ip'
       count:       1
       description: >

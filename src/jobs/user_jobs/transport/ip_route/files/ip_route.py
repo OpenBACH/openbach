@@ -4,7 +4,7 @@ import syslog
 import collect_agent
 
 
-def main(destination_ip, subnet_Mask, Gatewap_ip):
+def main(destination_ip, subnet_mask, gateway_ip):
     conffile = "/opt/openbach-jobs/ip_route/ip_route_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
@@ -13,7 +13,7 @@ def main(destination_ip, subnet_Mask, Gatewap_ip):
     collect_agent.send_log(syslog.LOG_INFO, "Starting ip_route")
 
     # Je défini une liste avec mes arguments et je fais ensuite appel à ma liste en utilisant le module subprocess
-    commande = ["route", "add", "-net", destination_ip, "netmask", Subnet_Mask, "gw", Gateway_ip]
+    commande = ["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip]
     subprocess.check_call(commande)
 
     collect_agent.send_log(syslog.LOG_INFO, "ip_route job done") 
@@ -36,13 +36,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('destination_ip', type=ip, help='')
-    parser.add_argument('Subnet_Mask', type=ip, help='') 
-    parser.add_argument('Gateway_ip', type=ip, help='')
+    parser.add_argument('subnet_mask', type=ip, help='') 
+    parser.add_argument('gateway_ip', type=ip, help='')
 
     # get args
     args = parser.parse_args()
     destination_ip = args.destination_ip
-    Subnet_Mask = args.Subnet_Mask
-    Gateway_ip = args.Gateway_ip
+    subnet_mask = args.subnet_mask
+    gateway_ip = args.gateway_ip
 
-    main(destination_ip, Subnet_Mask, Gateway_ip)
+    main(destination_ip, subnet_mask, gateway_ip)

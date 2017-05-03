@@ -73,11 +73,13 @@ if __name__ == "__main__":
     parser.add_argument('destination_ip', type=ip, help='')
     parser.add_argument('subnet_mask', type=ip, help='') 
     parser.add_argument('gateway_ip', type=ip, help='')
+    parser.add_argument('-a', '--action', type=int, default=1, help='')
 
     # get args
     args = parser.parse_args()
     destination_ip = args.destination_ip
     subnet_mask = args.subnet_mask
     gateway_ip = args.gateway_ip
+    action = args.action
 
-    main(destination_ip, subnet_mask, gateway_ip)
+    main(destination_ip, subnet_mask, gateway_ip, action)

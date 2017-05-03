@@ -16,7 +16,9 @@ os:
     command_stop:
 
 arguments:
+
   required:
+
     - name:        destination_ip
       type:        'ip'
       count:       1
@@ -37,4 +39,13 @@ arguments:
 
   optional:
 
+    - name:	   action	
+      type:	   'int'
+      count:	   1
+      flag:        '-a'	
+      description: >
+	  Add (1) or delete (0) a route. Default=1
+          
+
+  	
 statistics:

@@ -50,8 +50,8 @@ def ip(argument):
 	try:
 	    subprocess.call(["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
 	    collect_agent.send_log(syslog.LOG_DEBUG, "New Route Added")
- 	except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR Adding the route " + str(ex))
+# 	except Exception as ex:
+#           collect_agent.send_log(syslog.LOG_ERR, "ERROR Adding the route " + str(ex))
 
     else:
 	#Delete a route

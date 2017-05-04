@@ -37,7 +37,6 @@ arguments:
     - name:        action
       type:        'int'
       count:       1
-      flag:        '-a'
       description: >
           Add (1) or delete (0) a route. Default=1
           

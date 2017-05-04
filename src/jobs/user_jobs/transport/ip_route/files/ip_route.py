@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+
 import subprocess
 import argparse
 import syslog
@@ -50,8 +54,8 @@ def ip(argument):
 	try:
 	    subprocess.call(["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
 	    collect_agent.send_log(syslog.LOG_DEBUG, "New Route Added")
-# 	except Exception as ex:
-#           collect_agent.send_log(syslog.LOG_ERR, "ERROR Adding the route " + str(ex))
+ 	except Exception as ex:
+           collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
     else:
 	#Delete a route
@@ -73,7 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('destination_ip', type=ip, help='')
     parser.add_argument('subnet_mask', type=ip, help='') 
     parser.add_argument('gateway_ip', type=ip, help='')
-    parser.add_argument('-a', '--action', type=int, default=1, help='')
+    parser.add_argument('action', type=int, default=1, help='')
 
     # get args
     args = parser.parse_args()

@@ -34,9 +34,9 @@ arguments:
           The ip address of the first hop to reach the destination
 
   optional:
-    - name:        action
+    - name:        action	
       type:        'int'
-      count:       1
+      count:       1	
       description: >
           Add (1) or delete (0) a route. Default=1
           

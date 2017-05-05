@@ -1,0 +1,36 @@
+---
+
+general:
+  name:            ifconfig
+  description: >
+      This Job assignes an IP address to an interface of an agent
+
+  job_version:     0.1
+  keywords:        [ifconfig]
+  persistent:      false
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/usr/bin/env python3 /opt/openbach-jobs/ifconfig/ifconfig.py'
+    command_stop:
+
+arguments:
+  required:
+    - name:        interface_name
+      type:        'str'
+      count:       1
+      description: >
+          The name of the interface
+    - name:        ip_address
+      type:        'ip'
+      count:       1
+      description: >
+          The ip address to assign to the interface
+
+
+  optional:
+
+   
+statistics:
+

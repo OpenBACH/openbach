@@ -6,7 +6,7 @@
 
   tasks:
   - name: Install ifconfig
-    apt: name=ifconfig state=present
+    apt: name=net-tools state=present
     become: yes
 
   - name: Create ifconfig repository

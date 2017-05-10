@@ -30,7 +30,12 @@ arguments:
 
 
   optional:
-
+    - name:        action
+      type:        'int'
+      count:       1
+      flag:        '-a'
+      description: >
+          Add (1) or delete (0) an interface's ip address. Default=1
    
 statistics:
 

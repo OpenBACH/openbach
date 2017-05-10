@@ -20,7 +20,7 @@ def ip(argument):
     return argument
 
 
-def main(interface_name, ip_address):
+def main(interface_name, ip_address, action):
     conffile = "/opt/openbach-jobs/ifconfig/ifconfig_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
@@ -29,40 +29,35 @@ def main(interface_name, ip_address):
     collect_agent.send_log(syslog.LOG_ERR, "Starting ifconfig job")
 #   collect_agent.send_log(syslog.LOG_INFO,== c'etait log info avant 
 
-
+##################################################
 
 
     # Je défini une liste avec mes arguments et je fais ensuite appel à ma liste en utilisant le module subprocess
 
-    commande = ["ifconfig", interface_name, ip_address]
-    subprocess.check_call(commande)
-    collect_agent.send_log(syslog.LOG_INFO, "ifconfig job done") 
+#    commande = ["ifconfig", interface_name, ip_address]
+#    subprocess.check_call(commande)
+#    collect_agent.send_log(syslog.LOG_INFO, "ifconfig job done") 
+
+###############################################
 
 
-######################################
+    # Adding a new variable "action" for the addition/deletion of an ip address
 
-#    # Adding a new variable "action" for the addition/deletion of a route
-#
-#    if action == 1 :
-#	#Add a route
-#        try:
-#            subprocess.check_call(["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
-#            collect_agent.send_log(syslog.LOG_DEBUG, "New Route Added")
-#        except Exception as ex:
-#            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
-#
-#    else:
-#	#Delete a route
-#        try:
-#            subprocess.check_call(["route", "del", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
-#            collect_agent.send_log(syslog.LOG_DEBUG, "Route deleted")
-#        except Exception as ex:
-#            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+    if action == 1 :
+	#Add an ip add
+        try:
+            subprocess.check_call(["ifconfig", interface_name, ip_address])
+            collect_agent.send_log(syslog.LOG_DEBUG, "New ip address added")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
-########################################
-
-
-
+    else:
+	#Delete an interface's ip address
+        try:
+            subprocess.check_call(["ifconfig", interface_name, "0"])
+            collect_agent.send_log(syslog.LOG_DEBUG, "ip address deleted")
+        except Exception as ex:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 
 
@@ -73,11 +68,13 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('interface_name', type=str, help='')
     parser.add_argument('ip_address', type=ip, help='') 
-
+    parser.add_argument('-a', '--action', type=int, default=1, help='')
+   
     # get args
     args = parser.parse_args()
     interface_name = args.interface_name
     ip_address = args.ip_address
+    action = args.action
 
-    main(interface_name, ip_address)
+    main(interface_name, ip_address, action)
 

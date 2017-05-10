@@ -3,7 +3,7 @@
 general:
   name:            ifconfig
   description: >
-      This Job assignes an IP address to an interface of an agent
+      This Job assignes an IP address to an agent's interface
 
   job_version:     0.1
   keywords:        [ifconfig]

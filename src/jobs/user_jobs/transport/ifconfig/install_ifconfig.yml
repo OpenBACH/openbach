@@ -18,7 +18,7 @@
     become: yes
 
   - name: Install ifconfig Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ip_route/ mode={{ item.mode }}
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ifconfig/ mode={{ item.mode }}
     with_items:
       - { file: 'ifconfig.py', mode: '0755' }
       - { file: 'ifconfig.help', mode: '0644' }

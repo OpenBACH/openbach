@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('interface_name', type=str, help='')
-    parser.add_argument('ip_address', type=ip, help='') 
+    parser.add_argument('-i','--ip_address', type=ip, help='') 
     parser.add_argument('-a', '--action', type=int, default=1, help='')
    
     # get args

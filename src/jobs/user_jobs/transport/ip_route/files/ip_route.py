@@ -45,41 +45,40 @@ def main(destination_ip, subnet_mask, gateway_ip, action, default_gateway, defau
 
 
     # Adding a new variable "action" for the addition/deletion of a route
-while(action==1)
-  {
-    if default_gateway == 1 :
-        #Add a default gateway
-        try:
-            subprocess.check_call(["route", "add", "default", "gw", destination_ip, default_gw_name])
-            collect_agent.send_log(syslog.LOG_DEBUG, "New default route added")
-    else
-        #Add a normal route
-        try:
-            subprocess.check_call(["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
-            collect_agent.send_log(syslog.LOG_DEBUG,  "Route Added")
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
-  }
-while(action==0):
-  {
-    if default_gateway == 1 :
-        #delete a default gateway
-        try:
-            subprocess.check_call(["route", "del", "default", "gw", destination_ip, default_gw_name])
-            collect_agent.send_log(syslog.LOG_DEBUG, "Default Route deleted")
-    else
-        #Delete a normal route
-        try:
-            subprocess.check_call(["route", "del", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
-            collect_agent.send_log(syslog.LOG_DEBUG, "Route deleted")
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+    if action == 1:
+       if default_gateway == 1:
+           #Add a default gateway
+           try:
+               subprocess.check_call(["route", "add", "default", "gw", destination_ip, default_gw_name])
+               collect_agent.send_log(syslog.LOG_DEBUG, "New default route added")
+           except Exception as ex:
+               collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+       else:
+           #Add a normal route
+           try:
+               subprocess.check_call(["route", "add", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
+               collect_agent.send_log(syslog.LOG_DEBUG,  "Route Added")
+           except Exception as ex:
+               collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
-#c'etais de subprocess.call= n'envoyaients pas des logs
-
-
+    else:
+       if  default_gateway == 1:
+           #delete a default gateway
+           try:
+               subprocess.check_call(["route", "del", "default", "gw", destination_ip, default_gw_name])
+               collect_agent.send_log(syslog.LOG_DEBUG, "Default Route deleted")
+           except Exception as ex:
+               collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+       else:
+           #Delete a normal route
+           try:
+               subprocess.check_call(["route", "del", "-net", destination_ip, "netmask", subnet_mask, "gw", gateway_ip])
+               collect_agent.send_log(syslog.LOG_DEBUG, "Route deleted")
+           except Exception as ex:
+               collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 
+#c'etait des subprocess.call= n'envoyaients pas des logs
 
 
 if __name__ == "__main__":
@@ -88,9 +87,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-i','--destination_ip', type=ip, help='')
-    parser.add_argument('s','--subnet_mask', type=ip, help='') 
-    parser.add_argument('g','--gateway_ip', type=ip, help='')
-    parser.add_argument('-a', '--action', type=int, default=1, help='')
+    parser.add_argument('-s','--subnet_mask', type=ip, help='') 
+    parser.add_argument('-g','--gateway_ip', type=ip, help='')
+    parser.add_argument('-a', '--action', type=int, help='')
     parser.add_argument('-d', '--default_gateway', type=int, help='')
     parser.add_argument('-b', '--default_gw_name', type=str, help='')
 

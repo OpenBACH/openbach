@@ -2,7 +2,6 @@ input {
 	tcp {
 		port => {{ logstash_stats_port }}
 		type => "stats"
-		tags => ["tcp"]
 	}
 
 	udp {
@@ -17,40 +16,45 @@ input {
 }
 
 filter {
-	# If the tags "tcp" is present, we delete the incomming port
-	if "tcp" in [tags] {
-		mutate {
-			remove_field => ["port"]
-		}
+	mutate {
+		add_field => { "[@metadata][type]" => "%{type}" }
+		# Remove these fields first so stats can override them
+		remove_field => ["@version", "host", "tags", "type", "port"]
 	}
 
 	# If the type is 'stats', we parse the message and delete useless field
-	if [type] == "stats" {
+	if [@metadata][type] == "stats" {
 		json {
 			source => "message"
 		}
-		# If flag is 0 or the json parser has failed, drop the message
-		if [flag] == 0 or "_jsonparsefailure" in [tags] {
+		# If no flag provided or flag is 0 or the json parser has failed, drop the message
+		if !([_metadata][flag]) or [_metadata][flag] == 0 or "_jsonparsefailure" in [tags] {
 			drop {}
 		}
 		mutate {
-			remove_field => ["message", "@version", "host", "tags"]
+			remove_field => "message"
+			rename => { "_metadata" => "@metadata" }
+			# Put back the field we just overwrite
+			add_field => {
+				"[@metadata][type]" => "stats"
+        "[@metadata][measurement_name]" => "%{[@metadata][owner_scenario_instance_id]}.%{[@metadata][scenario_instance_id]}.%{[@metadata][job_instance_id]}.%{[@metadata][agent_name]}.%{[@metadata][job_name]}"
+			}
+		}
+		date {
+			match => [ "[@metadata][time]", "UNIX_MS" ]
 		}
 	}
 
-	# If the type is 'logs', we add the flag (broadcast is severity is ERROR or more)
-	if [type] == "logs" {
+	# If the type is 'logs', we add the flag (broadcast on severity ERROR or more)
+	if [@metadata][type] == "logs" {
 		if [severity] <= 3 {
 			mutate {
-				add_field => { "flag" => 3 }
+				add_field => { "[@metadata][flag]" => 3 }
 			}
 		} else {
 			mutate {
-				add_field => { "flag" => 1 }
+				add_field => { "[@metadata][flag]" => 1 }
 			}
-		}
-		mutate {
-			convert => ["flag", "integer"]
 		}
 		grok {
 			patterns_dir => ["/etc/logstash/conf.d/pattern/"]
@@ -60,8 +64,7 @@ filter {
 			mutate {
 				remove_tag => "_grokparsefailure"
 			}
-		}
-		else {
+		} else {
 			mutate {
 				rename => { "syslog_message" => "message" }
 			}
@@ -70,26 +73,22 @@ filter {
 }
 
 output {
-	# Flag = 0 => No Storage, No Broadcast
-	# Flag = 1 => Storage, No Broadcast
-	# Flag = 2 => No Storage, Broadcast
-	# Flag = 3 => Storage, Broadcast
+	# Flag & 0x01 => Storage
+	# Flag & 0x10 => Broadcast
 
 	# If the flag is 1 or 3, we have to store the data in the collector database
-	if [flag] == 1 or [flag] == 3 {
+	if [@metadata][flag] == 1 or [@metadata][flag] == 3 {
 		# If the type is 'logs', send the data to elasticsearch
-		if [type] == "logs" {
+		if [@metadata][type] == "logs" {
 			elasticsearch {
 				hosts => "{{ ansible_default_ipv4.address }}"
 				user => "{{ elasticsearch_cluster_name }}"
 			}
 		}
 		# If type is 'stats', send the data to influxdb
-		if [type] == "stats" {
+		if [@metadata][type] == "stats" {
 			influxdb {
-				measurement => "%{measurement_name}"
-				allow_time_override => true
-				exclude_fields => ["@timestamp", "type", "measurement_name", "flag"]
+				measurement => "%{[@metadata][measurement_name]}"
 				use_event_fields_for_data_points => true
 				host => "{{ ansible_default_ipv4.address }}"
 				port => {{ influxdb_port }}
@@ -102,7 +101,7 @@ output {
 	}
 
 	# Broadcast the message to the Auditorium
-	if [flag] == 2 or [flag] == 3 {
+	if [@metadata][flag] == 2 or [@metadata][flag] == 3 {
 		{{ broadcast_mode }} {
 			host => "{{ auditorium_ip }}"
 			port => {{ auditorium_broadcast_port }}

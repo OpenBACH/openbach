@@ -34,14 +34,24 @@ filter {
 		mutate {
 			remove_field => "message"
 			rename => { "_metadata" => "@metadata" }
-			# Put back the field we just overwrite
 			add_field => {
+				# Put back the field we just overwrite
 				"[@metadata][type]" => "stats"
-        "[@metadata][measurement_name]" => "%{[@metadata][owner_scenario_instance_id]}.%{[@metadata][scenario_instance_id]}.%{[@metadata][job_instance_id]}.%{[@metadata][agent_name]}.%{[@metadata][job_name]}"
+				# Save important fields for export (InfluxDB + broadcast)
+				"@owner_scenario_instance_id" => "%{[@metadata][owner_scenario_instance_id]}"
+				"@scenario_instance_id" => "%{[@metadata][scenario_instance_id]}"
+				"@job_instance_id" => "%{[@metadata][job_instance_id]}"
+				"@agent_name" => "%{[@metadata][agent_name]}"
+				"@job_name" => "%{[@metadata][job_name]}"
 			}
 		}
 		date {
 			match => [ "[@metadata][time]", "UNIX_MS" ]
+		}
+		if ([@metadata][suffix]) {
+				mutate {
+						add_field => { "@suffix" => "%{[@metadata][suffix]}" }
+				}
 		}
 	}
 
@@ -88,8 +98,9 @@ output {
 		# If type is 'stats', send the data to influxdb
 		if [@metadata][type] == "stats" {
 			influxdb {
-				measurement => "%{[@metadata][measurement_name]}"
+				measurement => "%{@job_name}"
 				use_event_fields_for_data_points => true
+				send_as_tags => [ "@owner_scenario_instance_id", "@scenario_instance_id", "@job_instance_id", "@agent_name", "@suffix" ]
 				host => "{{ ansible_default_ipv4.address }}"
 				port => {{ influxdb_port }}
 				db => "{{ database_name }}"

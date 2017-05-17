@@ -1,25 +1,24 @@
 input {
 	tcp {
 		port => {{ logstash_stats_port }}
-		type => "stats"
+		add_field => { "[@metadata][type]" => "stats" }
 	}
 
 	udp {
 		port => {{ logstash_stats_port }}
-		type => "stats"
+		add_field => { "[@metadata][type]" => "stats" }
 	}
 
 	syslog {
 		port => {{ logstash_logs_port }}
-		type => "logs"
+		add_field => { "[@metadata][type]" => "logs" }
 	}
 }
 
 filter {
 	mutate {
-		add_field => { "[@metadata][type]" => "%{type}" }
 		# Remove these fields first so stats can override them
-		remove_field => ["@version", "host", "tags", "type", "port"]
+		remove_field => [ "@version", "host", "tags", "type", "port" ]
 	}
 
 	# If the type is 'stats', we parse the message and delete useless field
@@ -34,10 +33,9 @@ filter {
 		mutate {
 			remove_field => "message"
 			rename => { "_metadata" => "@metadata" }
+			# Put back the field we just overwrite & Save important fields for export (InfluxDB + broadcast)
 			add_field => {
-				# Put back the field we just overwrite
 				"[@metadata][type]" => "stats"
-				# Save important fields for export (InfluxDB + broadcast)
 				"@owner_scenario_instance_id" => "%{[@metadata][owner_scenario_instance_id]}"
 				"@scenario_instance_id" => "%{[@metadata][scenario_instance_id]}"
 				"@job_instance_id" => "%{[@metadata][job_instance_id]}"
@@ -100,6 +98,7 @@ output {
 			influxdb {
 				measurement => "%{@job_name}"
 				use_event_fields_for_data_points => true
+				exclude_fields => [ "@job_name", "@timestamp" ]
 				send_as_tags => [ "@owner_scenario_instance_id", "@scenario_instance_id", "@job_instance_id", "@agent_name", "@suffix" ]
 				host => "{{ ansible_default_ipv4.address }}"
 				port => {{ influxdb_port }}
@@ -107,6 +106,7 @@ output {
 				user => "{{ database_username }}"
 				password => "{{ database_password }}"
 				time_precision => "ms"
+				retention_policy => "default"
 			}
 		}
 	}

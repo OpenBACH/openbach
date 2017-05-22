@@ -51,7 +51,7 @@ def main(interface_name, ip_address, action):
             collect_agent.send_log(syslog.LOG_DEBUG, "New ip address added")
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
-# Essai 1 : ecriture d'une chaîne de car
+# Essai 1 : ecriture d'une chaîne de car = OK
 
 #        with open('/etc/network/interfaces', 'a') as file :
 #            file.writelines('\niface koukou ')
@@ -59,46 +59,35 @@ def main(interface_name, ip_address, action):
 
 ##########
 
-# Essai 2 : Remplacement d'une CHAR:
-    
-#        with open('/etc/network/interfaces', 'r') as file :
-#            filedata = file.read()
-#        
-#        
-#        newdata = filedata.replace("address","blibli")
-#        
-#        with open('/etc/network/interfaces', 'w') as file :
-#            file.write(newdata)
-#            file.close()
-            
-##########
-
-# Essai 3 :Remplacement :
+# Essai 2 :Remplacement D'uen CHAR :  OK
     
 #         # Read in the file
-        with open('/etc/network/interfaces', 'r') as file :
-            filedata = file.read()
-         # Replace the target string
-        filedata = filedata.replace('address', 'abcd')
+#        with open('/etc/network/interfaces', 'r') as file :
+#            filedata = file.read()
+#         # Replace the target string
+#        filedata = filedata.replace('address', 'abcd')
 
-         # Write the file out again
-        with open('/etc/network/interfaces', 'w') as file:
-            file.write(filedata)
+#         # Write the file out again
+#        with open('/etc/network/interfaces', 'w') as file:
+#            file.write(filedata)
 #########              
 
-# Essai 4 :
+# Essai 3 : Remplacement après split : OK
     
-#        with open('/etc/network/interfaces', 'a') as file:
-#            f = file.read()
-#                for line in f.readlines():            
-#                    if interface_name in line :
-#                        f = f.replace('address' ,' blibli')
-#                  if ip_address in line :
-#                      f = f.replace('netmask , ‘netmask 255.255.255.0')
-#         # Write the file out again
-#        with open("/etc/network/interfaces", "w") as file:
-#            file.write(f)
- 
+        # Read in the file
+        with open('/etc/network/interfaces', 'r+') as file :
+            l = file.readlines()
+        for index, line in enumerate(l): 
+            liste = line.split()
+            if liste and liste[0] == 'address':
+                l[index] = '    address jkghkljh\n'
+        with open('/etc/network/interfaces', 'w') as file :        
+            file.writelines(l)
+         
+
+#########
+
+
 #'iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n'
  
     else:

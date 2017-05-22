@@ -74,13 +74,15 @@ def main(interface_name, ip_address, action):
 
 # Essai 3 : Remplacement après split : OK
     
-        # Read in the file
+        # Read in the file                                             #rajouter
+                                                                       # lacces aux fichier d conf de linterface
         with open('/etc/network/interfaces', 'r+') as file :
             l = file.readlines()
         for index, line in enumerate(l): 
             liste = line.split()
-            if liste and liste[0] == 'address':
-                l[index] = '    address jkghkljh\n'
+            if len(liste) > 2 and liste[1] == interface_name :
+                l[index+1] = '    address ip_address\n'       # rajouter ip_add
+                                                              # en tant qu'argument
         with open('/etc/network/interfaces', 'w') as file :        
             file.writelines(l)
          

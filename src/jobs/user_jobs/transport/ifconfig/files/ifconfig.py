@@ -6,6 +6,7 @@ import argparse
 import syslog
 import collect_agent
 
+
 #Fonction de définition du type ip :
 
 def ip(argument):
@@ -50,7 +51,56 @@ def main(interface_name, ip_address, action):
             collect_agent.send_log(syslog.LOG_DEBUG, "New ip address added")
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+# Essai 1 : ecriture d'une chaîne de car
 
+#        with open('/etc/network/interfaces', 'a') as file :
+#            file.writelines('\niface koukou ')
+
+
+##########
+
+# Essai 2 : Remplacement d'une CHAR:
+    
+#        with open('/etc/network/interfaces', 'r') as file :
+#            filedata = file.read()
+#        
+#        
+#        newdata = filedata.replace("address","blibli")
+#        
+#        with open('/etc/network/interfaces', 'w') as file :
+#            file.write(newdata)
+#            file.close()
+            
+##########
+
+# Essai 3 :Remplacement :
+    
+#         # Read in the file
+        with open('/etc/network/interfaces', 'r') as file :
+            filedata = file.read()
+         # Replace the target string
+        filedata = filedata.replace('address', 'abcd')
+
+         # Write the file out again
+        with open('/etc/network/interfaces', 'w') as file:
+            file.write(filedata)
+#########              
+
+# Essai 4 :
+    
+#        with open('/etc/network/interfaces', 'a') as file:
+#            f = file.read()
+#                for line in f.readlines():            
+#                    if interface_name in line :
+#                        f = f.replace('address' ,' blibli')
+#                  if ip_address in line :
+#                      f = f.replace('netmask , ‘netmask 255.255.255.0')
+#         # Write the file out again
+#        with open("/etc/network/interfaces", "w") as file:
+#            file.write(f)
+ 
+#'iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n'
+ 
     else:
 	#Delete an interface's ip address
         try:
@@ -59,7 +109,16 @@ def main(interface_name, ip_address, action):
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
+##################################################################################
+#ou bien changer le repertoire 
+#import os
+#os.chdir("/etc")   #pr me positionner dans un repertoire
 
+#fichier = sudo open("/etc/network/interfaces","a")  # a pr append car le fichier existe deja
+#fichier.writelines('iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n')
+
+#fichier.close()
+########################################################################
 
 if __name__ == "__main__":
 
@@ -77,4 +136,3 @@ if __name__ == "__main__":
     action = args.action
 
     main(interface_name, ip_address, action)
-

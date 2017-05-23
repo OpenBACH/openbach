@@ -203,6 +203,7 @@ def main(args, is_controller_local):
     with open('{}/ips'.format(CONFIG_DIR), 'w') as ips:
         print('---\n', file=ips)
         print('controller_ip:', "'{}'".format(args.controller_ip), file=ips)
+        print('collector_ip:', "'{}'".format(args.collector_ip), file=ips)
         print('auditorium_ip:', "'{}'".format(args.auditorium_ip), file=ips)
 
     common_command = partial(run_command, extra_vars_name, proxy_vars.name, hosts.name)

@@ -52,12 +52,15 @@
   unarchive: src=../src_collector/java8/jre-8u101-linux-x64.tar.gz dest=/usr/local/ extra_opts='--strip-components=1'
   ignore_errors: yes
 
+- name: Create symlink for Java 8
+  file: src=/usr/local/bin/java  dest=/usr/bin/java state=link
+
 - name: Configure ElasticSearch 
   template: src=elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml \
     owner=root group=elasticsearch
 
 - name: Indicate ElasticSearch where to find Java
-  lineinfile: dest=/etc/init.d/elasticsearch regexp='^PATH' line='PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin' backup=yes
+  lineinfile: dest=/etc/init.d/elasticsearch regexp='^PATH' line='PATH=/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin' backup=yes
   when: ansible_distribution_version != "16.04"
 
 - name: Start ElasticSearch
@@ -86,7 +89,8 @@
   copy: src=../src_collector/logstash/pattern dest=/etc/logstash/conf.d/
 
 - name: Indicate LogStash where to find Java
-  lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin' backup=yes
+  lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/usr/local/bin:/sbin:/usr/sbin:/bin:/usr/bin' backup=yes
+  when: ansible_distribution_version != "16.04"
 
 - name: Start LogStash
   service: name=logstash state=restarted

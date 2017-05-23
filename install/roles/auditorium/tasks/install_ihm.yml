@@ -34,7 +34,7 @@
 ---
 
 - name: Install Nginx
-  apt: pkg=nginx state=installed update_cache=false
+  apt: pkg=nginx-extras state=installed update_cache=false
 
 - name: Install the IHM
   copy: src=../src/auditorium/ihm/ dest=/usr/share/nginx/html/

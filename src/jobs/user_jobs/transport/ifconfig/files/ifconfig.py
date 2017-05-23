@@ -83,11 +83,12 @@ def main(interface_name, ip_address, action):
             if len(liste) > 2 and liste[1] == interface_name :
                 l[index+1] = '    address ip_address\n'       # rajouter ip_add
                                                               # en tant qu'argument
-        with open('/etc/network/interfaces', 'w') as file :        
-            file.writelines(l)
+                with open('/etc/network/interfaces', 'w') as file :        
+                     file.writelines(l)
          
-
-#########
+        else:
+                with open('/etc/network/interfaces', 'a') as file :
+                     file.writelines('\ncoca')
 
 
 #'iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n'

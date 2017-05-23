@@ -72,26 +72,25 @@ def main(interface_name, ip_address, action):
 #            file.write(filedata)
 #########              
 
-# Essai 3 : Remplacement après split : OK
-    
-        # Read in the file                                             #rajouter
-                                                                       # lacces aux fichier d conf de linterface
+# Essai 3 : Remplacement après split : OK                                          
+        
         with open('/etc/network/interfaces', 'r+') as file :
             l = file.readlines()
         for index, line in enumerate(l): 
             liste = line.split()
             if len(liste) > 2 and liste[1] == interface_name :
-                l[index+1] = '    address ip_address\n'       # rajouter ip_add
-                                                              # en tant qu'argument
+                l[index+1] = '    address ip_address\n'
+                                                            
                 with open('/etc/network/interfaces', 'w') as file :        
-                     file.writelines(l)
+                             file.writelines(l)
          
-        else:
-                with open('/etc/network/interfaces', 'a') as file :
-                     file.writelines('\ncoca')
+         
+        else :
+#        if len(liste) > 0 and liste[1] != interface_name :                        
+            with open('/etc/network/interfaces', 'a') as file :
+                 file.writelines('\nauto interface_name\niface interface_name inet static\n    addressip_address\n    netmask 255.255.255.0')
 
 
-#'iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n'
  
     else:
 	#Delete an interface's ip address
@@ -102,15 +101,6 @@ def main(interface_name, ip_address, action):
             collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 ##################################################################################
-#ou bien changer le repertoire 
-#import os
-#os.chdir("/etc")   #pr me positionner dans un repertoire
-
-#fichier = sudo open("/etc/network/interfaces","a")  # a pr append car le fichier existe deja
-#fichier.writelines('iface 'interface_name' inet static\n     address 'ip_address'\n     netmask 255.255.255.0\n')
-
-#fichier.close()
-########################################################################
 
 if __name__ == "__main__":
 

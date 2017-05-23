@@ -72,23 +72,26 @@ def main(interface_name, ip_address, action):
 #            file.write(filedata)
 #########              
 
-# Essai 3 : Remplacement après split : OK                                          
+# Essai 3 : Remplacement après split : OK 
+        found = False
         
         with open('/etc/network/interfaces', 'r+') as file :
             l = file.readlines()
         for index, line in enumerate(l): 
             liste = line.split()
             if len(liste) > 2 and liste[1] == interface_name :
-                l[index+1] = '    address ip_address\n'
+                l[index+1] = '    address ' + ip_address + '\n'
                                                             
                 with open('/etc/network/interfaces', 'w') as file :        
                              file.writelines(l)
+                found = True
          
          
-        else :
-#        if len(liste) > 0 and liste[1] != interface_name :                        
+        if not found:
             with open('/etc/network/interfaces', 'a') as file :
-                 file.writelines('\nauto interface_name\niface interface_name inet static\n    addressip_address\n    netmask 255.255.255.0')
+                 file.writelines('\nauto ' + interface_name + '\niface ' +
+                                 interface_name + ' inet static\n' + '    address ' +
+                                 ip_address + '\n'+ '    netmask 255.255.255.0')
 
 
  

@@ -83,7 +83,7 @@ class ScenarioManager:
 
 class ClientThread(threading.Thread):
     """ Class that represents the main thread of the Status Manager """
-    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"0.0.0.{agent.name}.openbach-agent"+where+job_name+=+\'{}\'+and+job_instance_id+=+{}'
+    UPDATE_INSTANCE_URL = 'http://{agent.collector.address}:8086/query?db=openbach&epoch=ms&q=SELECT+last("status")+FROM+"openbach-agent"+where+"@agent_name"+=+\'{}\'+and+job_name+=+\'{}\'+and+job_instance_id+=+{}'
 
     def __init__(self, clientsocket):
         threading.Thread.__init__(self)
@@ -96,9 +96,7 @@ class ClientThread(threading.Thread):
         # Get the Job Instance
         job_instance = Job_Instance.objects.get(pk=job_instance_id)
         # Request the last status to the Collector
-        url = ClientThread.UPDATE_INSTANCE_URL.format(
-            job_instance.job.job.name, job_instance.id,
-            agent=job_instance.job.agent)
+        url = ClientThread.UPDATE_INSTANCE_URL.format(str(job_instance.job.agent).split(' ',1)[0], job_instance.job.job.name, job_instance.id, agent=job_instance.job.agent)
         result = requests.get(url).json()
         # Parse the response
         try:

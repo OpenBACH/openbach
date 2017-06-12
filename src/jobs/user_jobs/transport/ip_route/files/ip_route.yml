@@ -1,7 +1,7 @@
 ---
 
 general:
-  name:            iproute
+  name:            ip_route
   description: >
       This Job executes the ip route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
 

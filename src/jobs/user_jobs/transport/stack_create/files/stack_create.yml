@@ -1,0 +1,60 @@
+---
+
+general:
+  name:            stack_create
+  description: >
+      This Job executes creates a stack with specific options.
+
+  job_version:     0.1
+  keywords:        [stack_create]
+  persistent:      false
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/usr/bin/env python3 /opt/openbach-jobs/stack_create/stack_create.py'
+    command_stop:
+
+arguments:
+
+  required:
+
+  optional:
+    - name:        destination_ip
+      type:        'ip'
+      count:       1
+      flag:        '-i' 
+      description: >
+          The destination ip of the ip_route
+    - name:        subnet_mask
+      type:        'ip'
+      count:       1
+      flag:        '-s'
+      description: >
+          The Subnet mask of the destination ip address
+    - name:        gateway_ip
+      type:        'ip'
+      count:       1
+      flag:        '-g'
+      description: >
+          The ip address of the first hop to reach the destination
+    - name:        action
+      type:        'int'
+      count:       1
+      flag:        '-a'
+      description: >
+          Add (1) or delete (0) a route. Default=1
+    - name:        default_gateway
+      type:        'int'
+      count:       1
+      flag:        '-d'
+      description: >
+          Add (1) or delete (0) a default route. Default=1
+    - name:        default_gw_name
+      type:        'str'
+      count:       1
+      flag:        '-b'
+      description: >
+          The default gateway name
+
+statistics:

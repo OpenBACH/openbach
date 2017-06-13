@@ -5,9 +5,19 @@
     - vars/main.yml
 
   tasks:
-  - name: Install net_create
-    apt: name=**** state=present
+  - name: Install heatclient
+    apt: name=python-heatclient state=present
     become: yes
+  
+#  tasks:
+#  - name: Install heatclient
+#    apt: name=python-heatclient state=present
+#    become: yes
+  
+#  tasks:
+#  - name: Install heatclient
+#    apt: name=python-heatclient state=present
+#    become: yes
 
   - name: Create net_create repository
     file: path=/opt/openbach-jobs/net_create state=directory mode=0755

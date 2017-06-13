@@ -20,17 +20,13 @@ def ip(argument):
     return argument
 
 
-def main(destination_ip, subnet_mask, gateway_ip, action, default_gateway, default_gw_name):
+def main(network_name, address, dhcp, action): #default_gateway, default_gw_name):
     conffile = "/opt/openbach-jobs/ip_route/ip_route_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
         return
 
-    collect_agent.send_log(syslog.LOG_ERR, "Starting ip_route")
-#   collect_agent.send_log(syslog.LOG_INFO,== c'etait log info avant 
-
-
-
+    collect_agent.send_log(syslog.LOG_ERR, "Starting net_create")
 
 # """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     # Je défini une liste avec mes arguments et je fais ensuite appel à ma liste en utilisant le module subprocess
@@ -40,10 +36,6 @@ def main(destination_ip, subnet_mask, gateway_ip, action, default_gateway, defau
 #    collect_agent.send_log(syslog.LOG_INFO, "ip_route job done") 
 
 # """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-
-
-
     # Adding a new variable "action" for the addition/deletion of a route
     if action == 1:
        if default_gateway == 1:
@@ -78,7 +70,6 @@ def main(destination_ip, subnet_mask, gateway_ip, action, default_gateway, defau
                collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 
-#c'etait des subprocess.call= n'envoyaients pas des logs
 
 
 if __name__ == "__main__":
@@ -86,21 +77,14 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-i','--destination_ip', type=ip, help='')
-    parser.add_argument('-s','--subnet_mask', type=ip, help='') 
-    parser.add_argument('-g','--gateway_ip', type=ip, help='')
-    parser.add_argument('-a', '--action', type=int, help='')
-    parser.add_argument('-d', '--default_gateway', type=int, help='')
-    parser.add_argument('-b', '--default_gw_name', type=str, help='')
-
+    parser.add_argument('-n','--network_name', type=str, help='')
+    parser.add_argument('-a','--address', type=ip, help='') 
+    parser.add_argument('-d','--dhcp', type=int, help='')
 
     # get args
     args = parser.parse_args()
-    destination_ip = args.destination_ip
-    subnet_mask = args.subnet_mask
-    gateway_ip = args.gateway_ip
-    action = args.action
-    default_gateway = args.default_gateway
-    default_gw_name = args.default_gw_name
+    network_name = args.network_name
+    address = args.address
+    dhcp = args.dhcp
 
-    main(destination_ip, subnet_mask, gateway_ip, action, default_gateway, default_gw_name)
+    main(network_name, address, dhcp)

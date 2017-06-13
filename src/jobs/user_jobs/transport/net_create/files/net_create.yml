@@ -1,9 +1,9 @@
 ---
 
 general:
-  name:           net_create
+  name:            net_create
   description: >
-      This Job executes enables you to create a network with specific propreties
+      This Job enables you to create a network with specific propreties.
 
   job_version:     0.1
   keywords:        [net_create]
@@ -37,5 +37,5 @@ arguments:
       count:       1
       flag:        '-d'
       description: >
-          Enable (1) or disable (0) dhcp 
+          Enable (1) or disable (0) dhcp server
 statistics:

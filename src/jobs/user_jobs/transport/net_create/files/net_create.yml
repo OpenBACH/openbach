@@ -20,7 +20,7 @@ arguments:
   required:
 
   optional:
-    - name:        network_name
+    - name:        net_name
       type:        'str'
       count:       1
       flag:        '-n' 
@@ -32,10 +32,4 @@ arguments:
       flag:        '-a'
       description: >
           The ip address of the network
-    - name:        dhcp
-      type:        'int'
-      count:       1
-      flag:        '-d'
-      description: >
-          Enable (1) or disable (0) dhcp server
 statistics:

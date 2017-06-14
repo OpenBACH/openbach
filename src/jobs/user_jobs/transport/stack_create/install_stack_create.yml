@@ -5,8 +5,8 @@
     - vars/main.yml
 
   tasks:
-  - name: Install stack_create
-    apt: name=*** state=present
+  - name: Install heatclient
+    apt: name=python-heatclient state=present
     become: yes
 
   - name: Create stack_create repository

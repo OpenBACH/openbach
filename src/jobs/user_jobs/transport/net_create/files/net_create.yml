@@ -32,4 +32,12 @@ arguments:
       flag:        '-a'
       description: >
           The ip address of the network
+    - name:        password
+      type:        'str'
+      count:       1
+      flag:        '-p'
+      description: >
+          The password needed to source the RC file
+          
 statistics:
+

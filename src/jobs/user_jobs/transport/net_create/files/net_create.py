@@ -21,7 +21,7 @@ def ip(argument):
     return argument
 
 
-def main(net_name, address):
+def main(net_name, address, password):
     conffile = "/opt/openbach-jobs/net_create/net_create_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
@@ -55,10 +55,13 @@ def main(net_name, address):
 
    # Create network
     try:
-        subprocess.check_call(["heat", "stack-create", net_name, "-f",
-                               "test1.yml"])
+        
+        subprocess.check_call(["source /home/exploit/CNES-openrc.sh"])
+#        subprocess.check_call(["heat", "stack-create", net_name, "-f", "test1.yml"])
+        subprocess.check_call(["heat","stack-create" , net_name, "-f", net_name + ".yml"])
         collect_agent.send_log(syslog.LOG_DEBUG, "New network added")
     except Exception as ex:
+        print(ex)
         collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 if __name__ == "__main__":
@@ -68,10 +71,12 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-n','--net_name', type=str, help='')
     parser.add_argument('-a','--address', type=ip, help='') 
-
+    parser.add_argument('-p','--password', type=str, help='') 
+    
     # get args
     args = parser.parse_args()
     net_name = args.net_name
     address = args.address
+    password = args.password
 
-    main(net_name, address)
+    main(net_name, address, password)

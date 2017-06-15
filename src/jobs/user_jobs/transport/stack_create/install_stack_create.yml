@@ -24,7 +24,7 @@
       - { file: 'stack_create.help', mode: '0644' }
       - { file: 'stack_create_rstats_filter.conf', mode: '0644' }
     become: yes
-
+    
   - name: Informs Agent that stack_create Job is installed
     copy: src=files/{{ job_name }}.yml dest=/opt/openbach_agent/jobs/ mode=0644
     become: yes

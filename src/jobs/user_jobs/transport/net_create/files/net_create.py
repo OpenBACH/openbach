@@ -41,23 +41,25 @@ def main(net_name, address):
 
     with open(net_name + '.yml', 'w') as file :
         file.writelines('heat_template_version: 2013-05-23\n\n' + 'description:'
-                        + ' Simple template to deploy a single network instance\n\n' + 'resources'+':\n\n' +  net_name + ':\n' + 
-                        '  properties:\n' + '     admin_state_up: true\n' + 
-                        '     name: ' + net_name + '\n'+ '     shared: false\n'+'  type: OS::Neutron::Net\n\n'+
-                        'network_subnet:\n' + '  properties:\n'+
-                        '    allocation_pools:\n' + '    - end: ' + net[0] + '.127\n' +
-                        '      start: ' + net[0] + '.2\n' + '    cidr: ' + address +
-                        '/24\n' + '    dns_nameservers: []\n' +
-                        '    enable_dhcp: true' + '\n' + '    host_routes: []\n' +
-                        '    ip_version: 4' + '\n' + '    name: '+ net_name + '\n' +
-                        '    network_id:\n' + '      get_resource: ' + net_name +
-                        '\n' + '  type: OS::Neutron::Subnet')
+                        + ' Simple template to deploy a single network instance\n\n' + 'resources'+':\n\n' + ' ' + net_name + ':\n' + 
+                        ' ' + '  properties:\n' + ' '+'     admin_state_up: true\n' + 
+                        ' ' + '     name: ' + net_name + '\n'+' '+ '     shared: false\n'+' '+'  type: OS::Neutron::Net\n\n '+
+                        'network_subnet:\n' +' '+ '  properties:\n'+' '+
+                        '    allocation_pools:\n' +' '+ '    - end: ' + net[0] +
+                        '.127\n' +' '+ '      start: ' + net[0] + '.2\n' +' '+ '    cidr: ' + address +
+                        '/24\n' +' '+ '    dns_nameservers: []\n' +' '+
+                        '    enable_dhcp: true' + '\n' +' '+ '    host_routes: []\n' +' '+
+                        '    ip_version: 4' + '\n ' +'    name: '+ net_name + '\n ' +
+                        '    network_id:\n ' + '      get_resource: ' + net_name +
+                        '\n ' + '  type: OS::Neutron::Subnet')
 
    # Create network
-
-#    subprocess.check_call(["heat stack-create", net_name, "–template", 
-#                           net_name + "yml"])
-#    collect_agent.send_log(syslog.LOG_DEBUG, "New network added")
+    try:
+        subprocess.check_call(["heat", "stack-create", net_name, "-f",
+                               "test1.yml"])
+        collect_agent.send_log(syslog.LOG_DEBUG, "New network added")
+    except Exception as ex:
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
 
 if __name__ == "__main__":
     

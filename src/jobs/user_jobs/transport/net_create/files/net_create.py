@@ -85,6 +85,7 @@ resources:
                         # '\n ' + '  type: OS::Neutron::Subnet')
 
    # Create network
+  
     try:
         # cmd = "echo " +  password + "|" + "source /home/exploit/CNES-openrc.sh"
         # print(cmd)

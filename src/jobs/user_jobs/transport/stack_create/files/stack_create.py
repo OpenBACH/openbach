@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # Author:  / <@toulouse.viveris.com>
 
+import os
 import subprocess
 import argparse
 import syslog
@@ -22,7 +23,7 @@ def ip(argument):
 
 
 def main(stack_name, flavor, image_id, network_name):
-    conffile = "/opt/openbach-jobs/net_create/net_create_rstats_filter.conf"
+    conffile = "/opt/openbach-jobs/stack_create/stack_create_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
         return
@@ -30,37 +31,39 @@ def main(stack_name, flavor, image_id, network_name):
     collect_agent.send_log(syslog.LOG_ERR, "Stating stack_create")
 
     
-    # Define variable net for pool address allocation
-
-#    address.split(".")
-#    net = var[0] + "." + var[1] + "." + var[2]
-#    address.rsplit(".",1)
-#    net = address.rsplit(".",1)
-    
     # CREATE TEMPLATE
+    
 
-    with open(net_name + '.yml', 'w') as file :
-        file.writelines('heat_template_version: 2015-04-30\n\n' + 'description:' +
-                        ' Simple template to deploy a single compute
-                        instance\n\n' + 'resources'+':\n\n ' + stack_name + ':\n
-                        ' + '  properties:\n' + '       image'+ 
-                        ' ' + '     name: ' + net_name + '\n'+' '+ '     shared: false\n'+' '+'  type: OS::Neutron::Net\n\n '+
-                        'network_subnet:\n' +' '+ '  properties:\n'+' '+
-                        '    allocation_pools:\n' +' '+ '    - end: ' + net[0] +
-                        '.127\n' +' '+ '      start: ' + net[0] + '.2\n' +' '+ '    cidr: ' + address +
-                        '/24\n' +' '+ '    dns_nameservers: []\n' +' '+
-                        '    enable_dhcp: true' + '\n' +' '+ '    host_routes: []\n' +' '+
-                        '    ip_version: 4' + '\n ' +'    name: '+ net_name + '\n ' +
-                        '    network_id:\n ' + '      get_resource: ' + net_name +
-                        '\n ' + '  type: OS::Neutron::Subnet')
+    with open("/tmp/" + net_name + '.yml', 'w') as file :
+        file.writelines('''\
+heat_template_version: 2015-04-30
+                        
+description: Simple template to deploy a single compute instance
+                        
+resources:
+  {0}                        
+    type: OS::Neutron::Server
+    properties:
+      image : {1}
+      flavor: {2}
+      networks:
+        -network:{3}
+        -network:'''.format(stack_name, image_id, flavor, network))
+        
 
    # Create stack
     try:
-#        subprocess.check_call(["heat", "stack-create", net_name, "-f", "test1.yml"])
-#        subprocess.check_call(["heat","stack-create" , net_name, "-f", net_name + ".yml"])
-#        collect_agent.send_log(syslog.LOG_DEBUG, "New network added")
-#    except Exception as ex:
-#        collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+        print("vri")
+        subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
+                              '&& heat stack-create {1} -f /tmp/{1}.yml'
+                              .format(password, net_name))
+        collect_agent.send_log(syslog.LOG_DEBUG, "New stack added")
+    except Exception as ex:
+        print(ex)
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+
+
+
 
 if __name__ == "__main__":
     

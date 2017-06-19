@@ -23,7 +23,7 @@ arguments:
     - name:        stack_name
       type:        'str'
       count:       1
-      flag:        '-n' 
+      flag:        '-s' 
       description: >
           The stack name
     - name:        flavor
@@ -38,10 +38,17 @@ arguments:
       flag:        '-i'
       description: >
           Image to be used for the instance
-    - name:        network_name
+    - name:        network
       type:        'str'
       count:       1
       flag:        '-n'
       description: >
           The networks to which the instance will be connected
+    - name:        password
+      type:        'str'
+      count:       1
+      flag:        '-p'
+      description: >
+          The password required to source the RC file
+s      
 statistics:

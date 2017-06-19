@@ -101,6 +101,7 @@
 
 - name: Install logstash-output-influxdb
   shell: bin/logstash-plugin install --local --no-verify /tmp/cause-0.1.gem /tmp/influxdb-0.3.14.gem /tmp/logstash-output-influxdb-5.0.0.gem chdir=/usr/share/logstash
+  become: logstash
 
 - name: Start LogStash
   service: name=logstash state=restarted

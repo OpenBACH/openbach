@@ -230,8 +230,8 @@ if __name__ == '__main__':
     # Check ansible and sshpass versions
     try:
         for program, version, flag in [('ansible', '2.2', '--version'), ('sshpass', '1', '-V')]:
-            output = subprocess.run([program, flag], encoding='utf-8', stdout=subprocess.PIPE)
-            real_version = output.stdout.split()[1]
+            output = subprocess.run([program, flag], stdout=subprocess.PIPE)
+            real_version = output.stdout.split()[1].decode()
             if real_version < version:
                 sys.exit('[ERROR] {} should be at least version {}'.format(program, version))
     except FileNotFoundError:

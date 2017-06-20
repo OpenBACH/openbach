@@ -66,9 +66,10 @@
 - include: uninstall_src.yml
   tags:
     - uninstall
-- include: uninstall_ansible.yml
-  tags:
-    - uninstall
+# TODO: Uninstall Ansible or not?
+#- include: uninstall_ansible.yml
+#  tags:
+#    - uninstall
 - include: uninstall_finished.yml
   tags:
     - uninstall

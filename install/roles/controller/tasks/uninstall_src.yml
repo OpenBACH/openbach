@@ -84,6 +84,15 @@
 - name: Drop the database
   postgresql_db: name=openbach_db state=absent
 
+#TODO: Reorganize uninstall 
+# We need to install pip3 again to uninstall Django.
+# The uninstall Agent operation has already uninstalled pip3
+- name: Install pip   
+  apt: pkg={{item}} state=installed update_cache=false   
+  with_items:     
+    - python3-pip
+    - python-pip
+
 - name: Uninstall Django
   pip: name=django state=absent executable=pip3
   ignore_errors: true

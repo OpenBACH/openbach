@@ -36,6 +36,6 @@
 - hosts: Collector
   roles:
     - collector
-  environment: "{{proxy_env}}"
+#  environment: "{{proxy_env}}"
   become: yes
   

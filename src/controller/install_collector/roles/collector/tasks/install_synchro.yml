@@ -38,6 +38,7 @@
   with_items:
     - ntp
     - ntpdate
+  environment: "{{proxy_env}}"
 
 - name: Delete all ntp pool of source servers
   lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^pool

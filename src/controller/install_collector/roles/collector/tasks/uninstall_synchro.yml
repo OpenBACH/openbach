@@ -38,3 +38,4 @@
   with_items:
     - ntp
     - ntpdate
+  environment: "{{proxy_env}}"

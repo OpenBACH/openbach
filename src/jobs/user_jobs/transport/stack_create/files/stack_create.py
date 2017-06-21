@@ -54,13 +54,12 @@ resources:
     try:
         subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
                               '&& heat stack-create {1} -f /tmp/{1}.yml'
-                              .format(password, stack_name))
+                              .format(password, stack_name),shell = True,
+                              executable = "/bin/bash")
         collect_agent.send_log(syslog.LOG_DEBUG, "New stack added")
     except Exception as ex:
         print(ex)
         collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
-
-
 
 
 if __name__ == "__main__":

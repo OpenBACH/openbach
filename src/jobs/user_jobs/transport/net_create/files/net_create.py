@@ -95,10 +95,10 @@ resources:
         #subprocess.check_call(["heat", "stack-create", net_name, "-f", "test1.yml"])
         #subprocess.check_call(cmd2, shell=True, executable='/bin/bash')
 
-        print("vri")
         subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
                               '&& heat stack-create {1} -f /tmp/{1}.yml'
-                              .format(password, net_name))
+                              .format(password, net_name),shell = True,
+                              executable = "/bin/bash") 
     #Add path to the rc file : 
     #    subprocess.check_call('echo "{0}" | source /tmp/{2}.sh '
     #                          '&& heat stack-create {1} -f /tmp/{1}.yml'

@@ -37,6 +37,7 @@
 
 
 import os
+import sys
 from argparse import ArgumentParser, Namespace
 import tempfile
 import subprocess
@@ -203,6 +204,7 @@ def main(args, is_controller_local):
     with open('{}/ips'.format(CONFIG_DIR), 'w') as ips:
         print('---\n', file=ips)
         print('controller_ip:', "'{}'".format(args.controller_ip), file=ips)
+        print('collector_ip:', "'{}'".format(args.collector_ip), file=ips)
         print('auditorium_ip:', "'{}'".format(args.auditorium_ip), file=ips)
 
     common_command = partial(run_command, extra_vars_name, proxy_vars.name, hosts.name)
@@ -225,6 +227,16 @@ def main(args, is_controller_local):
 
 
 if __name__ == '__main__':
+    # Check ansible and sshpass versions
+    try:
+        for program, version, flag in [('ansible', '2.2', '--version'), ('sshpass', '1', '-V')]:
+            output = subprocess.run([program, flag], encoding='utf-8', stdout=subprocess.PIPE)
+            real_version = output.stdout.split()[1]
+            if real_version < version:
+                sys.exit('[ERROR] {} should be at least version {}'.format(program, version))
+    except FileNotFoundError:
+        sys.exit('[ERROR] {} should be installed on the system to run the installer'.format(program))
+
     ips_list = machine_ips()
     # if controller IP is not specififed, take the first interface IP
     parser = build_parser(ips_list[0])

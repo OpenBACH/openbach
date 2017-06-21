@@ -34,7 +34,7 @@
 ---
 
 - name: Uninstall logstash-output-influxdb
-  shell: bin/plugin uninstall logstash-output-influxdb chdir=/opt/logstash
+  shell: bin/logstash-plugin uninstall logstash-output-influxdb chdir=/usr/share/logstash
   ignore_errors: yes
 
 - name: Uninstall InfluxDB (64bits)

@@ -63,7 +63,7 @@ if __name__ == "__main__":
     name = args.name
     min_size = args.min_size
     size = args.size
-    max_size = args.maw_size
+    max_size = args.max_size
 
     main(name, min_size, size, max_size)
 

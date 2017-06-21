@@ -1239,8 +1239,8 @@ class ClientThread(threading.Thread):
         # return it help
         return {'job_name': name, 'help': job.help}, 200
 
-    def install_jobs_action(self, addresses, names, severity=0,
-                            local_severity=0):
+    def install_jobs_action(self, addresses, names, severity=1,
+                            local_severity=1):
         """ Action that installs one or more Jobs on one or more Agents """
         # Check if all the addresses given are well formed
         for address in addresses:
@@ -1901,7 +1901,7 @@ class ClientThread(threading.Thread):
             installed_job = Installed_Job.objects.get(agent=agent, job=job)
         except ObjectDoesNotExist:
             raise BadRequest('The job' + job_name + 'is not installed in agent' +
-                             agent, 404,
+                             str(agent), 404,
                              {'job_name': '{} on {}'.format(
                                  job_name, agent_ip)})
         # Get the owner_scenario_instance_id
@@ -4426,7 +4426,7 @@ class ClientThread(threading.Thread):
         # Get the Project name
         project_name = ofi.scenario_instance.scenario.project.name
         # Start the Scenario Instance
-        result, _ = self.start_scenario_instance(scenario_name, arguments, date,
+        result, _ = self.start_scenario_instance(scenario_name, arguments, ofi, date,
                                                  project_name)
         # Get the scenario_instance_id
         scenario_instance_id = result['scenario_instance_id']
@@ -4434,19 +4434,19 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         # Fill it openbach_function_instance_master field
-        scenario_instance.openbach_function_instance_master = ofi
-        scenario_instance.save()
+        #scenario_instance.openbach_function_instance_master = ofi
+        #scenario_instance.save()
         # Return the list of generate threads
         with ThreadManager() as threads:
             return [threads[scenario_instance.id][0]]
 
-    def start_scenario_instance_action(self, scenario_name, arguments,
+    def start_scenario_instance_action(self, scenario_name, arguments, scen_parent=None,
                                        date=None, project_name=None):
         """ Action that starts a scenario instance """
-        return self.start_scenario_instance(scenario_name, arguments, date,
+        return self.start_scenario_instance(scenario_name, arguments, scen_parent, date,
                                             project_name)
 
-    def start_scenario_instance(self, scenario_name, arguments, date=None,
+    def start_scenario_instance(self, scenario_name, arguments, scen_parent, date=None,
                                 project_name=None):
         """ Function that starts a scenario instance """
         # Get the Project
@@ -4467,8 +4467,9 @@ class ClientThread(threading.Thread):
                                     'project_name': project_name})
         # Create the Scenario Instance
         scenario_instance = self.register_scenario_instance(scenario, arguments)
-        # Set the start date
+        # Set the start date and the parent scenario info
         scenario_instance.start_date = timezone.now()
+        scenario_instance.openbach_function_instance_master = scen_parent
         scenario_instance.save()
         # Build it table of Openbach Function
         table = self.build_table(scenario_instance)
@@ -4526,7 +4527,7 @@ class ClientThread(threading.Thread):
         scenario_instance = Scenario_Instance.objects.get(
             pk=scenario_instance_id)
         # Update the status
-        scenario_instance.status = state
+        scenario_instance.status = "Stopped"
         scenario_instance.is_stopped = True
         scenario_instance.stop_date = timezone.now()
         scenario_instance.save()
@@ -4594,7 +4595,7 @@ class ClientThread(threading.Thread):
                         continue
                     thread.do_run = False
         # For each Openbach Function Instance, stop the associated Job Instance
-        out_of_controll = False
+        out_of_control = False
         for ofi in scenario_instance.openbach_function_instance_set.all():
             for job_instance in ofi.job_instance_set.all():
                 try:
@@ -4603,9 +4604,19 @@ class ClientThread(threading.Thread):
                     # If an error occurs, update the status of the Scenatio
                     # Instance
                     scenario_instance.status = 'Running' # Running, out of controll
-                    out_of_controll = True
+                    out_of_control = True
+        
+        # Get the list of the sub Scenario Instances and stop them
+        sub_scenario_instance_ids = set()
+        for ofi in scenario_instance.openbach_function_instance_set.all():
+            try:
+                sub_scenario_instance = ofi.openbach_function_instance_master.all()[0]
+            except IndexError:
+                continue
+            self.stop_scenario_instance(sub_scenario_instance.id, date)
+        
         # Update the status of the Scenario Instance
-        if not out_of_controll:
+        if not out_of_control:
             scenario_instance.stop_date = timezone.now()
             scenario_instance.is_stopped = True
         scenario_instance.save()

@@ -58,14 +58,14 @@ fi
 result=`echo "$@" | nc localhost 1112`
 
 IFS=' ' read -ra arr <<< "$result"
-if [ $arr = "OK" ]; then
+if [ "$arr" = "OK" ]; then
     echo $result
     exit 0
-elif [ $arr = "KO" ]; then
+elif [ "$arr" = "KO" ]; then
     echo $result
     exit 2
 else
-    echo $result
+    echo "Unknown return code: '$result'"
     exit 3
 fi
 

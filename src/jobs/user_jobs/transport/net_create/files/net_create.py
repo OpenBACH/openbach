@@ -70,48 +70,14 @@ resources:
        get_resource: {0}
    type: OS::Neutron::Subnet'''.format(net_name, net, address))
         
-        
-        # file.writelines('heat_template_version: 2013-05-23\n\n' + 'description:'
-                        # + ' Simple template to deploy a single network instance\n\n' + 'resources'+':\n\n' + ' ' + net_name + ':\n' + 
-                        # ' ' + '  properties:\n' + ' '+'     admin_state_up: true\n' + 
-                        # ' ' + '     name: ' + net_name + '\n'+' '+ '     shared: false\n'+' '+'  type: OS::Neutron::Net\n\n '+
-                        # 'network_subnet:\n' +' '+ '  properties:\n'+' '+
-                        # '    allocation_pools:\n' +' '+ '    - end: ' + net[0] +
-                        # '.127\n' +' '+ '      start: ' + net[0] + '.2\n' +' '+ '    cidr: ' + address +
-                        # '/24\n' +' '+ '    dns_nameservers: []\n' +' '+
-                        # '    enable_dhcp: true' + '\n' +' '+ '    host_routes: []\n' +' '+
-                        # '    ip_version: 4' + '\n ' +'    name: '+ net_name + '\n ' +
-                        # '    network_id:\n ' + '      get_resource: ' + net_name +
-                        # '\n ' + '  type: OS::Neutron::Subnet')
-
    # Create network
   
     try:
-        # cmd = "echo " +  password + "|" + "source /home/exploit/CNES-openrc.sh"
-        # print(cmd)
-        # subprocess.check_call(cmd, shell=True, executable='/bin/bash')
-        # cmd2 = "heat" " stack-create " + net_name + " -f " + "/tmp/" + net_name + ".yml"
-        # print (cmd2)
-        #subprocess.check_call(["heat", "stack-create", net_name, "-f", "test1.yml"])
-        #subprocess.check_call(cmd2, shell=True, executable='/bin/bash')
 
-#        subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
-#                              '&& heat stack-create {1} -f /tmp/{1}.yml'
-#                              .format(password, net_name),shell = True,
-#                              executable = "/bin/bash")
-        
-         subprocess.check_call('echo "{0}" | source {2} '
-                              '&& heat stack-create {1} -f /tmp/{1}.yml'
-                              .format(password, net_name, RCfile),shell = True,
-                              executable = "/bin/bash") 
- 
-
-
-    #Add path to the rc file : 
-    #    subprocess.check_call('echo "{0}" | source /tmp/{2}.sh '
-    #                          '&& heat stack-create {1} -f /tmp/{1}.yml'
-    #                          .format(password, net_name, RCfile))
-        collect_agent.send_log(syslog.LOG_DEBUG, "New network stack added")
+        subprocess.call('export OS_PASSWORD=kalimasirriya && source {2} '
+                        '&& heat stack-create {1} -f /tmp/{1}.yml'
+                        .format(password, net_name, RCfile), shell = True,
+                        executable = "/bin/bash") 
     except Exception as ex:
         print(ex)
         collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))

@@ -50,5 +50,11 @@ arguments:
       flag:        '-p'
       description: >
           The password required to source the RC file
-                
+    - name:        RCfile
+      type:        'str'
+      count:       1
+      flag:        '-r'
+      description: >
+          The Path to the RC OpenStack file 
+ 
 statistics:

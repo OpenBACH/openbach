@@ -22,7 +22,7 @@ def ip(argument):
     return argument
 
 
-def main(stack_name, flavor, image_id, network, password):
+def main(stack_name, flavor, image_id, network, password, RCfile):
     conffile = "/opt/openbach-jobs/stack_create/stack_create_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
@@ -52,11 +52,19 @@ resources:
 
    # Create stack
     try:
-        subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
-                              '&& heat stack-create {1} -f /tmp/{1}.yml'
-                              .format(password, stack_name),shell = True,
-                              executable = "/bin/bash")
+   #     subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
+   #                           '&& heat stack-create {1} -f /tmp/{1}.yml'
+   #                           .format(password, stack_name),shell = True,
+   #                           executable = "/bin/bash")
+   #     cmd = 'export OS_PASSWORD=kalimasirriya && source /tmp/CNES-openrc.sh && heat stack-create test2 -f /tmp/test2.yml'
+   #     subprocess.call(cmd, shell = True, executable = "/bin/bash")
+ 
+        subprocess.call('export OS_PASSWORD=kalimasirriya && source {2} '
+                        '&& heat stack-create {1} -f /tmp/{1}.yml'
+                        .format(password, stack_name, RCfile), shell = True,
+                        executable = "/bin/bash")
         collect_agent.send_log(syslog.LOG_DEBUG, "New stack added")
+                        
     except Exception as ex:
         print(ex)
         collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
@@ -72,6 +80,7 @@ if __name__ == "__main__":
     parser.add_argument('-i','--image_id', type=str, help='')
     parser.add_argument('-n','--network', type=str, help='')
     parser.add_argument('-p','--password', type=str, help='')
+    parser.add_argument('-r','--RCfile', type=str, help='')
 
     # get args
     args = parser.parse_args()
@@ -80,5 +89,6 @@ if __name__ == "__main__":
     image_id = args.image_id
     network = args.network
     password = args.password
-
-    main(stack_name, flavor, image_id, network, password)
+    RCfile = args.RCfile
+    
+    main(stack_name, flavor, image_id, network, password, RCfile)

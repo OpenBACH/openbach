@@ -47,7 +47,7 @@ resources:
       image : {1}
       flavor: {2}
       networks:
-        - network: {3}'''.format(stack_name, image_id, flavor, network))
+        -  network: {3}'''.format(stack_name, image_id, flavor, network))
         
 
    # Create stack

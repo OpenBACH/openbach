@@ -50,5 +50,5 @@ arguments:
       flag:        '-p'
       description: >
           The password required to source the RC file
-s      
+                
 statistics:

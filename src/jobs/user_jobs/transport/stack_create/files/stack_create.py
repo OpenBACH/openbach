@@ -42,12 +42,12 @@ description: Simple template to deploy a single compute instance
                         
 resources:
   {0}:                        
-    type: OS::Neutron::Server
+    type: OS::Nova::Server
     properties:
       image : {1}
       flavor: {2}
       networks:
-        -network: {3}'''.format(stack_name, image_id, flavor, network))
+        - network: {3}'''.format(stack_name, image_id, flavor, network))
         
 
    # Create stack

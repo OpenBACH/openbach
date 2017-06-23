@@ -30,9 +30,13 @@ def main(stack_name, flavor, image_id, network, password, RCfile):
 
     collect_agent.send_log(syslog.LOG_ERR, "Starting stack_create")
 
+    # Create var nets for adding networks
     
-    # CREATE TEMPLATE
-    
+    text = "- network: {}".format
+    text_network = list(map(text,network))
+    nets = '\n        '.join(map(text, network))
+     
+
 
     with open("/tmp/" + stack_name + '.yml', 'w') as file :
         file.writelines('''\
@@ -47,8 +51,9 @@ resources:
       image : {1}
       flavor: {2}
       networks:
-        -  network: {3}'''.format(stack_name, image_id, flavor, network))
-        
+        {3}'''.format(stack_name, image_id, flavor, nets))
+
+
 
    # Create stack
     try:
@@ -78,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument('-s','--stack_name', type=str, help='')
     parser.add_argument('-f','--flavor', type=str, help='') 
     parser.add_argument('-i','--image_id', type=str, help='')
-    parser.add_argument('-n','--network', type=str, help='')
+    parser.add_argument('-n','--network', nargs='*', type=str, help='')
     parser.add_argument('-p','--password', type=str, help='')
     parser.add_argument('-r','--RCfile', type=str, help='')
 

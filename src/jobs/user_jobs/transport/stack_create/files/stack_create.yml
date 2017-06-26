@@ -40,7 +40,7 @@ arguments:
           Image to be used for the instance
     - name:        network
       type:        'str'
-      count:       1
+      count:       '+'
       flag:        '-n'
       description: >
           The networks to which the instance will be connected

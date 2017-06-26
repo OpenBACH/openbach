@@ -1,0 +1,2666 @@
+#!/usr/bin/env python3
+
+# OpenBACH is a generic testbed able to control/configure multiple
+# network/physical entities (under test) and collect data from them. It is
+# composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+# Agents (one for each network entity that wants to be tested).
+#
+#
+# Copyright © 2016 CNES
+#
+#
+# This file is part of the OpenBACH testbed.
+#
+#
+# OpenBACH is a free software : you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see http://www.gnu.org/licenses/.
+
+
+"""OpenBACH's core decision center.
+
+The conductor is responsible to check that requests conveyed by the
+backend are complete and well formed. If they do, appropriate actions
+are then performed to fulfill them and return meaningful result to
+the backend.
+
+Messages are received from and send to the backend by the means of
+a FIFO file so any amount of data can easily be transfered.
+"""
+
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
+
+
+import os
+import re
+import sys
+import json
+import time
+import queue
+import shutil
+import signal
+import syslog
+import getpass
+import tarfile
+import threading
+import itertools
+import socketserver
+from datetime import datetime
+from contextlib import suppress
+from collections import defaultdict, namedtuple
+
+import yaml
+import requests
+from fuzzywuzzy import fuzz
+
+sys.path.insert(0, '/opt/openbach-controller/backend')
+from django.core.wsgi import get_wsgi_application
+os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
+application = get_wsgi_application()
+from django.utils import timezone
+from django.db import IntegrityError, transaction
+from django.db.utils import DataError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.serializers.json import DjangoJSONEncoder
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.base import JobLookupError
+from openbach_django.models import (
+        CommandResult, CollectorCommandResult, Collector,
+        AgentCommandResult, Agent, Job, Keyword,
+        Statistic, OsCommand,
+        RequiredJobArgument, OptionalJobArgument,
+        InstalledJob, InstalledJobCommandResult,
+        JobInstance, JobInstanceCommandResult,
+        StatisticInstance, ScenarioInstance,
+        OpenbachFunction, OpenbachFunctionInstance,
+        Watch, Scenario, Project, FileCommandResult,
+        ScenarioArgument, ScenarioArgumentValue,
+)
+
+from . import errors, conductor_utils
+from .openbach_baton import OpenBachBaton
+from .playbook_builder import PlaybookBuilder
+
+
+syslog.openlog('openbach-conductor', syslog.LOG_PID, syslog.LOG_USER)
+
+
+PATH_SRC = '/opt/openbach-controller/openbach-conductor/'
+DEFAULT_JOBS_ON_AGENT = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
+_SEVERITY_MAPPING = {
+    1: 3,   # Error
+    2: 4,   # Warning
+    3: 6,   # Informational
+    4: 7,   # Debug
+}
+
+
+def convert_severity(severity):
+    """Convert the syslog severity to the equivalent openbach severity"""
+    return _SEVERITY_MAPPING.get(severity, 8)
+
+
+def get_master_scenario_id(scenario_id):
+    """Get all the way up to the sub-scenario chain to retrieve
+    the ID of the root Scenario.
+
+    If `scenario_id` is neither the ID of a Scenario nor the ID
+    of a subscenario, returns itself.
+    """
+    try:
+        scenario = ScenarioInstance.objects.get(id=scenario_id)
+    except ObjectDoesNotExist:
+        return scenario_id
+
+    while scenario.openbach_function_instance is not None:
+        scenario = scenario.openbach_function_instance.scenario_instance
+    return scenario.id
+
+
+def extract_and_check_name_from_json(json_data, existing_name=None, *, kind):
+    """Retrieve the `name` attribute from a JSON data and check that
+    it matches the provided name, if any.
+
+    This function is aimed at simplifying the first check on a Project
+    or a Scenario creation/modification.
+    """
+    try:
+        name = json_data['name']
+    except KeyError:
+        if existing_name is None:
+            raise errors.BadRequestError(
+                    'You must provide a name to create a {}'.format(kind))
+        else:
+            kwargs = {kind.lower(): existing_name}
+            raise errors.BadRequestError(
+                    'The {0} data to modify an existing {0} '
+                    'does not contain the {0} name.'.format(kind),
+                    **kwargs)
+
+    if existing_name is not None and name != existing_name:
+        lower_type = kind.lower()
+        kwargs = {lower_type: existing_name, 'name': name}
+        raise errors.BadRequestError(
+                'The name in the {} data does not match '
+                'with the name of the {}.'.format(kind, lower_type),
+                **kwargs)
+    return name
+
+
+def signal_term_handler(signal, frame):
+    """Gracefully terminate the Conductor by setting the state of
+    all started Scenarios to 'Stopped'.
+    """
+    for scenario_instance in ScenarioInstance.objects.all():
+        scenario_instance.stop()
+    exit(0)
+
+
+class IDGenerator:
+    """Thread safe incremental ID generator"""
+    __state = {'id': 0, '_mutex': threading.Lock()}
+
+    def __init__(self):
+        """Use the Borg pattern to share the same state
+        among every instances.
+        """
+        self.__dict__ = self.__class__.__state
+
+    def __next__(self):
+        with self._mutex:
+            self.id += 1
+            return self.id
+
+
+class ConductorAction:
+    """Base Template class that correspond to an action supported
+    by the conductor.
+
+    Subclasses are usually directly mapped to a route that the
+    backend handles and will perform the requested action.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.openbach_function_instance = None
+
+    def action(self):
+        """Public entry point to execute the required action"""
+        return self._action()
+
+    def _action(self):
+        """Override this in subclasses to implement the desired action"""
+        raise NotImplementedError
+
+
+class OpenbachFunctionMixin:
+    """Mixin describing that a specific ConductorAction can also be
+    called as an OpenBACH Function.
+    """
+
+    def openbach_function(self, openbach_function_instance):
+        """Public entry point to execute the required OpenBACH Function"""
+        self.openbach_function_instance = openbach_function_instance
+        if isinstance(self, ThreadedAction):
+            self._threaded_action(self._action)
+        else:
+            self._action()
+        return []
+
+
+class ThreadedAction(ConductorAction):
+    """Specific kind of action that is known to take a long time (usually
+    by launching playbooks).
+
+    Such action will immediately return with a 202 (Accepted) status code
+    and set the state of the action in the backend database. Clients are
+    responsible to check this state regularly to know when the action
+    actually terminates.
+    """
+
+    def action(self):
+        """Public entry point to execute the required action"""
+        real_action = super().action
+        thread = threading.Thread(target=self._threaded_action, args=(real_action,))
+        thread.start()
+        return {}, 202
+
+    def _create_command_result(self):
+        """Override this in subclasses to create the required CommandResult"""
+        raise NotImplementedError
+
+    def _threaded_action(self, real_action):
+        command_result = self._create_command_result()
+        try:
+            real_action()
+        except errors.ConductorError as e:
+            command_result.update(e.json, e.ERROR_CODE)
+            raise
+        except Exception as err:
+            infos = {
+                    'error': 'An unexpected error occured: '
+                    '{0.__class__.__name__}({0})'.format(err),
+            }
+            command_result.update(infos, 500)
+            raise
+        command_result.update(None, 204)
+
+    @staticmethod
+    def set_running(aggregator, field_name):
+        """Get a CommandResult from a nullable field of the given
+        aggregator and set its inner state to 'Running'.
+        """
+        command_result = getattr(aggregator, field_name)
+        if command_result is None:
+            new_result = CommandResult()
+            new_result.save()
+            setattr(aggregator, field_name, new_result)
+            aggregator.save()
+            return new_result
+
+        command_result.reset()
+        return command_result
+
+
+#############
+# Collector #
+#############
+
+class CollectorAction(ConductorAction, namedtuple('CollectorAction',
+            'address username password name logs_port logs_query_port '
+            'stats_port stats_query_port database_name database_precision')):
+    """Base class that defines all the attributes necessary
+    to deal with Collectors.
+    """
+
+    def __new__(self, address, username=None, password=None,
+                name=None, logs_port=None, logs_query_port=None,
+                stats_port=None, stats_query_port=None,
+                database_name=None, database_precision=None):
+        """Override namedtuple behaviour to allow for optional parameters"""
+        return super().__new__(
+                self, address, username, password, name,
+                logs_port, logs_query_port, stats_port,
+                stats_query_port, database_name, database_precision)
+
+    def get_collector_or_not_found_error(self):
+        try:
+            return Collector.objects.get(address=self.address)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Collector is not in the database',
+                    collector_address=self.address)
+
+
+class AddCollector(ThreadedAction, CollectorAction):
+    """Action responsible for the installation of a Collector"""
+
+    def __new__(self, address, username, password, name,
+                logs_port=None, logs_query_port=None,
+                stats_port=None, stats_query_port=None,
+                database_name=None, database_precision=None):
+        """Force more parameters to be required compared to the base class"""
+        return super().__new__(
+                self, address, username, password, name,
+                logs_port, logs_query_port, stats_port,
+                stats_query_port, database_name, database_precision)
+
+    def _create_command_result(self):
+        command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_add')
+
+    def _action(self):
+        collector, created = Collector.objects.get_or_create(
+                address=self.address,
+                defaults={
+                    'username': self.username,
+                    'password': self.password,
+                })
+        # Create + Update to be sure to use default
+        # values for parameters that are None
+        collector.username = self.username
+        collector.password = self.password
+        collector.update(
+                self.logs_port,
+                self.logs_query_port,
+                self.stats_port,
+                self.stats_query_port,
+                self.database_name,
+                self.database_precision)
+        try:
+            self._physical_install()
+        except errors.ConductorError as e:
+            collector.delete()
+            raise
+
+        if not created:
+            raise errors.ConductorWarning(
+                    'A Collector was already installed, configuration updated',
+                    collector_address=self.address)
+
+    def _physical_install(self):
+        """Perform physical installation of the Collector through a playbook"""
+        playbook_builder = PlaybookBuilder.default(
+                '/opt/openbach-controller/install_collector/collector.yml',
+                self.address, self.username, self.password)
+        playbook_builder.add_variables(
+                collector_ip=self.address,
+                logstash_logs_port=self.logs_port,
+                logstash_stats_port=self.stats_port,
+        )
+        playbook_builder.launch_playbook('install')
+
+        # A Collector always have an Agent on it, so install an Agent
+        try:
+            Agent.objects.get(address=self.address)
+        except ObjectDoesNotExist:
+            InstallAgent(self.address, self.username, self.password,
+                         self.name, self.address)._action()
+
+
+class ModifyCollector(ThreadedAction, CollectorAction):
+    """Action responsible of modifying the configuration of a Collector"""
+
+    def _create_command_result(self):
+        command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_modify')
+
+    def _action(self):
+        collector = self.get_collector_or_not_found_error()
+        updated = collector.update(self.logs_port, self.logs_query_port,
+                                   self.stats_port, self.stats_query_port,
+                                   self.database_name, self.database_precision)
+        if not updated:
+            raise errors.ConductorWarning('No modification to do')
+
+        for agent in collector.agents.all():
+            AssignCollector(agent, self)._physical_install()
+
+
+class DeleteCollector(ThreadedAction, CollectorAction):
+    """Action responsible for the uninstallation of a Collector"""
+
+    def __new__(self, address):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None,
+                               None, None, None, None, None, None)
+
+    def _create_command_result(self):
+        command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_del')
+
+    def _action(self):
+        collector = self.get_collector_or_not_found_error()
+        other_agents = collector.agents.exclude(address=self.address)
+        if other_agents:
+            raise errors.ConflictError(
+                    'The requested Collector is still bound to other Agents',
+                    collector_address=self.address,
+                    agents_addresses=[agent.address for agent in other_agents])
+
+        # Perform physical uninstallation through a playbook
+        playbook_builder = PlaybookBuilder.default(
+                '/opt/openbach-controller/install_collector/collector.yml',
+                self.address, collector.username, collector.password)
+        playbook_builder.add_variables(collector_ip=self.address)
+        playbook_builder.launch_playbook('uninstall')
+
+        # Uninstall the associated Agent if there is one
+        try:
+            agent = collector.agents.get(address=self.address)
+            UninstallAgent(agent.address)._action()
+        except ObjectDoesNotExist:
+            pass
+        except errors.ConductorError as err:
+            raise errors.ConductorWarning(
+                    'Collector uninstalled successfully but the '
+                    'associated Agent uninstallation failed',
+                    agent_error=err.error)
+        finally:
+            collector.delete()
+
+
+class InfosCollector(CollectorAction):
+    """Action responsible for information retrieval about a Collector"""
+
+    def __new__(self, address):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None,
+                               None, None, None, None, None, None)
+
+    def _action(self):
+        collector = self.get_collector_or_not_found_error()
+        return collector.json, 200
+
+
+class ListCollectors(CollectorAction):
+    """Action responsible for information retrieval about all Collectors"""
+
+    def __new__(self):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, None, None, None, None,
+                               None, None, None, None, None, None)
+
+    def _action(self):
+        infos = [c.json for c in Collector.objects.all()]
+        return infos, 200
+
+
+#########
+# Agent #
+#########
+
+class AgentAction(ConductorAction, namedtuple('AgentAction',
+                  'address username password name collector_ip')):
+    """Base class that defines all the attributes necessary
+    to deal with Agents.
+    """
+
+    def get_agent_or_not_found_error(self):
+        try:
+            return Agent.objects.get(address=self.address)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Agent is not in the database',
+                    agent_address=self.address)
+
+    def _update_agent(self):
+        """Update the local status of an Agent by trying to connect to it"""
+        agent = self.get_agent_or_not_found_error()
+
+        playbook_builder = PlaybookBuilder.from_agent(agent)
+        playbook_builder.configure_playbook('check_connection')
+        try:
+            playbook_builder.launch_playbook()
+        except errors.ConductorError:
+            agent.set_reachable(False)
+            agent.set_status('Agent unreachable')
+            agent.save()
+            return
+
+        agent.set_reachable(True)
+        try:
+            OpenBachBaton(agent.address)
+        except errors.UnprocessableError:
+            agent.set_status('Agent reachable but daemon not available')
+        else:
+            agent.set_status('Available')
+        agent.save()
+
+
+class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
+    """Action responsible for the installation of an Agent"""
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_add')
+
+    def _action(self):
+        collector_info = InfosCollector(self.collector_ip)
+        collector = collector_info.get_collector_or_not_found_error()
+        agent, created = Agent.objects.get_or_create(
+                address=self.address,
+                defaults={'name': self.name, 'username': self.username})
+        agent.name = self.name
+        agent.username = self.username
+        agent.set_password(self.password)
+        agent.set_reachable(True)
+        agent.set_status('Installing...')
+        agent.collector = collector
+        agent.save()
+
+        try:
+            self._physical_install()
+        except errors.ConductorError as e:
+            agent.delete()
+            raise
+
+        failures = list(self._install_default_jobs())
+        if failures:
+            raise errors.ConductorWarning(
+                    'Some of the default Jobs could not be installed',
+                    installation_failed=failures)
+
+        if not created:
+            raise errors.ConductorWarning(
+                    'An Agent was already installed, configuration updated',
+                    agent_address=self.address)
+
+    def _physical_install(self):
+        """Perform physical installation of the Agent through a playbook"""
+        agent = self.get_agent_or_not_found_error()
+        playbook_builder = PlaybookBuilder.default(
+                '/opt/openbach-controller/install_collector/collector.yml',
+                agent.address, agent.username, agent.password)
+        playbook_builder.add_variables(
+                agents=[agent.address],
+                collector_ip=agent.collector.address,
+                logstash_logs_port=agent.collector.logs_port,
+                logstash_stats_port=agent.collector.stats.port,
+                local_username=getpass.getuser(),
+                agent_name=agent.name,
+        )
+        playbook_builder.launch_playbook('install')
+        agent.set_status('Available')
+        agent.save()
+
+    def _install_default_jobs(self):
+        with open(DEFAULT_JOBS_ON_AGENT) as jobs:
+            for line in jobs:
+                job = line.rstrip()
+                install_job = InstallJob(self.address, job)
+                try:
+                    install_job._action()
+                except errors.ConductorError as e:
+                    if not isinstance(e, errors.ConductorWarning):
+                        yield job
+
+
+class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
+    """Action responsible for the uninstallation of an Agent"""
+
+    def __new__(self, address):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None, None)
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_uninstall')
+
+    def _action(self):
+        agent = self.get_agent_or_not_found_error()
+        try:
+            # Perform physical uninstallation through a playbook
+            playbook_builder = PlaybookBuilder.default(
+                    '/opt/openbach-controller/install_collector/collector.yml',
+                    agent.address, agent.username, agent.password)
+            playbook_builder.add_variables(agents=[agent.address], local_username=getpass.getuser())
+            playbook_builder.launch_playbook('uninstall')
+        except errors.ConductorError:
+            agent.set_status('Uninstall failed')
+            agent.save()
+            raise
+        else:
+            agent.delete()
+
+
+class InfosAgent(AgentAction):
+    """Action responsible for information retrieval about an Agent"""
+
+    def __new__(self, address, update):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, address, None, None, None, None)
+        instance.update = update
+        return instance
+
+    def _action(self):
+        if self.update:
+            self._update_agent()
+        agent = self.get_agent_or_not_found_error()
+        return agent.json, 200
+
+
+class ListAgents(AgentAction):
+    """Action responsible for information retrieval about all Agents"""
+
+    def __new__(self, update):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, None, None, None, None, None)
+        instance.update = update
+        return instance
+
+    def _action(self):
+        infos = [
+                InfosAgent(agent.address, self.update)._action()[0]
+                for agent in Agent.objects.all()
+        ]
+        return infos, 200
+
+
+class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
+    """Action responsible for status retrieval about an Agent"""
+
+    def __new__(self, address):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None, None)
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_retrieve_status_agent')
+
+    def _action(self):
+        self._update_agent()
+
+
+def RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
+    """Action responsible for status retrieval about several Agents"""
+
+    def __init__(self, addresses, update):
+        super().__init__()
+        self.addresses = addresses
+        self.update = update
+
+    def _action(self):
+        for address in self.addresses:
+            RetrieveStatusAgent(address, self.update).action()
+        return {}, 202
+
+
+class RetrieveStatusJob(ThreadedAction, AgentAction):
+    """Action responsible for asking an Agent to send the
+    list of its Installed Jobs to its Collector.
+    """
+
+    def __new__(self, address):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None, None)
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_retrieve_status_jobs')
+
+    def _action(self):
+        agent = self.get_agent_or_not_found_error()
+        OpenBachBaton(agent.address).list_jobs()
+
+
+class RetrieveStatusJobs(OpenbachFunctionMixin, ConductorAction):
+    """Action responsible for asking several Agent to send the
+    list of their Installed Jobs to their Collector.
+    """
+
+    def __init__(self, addresses):
+        super().__init__()
+        self.addresses = addresses
+
+    def _action(self):
+        for address in self.addresses:
+            RetrieveStatusJob(address).action()
+        return {}, 202
+
+
+class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
+    """Action responsible for assigning a Collector to an Agent"""
+
+    def __new__(self, address, collector_ip):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, None, None, None, collector_ip)
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_assign')
+
+    def _action(self):
+        agent = self.get_agent_or_not_found_error()
+        collector_infos = InfosCollector(self.collector_ip)
+        collector = collector_infos.get_collector_or_not_found_error()
+        self._physical_install(agent, collector)
+
+    def _physical_install(self, agent, collector):
+        """Perform the physical association through a playbook"""
+        playbook_builder = PlaybookBuilder.from_agent(agent)
+        playbook_builder.configure_playbook('assign_collector')
+        playbook_builder.add_variables(
+                collector_ip=collector.address,
+                logstash_logs_port=collector.logs_port,
+                logstash_stats_port=collector.stats_port,
+                elasticsearch_query_port=collector.logs_query_port,
+                influxdb_query_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_precision=collector.stats_database_precision)
+        playbook_builder.launch_playbook()
+        agent.collector = collector
+
+
+########
+# Jobs #
+########
+
+class JobAction(ConductorAction, namedtuple('JobAction', 'name path')):
+    """Base class that defines all the attributes necessary
+    to deal with Collectors.
+    """
+
+    def get_job_or_not_found_error(self):
+        try:
+            return Job.objects.get(name=self.name)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Job is not in the database',
+                    job_name=self.name)
+
+
+class AddJob(JobAction):
+    """Action responsible to add a Job whose files are on the
+    Controller's filesystem into the database.
+    """
+
+    def _action(self):
+        config_prefix = os.path.join(self.path, 'files', self.name)
+        config_file = '{}.yml'.format(config_prefix)
+        config_help = '{}.help'.format(config_prefix)
+        try:
+            stream = open(config_file)
+        except FileNotFoundError:
+            raise errors.BadRequestError(
+                    'The configuration file of the Job is not present',
+                    job_name=self.name,
+                    configuration_file=config_file)
+        with stream:
+            try:
+                content = yaml.load(stream)
+            except yaml.YAMLError as err:
+                raise errors.BadRequestError(
+                        'The configuration file of the Job does not '
+                        'contain valid YAML data',
+                        job_name=self.name, error=str(err),
+                        configuration_file=config_file)
+
+        # Load the help file
+        try:
+            with open(config_help) as stream:
+                help_content = stream.read()
+        except OSError:
+            help_content = None
+
+        try:
+            with transaction.atomic():
+                self._update_job(content, help_content)
+        except KeyError as err:
+            raise errors.BadRequestError(
+                    'The configuration file of the Job is missing an entry',
+                    entry_name=str(err), job_name=self.name,
+                    configuration_file=config_file)
+        except (TypeError, DataError) as err:
+            raise errors.BadRequestError(
+                    'The configuration file of the Job contains entries '
+                    'whose values are not of the required type',
+                    job_name=self.name, error=str(err),
+                    configuration_file=config_file)
+        except IntegrityError as err:
+            raise errors.BadRequestError(
+                    'The configuration file of the Job contains '
+                    'duplicated entries',
+                    job_name=self.name, error=str(err),
+                    configuration_file=config_file)
+
+        return InfosJob(self.name).action()
+
+    def _update_job(self, content, help_content):
+        """Update the values stored for a job based on its JSON"""
+
+        general_section = content['general']
+        general_section['name'] = self.name  # Enforce the two to match
+        description = general_section['description']
+
+        job, created = Job.objects.get_or_create(name=self.name)
+        job.path = self.path
+        job.description = description
+        job.help = description if help_content is None else help_content
+        job.job_version = general_section['job_version']
+        job.persistent = general_section['persistent']
+
+        # Associate OSes
+        os_commands = content['os']
+        for os_name, os_description in os_commands.items():
+            requirements = os_description.get('requirements', '')
+            command = os_description['command']
+            command_stop = os_description.get('command_stop')
+            os_command, _ = OsCommand.objects.get_or_create(
+                    job=job, name=os_name,
+                    defaults={
+                        'requirements': requirements,
+                        'command': command,
+                        'command_stop': command_stop,
+                    })
+            os_command.requirements = requirements
+            os_command.command = command
+            os_command.command_stop = command_stop
+            os_command.save()
+        # Remove OSes associated to the previous version of the job
+        job.os.exclude(name__in=os_commands).delete()
+
+        # Associate "new" keywords
+        keywords = general_section['keywords']
+        for keyword in keywords:
+            job_keyword, _ = Keyword.objects.get_or_create(name=keyword)
+            job.keywords.add(job_keyword)
+        # Remove keywords associated to the previous version of the job
+        job.keywords = Keyword.objects.filter(
+                jobs__name__exact=self.name,
+                name__in=keywords)
+
+        # Associate "new" statistics
+        statistics = content.get('statistics')
+        # No EAFP here to support entry with empty content
+        if statistics is not None:
+            for statistic in statistics:
+                stat, _ = Statistic.objects.get_or_create(
+                        name=statistic['name'], job=job)
+                stat.description = statistic['description']
+                stat.frequency = statistic['frequency']
+                stat.save()
+            stats_names = {stat['name'] for stat in statistics}
+        else:
+            stats_names = set()
+        # Remove statistics associated to the previous version of the job
+        job.statistics.exclude(name__in=stats_names).delete()
+
+        # Associate "new" required arguments
+        job.required_arguments.delete()
+        arguments = content.get('arguments', {}).get('required')
+        if arguments is not None:
+            for rank, argument in enumerate(arguments):
+                name = argument['name']
+                argument, _ = RequiredJobArgument.objects.get_or_create(
+                        job=job, rank=rank, defaults={'name': name})
+                argument.name = name
+                argument.type = argument['type']
+                argument.count = argument['count']
+                argument.description = argument.get('description', '')
+                argument.save()
+
+        # Associate "new" optional arguments
+        job.optional_arguments.delete()
+        arguments = content.get('arguments', {}).get('optional')
+        if arguments is not None:
+            for argument in arguments:
+                name = argument['name']
+                flag = argument['flag']
+                argument, _ = OptionalJobArgument.objects.get_or_create(
+                        job=job, flag=flag, defaults={'name': name})
+                argument.name = name
+                argument.type = argument['type']
+                argument.count = argument['count']
+                argument.description = argument.get('description', '')
+                argument.save()
+
+
+class AddTarJob(JobAction):
+    """Action responsible to add a Job whose files are sent in
+    a .tar file into the database.
+    """
+
+    def _action(self):
+        path = '/opt/openbach-controller/jobs/private_jobs/{}'.format(self.name)
+        try:
+            with tarfile.open(self.path) as tar_file:
+                tar_file.extractall(path)
+        except tarfile.ReadError as err:
+            raise errors.ConductorError(
+                    'Failed to uncompress the provided tar file',
+                    error=str(err))
+        add_job_action = AddJob(self.name, path)
+        return add_job_action.action()
+
+
+class DeleteJob(JobAction):
+    """Action responsible of removing a Job from the filesystem"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        job = self.get_job_or_not_found_error()
+        path = job.path
+        job.delete()
+
+        shutil.rmtree(path, ignore_errors=True)
+        if os.path.exists(path):
+            return {
+                    'warning': 'Job deleted but some files '
+                               'remain on the controller',
+                    'job_name': self.name,
+            }, 200
+        return None, 204
+
+
+class InfosJob(JobAction):
+    """Action responsible for information retrieval about a Job"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        job = self.get_job_or_not_found_error()
+        return job.json, 200
+
+
+class ListJobs(JobAction):
+    """Action responsible to search information about Jobs"""
+
+    def __new__(self, string_to_search=None, ratio=60):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, string_to_search, None)
+        instance.ratio = ratio
+        return instance
+
+    def _action(self):
+        if self.name is None:
+            return [job.json for job in Job.objects.all()], 200
+
+        return list(self._fuzzy_matching()), 200
+
+    def _fuzzy_matching(self):
+        delimiters = re.compile(r'\W|_')
+        for job in Job.objects.all():
+            search_fields = itertools.chain(
+                    delimiters.split(job.name),
+                    job.keywords.all())
+            if any(fuzz.token_set_ratio(word, self.name) > self.ratio
+                   for word in search_fields):
+                yield job
+                continue
+
+
+class GetKeywordsJob(JobAction):
+    """Action responsible for retrieval of the keywords of a Job"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        job = self.get_job_or_not_found_error()
+        keywords = [keyword.name for keyword in job.keywords.all()]
+        return {'job_name': job.name, 'keywords': keywords}, 200
+
+
+class GetStatisticsJob(JobAction):
+    """Action responsible for retrieval of the statistics of a Job"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        job = self.get_job_or_not_found_error()
+        stats = [stat.json for stat in job.statistics.all()]
+        return {'job_name': job.name, 'statistics': stats}, 200
+
+
+class GetHelpJob(JobAction):
+    """Action responsible for retrieval of the help on a Job"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        job = self.get_job_or_not_found_error()
+        return {'job_name': job.name, 'help': job.help}, 200
+
+
+##################
+# Installed Jobs #
+##################
+
+class InstalledJobAction(ConductorAction, namedtuple('InstalledJobAction',
+                         'address name severity local_severity')):
+    """Base class that defines all the attributes necessary
+    to deal with Installed Jobs.
+    """
+
+    def get_installed_job_or_not_found_error(self):
+        job = InfosJob(self.name).get_job_or_not_found_error()
+        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        try:
+            return InstalledJob.objects.get(agent=agent, job=job)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Installed Job is not in the database',
+                    agent_address=self.address, job_name=self.name)
+
+
+class InstallJob(ThreadedAction, InstalledJobAction):
+    """Action responsible for installing a Job on an Agent"""
+
+    def __new__(self, address, name, severity=1, local_severity=1):
+        """Allow some of the arguments to be optional"""
+        return super().__new__(self, address, name, severity, local_severity)
+
+    def _create_command_result(self):
+        command_result, _ = InstalledJobCommandResult.object.get_or_create(
+                agent_ip=self.address,
+                job_name=self.name)
+        return self.set_running(command_result, 'status_install')
+
+    def _action(self):
+        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        job = InfosJob(self.name).get_job_or_not_found_error()
+
+        # Physically install the job on the agent
+        playbook_builder = PlaybookBuilder.from_agent(agent)
+        playbook_builder.load_variables('/opt/openbach-controller/configs/proxy')
+        # playbook_builder.add_variables(path_src=PATH_SRC)
+        playbook_builder.configure_playbook('{job.path}/install_{job.name}.yml'.format(job=job))
+        playbook_builder.launch_playbook()
+        OpenBachBaton(self.address).add_job(self.name)
+
+        installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)
+        installed_job.severity = self.severity
+        installed_job.local_severity = self.local_severity
+        installed_job.update_status = timezone.now()
+        installed_job.save()
+
+        with suppress(errors.ConductorError):
+            SetLogSeverityJob(self.address, self.name, self.severity, self.local_severity)._action()
+
+        if not created:
+            raise errors.ConductorWarning(
+                    'A Job was already installed on an Agent, configuration updated',
+                    agent_address=self.address, job_name=self.name)
+
+
+class InstallJobs(InstalledJobAction):
+    """Action responsible for installing several Jobs on several Agents"""
+
+    def __new__(self, addresses, names, severity=1, local_severity=1):
+        """Allow some of the arguments to be optional"""
+        return super().__new__(self, addresses, names, severity, local_severity)
+
+    def _action(self):
+        for name, address in itertools.product(self.name, self.address):
+            InstallJob(address, name, self.severity, self.local_severity).action()
+        return {}, 202
+
+
+class UninstallJob(ThreadedAction, InstalledJobAction):
+    """Action responsible for uninstalling a Job on an Agent"""
+
+    def __new__(self, address, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__init__(self, address, name, None, None)
+
+    def _create_command_result(self):
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(
+                agent_ip=self.address,
+                job_name=self.name)
+        return self.set_running(command_result, 'status_uninstall')
+
+    def _action(self):
+        installed_job = self.get_installed_job_or_not_found_error()
+        agent = installed_job.agent
+        job = installed_job.job
+        playbook_builder = PlaybookBuilder.from_agent(agent)
+        # playbook_builder.add_variables(path_src=PATH_SRC)
+        playbook_builder.configure_playbook('{job.path}/uninstall_{job.name}'.format(job=job))
+        playbook_builder.launch_playbook()
+        OpenBachBaton(agent.address).remove_job(job.name)
+        installed_job.delete()
+
+
+class UninstallJobs(InstalledJobAction):
+    """Action responsible for uninstalling several Jobs on several Agents"""
+
+    def __new__(self, addresses, names):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, addresses, names, None, None)
+
+    def _action(self):
+        for name, address in itertools.product(self.name, self.address):
+            UninstallJob(address, name).action()
+        return {}, 202
+
+
+class InfosInstalledJob(InstalledJobAction):
+    """Action responsible for information retrieval about an Installed Job"""
+
+    def __new__(self, address, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, address, name, None, None)
+
+    def _action(self):
+        installed_job = self.get_installed_job_or_not_found_error()
+        return installed_job.json, 200
+
+
+class ListInstalledJobs(InstalledJobAction):
+    """Action responsible for information retrieval about
+    all Installed Job on an Agent.
+    """
+    UPDATE_JOB_URL = (
+            'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
+            'db={agent.collector.stats_database_name}&'
+            'epoch={agent.collector.stats_database_precision}&'
+            'q=SELECT+*+FROM+"openbach-agent"+'
+            'WHERE+"@agent_name"+=+\'{agent.name}\'+'
+            'AND+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1')
+
+    def __new__(self, address, update=False):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, address, None, None, None)
+        instance.update = update
+        return instance
+
+    def _action(self):
+        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        update_errors = []
+
+        # TODO better update
+        if self.update:
+            url = self.UPDATE_JOB_URL.format(agent=agent)
+            result = requests.get(url).json()
+            try:
+                serie = result['results'][0]['series'][0]
+                columns = serie['columns']
+                values = serie['values'][0]
+            except LookupError:
+                raise errors.ConductorError(
+                        'Cannot retrieve the jobs status in the Collector',
+                        collector_response=result)
+
+            jobs = {
+                    value for column, value in zip(columns, values)
+                    if column not in ('time', 'nb', '_type')
+            }
+            tz = timezone.get_current_timezone()
+            date_value = values[columns.index('time')]
+            date = datetime.fromtimestamp(date_value / 1000, tz)
+            for job in agent.installed_jobs.all():
+                name = job.job.name
+                if name not in jobs:
+                    job.delete()  # Not installed anymore
+                else:
+                    job.update_status = date
+                    job.save()
+                    jobs.remove(name)
+
+            # Store remaining installed jobs in the database
+            for job_name in jobs:
+                try:
+                    job = Job.objects.get(name=job_name)
+                except Job.DoesNotExist:
+                    update_errors.append({
+                        'message': 'A Job on the Agent is not found in the database',
+                        'job_name': job_name,
+                    })
+                else:
+                    InstalledJob.objects.create(
+                            agent=agent, job=job,
+                            update_status=date,
+                            severity=4,
+                            local_severity=4)
+
+        infos = [job.json for job in agent.installed_jobs.all()]
+        result = {
+                'agent': self.address,
+                'installed_jobs': infos,
+        }
+        if update_errors:
+            result['errors'] = update_errors
+        return result, 200
+
+
+class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
+    """Action responsible for changing the log severity of an Installed Job"""
+
+    def __new__(self, address, name, severity, local_severity=None, date=None):
+        """Allow some of the arguments to be optional"""
+        instance = super().__new__(self, address, name, severity, local_severity)
+        instance.date = date
+        return instance
+
+    def _create_command_result(self):
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(
+                agent_ip=self.address, job_name=self.name)
+        return self.set_running(command_result, 'status_log_severity')
+
+    def _action(self):
+        installed_job = self.get_installed_job_or_not_found_error()
+        local_severity = self.local_severity
+        if self.local_severity is None:
+            local_severity = installed_job.local_severity
+        self._physical_set_severity(self.severity, local_severity)
+
+        installed_job.severity = self.severity
+        installed_job.local_severity = local_severity
+        installed_job.save()
+
+    def _physical_set_severity(self, severity, local_severity):
+        job_name = 'rsyslog_job'
+        rsyslog = InfosInstalledJob(self.address, job_name)
+        rsyslog_installed = rsyslog.get_installed_job_or_not_found_error()
+
+        # Configure the playbook
+        transfer_id = next(IDGenerator())
+        logs_job_path = rsyslog_installed.job.path
+        syslogseverity = convert_severity(int(severity))
+        syslogseverity_local = convert_severity(int(local_severity))
+        playbook_builder = PlaybookBuilder.from_agent(rsyslog_installed.agent)
+        playbook_builder.add_variables(
+                job=self.name, transfer_id=transfer_id,
+                collector_ip=rsyslog_installed.agent.collector.address)
+
+        disable = 0
+        if syslogseverity == 8:
+            disable += 1
+        else:
+            playbook_builder.add_variables(syslogseverity=syslogseverity)
+        if syslogseverity_local == 8:
+            disable += 2
+        else:
+            playbook_builder.add_variables(syslogseverity_local=syslogseverity_local)
+        playbook_builder.configure_playbook(
+                'enable_logs',
+                severity=syslogseverity,
+                local_severity=syslogseverity_local,
+                logs_path=logs_job_path)
+
+        arguments = {
+                'disable_code': disable,
+                'transfered_file_id': transfer_id,
+                'job_name': self.name,
+        }
+        rsyslog_instance = StartJobInstance(self.address, job_name, arguments, self.date)
+        rsyslog_instance.openbach_function_instance = self.openbach_function_instance
+        rsyslog_instance._build_job_instance()
+        try:
+            playbook_builder.launch_playbook()
+        except errors.ConductorError:
+            rsyslog_instance._cancel()
+            raise
+        else:
+            rsyslog_instance._action()
+
+
+class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
+    """Action responsible for changing the log severity of an Installed Job"""
+
+    def __new__(
+            self, address, name, storage=None, broadcast=None,
+            stat_name=None, date=None):
+        """Allow some of the arguments to be optional"""
+        instance = super().__new__(self, address, name, storage, broadcast)
+        instance.date = date
+        instance.statistic = stat_name
+        return instance
+
+    def _create_command_result(self):
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(
+                agent_ip=self.address, job_name=self.name)
+        return self.set_running(command_result, 'status_stat_policy')
+
+    def _action(self):
+        installed_job = self.get_installed_job_or_not_found_error()
+        storage = self.severity
+        broadcast = self.local_severity
+
+        if self.statistic is None:
+            if broadcast is not None:
+                installed_job.default_stat_broadcast = broadcast
+            if storage is not None:
+                installed_job.default_stat_storage = storage
+            installed_job.save()
+        else:
+            try:
+                statistic = installed_job.job.statistics.get(name=self.statistic)
+            except ObjectDoesNotExist:
+                raise errors.NotFoundError(
+                        'The statistic is not generated by the Job',
+                        statistic_name=self.statistic,
+                        job_name=self.name)
+            statistic_instance, _ = StatisticInstance.objects.get_or_create(
+                    job=installed_job, stat=statistic)
+            if storage is None and broadcast is None:
+                statistic_instance.delete()
+            else:
+                if broadcast is not None:
+                    statistic_instance.broadcast = broadcast
+                if storage is not None:
+                    statistic_instance.storage = storage
+                statistic_instance.save()
+
+        self._physical_set_policy(storage, broadcast, installed_job)
+
+    def _physical_set_policy(self, storage, broadcast, installed_job):
+        job_name = 'rstats_job'
+        rstats = InfosInstalledJob(self.address, 'rstats_job')
+        rstats_installed = rstats.get_installed_job_or_not_found_error()
+        # Create the new stats policy file
+        with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
+            print('[default]', file=rstats_filter)
+            print('storage =', installed_job.default_stat_storage, file=rstats_filter)
+            print('broadcast =', installed_job.default_stat_broadcast, file=rstats_filter)
+            for stat in installed_job.statistics.all():
+                print('[{}]'.format(stat.stat.name), file=rstats_filter)
+                print('storage =', stat.storage, file=rstats_filter)
+                print('broadcast =', stat.broadcast, file=rstats_filter)
+
+        # Configure the playbook
+        transfer_id = next(IDGenerator())
+        remote_path_template = '/opt/openbach-jobs/{0}/{0}{1}_rstats_filter.conf.locked'
+        playbook_builder = PlaybookBuilder.from_agent(rstats_installed.agent)
+        playbook_builder.configure_playbook(
+                'push_file',
+                local_path=rstats_filter.name,
+                remote_path=remote_path_template.format(self.name, transfer_id))
+
+        arguments = {
+            'transfered_file_id': transfer_id,
+            'job_name': self.name,
+        }
+        rstats_instance = StartJobInstance(self.address, job_name, arguments, self.date)
+        rstats_instance.openbach_function_instance = self.openbach_function_instance
+        rstats_instance._build_job_instance()
+        try:
+            playbook_builder.launch_playbook()
+        except errors.ConductorError:
+            rstats_instance._cancel()
+            raise
+        else:
+            rstats_instance._action()
+
+
+###############
+# JobInstance #
+###############
+
+class JobInstanceAction(ConductorAction, namedtuple('JobInstanceAction',
+                        'address name arguments date interval offset')):
+    """Base class that defines all the attributes necessary
+    to deal with Jobs Instances.
+    """
+
+    def get_job_instance_or_not_found_error(self):
+        try:
+            job_instance_id = self.instance_id
+        except AttributeError:
+            raise errors.ConductorError(
+                    'The JobInstance handler did not store the required '
+                    'job instance id for the required job',
+                    job_name=self.name, agent_address=self.address)
+        try:
+            return JobInstance.objects.get(id=job_instance_id)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Job Instance is not in the database',
+                    job_instance_id=self.instance_id)
+
+
+class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
+    """Action responsible for launching a Job on an Agent"""
+
+    def __new__(self, address, name, arguments, date=None, interval=None, offset=0):
+        """Allow some of the arguments to be optional"""
+        return super().__new__(address, name, arguments, date, interval, offset)
+
+    def _create_command_result(self):
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        return self.set_running(command_result, 'status_start')
+
+    def openbach_function(self, openbach_function_instance, waiters):
+        date = self.offset * 1000
+        if self.date is None:
+            date += int(timezone.now().timestamp() * 1000)
+        else:
+            date += self.date
+
+        self.openbach_function_instance = openbach_function_instance
+        self._build_job_instance(date)
+
+        scenario = openbach_function_instance.scenario_instance
+        WatchJobInstance(self.instance_id, interval=2).action()
+        WaitingQueueManager().add_job(
+                self.instance_id,
+                scenario.id,
+                openbach_function_instance.instance_id,
+                waiters)
+        StatusManager().add(scenario.id, self.instance_id)
+        return []
+
+    def action(self):
+        """Override the base threaded action handler to build the JobInstance
+        first and store its ID in this object instance before launching it.
+        """
+        self._build_job_instance()
+        super().action()
+        return {'job_instance_id': self.instance_id}, 202
+
+    def _build_job_instance(self, date=None):
+        """Construct the JobInstance in the database and store its ID
+        in this object instance. The Job Instance will be retrieved and
+        started latter in regular action handling.
+        """
+        if date is None:
+            date = self.date
+
+        installed_infos = InfosInstalledJob(self.address, self.name)
+        installed_job = installed_infos.get_installed_job_or_not_found_error()
+
+        now = timezone.now()
+        job_instance = JobInstance.objects.create(
+                job=installed_job,
+                status='Scheduled',
+                update_status=now,
+                start_date=now,
+                periodic=False)
+        ofi = self.openbach_function_instance
+        if ofi is not None:
+            job_instance.openbach_function_instance = ofi
+        try:
+            job_instance.configure(self.arguments, date, self.interval)
+        except (KeyError, ValueError) as err:
+            job_instance.delete()
+            raise errors.BadRequestError(
+                    'An error occured when configuring the JobInstance',
+                    job_name=self.name, agent_address=self.address,
+                    arguments=self.arguments, error=str(err))
+        else:
+            job_instance.save()
+        self.instance_id = job_instance.id
+
+    def _action(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+        scenario_id = job_instance.scenario_id
+        owner_id = get_master_scenario_id(scenario_id)
+        date = job_instance.start_timestamp if self.interval is None else None
+        arguments = job_instance.arguments
+
+        try:
+            OpenBachBaton(self.address).start_job_instance(
+                    self.name, job_instance.id,
+                    scenario_id, owner_id,
+                    arguments, date, self.interval)
+        except errors.ConductorError:
+            self._cancel()
+            raise
+
+        job_instance.set_status('Running')
+        job_instance.save()
+
+    def _cancel(self):
+        """Cancel the launching of this JobInstance by
+        destroying it in the database.
+        """
+        job_instance = self.get_job_instance_or_not_found_error()
+        job_instance.delete()
+
+
+class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
+    """Action responsible for stopping a launched Job"""
+
+    def __new__(self, instance_id=None, date=None, openbach_function_id=None):
+        """Allow some of the arguments to be optional"""
+        instance = super().__new__(None, None, None, date, None, None)
+        instance.instance_id = instance_id
+        instance.openbach_function_id = openbach_function_id
+        return instance
+
+    def openbach_function(self, openbach_function_instance):
+        """Retrieve the job instance id launched by the provided
+        openbach function id and store it in the instance.
+        """
+        scenario = openbach_function_instance.scenario_instance
+        try:
+            openbach_function_to_stop = scenario.instances.get(id=self.openbach_function_id)
+        except OpenbachFunctionInstance.DoesNotExist:
+            raise errors.NotFoundError(
+                    'The provided Openbach Function Instance is '
+                    'not found in the database for the given Scenario',
+                    openbach_function_id=self.openbach_function_id,
+                    scenario_name=scenario.scenario.name)
+
+        start_job_instance = openbach_function_to_stop.get_content_type()
+        try:
+            self.instance_id = start_job_instance.started_job.id
+        except JobInstance.DoesNotExist:
+            raise errors.NotFoundError(
+                    'The provided Openbach Function Instance is '
+                    'not associated to a launched job',
+                    openbach_function_id=self.openbach_function_id,
+                    openbach_function_name=openbach_function_to_stop.name)
+        return super().openbach_function(openbach_function_instance)
+
+    def _create_command_result(self):
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        return self.set_running(command_result, 'status_stop')
+
+    def _action(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+        if job_instance.is_stopped:
+            raise errors.ConductorWarning(
+                    'The required JobInstance is already stopped',
+                    job_instance_id=self.instance_id,
+                    job_name=job_instance.job.job.name)
+
+        if self.date is None:
+            date = 'now'
+            stop_date = timezone.now()
+        else:
+            date = self.date
+            tz = timezone.get_current_timezone()
+            stop_date = datetime.fromtimestamp(date / 1000, tz=tz)
+        job = job_instance.job.job
+        agent = job_instance.job.agent
+
+        OpenBachBaton(agent.address).stop_job_instance(job.name, self.instance_id, date)
+        job_instance.stop_date = stop_date
+        job_instance.save()
+
+
+class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
+    """Action responsible for stopping several launched Job"""
+
+    def __init__(self, instance_ids=None, date=None, openbach_function_ids=None):
+        super().__init__()
+        self.date = date
+        self.instance_ids = instance_ids
+        self.openbach_function_ids = openbach_function_ids
+
+    def openbach_function(self, openbach_function_instance):
+        issues = []
+        has_error = False
+        for stop_id in self.openbach_function_ids:
+            try:
+                stop_job = StopJobInstance(date=self.date, openbach_function_id=stop_id)
+                stop_job.openbach_function(openbach_function_instance)
+            except errors.ConductorWarning as e:
+                issues.append(e.json)
+            except errors.ConductorError as e:
+                issues.append(e.json)
+                has_error = True
+        if has_error:
+            raise errors.ConductorError(
+                    'Stopping one or more JobInstance produced an error',
+                    errors=issues)
+        elif issues:
+            raise errors.ConductorWarning(
+                    'Stopping one or more JobInstance produced an error',
+                    warnings=issues)
+        return []
+
+    def _action(self):
+        for instance_id in self.instance_ids:
+            StopJobInstance(instance_id, self.date).action()
+        return {}, 202
+
+
+class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
+    """Action responsible for restarting a launched Job"""
+
+    def __new__(self, instance_id, arguments, date=None, interval=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, None, None, arguments, date, interval, None)
+        instance.instance_id = instance_id
+        return instance
+
+    def _create_command_result(self):
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        return self.set_running(command_result, 'status_restart')
+
+    def _action(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+        with transaction.atomic():
+            try:
+                job_instance.configure(self.arguments, self.date, self.interval)
+            except (KeyError, ValueError) as err:
+                raise errors.BadRequestError(
+                        'An error occured when reconfiguring the JobInstance',
+                        job_name=self.name, agent_address=self.address,
+                        job_instance_id=self.instance_id,
+                        arguments=self.arguments, error=str(err))
+            ofi = self.openbach_function_instance
+            if ofi is not None:
+                job_instance.openbach_function_instance = ofi
+            job_instance.save()
+
+        job = job_instance.job.job
+        agent = job_instance.job.agent
+        try:
+            OpenBachBaton(agent.address).restart_job_instance(
+                    job.name, self.instance_id,
+                    job_instance.scenario_id,
+                    job_instance.arguments,
+                    self.date, self.interval)
+        except errors.ConductorError:
+            job_instance.delete()
+            raise
+        job_instance.set_status('Running')
+        job_instance.is_stopped = False
+        job_instance.save()
+
+
+class WatchJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
+    """Action responsible for managing Watches on a JobInstance"""
+
+    def __new__(self, instance_id, date=None, interval=None, stop=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, None, None, None, date, interval, None)
+        instance.instance_id = instance_id
+        instance.stop = stop
+        return instance
+
+    def _create_command_result(self):
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        return self.set_running(command_result, 'status_watch')
+
+    def _action(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+        watch, created = Watch.objects.get_or_create(job_instance=job_instance)
+        if not created and self.interval is None and self.stop is None:
+            raise errors.BadRequestError(
+                    'A Watch already exists in the database',
+                    job_instance_id=self.instance_id,
+                    job_name=job_instance.job.job.name,
+                    agent_address=job_instance.job.agent.address)
+
+        if self.interval is not None:
+            watch.interval = self.interval
+            watch.save()
+        date = self.date
+        if date is None and self.interval is None and self.stop is None:
+            date = 'now'
+
+        # Configure the playbook
+        job = job_instance.job.job
+        agent = job_instance.job.agent
+        try:
+            OpenBachBaton(agent.address).status_job_instance(
+                    job.name, self.instance_id,
+                    date, self.interval, self.stop)
+        except errors.ConductorError:
+            watch.delete()
+            raise
+
+        if self.interval is None:
+            # Do not keep one-shot or stopped watches
+            watch.delete()
+
+
+class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
+    """Action responsible for retrieving the status of a JobInstance"""
+    UPDATE_INSTANCE_URL = (
+            'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
+            'db={agent.collector.stats_database_name}&'
+            'epoch={agent.collector.stats_database_precision}&'
+            'q=SELECT+last("status")+FROM+"openbach-agent"+'
+            'WHERE+"@agent_name"+=+\'{agent.name}\'+'
+            'AND+job_name+=+\'{}\'+AND+job_instance_id+=+{}')
+
+    def __new__(self, instance_id, update=False):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, None, None, None, None, None, None)
+        instance.instance_id = instance_id
+        instance.update = update
+        return instance
+
+    def _action(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+
+        status = {}
+        # TODO better update
+        if self.update:
+            url = self.UPDATE_INSTANCE_URL.format(
+                    job_instance.job.job.name,
+                    self.instance_id,
+                    agent=job_instance.job.agent)
+            result = requests.get(url).json()
+            try:
+                serie = result['results'][0]['series'][0]
+                columns = serie['columns']
+                values = serie['values'][0]
+            except LookupError:
+                status['error'] = {
+                        'message': 'Cannot retrieve the job '
+                        'instance status in the Collector',
+                        'collector_response': result,
+                }
+            else:
+                tz = timezone.get_current_timezone()
+                for column, value in zip(columns, values):
+                    if column == 'time':
+                        date = datetime.fromtimestamp(value / 1000, tz=tz)
+                    elif column == 'last':
+                        status = value
+                job_instance.update_status = date
+                job_instance.status = status
+                job_instance.save()
+
+        status.update(job_instance.json)
+        return status, 200
+
+
+class ListJobInstance(JobInstanceAction):
+    """Action responsible for listing the JobInstances running on an Agent"""
+
+    def __new__(self, address, update=False):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, address, None, None, None, None, None)
+        instance.update = update
+        return instance
+
+    def _action(self):
+        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        jobs = [
+                self._status_instances(installed_job)
+                for installed_job in agent.installed_jobs.all()
+        ]
+        return {
+                'address': self.address,
+                'installed_jobs': jobs,
+        }, 200
+
+    def _status_instances(self, installed_job):
+        status_instances = [
+                StatusJobInstance(job_instance.id, self.update).action()[0]
+                for job_instance in installed_job.instances.filter(is_stopped=False)
+        ]
+        return {
+                'job_name': installed_job.job.name,
+                'instances': status_instances,
+        }
+
+
+class ListJobInstances(OpenbachFunctionMixin, ConductorAction):
+    """Action responsible for listing the JobInstances running on several Agents"""
+
+    def __init__(self, addresses, update=False):
+        super().__init__()
+        self.addresses = addresses
+        self.update = update
+
+    def _action(self):
+        instances = [
+                ListJobInstance(address, self.update).action()[0]
+                for address in self.addresses
+        ]
+        return {'instances': instances}, 202
+
+
+############
+# Scenario #
+############
+
+class ScenarioAction(ConductorAction, namedtuple('ScenarioAction',
+                     'json_data name project')):
+    """Base class that defines all the attributes necessary
+    to deal with Scenarios.
+    """
+
+    def get_scenario_or_not_found_error(self):
+        project = InfosProject(self.project).get_project_or_not_found_error()
+
+        try:
+            return Scenario.objects.get(name=self.name, project=project)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Scenario is not in the database',
+                    scenario_name=self.name,
+                    project_name=self.project)
+
+    def _register_scenario(self):
+        description = self.json_data.get('description')
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        scenario, _ = Scenario.objects.get_or_create(
+                name=self.name, project=project,
+                defaults={'description': description})
+        scenario.description = description
+        scenario.save()
+        try:
+            scenario.load_from_json(self.json_data)
+        except Scenario.MalformedError as e:
+            scenario.delete()
+            raise errors.BadRequestError(
+                    'Data of the Scenario are malformed',
+                    scenario_name=self.name,
+                    error=e.error,
+                    scenario_data=self.json_data)
+        else:
+            scenario.save()
+
+
+class CreateScenario(ScenarioAction):
+    """Action responsible for creating a new Scenario"""
+
+    def __new__(self, json_data, project=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        name = extract_and_check_name_from_json(json_data, kind='Scenario')
+        return super().__new__(self, json_data, name, project)
+
+    def _action(self):
+        self._register_scenario()
+        scenario = self.get_scenario_or_not_found_error()
+        return scenario.json, 200
+
+
+class DeleteScenario(ScenarioAction):
+    """Action responsible for deleting an existing Scenario"""
+
+    def __new__(self, name, project=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, None, name, project)
+
+    def _action(self):
+        scenario = self.get_scenario_or_not_found_error()
+        scenario.delete()
+        return None, 204
+
+
+class ModifyScenario(ScenarioAction):
+    """Action responsible for modifying an existing Scenario"""
+
+    def __new__(self, json_data, name, project=None):
+        """Allow some of the arguments to be optional"""
+        return super().__new__(self, json_data, name, project)
+
+    def _action(self):
+        extract_and_check_name_from_json(self.json_data, self.name, kind='Scenario')
+        with transaction.atomic():
+            self._register_scenario()
+        scenario = self.get_scenario_or_not_found_error()
+        return scenario.json, 200
+
+
+class InfosScenario(ScenarioAction):
+    """Action responsible for information retrieval about a Scenario"""
+
+    def __new__(self, name, project=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, None, name, project)
+
+    def _action(self):
+        scenario = self.get_scenario_or_not_found_error()
+        return scenario.json, 200
+
+
+class ListScenarios(ScenarioAction):
+    """Action responsible for information retrieval about all Scenarios"""
+
+    def __new__(self, project=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, None, None, project)
+
+    def _action(self):
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        scenarios = Scenario.objects.filter(project=project)
+        return [scenario.json for scenario in scenarios], 200
+
+
+####################
+# ScenarioInstance #
+####################
+
+class ScenarioInstanceAction(ConductorAction, namedtuple('ScenarioInstanceAction',
+                             'name project arguments date')):
+    """Base class that defines all the attributes necessary
+    to deal with ScenarioInstances.
+    """
+
+    def get_scenario_instance_or_not_found_errror(self):
+        try:
+            scenario_instance_id = self.instance_id
+        except AttributeError:
+            raise errors.ConductorError(
+                    'The ScenarioInstance handler did not store the required '
+                    'scenario instance id for the required scenario',
+                    scenario_name=self.name, project_name=self.project)
+        try:
+            return ScenarioInstance.objects.get(id=scenario_instance_id)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Scenario Instance is not in the database',
+                    scenario_instance_id=self.instance_id)
+
+
+class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
+    """Action responsible of launching new Scenario Instances"""
+
+    def __new__(self, name, project=None, arguments=None, date=None):
+        """Allow some of the arguments to be optional"""
+        return super().__new__(self, name, project, arguments, date)
+
+    def openbach_function(self, openbach_function_instance):
+        launching_project = openbach_function_instance.scenario_instance.scenario.project
+        project = None if launching_project is None else launching_project.name
+        if project != self.project and self.project is not None:
+            raise errors.BadRequestError(
+                    'Trying to start a ScenarioInstance using '
+                    'an OpenbachFunction of an other Project.',
+                    scenario_name=self.name,
+                    project_name=self.project,
+                    used_project_name=project)
+        else:
+            self.project = project
+        super().openbach_function(openbach_function_instance)
+        scenario_id = self.openbach_function_instance.started_scenario.id
+        return [ThreadManager().get_status_thread(scenario_id)]
+
+    def _action(self):
+        scenario = InfosScenario(self.name, self.project).get_scenario_or_not_found_error()
+        scenario_instance = ScenarioInstance.objects.create(
+                scenario=scenario,
+                status='Scheduling',
+                start_date=timezone.now(),
+                openbach_function_instance=self.openbach_function_instance)
+        self.instance_id = scenario_instance.id
+
+        # Populate values for ScenarioArguments
+        for argument, value in self.arguments:
+            try:
+                argument_instance = ScenarioArgument.objects.get(name=argument, scenario=scenario)
+            except ScenarioArgument.DoesNotExist:
+                raise errors.BadRequestError(
+                        'A value was provided for an Argument that '
+                        'is not defined for this Scenario.',
+                        scenario_name=self.name,
+                        project_name=self.project,
+                        argument_name=argument)
+            ScenarioArgumentValue.objects.create(
+                    value=value, argument=argument_instance,
+                    scenario_instance=scenario_instance)
+
+        # Create instances for each OpenbachFunction of this Scenario
+        # and check that the values of the arguments fit
+        for openbach_function in scenario.openbach_functions.all():
+            openbach_function_instance = OpenbachFunctionInstance.objects.create(
+                    openbach_function=openbach_function,
+                    scenario_instance=scenario_instance)
+            try:
+                openbach_function_instance.check_arguments.type()
+            except ValidationError as e:
+                raise errors.BadRequestError(
+                        'Arguments of an OpenbachFunction have '
+                        'the wrong type of arguments.',
+                        openbach_function_name=openbach_function.name,
+                        error_message=str(e))
+
+        # Build a table of communication queues and wait IDs
+        functions_table = {}
+        openbach_functions_instances = scenario_instance.openbach_functions_instances.all()
+        for openbach_function in openbach_functions_instances:
+            functions_table[openbach_function.id] = {
+                    'queue': queue.Queue(),
+                    'is_waited_for_launch': set(get_waited(
+                        openbach_function.openbach_function.launched_waiters.all(),
+                        scenario_instance)),
+                    'is_waited_for_finish': set(get_waited(
+                        openbach_function.openbach_function.finished_waiters.all(),
+                        scenario_instance)),
+                    'is_waited_true_condition': set(),
+                    'is_waited_false_condition': set(),
+            }
+
+        # Populate wait IDs for If and While OpenbachFunctions
+        parameters = scenario_instance.parameters
+        for openbach_function in openbach_functions_instances:
+            function = openbach_function.openbach_function.get_content_model()
+            true_ids, false_ids = [], []
+            with suppress(AttributeError):
+                # Test If OpenbachFunction
+                true_ids.extend(function.instance_value('function_true', parameters))
+                false_ids.extend(function.instance_value('function_false', parameters))
+            with suppress(AttributeError):
+                # Test While OpenbachFunction
+                true_ids.extend(function.instance_value('function_while', parameters))
+                false_ids.extend(function.instance_value('function_end', parameters))
+            id_ = openbach_function.id
+            for waiting_id in true_ids:
+                functions_table[waiting_id]['is_waited_true_condition'].add(id_)
+            for waiting_id in false_ids:
+                functions_table[waiting_id]['is_waited_false_condition'].add(id_)
+
+        # Start all OpenbachFunctions threads
+        threads = [
+                OpenbachFunctionThread(openbach_function, functions_table)
+                for openbach_function in openbach_functions_instances
+        ]
+        for thread in threads:
+            ThreadManager().add_and_launch(thread, self.instance_id, thread.instance_id)
+
+        # Start the scenario's status thread
+        thread = WaitScenarioToFinish(self.instance_id, threads)
+        ThreadManager().add_and_launch(thread, self.instance_id, 0)
+        return {'scenario_instance_id': self.instance_id}, 200
+
+
+class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
+    """Action responsible of stopping an existing Scenario Instance"""
+
+    def __new__(self, instance_id, date=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        instance = super().__new__(self, None, None, None, date)
+        instance.instance_id = instance_id
+        return instance
+
+    def _action(self):
+        scenario_instance = self.get_scenario_instance_or_not_found_errror()
+        if not scenario_instance.is_stopped:
+            scenario_instance.stop()
+            try:
+                ThreadManager().stop(self.instance_id)
+            except KeyError:
+                scenario_instance.status = 'Stopped, out of controll'
+                scenario_instance.save()
+            for openbach_function in scenario_instance.openbach_functions_instances.all():
+                with suppress(JobInstance.DoesNotExist):
+                    job_instance = openbach_function.started_job
+                    StopJobInstance(job_instance.id).action()
+                with suppress(ScenarioInstance.DoesNotExist):
+                    subscenario_instance = openbach_function.started_scenario
+                    StopScenarioInstance(subscenario_instance.id).action()
+        return None, 204
+
+
+class InfosScenarioInstance(ScenarioInstanceAction):
+    """Action responsible for information retrieval about a ScenarioInstance"""
+
+    def __new__(self, instance_id):
+        instance = super().__new__(self, None, None, None, None)
+        instance.instance_id = instance_id
+        return instance
+
+    def _action(self):
+        scenario_instance = self.get_scenario_instance_or_not_found_errror()
+        return scenario_instance.json, 200
+
+
+class ListScenarioInstances(ScenarioInstanceAction):
+    """Action responsible for information retrieval about all
+    ScenarioInstances of a given Scenario.
+    """
+
+    def __new__(self, name=None, project=None):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, project, None, None)
+
+    def _action(self):
+        if self.name is not None:
+            scenario_info = InfosScenario(self.name, self.project)
+            scenario = scenario_info.get_scenario_or_not_found_error()
+            instances = [
+                    instance.json for instance in
+                    scenario.instances.order_by('-start_date')
+            ]
+            return instances, 200
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        scenarios = Scenario.objects.prefetch_related('instances').filter(project=project)
+        instances = [
+                instance.json for scenario in scenarios
+                for instance in scenario.instances.order_by('-start_date')
+        ]
+        return instances, 200
+
+
+############################
+# OpenbachFunctionInstance #
+############################
+
+def get_waited(waiters, scenario_instance):
+    for waiter in waiters:
+        waited = waiter.openbach_function_waited
+        try:
+            openbach_function_instance = OpenbachFunctionInstance.objects.get(
+                openbach_function=waited,
+                scenario_instance=scenario_instance)
+        except OpenbachFunctionInstance.DoesNotExist:
+            raise errors.BadRequestError(
+                    'An OpenbachFunction of this Scenario is waited '
+                    'but no instance of this OpenbachFunction is '
+                    'planned for this ScenarioInstance.',
+                    scenario_name=scenario_instance.scenario.name,
+                    scenario_instance_id=scenario_instance.id,
+                    openbach_function_name=waited.name)
+        yield openbach_function_instance.id
+
+
+class WaitScenarioToFinish(threading.Thread):
+    def __init__(self, instance_id, openbach_function_threads):
+        super().__init__(self)
+        self.instance_id = instance_id
+        self.threads = openbach_function_threads
+
+    def run(self):
+        for thread in self.threads:
+            thread.join()
+
+        scenario = InfosScenarioInstance(self.instance_id)
+        if scenario.is_stopped:
+            return
+
+        # Check that all sub-scenarios and all launched job instances
+        # are stopped as well
+        for openbach_function in scenario.openbach_functions_instances.all():
+            with suppress(JobInstance.DoesNotExist):
+                job_instance = openbach_function.started_job
+                if not job_instance.is_stopped:
+                    break
+            with suppress(ScenarioInstance.DoesNotExist):
+                subscenario_instance = openbach_function.started_scenario
+                if not subscenario_instance.is_stopped:
+                    break
+        else:  # No break
+            scenario.stop()
+            scenario.status = 'Finished OK'
+            scenario.save()
+            return
+
+        scenario.status = 'Running'
+        scenario.save()
+
+
+class OpenbachFunctionThread(threading.Thread):
+    def __init__(self, openbach_function_instance, table):
+        super().__init__()
+        self._table = table
+        self._stop = threading.Event()
+
+        openbach_function = openbach_function_instance.openbach_function
+        action_name = openbach_function.get_content_model().__class__.__name__
+        try:
+            self.action = globals()[action_name]
+        except KeyError:
+            raise errors.ConductorError(
+                    'An OpenbachFunction is not implemented',
+                    openbach_function_name=openbach_function.name)
+        if not hasattr(self.action, 'openbach_function'):
+            raise errors.ConductorError(
+                    'An Action is not available as OpenbachFunction',
+                    action_name=openbach_function.name)
+        self.instance_id = openbach_function_instance.id
+        self.openbach_function = openbach_function_instance
+        own_table = table[self.instance_id]
+        self.queue = own_table['queue']
+        self.waited_ids = (
+                own_table['is_waited_for_launch'] |
+                own_table['is_waited_for_finish'] |
+                own_table['is_waited_true_condition'] |
+                own_table['is_waited_false_condition'])
+        self.wait_for_launch_queues = [
+                table[id]['queue'] for id, data in table.items()
+                if self.instance_id in data['is_waited_for_launch']
+        ]
+        self.wait_for_finished_queues = [
+                table[id]['queue'] for id, data in table.items()
+                if self.instance_id in data['is_waited_for_finished']
+        ]
+
+    def run(self):
+        while self.waited_ids:
+            try:
+                id_ = self.queue.get(timeout=.5)
+            except queue.Empty:
+                if self._stopped.is_set():
+                    self.openbach_function.set_status('Stopped')
+                    return
+            else:
+                if id_ is None:
+                    # We were waiting on a condition
+                    # and the path is not taken
+                    return
+                self.waited_ids.remove(id_)
+        time.sleep(self.openbach_function.wait_time)
+        self._openbach_function_instance.start()
+        arguments = self.openbach_function.arguments
+        if self.action == If or self.action == While:
+            arguments['on_true_queues'] = [self._table[id]['queue'] for id in arguments['on_true']]
+            arguments['on_false_queues'] = [self._table[id]['queue'] for id in arguments['on_false']]
+        try:
+            action = self.action(**arguments)
+            if self.action == StartJobInstance:
+                threads = action.openbach_function(
+                        self.openbach_function,
+                        self.wait_for_finished_queues)
+            else:
+                threads = action.openbach_function(self.openbach_function)
+        # except TypeError:
+        #     ??? TODO
+        except errors.ConductorWarning:
+            pass
+        except errors.ConductorError:
+            scenario_id = self.openbach_function.scenario_instance.id
+            StopScenarioInstance(scenario_id).action()
+            self.openbach_function.set_status('Error')
+            return
+
+        if self._stopped.is_set():
+            self.openbach_function.set_status('Stopped')
+            return
+
+        self.openbach_function.set_status('Finished')
+        for waiter_queue in self.wait_for_launch_queues:
+            waiter_queue.put(self.instance_id)
+
+        for thread in threads:
+            thread.join()
+
+    def stop(self):
+        self._stopped.set()
+
+
+class If(OpenbachFunctionMixin, namedtuple('If',
+         'condition on_true on_false on_true_queues on_false_queues')):
+    def openbach_function(self, openbach_function_instance):
+        instance_id = openbach_function_instance.id
+        scenario = openbach_function_instance.scenario_instance
+        if self.condition.get_value(scenario.id, scenario.parameters):
+            return self._do_true_action(instance_id, scenario)
+        return self._do_false_action(instance_id)
+
+    def _do_true_action(self, instance_id, scenario_instance):
+        for waiting_queue in self.on_true_queues:
+            waiting_queue.put(instance_id)
+        for waiting_queue in self.on_false_queues:
+            waiting_queue.put(None)
+        return []
+
+    def _do_false_action(self, instance_id):
+        for waiting_queue in self.on_true_queues:
+            waiting_queue.put(None)
+        for waiting_queue in self.on_false_queues:
+            waiting_queue.put(instance_id)
+        return []
+
+
+class While(If):
+    def _do_true_action(self, instance_id, scenario_instance):
+        for waiting_queue in self.on_true_queues:
+            waiting_queue.put(self.openbach_function_instance.id)
+        threads = ThreadManager().get_threads(scenario_instance.id, self.on_true)
+        restarted = scenario_instance.openbach_functions_instances.filter(id__in=self.on_true)
+        # TODO (restart while)
+        return [threads]
+
+
+###########
+# Project #
+###########
+
+class ProjectAction(ConductorAction, namedtuple('ProjectAction', 'name json_data')):
+    """Base class that defines all the attributes necessary
+    to deal with Projects.
+    """
+
+    def get_project_or_not_found_error(self):
+        try:
+            return Project.objects.get(name=self.name)
+        except ObjectDoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Project is not in the database',
+                    project_name=self.name)
+
+    def _register_project(self):
+        description = self.json_data.get('description')
+        project, _ = Project.objects.get_or_create(name=self.name)
+        project.description = description
+        project.save()
+        try:
+            project.load_from_json(self.json_data)
+        except Project.MalformedProjectError as e:
+            project.delete()
+            raise errors.BadRequestError(
+                    'Data of the Project are malformed',
+                    project_name=self.name,
+                    error=e.error,
+                    project_data=self.json_data)
+        else:
+            project.save()
+
+
+class CreateProject(ProjectAction):
+    """Action responsible for creating a new Project"""
+
+    def __new__(self, json_data):
+        """Force fewer parameters to be accepted by the constructor"""
+        name = extract_and_check_name_from_json(json_data, kind='Project')
+        return super().__new__(self, name, json_data)
+
+    def _action(self):
+        self._register_project()
+        project = self.get_project_or_not_found_error()
+        return project.json, 200
+
+
+class DeleteProject(ProjectAction):
+    """Action responsible for deleting an existing Scenario"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        project.delete()
+        return None, 204
+
+
+class ModifyProject(ProjectAction):
+    """Action responsible for modifying an existing Scenario"""
+
+    def _action(self):
+        extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
+        with transaction.atomic():
+            self._register_project()
+        project = self.get_project_or_not_found_error()
+        return project.json, 200
+
+
+class InfosProject(ProjectAction):
+    """Action responsible for information retrieval about a Project"""
+
+    def __new__(self, name):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, name, None)
+
+    def get_project_or_not_found_error(self):
+        if self.name is None:
+            return None
+        return super().get_project_or_not_found_error()
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        return project.json, 200
+
+
+class ListProjects(ProjectAction):
+    """Action responsible for information retrieval about all Projects"""
+
+    def __new__(self):
+        """Force fewer parameters to be accepted by the constructor"""
+        return super().__new__(self, None, None)
+
+    def _action(self):
+        return [project.json for project in Project.objects.all()], 200
+
+
+#########
+# State #
+#########
+
+class StateCollectorAction(ConductorAction, namedtuple('StateCollectorAction', 'address')):
+    """Action that retrieve the last action done on a Collector"""
+
+    def _action(self):
+        command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
+        return command_result.json, 200
+
+
+class StateAgentAction(ConductorAction, namedtuple('StateAgentAction', 'address')):
+    """Action that retrieve the last action done on a Agent"""
+
+    def _action(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return command_result.json, 200
+
+
+class StateJobAction(ConductorAction, namedtuple('StateJobAction', 'address name')):
+    """Action that retrieve the last action done on an Installed Job"""
+
+    def _action(self):
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(address=self.address)
+        return command_result.json, 200
+
+
+class StatePushFileAction(ConductorAction, namedtuple('StatePushFileAction',
+                          'name path address')):
+    """Action that retrieve the last action done on a Pushed File"""
+
+    def _action(self):
+        command_result, _ = FileCommandResult.objects.get_or_create(
+                filename=self.name,
+                remote_path=self.path,
+                address=self.address)
+        return command_result.json, 200
+
+
+class StateJobInstanceAction(ConductorAction, namedtuple('StateJobInstanceAction', 'instance_id')):
+    """Action that retrieve the last action done on a JobInstance"""
+
+    def _action(self):
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
+        return command_result.json, 200
+
+
+################
+# Miscelaneous #
+################
+
+class PushFile(OpenbachFunctionMixin, ThreadedAction, namedtuple('PushFile',
+               'local_path remote_path address')):
+    """Action that send a file from the Controller to an Agent"""
+
+    def _action(self):
+        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        playbook_builder = PlaybookBuilder.from_agent(agent)
+        playbook_builder.configure_playbook(
+                'push_file',
+                local_path=self.local_path,
+                remote_path=self.remote_path)
+        playbook_builder.launch_playbook()
+
+
+class KillAction(ConductorAction):
+    """Action that kills all instances: Scenarios, Jobs and Watches"""
+
+    def __init__(self, date=None):
+        super().__init__()
+        self.date = date
+
+    def _action(self):
+        for scenario in ScenarioInstance.objects.filter(is_stopped=False):
+            StopScenarioInstance(scenario.id).action()
+
+        for job in JobInstance.objects.filter(is_stopped=False):
+            StopJobInstance(job.id).action()
+
+        for watch in Watch.objects.all():
+            WatchJobInstance(watch.job_instance.id, stop='now').action()
+
+        return None, 204
+
+
+########
+# Main #
+########
+
+class ThreadManager:
+    """Manage threads in which OpenBACH functions are being run"""
+    __shared_state = {'_threads': defaultdict(dict), 'mutex': threading.Lock()}
+
+    def __init__(self):
+        """Implement the Borg pattern so any instance share the same state"""
+        self.__dict__ = self.__class__.__shared_state
+
+    def add_and_launch(self, thread, scenario_id, openbach_function_id):
+        thread.do_run = True
+        thread.start()
+        with self.mutex:
+            self._threads[scenario_id][openbach_function_id] = thread
+
+    def get_status_thread(self, scenario_id):
+        with self.mutex:
+            return self._threads[scenario_id][0]
+
+    def get_threads(self, scenario_id, threads_ids):
+        with self.mutex:
+            scenario_threads = self._threads[scenario_id]
+            return [scenario_threads[id_] for id_ in threads_ids]
+
+    def is_scenario_stopped(self, scenario_id):
+        with self.mutex:
+            try:
+                thread = self._threads[scenario_id][0]
+            except KeyError:
+                return False
+
+            if thread.is_alive():
+                return False
+            del self._threads[scenario_id]
+            return True
+
+    def stop(self, scenario_id):
+        with self.mutex:
+            threads = self._threads.pop(scenario_id)
+            # Put back the status thread so we can check
+            # later that it exited properly
+            self._threads[scenario_id][0] = threads.pop(0)
+        for openbach_function_id, thread in threads.items():
+            thread.stop()
+
+
+class WaitingQueueManager:
+    """Manage communication between OpenBACH functions that are
+    being run so any function can wait for any other to be
+    launched or finished executing.
+    """
+    __shared_state = {'_waiting_queues': {}, 'mutex': threading.Lock()}
+
+    def __init__(self):
+        """Implement the Borg pattern so any instance share the same state"""
+        self.__dict__ = self.__class__.__shared_state
+
+    def add_job(self, job_id, scenario_id, function_id, queues):
+        with self.mutex:
+            self._waiting_queues[job_id] = (scenario_id, function_id, queues)
+
+    def remove_job(self, job_id):
+        with self.mutex:
+            scenario_id, function_id, queues = self._waiting_queues.pop(job_id)
+            for waited_queue in queues:
+                # Alert other functions that this one is being finished
+                waited_queue.put(function_id)
+        return scenario_id
+
+
+class StatusManager:
+    __state = {
+            'scenarios': {},
+            '_mutex': threading.Lock(),
+            'scheduler': None,
+    }
+
+    def __init__(self):
+        """Implement the Borg pattern so any instance share the same state"""
+        self.__dict__ = self.__class__.__state
+        with self._mutex:
+            if self.scheduler is None:
+                self.scheduler = BackgroundScheduler()
+                self.scheduler.start()
+
+    def _stop_watch(self, job_id):
+        with suppress(JobLookupError):
+            self.scheduler.remove_job('watch_{}'.format(job_id))
+
+    def remove(self, scenario_id, job_id):
+        with self._mutex:
+            jobs = self.scenarios.get(scenario_id, set())
+            jobs.remove(job_id)
+            self._stop_watch(job_id)
+
+    def cancel(self, scenario_id):
+        with self._mutex:
+            jobs = self.scenarios.pop(scenario_id, set())
+            for job_id in jobs:
+                self._stop_watch(job_id)
+
+    def add(self, scenario_id, job_id):
+        with self._mutex:
+            self.scenarios.setdefault(scenario_id, set()).add(job_id)
+            self.scheduler.add_job(
+                    status_manager, 'interval', seconds=2,
+                    args=(job_id, scenario_id),
+                    id='watch_{}'.format(job_id))
+
+
+def status_manager(job_instance_id, scenario_instance_id):
+    job_status_manager = StatusJobInstance(job_instance_id, update=True)
+    job_status_manager.action()
+    job_instance = job_status_manager.get_job_instance_or_not_found_error()
+    if job_instance.status in ('Error', 'Finished', 'Not Running'):
+        job_instance.is_stopped = True
+        job_instance.save()
+        StatusManager().remove(scenario_instance_id, job_instance_id)
+        WatchJobInstance(job_instance_id, stop='now').action()
+        if job_instance.status == 'Error':
+            # TODO: stop the scenario
+            pass
+        else:
+            si_id = WaitingQueueManager().remove_job(job_instance_id)
+            assert scenario_instance_id == si_id
+            scenario_instance = ScenarioInstance.objects.get(id=si_id)
+            if not scenario_instance.is_stopped:
+                ofis = scenario_instance.openbach_function_instances
+                # Check if all JobInstance and all ScenarioInstance
+                # launched by the ScenarioInstance are finished
+                if (all(
+                        job_instance.is_stopped for job_instance in
+                        JobInstance.objects.filter(openbach_function_instance__in=ofis))
+                    and all(
+                        sub_scenario.is_stopped for sub_scenario in
+                        ScenarioInstance.objects.filter(openbach_function_instance__in=ofis))):
+                    # Update the status of the Scenario Instance if it is finished
+                    if ThreadManager().is_scenario_stopped(scenario_instance.id):
+                        scenario_instance.stop('Finished OK')
+
+
+class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """Choose the underlying technology for our sockets servers"""
+    pass
+
+
+class BackendHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        """Handle message comming from the backend"""
+
+        fifo_infos = self.request.recv(4096).decode()
+        fifoname = json.loads(fifo_infos)['fifoname']
+        with open(fifoname) as fifo:
+            request = json.loads(fifo.read())
+
+        try:
+            response, returncode = self.execute_request(request)
+        except errors.ConductorError as e:
+            result = {
+                    'response': e,
+                    'returncode': e.returncode,
+            }
+        except Exception as e:
+            result = {
+                    'response': {
+                        'message': 'Unexpected exception appeared',
+                        'error': str(e),
+                    },
+                    'returncode': 500,
+            }
+        else:
+            result = {'response': response, 'returncode': returncode}
+        finally:
+            with open(fifoname, 'w') as fifo:
+                json.dump(result, fifo, cls=DjangoJSONEncoder)
+            self.request.sendall(b'Done')
+
+    def execute_request(self, request):
+        """Analyze the data received to execute the right action"""
+        request_name = request.pop('command')
+        action_name = ''.join(map(str.title, request_name.split('_')))
+        try:
+            action = globals()[action_name]
+        except KeyError:
+            raise errors.ConductorError(
+                    'A Function is not implemented',
+                    function_name=action_name)
+        return action(**request).action()
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, signal_term_handler)
+
+    with ConductorServer(('', 1113), BackendHandler) as backend_server:
+        backend_server.serve_forever()

@@ -18,11 +18,11 @@ os:
 
 arguments:
   required:
-    - name:        job_instance_id
+    - name:        transfered_file_id
       type:        'int'
       count:       1
       description: >
-          The id of the Job Instance
+          Unique ID used to transfer the required files
     - name:        job_name
       type:        'str'
       count:       1

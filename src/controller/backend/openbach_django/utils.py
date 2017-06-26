@@ -1,43 +1,48 @@
 #!/usr/bin/env python3
 
-"""
-   OpenBACH is a generic testbed able to control/configure multiple
-   network/physical entities (under test) and collect data from them. It is
-   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
-   Agents (one for each network entity that wants to be tested).
+# OpenBACH is a generic testbed able to control/configure multiple
+# network/physical entities (under test) and collect data from them. It is
+# composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+# Agents (one for each network entity that wants to be tested).
+#
+#
+# Copyright © 2016 CNES
+#
+#
+# This file is part of the OpenBACH testbed.
+#
+#
+# OpenBACH is a free software : you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see http://www.gnu.org/licenses/.
 
 
-   Copyright © 2016 CNES
+"""Helper tools to simplify the writing of models and views"""
 
 
-   This file is part of the OpenBACH testbed.
-
-
-   OpenBACH is a free software : you can redistribute it and/or modify it under the
-   terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see http://www.gnu.org/licenses/.
-
-
-
-   @file     utils.py
-   @brief    Classes used in the Controller
-   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
-"""
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
 
 
 import os
-import tempfile
+import enum
 import json
+import shlex
 import syslog
+import tempfile
+import ipaddress
 
 
 class BadRequest(Exception):
@@ -75,14 +80,106 @@ def send_fifo(msg, socket):
     return msg
 
 
-_SEVERITY_MAPPING = {
-    1: 3,   # Error
-    2: 4,   # Warning
-    3: 6,   # Informational
-    4: 7,   # Debug
+def nullable_json(model):
+    """Return the json attribute of a model, or None if no model"""
+    if model is None:
+        return None
+    return model.json
+
+
+def extract_models(cls):
+    """Generate each sub-model out of a base Django's model class.
+
+    Does not generate models that are marked abstract as they don't
+    have any database representation.
+    """
+    for sub_class in cls.__subclasses__():
+        if not sub_class._meta.abstract:
+            yield sub_class
+        yield from extract_models(sub_class)
+
+
+class ValuesType(enum.Enum):
+    INTEGER = 'int'
+    BOOLEAN = 'bool'
+    STRING = 'str'
+    FLOATING_POINT_NUMBER = 'float'
+    IP_ADDRESS = 'ip'
+    LIST = 'list'
+    JSON_DATA = 'json'
+    NONE_TYPE = 'None'
+
+
+def check_and_get_value(value, kind):
+    kind = ValuesType(kind)
+    try:
+        validate = VALIDATORS[kind]
+    except KeyError:
+        raise ValueError(
+                'Value \'{}\' has unknown type: {}'
+                .format(value, kind))
+
+    validate(value)
+    if kind == ValuesType.JSON_DATA:
+        return json.dumps(value)
+    if kind == ValuesType.LIST:
+        return ' '.join(shlex.quote(str(val)) for val in value)
+    return value
+
+
+def _generic_validator(value, converter, type_name):
+    try:
+        converter(value)
+    except ValueError:
+        raise ValueError(
+                'Value \'{}\' does not parse as {}'
+                .format(value, type_name))
+
+
+def _validate_int(value):
+    _generic_validator(value, int, 'an integer')
+
+
+def _validate_bool(value):
+    if str(value).lower() not in {'true', 't', 'false', 'f'}:
+        raise ValueError(
+                'Value \'{}\' does not parse as a '
+                'boolean'.format(value))
+
+
+def _validate_str(value):
+    pass
+
+
+def _validate_float(value):
+    _generic_validator(value, float, 'a floating point number')
+
+
+def _validate_ip(value):
+    _generic_validator(value, ipaddress.ip_address, 'an IP address')
+
+
+def _validate_list(value):
+    if not isinstance(value, list):
+        raise ValueError('Value \'{}\' does not parse as a list'.format(value))
+
+
+def _validate_json(value):
+    if not isinstance(value, dict):
+        raise ValueError('Value \'{}\' is not valid JSON data'.format(value))
+
+
+def _validate_none(value):
+    pass
+
+
+VALIDATORS = {
+        ValuesType.INTEGER: _validate_int,
+        ValuesType.BOOLEAN: _validate_bool,
+        ValuesType.STRING: _validate_str,
+        ValuesType.FLOATING_POINT_NUMBER: _validate_float,
+        ValuesType.IP_ADDRESS: _validate_ip,
+        ValuesType.LIST: _validate_list,
+        ValuesType.JSON_DATA: _validate_json,
+        ValuesType.NONE_TYPE: _validate_none,
 }
-
-
-def convert_severity(severity):
-    """ Function that converts the syslog severity to the openbach severity """
-    return _SEVERITY_MAPPING.get(severity, 8)

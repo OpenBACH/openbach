@@ -125,12 +125,6 @@ class OpenbachFunctionInstance(models.Model):
     status = models.CharField(max_length=500, null=True, blank=True)
     launch_date = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        unique_together = (
-                ('instance_id', 'scenario_instance'),
-                ('label', 'scenario_instance'),
-        )
-
     def __str__(self):
         return (
             'Openbach Function \'{}\' of Scenario \'{}\' '
@@ -394,10 +388,17 @@ class StartJobInstance(OpenbachFunction):
 
     @property
     def _json(self):
-        arguments = {
-                argument.name: argument.value
-                for argument in self.arguments.all()
-        }
+        arguments = {}
+        for argument in self.arguments.all():
+            try:
+                old_value = arguments[argument.name]
+            except KeyError:
+                arguments[argument.name] = argument.value
+            else:
+                if isinstance(old_value, list):
+                    old_value.append(argument.value)
+                else:
+                    arguments[argument.name] = [old_value, argument.value]
 
         return {'start_job_instance': {
             self.job_name: arguments,
@@ -406,7 +407,19 @@ class StartJobInstance(OpenbachFunction):
         }}
 
     def _get_arguments(self, parameters):
-        arguments = []
+        arguments = {}
+        for argument in self.arguments.all():
+            value = argument.get_value(parameters)
+            try:
+                old_value = arguments[argument.name]
+            except KeyError:
+                arguments[argument.name] = value
+            else:
+                if isinstance(old_value, list):
+                    old_value.append(value)
+                else:
+                    arguments[argument.name] = [old_value, value]
+
         return {
                 'address': self.instance_value('agent_ip', parameters),
                 'name': self.instance_value('job_name', parameters),
@@ -427,6 +440,11 @@ class StartJobInstanceArgument(models.Model):
             StartJobInstance,
             models.CASCADE,
             related_name='arguments')
+
+    def get_value(self, parameters):
+        value = self.value
+        field = self._meta._forward_fields_map['value']
+        return field.validate_openbach_value(value, parameters)
 
 
 class StopJobInstance(OpenbachFunction):

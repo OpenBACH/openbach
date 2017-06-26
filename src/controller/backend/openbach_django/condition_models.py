@@ -315,6 +315,9 @@ class _TwoConditions(Condition):
             models.CASCADE,
             related_name='+')
 
+    class Meta:
+        abstract = True
+
     def check_field_value(self, parameters):
         self.left_condition.check_field_value(parameters)
         self.right_condition.check_field_value(parameters)
@@ -386,6 +389,9 @@ class _TwoOperands(Condition):
             Operand,
             models.CASCADE,
             related_name='+')
+
+    class Meta:
+        abstract = True
 
     def check_field_value(self, parameters):
         self.left_operand.check_field_value(parameters)

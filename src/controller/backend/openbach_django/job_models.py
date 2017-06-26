@@ -286,8 +286,8 @@ class JobInstance(models.Model):
             self.periodic = True
 
         # Remove old arguments in case of a restart
-        self.required_arguments_values.delete()
-        self.optional_arguments_values.delete()
+        self.required_arguments_values.all().delete()
+        self.optional_arguments_values.all().delete()
 
         job = self.job.job
         for arg_name, arg_values in arguments.items():
@@ -306,11 +306,11 @@ class JobInstance(models.Model):
             if not isinstance(arg_values, list):
                 arg_values = [arg_values]
             count = len(arg_values)
-            if not argument_instance.argument.check_count(count):
+            if not argument_instance.check_count(count):
                 raise ValueError(
                         'Provided number of arguments ({}) does not '
                         'match with their expected number ({})'
-                        .format(count, argument_instance.argument.count))
+                        .format(count, argument_instance.count))
             for arg_value in arg_values:
                 job_argument = JobArgumentValue(
                         argument=argument_instance,
@@ -377,14 +377,15 @@ class RequiredJobArgument(Argument):
                     'You must specify a count value for the '
                     'required argument \'{}\''.format(self.name))
 
-            if count == '*' or count == '+' or len(count.split('-')) > 1:
-                if self.job.has_uncertain_required_arg:
-                    raise TypeError(
-                            'A Job can only have one required argument with '
-                            'a variable amount of values')
-                    self.job.has_uncertain_required_arg = True
+        if count == '*' or count == '+' or len(count.split('-')) > 1:
+            if self.job.has_uncertain_required_arg:
+                raise TypeError(
+                        'A Job can only have one required argument with '
+                        'a variable amount of values')
+            self.job.has_uncertain_required_arg = True
 
         super().save(*args, **kwargs)
+        self.job.save()
 
     @property
     def json(self):

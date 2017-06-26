@@ -61,7 +61,7 @@ class Collector(models.Model):
     stats_port = models.IntegerField(default=2222)
     stats_query_port = models.IntegerField(default=8086)
     stats_database_name = models.CharField(max_length=500, default='openbach')
-    stats_database_precision = models.CharFiled(max_length=10, default='ms')
+    stats_database_precision = models.CharField(max_length=10, default='ms')
 
     def __str__(self):
         return self.address

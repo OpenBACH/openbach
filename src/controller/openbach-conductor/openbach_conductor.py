@@ -47,7 +47,6 @@ __credits__ = '''Contributors:
 
 import os
 import re
-import sys
 import json
 import time
 import queue
@@ -61,15 +60,14 @@ import itertools
 import socketserver
 from datetime import datetime
 from contextlib import suppress
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 
 import yaml
 import requests
 from fuzzywuzzy import fuzz
 
-sys.path.insert(0, '/opt/openbach-controller/backend')
 from django.core.wsgi import get_wsgi_application
-os.environ['DJANGO_SETTINGS_MODULE'] = 'backend.settings'
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 application = get_wsgi_application()
 from django.utils import timezone
 from django.db import IntegrityError, transaction
@@ -92,9 +90,9 @@ from openbach_django.models import (
         ScenarioArgument, ScenarioArgumentValue,
 )
 
-from . import errors, conductor_utils
-from .openbach_baton import OpenBachBaton
-from .playbook_builder import PlaybookBuilder
+import errors
+from openbach_baton import OpenBachBaton
+from playbook_builder import PlaybookBuilder
 
 
 syslog.openlog('openbach-conductor', syslog.LOG_PID, syslog.LOG_USER)
@@ -195,9 +193,10 @@ class ConductorAction:
     backend handles and will perform the requested action.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
         self.openbach_function_instance = None
+        for name, value in kwargs:
+            setattr(self, name, value)
 
     def action(self):
         """Public entry point to execute the required action"""
@@ -281,22 +280,8 @@ class ThreadedAction(ConductorAction):
 # Collector #
 #############
 
-class CollectorAction(ConductorAction, namedtuple('CollectorAction',
-            'address username password name logs_port logs_query_port '
-            'stats_port stats_query_port database_name database_precision')):
-    """Base class that defines all the attributes necessary
-    to deal with Collectors.
-    """
-
-    def __new__(self, address, username=None, password=None,
-                name=None, logs_port=None, logs_query_port=None,
-                stats_port=None, stats_query_port=None,
-                database_name=None, database_precision=None):
-        """Override namedtuple behaviour to allow for optional parameters"""
-        return super().__new__(
-                self, address, username, password, name,
-                logs_port, logs_query_port, stats_port,
-                stats_query_port, database_name, database_precision)
+class CollectorAction(ConductorAction):
+    """Base class that defines helper methods to deal with Collectors"""
 
     def get_collector_or_not_found_error(self):
         try:
@@ -310,15 +295,17 @@ class CollectorAction(ConductorAction, namedtuple('CollectorAction',
 class AddCollector(ThreadedAction, CollectorAction):
     """Action responsible for the installation of a Collector"""
 
-    def __new__(self, address, username, password, name,
-                logs_port=None, logs_query_port=None,
-                stats_port=None, stats_query_port=None,
-                database_name=None, database_precision=None):
-        """Force more parameters to be required compared to the base class"""
-        return super().__new__(
-                self, address, username, password, name,
-                logs_port, logs_query_port, stats_port,
-                stats_query_port, database_name, database_precision)
+    def __init__(self, address, username, password, name,
+                 logs_port=None, logs_query_port=None,
+                 stats_port=None, stats_query_port=None,
+                 database_name=None, database_precision=None):
+        super().__init__(
+                address=address, username=username, password=password,
+                name=name, logs_port=logs_port, stats_port=stats_port,
+                logs_query_port=logs_query_port,
+                stats_query_port=stats_query_port,
+                database_name=database_name,
+                database_precision=database_precision)
 
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
@@ -376,6 +363,18 @@ class AddCollector(ThreadedAction, CollectorAction):
 class ModifyCollector(ThreadedAction, CollectorAction):
     """Action responsible of modifying the configuration of a Collector"""
 
+    def __init__(self, address, username=None, password=None,
+                 name=None, logs_port=None, logs_query_port=None,
+                 stats_port=None, stats_query_port=None,
+                 database_name=None, database_precision=None):
+        super().__init__(
+                address=address, username=username, password=password,
+                name=name, logs_port=logs_port, stats_port=stats_port,
+                logs_query_port=logs_query_port,
+                stats_query_port=stats_query_port,
+                database_name=database_name,
+                database_precision=database_precision)
+
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_modify')
@@ -395,10 +394,8 @@ class ModifyCollector(ThreadedAction, CollectorAction):
 class DeleteCollector(ThreadedAction, CollectorAction):
     """Action responsible for the uninstallation of a Collector"""
 
-    def __new__(self, address):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None,
-                               None, None, None, None, None, None)
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
@@ -438,10 +435,8 @@ class DeleteCollector(ThreadedAction, CollectorAction):
 class InfosCollector(CollectorAction):
     """Action responsible for information retrieval about a Collector"""
 
-    def __new__(self, address):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None,
-                               None, None, None, None, None, None)
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _action(self):
         collector = self.get_collector_or_not_found_error()
@@ -451,10 +446,8 @@ class InfosCollector(CollectorAction):
 class ListCollectors(CollectorAction):
     """Action responsible for information retrieval about all Collectors"""
 
-    def __new__(self):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, None, None, None, None,
-                               None, None, None, None, None, None)
+    def __init__(self):
+        super().__init__()
 
     def _action(self):
         infos = [c.json for c in Collector.objects.all()]
@@ -465,11 +458,8 @@ class ListCollectors(CollectorAction):
 # Agent #
 #########
 
-class AgentAction(ConductorAction, namedtuple('AgentAction',
-                  'address username password name collector_ip')):
-    """Base class that defines all the attributes necessary
-    to deal with Agents.
-    """
+class AgentAction(ConductorAction):
+    """Base class that defines helper methods to deal with Agents"""
 
     def get_agent_or_not_found_error(self):
         try:
@@ -505,6 +495,10 @@ class AgentAction(ConductorAction, namedtuple('AgentAction',
 
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
+
+    def __init__(self, address, username, password, name, collector_ip):
+        super().__init__(address=address, username=username, password=password,
+                         name=name, collector_ip=collector_ip)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -574,9 +568,8 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the uninstallation of an Agent"""
 
-    def __new__(self, address):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None, None)
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -602,11 +595,8 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 class InfosAgent(AgentAction):
     """Action responsible for information retrieval about an Agent"""
 
-    def __new__(self, address, update):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, address, None, None, None, None)
-        instance.update = update
-        return instance
+    def __init__(self, address, update):
+        super().__init__(address=address, update=update)
 
     def _action(self):
         if self.update:
@@ -618,11 +608,8 @@ class InfosAgent(AgentAction):
 class ListAgents(AgentAction):
     """Action responsible for information retrieval about all Agents"""
 
-    def __new__(self, update):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, None, None, None, None, None)
-        instance.update = update
-        return instance
+    def __init__(self, update):
+        super().__init__(update=update)
 
     def _action(self):
         infos = [
@@ -635,9 +622,8 @@ class ListAgents(AgentAction):
 class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for status retrieval about an Agent"""
 
-    def __new__(self, address):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None, None)
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -651,9 +637,7 @@ def RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for status retrieval about several Agents"""
 
     def __init__(self, addresses, update):
-        super().__init__()
-        self.addresses = addresses
-        self.update = update
+        super().__init__(addresses=addresses, update=update)
 
     def _action(self):
         for address in self.addresses:
@@ -666,9 +650,8 @@ class RetrieveStatusJob(ThreadedAction, AgentAction):
     list of its Installed Jobs to its Collector.
     """
 
-    def __new__(self, address):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None, None)
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -685,8 +668,7 @@ class RetrieveStatusJobs(OpenbachFunctionMixin, ConductorAction):
     """
 
     def __init__(self, addresses):
-        super().__init__()
-        self.addresses = addresses
+        super().__init__(addresses=addresses)
 
     def _action(self):
         for address in self.addresses:
@@ -697,9 +679,8 @@ class RetrieveStatusJobs(OpenbachFunctionMixin, ConductorAction):
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for assigning a Collector to an Agent"""
 
-    def __new__(self, address, collector_ip):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, None, None, None, collector_ip)
+    def __init__(self, address, collector_ip):
+        super().__init__(address=address, collector_ip=collector_ip)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -731,10 +712,8 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 # Jobs #
 ########
 
-class JobAction(ConductorAction, namedtuple('JobAction', 'name path')):
-    """Base class that defines all the attributes necessary
-    to deal with Collectors.
-    """
+class JobAction(ConductorAction):
+    """Base class that defines helper methods to deal with Jobs"""
 
     def get_job_or_not_found_error(self):
         try:
@@ -749,6 +728,9 @@ class AddJob(JobAction):
     """Action responsible to add a Job whose files are on the
     Controller's filesystem into the database.
     """
+
+    def __init__(self, name, path):
+        super().__init__(name=name, path=path)
 
     def _action(self):
         config_prefix = os.path.join(self.path, 'files', self.name)
@@ -862,7 +844,7 @@ class AddJob(JobAction):
         job.statistics.exclude(name__in=stats_names).delete()
 
         # Associate "new" required arguments
-        job.required_arguments.delete()
+        job.required_arguments.all().delete()
         arguments = content.get('arguments', {}).get('required')
         if arguments is not None:
             for rank, argument in enumerate(arguments):
@@ -876,7 +858,7 @@ class AddJob(JobAction):
                 argument.save()
 
         # Associate "new" optional arguments
-        job.optional_arguments.delete()
+        job.optional_arguments.all().delete()
         arguments = content.get('arguments', {}).get('optional')
         if arguments is not None:
             for argument in arguments:
@@ -896,6 +878,9 @@ class AddTarJob(JobAction):
     a .tar file into the database.
     """
 
+    def __init__(self, name, path):
+        super().__init__(name=name, path=path)
+
     def _action(self):
         path = '/opt/openbach-controller/jobs/private_jobs/{}'.format(self.name)
         try:
@@ -912,9 +897,8 @@ class AddTarJob(JobAction):
 class DeleteJob(JobAction):
     """Action responsible of removing a Job from the filesystem"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         job = self.get_job_or_not_found_error()
@@ -934,9 +918,8 @@ class DeleteJob(JobAction):
 class InfosJob(JobAction):
     """Action responsible for information retrieval about a Job"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         job = self.get_job_or_not_found_error()
@@ -946,11 +929,8 @@ class InfosJob(JobAction):
 class ListJobs(JobAction):
     """Action responsible to search information about Jobs"""
 
-    def __new__(self, string_to_search=None, ratio=60):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, string_to_search, None)
-        instance.ratio = ratio
-        return instance
+    def __init__(self, string_to_search=None, ratio=60):
+        super().__init__(name=string_to_search, ratio=ratio)
 
     def _action(self):
         if self.name is None:
@@ -967,15 +947,13 @@ class ListJobs(JobAction):
             if any(fuzz.token_set_ratio(word, self.name) > self.ratio
                    for word in search_fields):
                 yield job
-                continue
 
 
 class GetKeywordsJob(JobAction):
     """Action responsible for retrieval of the keywords of a Job"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         job = self.get_job_or_not_found_error()
@@ -986,9 +964,8 @@ class GetKeywordsJob(JobAction):
 class GetStatisticsJob(JobAction):
     """Action responsible for retrieval of the statistics of a Job"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         job = self.get_job_or_not_found_error()
@@ -999,9 +976,8 @@ class GetStatisticsJob(JobAction):
 class GetHelpJob(JobAction):
     """Action responsible for retrieval of the help on a Job"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         job = self.get_job_or_not_found_error()
@@ -1012,11 +988,8 @@ class GetHelpJob(JobAction):
 # Installed Jobs #
 ##################
 
-class InstalledJobAction(ConductorAction, namedtuple('InstalledJobAction',
-                         'address name severity local_severity')):
-    """Base class that defines all the attributes necessary
-    to deal with Installed Jobs.
-    """
+class InstalledJobAction(ConductorAction):
+    """Base class that defines helper methods to deal with InstalledJobs"""
 
     def get_installed_job_or_not_found_error(self):
         job = InfosJob(self.name).get_job_or_not_found_error()
@@ -1032,9 +1005,9 @@ class InstalledJobAction(ConductorAction, namedtuple('InstalledJobAction',
 class InstallJob(ThreadedAction, InstalledJobAction):
     """Action responsible for installing a Job on an Agent"""
 
-    def __new__(self, address, name, severity=1, local_severity=1):
-        """Allow some of the arguments to be optional"""
-        return super().__new__(self, address, name, severity, local_severity)
+    def __init__(self, address, name, severity=1, local_severity=1):
+        super().__init__(address=address, name=name,
+                         severity=severity, local_severity=local_severity)
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.object.get_or_create(
@@ -1072,12 +1045,12 @@ class InstallJob(ThreadedAction, InstalledJobAction):
 class InstallJobs(InstalledJobAction):
     """Action responsible for installing several Jobs on several Agents"""
 
-    def __new__(self, addresses, names, severity=1, local_severity=1):
-        """Allow some of the arguments to be optional"""
-        return super().__new__(self, addresses, names, severity, local_severity)
+    def __init__(self, addresses, names, severity=1, local_severity=1):
+        super().__init__(addresses=addresses, names=names,
+                         severity=severity, local_severity=local_severity)
 
     def _action(self):
-        for name, address in itertools.product(self.name, self.address):
+        for name, address in itertools.product(self.names, self.addresses):
             InstallJob(address, name, self.severity, self.local_severity).action()
         return {}, 202
 
@@ -1085,9 +1058,8 @@ class InstallJobs(InstalledJobAction):
 class UninstallJob(ThreadedAction, InstalledJobAction):
     """Action responsible for uninstalling a Job on an Agent"""
 
-    def __new__(self, address, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__init__(self, address, name, None, None)
+    def __init__(self, address, name):
+        super().__init__(address=address, name=name)
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
@@ -1110,12 +1082,11 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
 class UninstallJobs(InstalledJobAction):
     """Action responsible for uninstalling several Jobs on several Agents"""
 
-    def __new__(self, addresses, names):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, addresses, names, None, None)
+    def __init__(self, addresses, names):
+        super().__init__(addresses=addresses, names=names)
 
     def _action(self):
-        for name, address in itertools.product(self.name, self.address):
+        for name, address in itertools.product(self.names, self.addresses):
             UninstallJob(address, name).action()
         return {}, 202
 
@@ -1123,9 +1094,8 @@ class UninstallJobs(InstalledJobAction):
 class InfosInstalledJob(InstalledJobAction):
     """Action responsible for information retrieval about an Installed Job"""
 
-    def __new__(self, address, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, address, name, None, None)
+    def __init__(self, address, name):
+        super().__init__(address=address, name=name)
 
     def _action(self):
         installed_job = self.get_installed_job_or_not_found_error()
@@ -1144,11 +1114,8 @@ class ListInstalledJobs(InstalledJobAction):
             'WHERE+"@agent_name"+=+\'{agent.name}\'+'
             'AND+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1')
 
-    def __new__(self, address, update=False):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, address, None, None, None)
-        instance.update = update
-        return instance
+    def __init__(self, address, update=False):
+        super().__init__(address=address, update=update)
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
@@ -1212,11 +1179,9 @@ class ListInstalledJobs(InstalledJobAction):
 class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
     """Action responsible for changing the log severity of an Installed Job"""
 
-    def __new__(self, address, name, severity, local_severity=None, date=None):
-        """Allow some of the arguments to be optional"""
-        instance = super().__new__(self, address, name, severity, local_severity)
-        instance.date = date
-        return instance
+    def __init__(self, address, name, severity, local_severity=None, date=None):
+        super().__init__(address=address, name=name, severity=severity,
+                         local_severity=local_severity, date=date)
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
@@ -1284,14 +1249,10 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
 class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
     """Action responsible for changing the log severity of an Installed Job"""
 
-    def __new__(
-            self, address, name, storage=None, broadcast=None,
-            stat_name=None, date=None):
-        """Allow some of the arguments to be optional"""
-        instance = super().__new__(self, address, name, storage, broadcast)
-        instance.date = date
-        instance.statistic = stat_name
-        return instance
+    def __init__(self, address, name, storage=None,
+                 broadcast=None, stat_name=None, date=None):
+        super().__init__(address=address, name=name, storage=storage,
+                         broadcast=broadcast, statistic=stat_name, date=date)
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
@@ -1300,8 +1261,8 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
 
     def _action(self):
         installed_job = self.get_installed_job_or_not_found_error()
-        storage = self.severity
-        broadcast = self.local_severity
+        storage = self.storage
+        broadcast = self.broadcast
 
         if self.statistic is None:
             if broadcast is not None:
@@ -1373,11 +1334,8 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
 # JobInstance #
 ###############
 
-class JobInstanceAction(ConductorAction, namedtuple('JobInstanceAction',
-                        'address name arguments date interval offset')):
-    """Base class that defines all the attributes necessary
-    to deal with Jobs Instances.
-    """
+class JobInstanceAction(ConductorAction):
+    """Base class that defines helper methods to deal with JobInstances"""
 
     def get_job_instance_or_not_found_error(self):
         try:
@@ -1398,9 +1356,9 @@ class JobInstanceAction(ConductorAction, namedtuple('JobInstanceAction',
 class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
     """Action responsible for launching a Job on an Agent"""
 
-    def __new__(self, address, name, arguments, date=None, interval=None, offset=0):
-        """Allow some of the arguments to be optional"""
-        return super().__new__(address, name, arguments, date, interval, offset)
+    def __init__(self, address, name, arguments, date=None, interval=None, offset=0):
+        super().__init__(address=address, name=name, arguments=arguments,
+                         date=date, interval=interval, offset=offset)
 
     def _create_command_result(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
@@ -1497,12 +1455,9 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
 class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
     """Action responsible for stopping a launched Job"""
 
-    def __new__(self, instance_id=None, date=None, openbach_function_id=None):
-        """Allow some of the arguments to be optional"""
-        instance = super().__new__(None, None, None, date, None, None)
-        instance.instance_id = instance_id
-        instance.openbach_function_id = openbach_function_id
-        return instance
+    def __init__(self, instance_id=None, date=None, openbach_function_id=None):
+        super().__init__(instance_id=instance_id, date=date,
+                         openbach_function_id=openbach_function_id)
 
     def openbach_function(self, openbach_function_instance):
         """Retrieve the job instance id launched by the provided
@@ -1560,10 +1515,8 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for stopping several launched Job"""
 
     def __init__(self, instance_ids=None, date=None, openbach_function_ids=None):
-        super().__init__()
-        self.date = date
-        self.instance_ids = instance_ids
-        self.openbach_function_ids = openbach_function_ids
+        super().__init__(instance_ids=instance_ids, date=date,
+                         openbach_function_ids=openbach_function_ids)
 
     def openbach_function(self, openbach_function_instance):
         issues = []
@@ -1596,11 +1549,9 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
 class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
     """Action responsible for restarting a launched Job"""
 
-    def __new__(self, instance_id, arguments, date=None, interval=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, None, None, arguments, date, interval, None)
-        instance.instance_id = instance_id
-        return instance
+    def __init__(self, instance_id, arguments, date=None, interval=None):
+        super().__init__(instance_id=instance_id, arguments=arguments,
+                         date=date, interval=interval)
 
     def _create_command_result(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
@@ -1641,12 +1592,8 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
 class WatchJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
     """Action responsible for managing Watches on a JobInstance"""
 
-    def __new__(self, instance_id, date=None, interval=None, stop=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, None, None, None, date, interval, None)
-        instance.instance_id = instance_id
-        instance.stop = stop
-        return instance
+    def __init__(self, instance_id, date=None, interval=None, stop=None):
+        super().__init__(instance_id=instance_id, date=date, interval=interval, stop=stop)
 
     def _create_command_result(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
@@ -1695,12 +1642,8 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             'WHERE+"@agent_name"+=+\'{agent.name}\'+'
             'AND+job_name+=+\'{}\'+AND+job_instance_id+=+{}')
 
-    def __new__(self, instance_id, update=False):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, None, None, None, None, None, None)
-        instance.instance_id = instance_id
-        instance.update = update
-        return instance
+    def __init__(self, instance_id, update=False):
+        super().__init__(instance_id=instance_id, update=update)
 
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
@@ -1741,11 +1684,8 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
 class ListJobInstance(JobInstanceAction):
     """Action responsible for listing the JobInstances running on an Agent"""
 
-    def __new__(self, address, update=False):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, address, None, None, None, None, None)
-        instance.update = update
-        return instance
+    def __init__(self, address, update=False):
+        super().__init__(address=address, update=update)
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
@@ -1773,9 +1713,7 @@ class ListJobInstances(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for listing the JobInstances running on several Agents"""
 
     def __init__(self, addresses, update=False):
-        super().__init__()
-        self.addresses = addresses
-        self.update = update
+        super().__init__(addresses=addresses, update=update)
 
     def _action(self):
         instances = [
@@ -1789,11 +1727,8 @@ class ListJobInstances(OpenbachFunctionMixin, ConductorAction):
 # Scenario #
 ############
 
-class ScenarioAction(ConductorAction, namedtuple('ScenarioAction',
-                     'json_data name project')):
-    """Base class that defines all the attributes necessary
-    to deal with Scenarios.
-    """
+class ScenarioAction(ConductorAction):
+    """Base class that defines helper methods to deal with Scenarios"""
 
     def get_scenario_or_not_found_error(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
@@ -1830,10 +1765,9 @@ class ScenarioAction(ConductorAction, namedtuple('ScenarioAction',
 class CreateScenario(ScenarioAction):
     """Action responsible for creating a new Scenario"""
 
-    def __new__(self, json_data, project=None):
-        """Force fewer parameters to be accepted by the constructor"""
+    def __init__(self, json_data, project=None):
         name = extract_and_check_name_from_json(json_data, kind='Scenario')
-        return super().__new__(self, json_data, name, project)
+        super().__init__(self, json_data=json_data, name=name, project=project)
 
     def _action(self):
         self._register_scenario()
@@ -1844,9 +1778,8 @@ class CreateScenario(ScenarioAction):
 class DeleteScenario(ScenarioAction):
     """Action responsible for deleting an existing Scenario"""
 
-    def __new__(self, name, project=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, None, name, project)
+    def __init__(self, name, project=None):
+        super().__init__(name=name, project=project)
 
     def _action(self):
         scenario = self.get_scenario_or_not_found_error()
@@ -1857,9 +1790,8 @@ class DeleteScenario(ScenarioAction):
 class ModifyScenario(ScenarioAction):
     """Action responsible for modifying an existing Scenario"""
 
-    def __new__(self, json_data, name, project=None):
-        """Allow some of the arguments to be optional"""
-        return super().__new__(self, json_data, name, project)
+    def __init__(self, json_data, name, project=None):
+        super().__init__(json_data=json_data, name=name, project=project)
 
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Scenario')
@@ -1872,9 +1804,8 @@ class ModifyScenario(ScenarioAction):
 class InfosScenario(ScenarioAction):
     """Action responsible for information retrieval about a Scenario"""
 
-    def __new__(self, name, project=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, None, name, project)
+    def __init__(self, name, project=None):
+        super().__init__(name=name, project=project)
 
     def _action(self):
         scenario = self.get_scenario_or_not_found_error()
@@ -1884,9 +1815,8 @@ class InfosScenario(ScenarioAction):
 class ListScenarios(ScenarioAction):
     """Action responsible for information retrieval about all Scenarios"""
 
-    def __new__(self, project=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, None, None, project)
+    def __init__(self, project=None):
+        super().__init__(project=project)
 
     def _action(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
@@ -1898,11 +1828,8 @@ class ListScenarios(ScenarioAction):
 # ScenarioInstance #
 ####################
 
-class ScenarioInstanceAction(ConductorAction, namedtuple('ScenarioInstanceAction',
-                             'name project arguments date')):
-    """Base class that defines all the attributes necessary
-    to deal with ScenarioInstances.
-    """
+class ScenarioInstanceAction(ConductorAction):
+    """Base class that defines helper methods to deal with ScenarioInstances"""
 
     def get_scenario_instance_or_not_found_errror(self):
         try:
@@ -1923,9 +1850,8 @@ class ScenarioInstanceAction(ConductorAction, namedtuple('ScenarioInstanceAction
 class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
     """Action responsible of launching new Scenario Instances"""
 
-    def __new__(self, name, project=None, arguments=None, date=None):
-        """Allow some of the arguments to be optional"""
-        return super().__new__(self, name, project, arguments, date)
+    def __init__(self, name, project=None, arguments=None, date=None):
+        super().__init__(name=name, project=project, arguments=arguments, date=date)
 
     def openbach_function(self, openbach_function_instance):
         launching_project = openbach_function_instance.scenario_instance.scenario.project
@@ -2019,7 +1945,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
 
         # Start all OpenbachFunctions threads
         threads = [
-                OpenbachFunctionThread(openbach_function, functions_table)
+                create_thread(openbach_function, functions_table)
                 for openbach_function in openbach_functions_instances
         ]
         for thread in threads:
@@ -2034,11 +1960,8 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
 class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
     """Action responsible of stopping an existing Scenario Instance"""
 
-    def __new__(self, instance_id, date=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        instance = super().__new__(self, None, None, None, date)
-        instance.instance_id = instance_id
-        return instance
+    def __init__(self, instance_id, date=None):
+        super().__init__(instance_id=instance_id, date=date)
 
     def _action(self):
         scenario_instance = self.get_scenario_instance_or_not_found_errror()
@@ -2062,10 +1985,8 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
 class InfosScenarioInstance(ScenarioInstanceAction):
     """Action responsible for information retrieval about a ScenarioInstance"""
 
-    def __new__(self, instance_id):
-        instance = super().__new__(self, None, None, None, None)
-        instance.instance_id = instance_id
-        return instance
+    def __init__(self, instance_id):
+        super().__init__(instance_id=instance_id)
 
     def _action(self):
         scenario_instance = self.get_scenario_instance_or_not_found_errror()
@@ -2077,9 +1998,8 @@ class ListScenarioInstances(ScenarioInstanceAction):
     ScenarioInstances of a given Scenario.
     """
 
-    def __new__(self, name=None, project=None):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, project, None, None)
+    def __init__(self, name=None, project=None):
+        super().__init__(name=name, project=project)
 
     def _action(self):
         if self.name is not None:
@@ -2119,6 +2039,16 @@ def get_waited(waiters, scenario_instance):
                     scenario_instance_id=scenario_instance.id,
                     openbach_function_name=waited.name)
         yield openbach_function_instance.id
+
+
+def create_thread(openbach_function, functions_table):
+    openbach_function_model = openbach_function.openbach_function.get_content_model()
+    openbach_function_name = openbach_function_model.__class__.__name__
+    if openbach_function_name == 'If':
+        return IfThread(openbach_function, functions_table)
+    if openbach_function_name == 'While':
+        return WhileThread(openbach_function, functions_table)
+    return OpenbachFunctionThread(openbach_function, functions_table)
 
 
 class WaitScenarioToFinish(threading.Thread):
@@ -2207,21 +2137,8 @@ class OpenbachFunctionThread(threading.Thread):
                     return
                 self.waited_ids.remove(id_)
         time.sleep(self.openbach_function.wait_time)
-        self._openbach_function_instance.start()
-        arguments = self.openbach_function.arguments
-        if self.action == If or self.action == While:
-            arguments['on_true_queues'] = [self._table[id]['queue'] for id in arguments['on_true']]
-            arguments['on_false_queues'] = [self._table[id]['queue'] for id in arguments['on_false']]
         try:
-            action = self.action(**arguments)
-            if self.action == StartJobInstance:
-                threads = action.openbach_function(
-                        self.openbach_function,
-                        self.wait_for_finished_queues)
-            else:
-                threads = action.openbach_function(self.openbach_function)
-        # except TypeError:
-        #     ??? TODO
+            threads = self._run_openbach_function()
         except errors.ConductorWarning:
             pass
         except errors.ConductorError:
@@ -2241,52 +2158,77 @@ class OpenbachFunctionThread(threading.Thread):
         for thread in threads:
             thread.join()
 
+    def _run_openbach_function(self):
+        self.openbach_function.start()
+        arguments = self.openbach_function.arguments
+        # try:
+        action = self.action(**arguments)
+        if self.action == StartJobInstance:
+            return action.openbach_function(
+                    self.openbach_function,
+                    self.wait_for_finished_queues)
+        else:
+            return action.openbach_function(self.openbach_function)
+        # except TypeError:
+        #     ??? TODO
+
     def stop(self):
         self._stopped.set()
 
 
-class If(OpenbachFunctionMixin, namedtuple('If',
-         'condition on_true on_false on_true_queues on_false_queues')):
-    def openbach_function(self, openbach_function_instance):
-        instance_id = openbach_function_instance.id
-        scenario = openbach_function_instance.scenario_instance
-        if self.condition.get_value(scenario.id, scenario.parameters):
-            return self._do_true_action(instance_id, scenario)
-        return self._do_false_action(instance_id)
-
-    def _do_true_action(self, instance_id, scenario_instance):
-        for waiting_queue in self.on_true_queues:
-            waiting_queue.put(instance_id)
-        for waiting_queue in self.on_false_queues:
-            waiting_queue.put(None)
-        return []
-
-    def _do_false_action(self, instance_id):
-        for waiting_queue in self.on_true_queues:
-            waiting_queue.put(None)
-        for waiting_queue in self.on_false_queues:
-            waiting_queue.put(instance_id)
+class IfThread(OpenbachFunctionThread):
+    def _run_openbach_function(self):
+        instance_id = self.instance_id
+        scenario = self.openbach_function.scenario_instance
+        arguments = self.openbach_function.arguments
+        condition = arguments['condition']
+        condition_value = condition.get_value(scenario.id, scenario.parameters)
+        id_queue, none_queue = sorted(('on_false', 'on_true'), reverse=condition_value)
+        for id in arguments[id_queue]:
+            self._table[id]['queue'].put(instance_id)
+        for id in arguments[none_queue]:
+            self._table[id]['queue'].put(None)
         return []
 
 
-class While(If):
-    def _do_true_action(self, instance_id, scenario_instance):
-        for waiting_queue in self.on_true_queues:
-            waiting_queue.put(self.openbach_function_instance.id)
-        threads = ThreadManager().get_threads(scenario_instance.id, self.on_true)
-        restarted = scenario_instance.openbach_functions_instances.filter(id__in=self.on_true)
-        # TODO (restart while)
-        return [threads]
+class WhileThread(OpenbachFunctionThread):
+    def _run_openbach_function(self):
+        instance_id = self.instance_id
+        scenario = self.openbach_function.scenario_instance
+        arguments = self.openbach_function.arguments
+        condition = arguments['condition']
+        on_true_ids = arguments['on_true']
+        on_true = [self._table[id]['queue'] for id in on_true_ids]
+        while condition.get_value(scenario.id, scenario.parameters):
+            for waiting_queue in on_true:
+                waiting_queue.put(instance_id)
+            for thread in ThreadManager().get_threads(scenario.id, on_true_ids):
+                thread.join()
+                # TODO wait for JobInstances to stop
+                table = {
+                        thread.instance_id: {
+                            'queue': thread.queue,
+                            'is_waited_for_launch': set(),
+                            'is_waited_for_finish': set(),
+                            'is_waited_true_condition': {instance_id},
+                            'is_waited_false_condition': set(),
+                        },
+                }
+                new_thread = create_thread(thread.openbach_function, table)
+                ThreadManager().add_and_launch(new_thread, scenario.id, new_thread.instance_id)
+        for waiting_queue in on_true:
+            waiting_queue.put(None)
+        for id in arguments['on_false']:
+            self._table[id]['queue'].put(instance_id)
+        return ThreadManager().get_threads(scenario.id, on_true_ids)
 
 
 ###########
 # Project #
 ###########
 
-class ProjectAction(ConductorAction, namedtuple('ProjectAction', 'name json_data')):
-    """Base class that defines all the attributes necessary
-    to deal with Projects.
-    """
+class ProjectAction(ConductorAction):
+    """Base class that defines helper methods to deal with Projects"""
 
     def get_project_or_not_found_error(self):
         try:
@@ -2317,10 +2259,9 @@ class ProjectAction(ConductorAction, namedtuple('ProjectAction', 'name json_data
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""
 
-    def __new__(self, json_data):
-        """Force fewer parameters to be accepted by the constructor"""
+    def __init__(self, json_data):
         name = extract_and_check_name_from_json(json_data, kind='Project')
-        return super().__new__(self, name, json_data)
+        super().__init__(name=name, json_data=json_data)
 
     def _action(self):
         self._register_project()
@@ -2331,9 +2272,8 @@ class CreateProject(ProjectAction):
 class DeleteProject(ProjectAction):
     """Action responsible for deleting an existing Scenario"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def _action(self):
         project = self.get_project_or_not_found_error()
@@ -2343,6 +2283,9 @@ class DeleteProject(ProjectAction):
 
 class ModifyProject(ProjectAction):
     """Action responsible for modifying an existing Scenario"""
+
+    def __init__(self, name, json_data):
+        super().__init__(name=name, json_data=json_data)
 
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
@@ -2355,9 +2298,8 @@ class ModifyProject(ProjectAction):
 class InfosProject(ProjectAction):
     """Action responsible for information retrieval about a Project"""
 
-    def __new__(self, name):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, name, None)
+    def __init__(self, name):
+        super().__init__(name=name)
 
     def get_project_or_not_found_error(self):
         if self.name is None:
@@ -2372,9 +2314,8 @@ class InfosProject(ProjectAction):
 class ListProjects(ProjectAction):
     """Action responsible for information retrieval about all Projects"""
 
-    def __new__(self):
-        """Force fewer parameters to be accepted by the constructor"""
-        return super().__new__(self, None, None)
+    def __init__(self):
+        super().__init__()
 
     def _action(self):
         return [project.json for project in Project.objects.all()], 200
@@ -2384,33 +2325,44 @@ class ListProjects(ProjectAction):
 # State #
 #########
 
-class StateCollectorAction(ConductorAction, namedtuple('StateCollectorAction', 'address')):
+class StateCollectorAction(ConductorAction):
     """Action that retrieve the last action done on a Collector"""
+
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _action(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return command_result.json, 200
 
 
-class StateAgentAction(ConductorAction, namedtuple('StateAgentAction', 'address')):
+class StateAgentAction(ConductorAction):
     """Action that retrieve the last action done on a Agent"""
+
+    def __init__(self, address):
+        super().__init__(address=address)
 
     def _action(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return command_result.json, 200
 
 
-class StateJobAction(ConductorAction, namedtuple('StateJobAction', 'address name')):
+class StateJobAction(ConductorAction):
     """Action that retrieve the last action done on an Installed Job"""
+
+    def __init__(self, address, name):
+        super().__init__(address=address, name=name)
 
     def _action(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(address=self.address)
         return command_result.json, 200
 
 
-class StatePushFileAction(ConductorAction, namedtuple('StatePushFileAction',
-                          'name path address')):
+class StatePushFileAction(ConductorAction):
     """Action that retrieve the last action done on a Pushed File"""
+
+    def __init__(self, name, path, address):
+        super().__init__(name=name, path=path, address=address)
 
     def _action(self):
         command_result, _ = FileCommandResult.objects.get_or_create(
@@ -2420,8 +2372,11 @@ class StatePushFileAction(ConductorAction, namedtuple('StatePushFileAction',
         return command_result.json, 200
 
 
-class StateJobInstanceAction(ConductorAction, namedtuple('StateJobInstanceAction', 'instance_id')):
+class StateJobInstanceAction(ConductorAction):
     """Action that retrieve the last action done on a JobInstance"""
+
+    def __init__(self, instance_id):
+        super().__init__(instance_id=instance_id)
 
     def _action(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
@@ -2432,9 +2387,11 @@ class StateJobInstanceAction(ConductorAction, namedtuple('StateJobInstanceAction
 # Miscelaneous #
 ################
 
-class PushFile(OpenbachFunctionMixin, ThreadedAction, namedtuple('PushFile',
-               'local_path remote_path address')):
+class PushFile(OpenbachFunctionMixin, ThreadedAction):
     """Action that send a file from the Controller to an Agent"""
+
+    def __init__(self, local_path, remote_path, address):
+        super().__init__(local_path=local_path, remote_path=remote_path, address=address)
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
@@ -2450,8 +2407,7 @@ class KillAction(ConductorAction):
     """Action that kills all instances: Scenarios, Jobs and Watches"""
 
     def __init__(self, date=None):
-        super().__init__()
-        self.date = date
+        super().__init__(date=date)
 
     def _action(self):
         for scenario in ScenarioInstance.objects.filter(is_stopped=False):

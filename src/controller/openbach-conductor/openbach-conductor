@@ -3,9 +3,10 @@
 # description: openbach-conductor daemon
 # processname: openbach-conductor
 
+DJANGO_PATH="/opt/openbach-controller/backend/"
 DAEMON_PATH="/opt/openbach-controller/openbach-conductor/"
 
-DAEMON=./openbach-conductor.py
+DAEMON=./openbach_conductor.py
 DAEMONOPTS=""
 
 NAME=openbach-conductor
@@ -16,7 +17,7 @@ case "$1" in
 start)
     printf "%-50s" "Starting $NAME..."
     cd $DAEMON_PATH
-    PID=`$DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
+    PID=`PYTHONPATH=$DJANGO_PATH $DAEMON $DAEMONOPTS > /dev/null 2>&1 & echo $!`
     if [ -z $PID ]; then
         printf "%s\n" "Fail"
     else

@@ -33,9 +33,6 @@
 
 ---
 
-- name: Install logstash-output-influxdb
-  shell: bin/logstash-plugin install logstash-output-influxdb chdir=/usr/share/logstash
-
 - name: Check if InfluxDB is installed
   shell: dpkg-query -W -f='${Version}\n' influxdb | sed 's/^[0-9]\+://'
   register: influxdb_check_deb

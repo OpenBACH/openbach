@@ -50,6 +50,7 @@ arguments:
       flag:        '-p'
       description: >
           The password required to source the RC file
+           / NB = The lines related to the password should be commented in the RCfile
     - name:        RCfile
       type:        'str'
       count:       1

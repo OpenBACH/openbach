@@ -37,7 +37,8 @@ arguments:
       count:       1
       flag:        '-p'
       description: >
-          The OpenStack Password required to source RC file
+          The OpenStack Password required to source RC file 
+           / NB = The lines related to the password should be commented in the RCfile 
     - name:        RCfile
       type:        'str'
       count:       1

@@ -33,6 +33,6 @@
 
 ---
 
-- name: Informs that an installation is running
+- name: Informs that an uninstall is running
   shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
-
+  ignore_errors: yes

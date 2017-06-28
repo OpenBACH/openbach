@@ -59,6 +59,7 @@
   
 - name: Install python-influxdb
   apt: name=python-influxdb state=present
+  environment: "{{proxy_env}}"
 
 - name: Database Creation
   influxdb_database:

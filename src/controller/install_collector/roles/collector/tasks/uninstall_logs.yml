@@ -41,4 +41,5 @@
     
 - name: Uninstall openjdk-7-jdk
   apt: pkg=openjdk-7-jdk state=absent update_cache=false
+  environment: "{{proxy_env}}"
  

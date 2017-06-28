@@ -78,11 +78,7 @@
   when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Download LogStash plugin
-  copy: src=../src_collector/logstash/{{ item }}.gem dest=/tmp/
-  with_items:
-    - 'cause-0.1'
-    - 'influxdb-0.3.14'
-    - 'logstash-output-influxdb-5.0.0'
+  copy: src=../src_collector/logstash/logstash-offline-plugins-{{ version_logstash }}.zip dest=/tmp/
 
 - name: Install LogStash
   shell: dpkg -i /tmp/logstash_{{ version_logstash }}_all.deb
@@ -99,8 +95,9 @@
   lineinfile: dest=/etc/init.d/logstash regexp='^PATH' line='PATH=/usr/local/bin:/sbin:/usr/sbin:/bin:/usr/bin' backup=yes
   when: ansible_distribution_version != "16.04"
 
-- name: Install logstash-output-influxdb
-  shell: bin/logstash-plugin install --local --no-verify /tmp/cause-0.1.gem /tmp/influxdb-0.3.14.gem /tmp/logstash-output-influxdb-5.0.0.gem chdir=/usr/share/logstash
+- name: Install logstash plugins
+  shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins-{{ version_logstash }}.zip chdir=/usr/share/logstash
+  become_user: logstash
 
 - name: Start LogStash
   service: name=logstash state=restarted

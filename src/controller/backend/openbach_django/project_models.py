@@ -177,8 +177,8 @@ class Project(models.Model):
 
     def load_from_json(self, json_data):
         # Cleanup in case of modifications
-        self.networks.delete()
-        self.scenarios.delete()
+        self.networks.all().delete()
+        self.scenarios.all().delete()
 
         networks = json_data.get('network', [])
         if not isinstance(networks, list):

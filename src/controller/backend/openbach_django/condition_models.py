@@ -71,7 +71,7 @@ class Operand(ContentTyped):
     def _get_field_value(self, field_name, parameters):
         this = self.get_content_model()
         value = getattr(this, field_name)
-        field = this._meta._forward_fields_map[field_name]
+        field = this._meta.get_field(field_name)
         if isinstance(field, OpenbachFunctionArgument):
             value = field.validate_openbach_value(value, parameters)
         return value

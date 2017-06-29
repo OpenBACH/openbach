@@ -69,6 +69,14 @@ class OpenbachFunction(ContentTyped):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        """Override the standard Django's save operation to
+        make sure we store which concrete implementation was
+        used to build the associated object.
+        """
+        self.set_content_model()
+        super().save(*args, **kwargs)
+
     @property
     def name(self):
         return self.get_content_model()._meta.verbose_name
@@ -98,9 +106,17 @@ class OpenbachFunction(ContentTyped):
             json_data['label'] = self.label
         return json_data
 
+    def set_arguments_count(self, arguments):
+        this = self.get_content_model()
+        for field in this._meta.fields:
+            if isinstance(field, OpenbachFunctionArgument):
+                value = getattr(this, field.name)
+                for placeholder in field.placeholders(value):
+                    arguments[placeholder] += 1
+
     def instance_value(self, field_name, parameters):
         value = getattr(self, field_name)
-        field = self._meta._forward_fields_map[field_name]
+        field = self._meta.get_field(field_name)
         if isinstance(field, OpenbachFunctionArgument):
             value = field.validate_openbach_value(value, parameters)
         return value
@@ -253,8 +269,8 @@ class InstallAgent(OpenbachFunction):
     @property
     def _json(self):
         return {'install_agent': {
-            'address': self.address,
-            'collector': self.collector,
+            'address': self.address.compressed,
+            'collector': self.collector.compressed,
             'username': self.username,
             'password': self.password,
             'name': self.name,
@@ -267,7 +283,7 @@ class UninstallAgent(OpenbachFunction):
     @property
     def _json(self):
         return {'uninstall_agent': {
-            'address': self.address,
+            'address': self.address.compressed,
         }}
 
 
@@ -403,7 +419,7 @@ class StartJobInstance(OpenbachFunction):
         return {'start_job_instance': {
             self.job_name: arguments,
             'offset': self.offset,
-            'agent_ip': self.agent_ip,
+            'agent_ip': self.agent_ip.compressed,
         }}
 
     def _get_arguments(self, parameters):
@@ -443,7 +459,7 @@ class StartJobInstanceArgument(models.Model):
 
     def get_value(self, parameters):
         value = self.value
-        field = self._meta._forward_fields_map['value']
+        field = self._meta.get_field('value')
         return field.validate_openbach_value(value, parameters)
 
 
@@ -453,13 +469,14 @@ class StopJobInstance(OpenbachFunction):
     @property
     def _json(self):
         return {'stop_job_instance': {
-            'openbach_function_ids': self.openbach_function_ids,
+            'openbach_function_ids': [int(id) for id in self.openbach_function_ids],
         }}
 
     def _get_arguments(self, parameters):
         field_name = 'openbach_functions_ids'
+        stop_ids = self.instance_value(field_name, parameters)
         return {
-                field_name: self.instance_value(field_name, parameters),
+                field_name: [int(id) for id in stop_ids],
         }
 
 

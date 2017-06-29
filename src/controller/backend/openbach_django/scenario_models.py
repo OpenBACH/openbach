@@ -207,9 +207,9 @@ class Scenario(models.Model):
             return data
 
         # Cleanup in case of modifications
-        self.arguments.delete()
-        self.constants.delete()
-        self.openbach_functions.delete()
+        self.arguments.all().delete()
+        self.constants.all().delete()
+        self.openbach_functions.all().delete()
 
         # Extract top-level parameters
         arguments = extract_value('arguments', expected_type=dict, mandatory=False)
@@ -250,7 +250,7 @@ class Scenario(models.Model):
             json_data['openbach_functions'][index]['wait'] = wait
             wait_time = extract_value('openbach_functions', index, 'wait', 'time', expected_type=int, mandatory=False)
             id_ = extract_value('openbach_functions', index, 'id', expected_type=int)
-            label = extract_value('openbach_functions', index, 'label', expected_type=str)
+            label = extract_value('openbach_functions', index, 'label', expected_type=str, mandatory=False)
             possible_function_name = [key for key in function if key not in {'wait', 'id', 'label'}]
             if len(possible_function_name) < 1:
                 raise Scenario.MalformedError(
@@ -325,8 +325,8 @@ class Scenario(models.Model):
                             raise Scenario.MalformedError(
                                     'openbach_functions.{}.{}.{}.{}'
                                     .format(index, function_name, job_name, name),
-                                    override_error='The configured job does not'
-                                    'accept the given argument')
+                                    override_error='The configured job does '
+                                    'not accept the given argument')
                     if not isinstance(value, str) or not OpenbachFunctionArgument.has_placeholders(value):
                         check_and_get_value(value, job_argument.type)
                     StartJobInstanceArgument.objects.create(
@@ -347,19 +347,17 @@ class Scenario(models.Model):
                             'launched_ids.{}'.format(index, idx),
                             value=launched_id, expected_type=int)
                 try:
-                    waited_function = OpenbachFunction.objects.get(
-                            scenario=self, function_id=launched_id)
+                    waited_function = self.openbach_functions.get(function_id=launched_id)
                 except OpenbachFunction.DoesNotExist:
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.wait.'
                             'launched_ids.{}'.format(index, idx),
                             value=launched_id, override_error='The '
-                            'referenced openbach function does not exits')
+                            'referenced openbach function does not exist')
                 else:
                     waited_function = waited_function.get_content_model()
-                openbach_function_instance = OpenbachFunction.objects.get(
-                        function_id=function['id'],
-                        scenario=self).get_content_model()
+                openbach_function_instance = self.openbach_functions.get(
+                        function_id=function['id']).get_content_model()
                 WaitForLaunched.objects.create(
                         openbach_function_waited=waited_function,
                         openbach_function_instance=openbach_function_instance)
@@ -373,8 +371,7 @@ class Scenario(models.Model):
                             'finished_ids.{}'.format(index, idx),
                             value=launched_id, expected_type=int)
                 try:
-                    waited_function = OpenbachFunction.objects.get(
-                            scenario=self, function_id=launched_id)
+                    waited_function = self.openbach_functions.get(function_id=launched_id)
                 except OpenbachFunction.DoesNotExist:
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.wait.'
@@ -388,29 +385,31 @@ class Scenario(models.Model):
                             'openbach_functions.{}.wait.'
                             'finished_ids.{}'.format(index, idx),
                             value=launched_id, override_error='The '
-                            'referenced openbach function is not a'
+                            'referenced openbach function is not a '
                             'start_job_instance.')
-                openbach_function_instance = OpenbachFunction.objects.get(
-                        function_id=function['id'],
-                        scenario=self).get_content_model()
+                openbach_function_instance = self.openbach_functions.get(
+                        function_id=function['id']).get_content_model()
                 WaitForFinished.objects.create(
                         openbach_function_waited=waited_function,
                         openbach_function_instance=openbach_function_instance)
 
-        # Check that all arguments are used and that their
-        # type matches among usages
-        scenario_arguments = self.arguments.all()
+        # Check that all arguments are used
+        scenario_arguments = {
+                argument.name: 0 for argument in self.arguments.all()
+        }
+
         for openbach_function in self.openbach_functions.all():
-            conflicting_name = openbach_function.set_arguments_type(scenario_arguments)
-            if conflicting_name is not None:
+            try:
+                openbach_function.set_arguments_count(scenario_arguments)
+            except KeyError as e:
                 raise Scenario.MalformedError(
-                        'arguments.{}'.format(conflicting_name),
-                        override_error='An argument is used for '
-                        'two values with different types')
-        for argument in self.arguments.all():
-            if argument.type == ValuesType.NONE_TYPE.value:
+                        'arguments.{}'.format(e),
+                        override_error='This argument is used as '
+                        'a placeholder value but is not defined')
+        for name, count in scenario_arguments.items():
+            if not count:
                 raise Scenario.MalformedError(
-                        'arguments.{}'.format(argument.name),
+                        'arguments.{}'.format(name),
                         override_error='An argument is unused')
 
     def save(self, *args, **kwargs):

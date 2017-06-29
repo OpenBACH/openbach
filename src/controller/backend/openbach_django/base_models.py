@@ -68,9 +68,11 @@ class OpenbachFunctionArgument(models.CharField):
         return name, path, args, kwargs
 
     @staticmethod
-    def has_placeholders(value):
+    def placeholders(value):
+        if not isinstance(value, str):
+            return
+
         templated = string.Template(value)
-        placeholders = False
         for match in templated.pattern.finditer(templated.template):
             escaped, named, braced, invalid = match.groups()
             if invalid is not None:
@@ -78,18 +80,22 @@ class OpenbachFunctionArgument(models.CharField):
                         'value uses the placeholder escape '
                         'symbol ($) but does not provide a '
                         'valid identifier', code='invalid_template')
-            if named is not None or braced is not None:
-                placeholders = True
+            if named is not None:
+                yield named[1:]
+            if braced is not None:
+                yield braced[2:-1]
 
+    @staticmethod
+    def has_placeholders(value):
+        placeholders = False
+        for _ in OpenbachFunctionArgument.placeholders(value):
+            placeholders = True
         return placeholders
 
     def validate_openbach_value(self, value, parameters):
         """Interpolate placeholders of the stored value to
         provide the actual value of this field.
         """
-        if not isinstance(value, str):
-            return value
-
         if self.has_placeholders(value):
             templated = string.Template(value)
             try:
@@ -165,7 +171,7 @@ class OpenbachFunctionArgument(models.CharField):
         if self.type == dict:
             return json.dumps(value)
         if self.type == list:
-            return ' '.join(map(shlex.quote, value))
+            return ' '.join(shlex.quote(str(val)) for val in value)
         return str(value)
 
 

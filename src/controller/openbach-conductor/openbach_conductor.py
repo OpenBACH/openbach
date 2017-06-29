@@ -195,7 +195,7 @@ class ConductorAction:
 
     def __init__(self, **kwargs):
         self.openbach_function_instance = None
-        for name, value in kwargs:
+        for name, value in kwargs.items():
             setattr(self, name, value)
 
     def action(self):

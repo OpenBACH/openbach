@@ -38,7 +38,6 @@
   with_items:
     - openbach-conductor
     - openbach-backend
-    - status-manager
   when: ansible_distribution_version != "16.04"
 
 - name: Add services to boot
@@ -46,6 +45,5 @@
   with_items:
     - openbach-conductor
     - openbach-backend
-    - status-manager
   when: ansible_distribution_version == "16.04"
 

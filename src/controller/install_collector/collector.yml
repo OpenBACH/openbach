@@ -33,7 +33,7 @@
 
 ---
 
-- hosts: Collector
+- hosts: all
   roles:
     - collector
   environment: "{{proxy_env}}"

@@ -250,7 +250,7 @@ class CollectorView(GenericView):
     def delete(self, request, address):
         """remove a collector from the database"""
 
-        data = {'command': 'del_collector', 'address': address}
+        data = {'command': 'delete_collector', 'address': address}
 
         return self.conductor_execute(data)
 
@@ -519,7 +519,7 @@ class JobView(BaseJobView):
     def delete(self, request, name):
         """remove a job from the database"""
 
-        data = {'command': 'del_job', 'name': name}
+        data = {'command': 'delete_job', 'name': name}
 
         return self.conductor_execute(data)
 
@@ -808,7 +808,7 @@ class ScenarioView(GenericView):
     def delete(self, request, scenario_name, project_name=None):
         """remove a scenario from the database"""
 
-        data = {'command': 'del_scenario', 'scenario_name': scenario_name}
+        data = {'command': 'delete_scenario', 'scenario_name': scenario_name}
         if project_name:
             data['project_name'] = project_name
 
@@ -915,7 +915,7 @@ class ProjectView(GenericView):
     def delete(self, request, project_name):
         """remove a project from the database"""
 
-        data = {'command': 'del_project', 'project_name': project_name}
+        data = {'command': 'delete_project', 'project_name': project_name}
 
         return self.conductor_execute(data)
 

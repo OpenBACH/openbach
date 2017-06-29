@@ -45,7 +45,7 @@
   when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Install ElasticSearch
-  shell: dpkg -i /tmp/elasticsearch-{{ version_elasticsearch }}.deb
+  apt: deb=/tmp/elasticsearch-{{ version_elasticsearch }}.deb
   when: elasticsearch_check_deb.stdout != '{{ version_elasticsearch }}'
 
 - name: Install Java 8
@@ -78,7 +78,7 @@
   when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Install LogStash
-  shell: dpkg -i /tmp/logstash_{{ version_logstash }}_all.deb
+  apt: deb=/tmp/logstash_{{ version_logstash }}_all.deb
   when: logstash_check_deb.stdout != '{{ version_logstash }}'
 
 - name: Configure LogStash

@@ -106,10 +106,10 @@ class Agent(models.Model):
     address = models.GenericIPAddressField(primary_key=True)
     status = models.CharField(max_length=500, null=True, blank=True)
     update_status = models.DateTimeField(null=True, blank=True)
-    reachable = models.BooleanField()
+    reachable = models.BooleanField(default=False)
     update_reachable = models.DateTimeField(null=True, blank=True)
     username = models.CharField(max_length=500)
-    password = models.CharField(max_length=500)
+    password = models.CharField(max_length=500, null=True, blank=True)
     collector = models.ForeignKey(Collector, related_name='agents')
 
     def set_password(self, raw_password):

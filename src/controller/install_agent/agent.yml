@@ -33,7 +33,7 @@
 
 ---
 
-- hosts: Agents 
+- hosts: all
   roles:
     - agent
   environment: "{{proxy_env}}"

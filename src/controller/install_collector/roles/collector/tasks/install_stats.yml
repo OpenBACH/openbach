@@ -48,7 +48,7 @@
   when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
     
 - name: Install InfluxDB (64bits)
-  shell: dpkg -i /tmp/influxdb_{{ influxdb_version }}_amd64.deb
+  apt: deb=/tmp/influxdb_{{ influxdb_version }}_amd64.deb
   when: influxdb_check_deb.stdout != '{{ influxdb_version }}'
 
 - name: Set the Port to use

@@ -89,17 +89,6 @@
 - name: Install python3-yaml
   apt: pkg=python3-yaml state=installed update_cache=false
 
-- name: Download parse module
-  copy: src=../src/controller/parse dest=/tmp/
-
-- name: Install parse module
-  pip: name=parse executable=pip3 version={{ parse_version }} extra_args='--download-cache /tmp/parse/'
-  when: ansible_distribution_version != "16.04"
-
-- name: Install parse module
-  pip: name=parse executable=pip3 version={{ parse_version }} extra_args='--no-index --find-links=file:///tmp/parse/'
-  when: ansible_distribution_version == "16.04"
-
 - name: Download APScheduler
   copy: src=../src/controller/apscheduler dest=/tmp/
 
@@ -130,6 +119,8 @@
   pip: name=fuzzywuzzy executable=pip3
   when: ansible_distribution_version == "16.04"
 
+- name: Install Ansible Python3
+  pip: name=ansible executable=pip3 version="2.2"
 
 - name: Copy the global variables file
   copy: src=../configs dest=/opt/openbach-controller/
@@ -152,20 +143,14 @@
 - name: Set up local settings
   template: src=local_settings.py.j2 dest=/opt/openbach-controller/backend/backend/local_settings.py
 
-- name: Install the status-manager
-  copy: src=../src/controller/status-manager/status-manager.py dest=/opt/openbach-controller/status-manager/ mode=0755
-
 - name: Install the openbach-conductor
   copy: src=../src/controller/openbach-conductor/{{ item.name }} dest=/opt/openbach-controller/openbach-conductor/ mode={{ item.mode }}
   with_items:
-    - { name: 'openbach-conductor.py', mode: '0755' }
-    - { name: 'playbookbuilder.py', mode: '0644' }
-    - { name: 'add_job.yml', mode: '0644' }
-    - { name: 'del_job.yml', mode: '0644' }
-    - { name: 'start_job_instance_agent.yml', mode: '0644' }
-    - { name: 'stop_job_instance_agent.yml', mode: '0644' }
-    - { name: 'restart_job_instance_agent.yml', mode: '0644' }
-    - { name: 'status_job_instance_agent.yml', mode: '0644' }
+    - { name: 'openbach_conductor.py', mode: '0755' }
+    - { name: 'openbach_baton.py', mode: '0644' }
+    - { name: 'playbook_builder.py', mode: '0644' }
+    - { name: 'playbooks.py', mode: '0644' }
+    - { name: 'errors.py', mode: '0644' }
 
 - name: Configure Rsyslog
   template: src={{ item.name }} dest=/etc/rsyslog.d/{{ item.dest }} mode=0644
@@ -174,8 +159,6 @@
     - { name: 'openbach-conductor_local.j2', dest: 'openbach-conductor_local.conf' }
     - { name: 'openbach-backend.j2', dest: 'openbach-backend.conf' }
     - { name: 'openbach-backend_local.j2', dest: 'openbach-backend_local.conf' }
-    - { name: 'status-manager.j2', dest: 'status-manager.conf' }
-    - { name: 'status-manager_local.j2', dest: 'status-manager_local.conf' }
 
 - name: Packs Collect-Agent client sources
   local_action: command tar -cvzf ../src/agent/collect-agent/client_api.tar.gz -C ../src/agent/collect-agent client_api/
@@ -217,26 +200,18 @@
   local_action: command tar -cvzf ../src/jobs.tar.gz -C ../src jobs/
   become: no
 
-- name: Move the compressed src of the Jobs
-  copy: src=../src/jobs.tar.gz dest=/opt/openbach-controller/jobs.tar.gz
-
 - name: Uncompress the src of the Jobs
-  unarchive: src=/opt/openbach-controller/jobs.tar.gz dest=/opt/openbach-controller
+  unarchive: src=../src/jobs.tar.gz dest=/opt/openbach-controller
   
 - name: Remove tar.gz
-  file: path={{ item.src }}/jobs.tar.gz state=absent
-  with_items: 
-    - {'src': '/opt/openbach-controller'}
-    - {'src': '../src'}
+  file: path=/opt/openbach-controller/jobs.tar.gz state=absent
+
+- name: Remove the Jobs sources we just packed
+  local_action: file path=../src/jobs.tar.gz state=absent
+  become: no
     
 - name: Create the repository for the private Jobs
   file: path=/opt/openbach-controller/jobs/private_jobs state=directory owner={{ ansible_ssh_user }} group={{ ansible_ssh_user }}
-
-- name: Set the influxdb port to use
-  replace: dest=/opt/openbach-controller/{{item}} regexp=':8086/query' replace=':{{ influxdb_port }}/query' backup=yes
-  with_items:
-    - openbach-conductor/openbach-conductor.py
-    - status-manager/status-manager.py
 
 - name: Change postgresql methode to trust for user postgres
   lineinfile: dest=/etc/postgresql/9.3/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
@@ -276,14 +251,6 @@
   template: src=../src/controller/openbach-conductor/openbach-conductor.service.j2 dest=/etc/systemd/system/openbach-conductor.service mode=0644
   when: ansible_distribution_version == "16.04"
 
-- name: Create status-manager service
-  copy: src=../src/controller/status-manager/status-manager dest=/etc/init.d/ mode=0755
-  when: ansible_distribution_version != "16.04"
-
-- name: Create status-manager service
-  copy: src=../src/controller/status-manager/status-manager.service dest=/etc/systemd/system/ mode=0644
-  when: ansible_distribution_version == "16.04"
-
 - name: Create openbach-backend service
   copy: src=../src/controller/backend/openbach-backend dest=/etc/init.d/ mode=0755
   when: ansible_distribution_version != "16.04"
@@ -298,9 +265,6 @@
 
 - name: Restart Rsyslog
   service: name=rsyslog state=restarted
-
-- name: Start status-manager
-  service: name=status-manager state=restarted
 
 - name: Start openbach-conductor
   service: name=openbach-conductor state=restarted

@@ -57,6 +57,7 @@ import getpass
 import tarfile
 import threading
 import itertools
+import traceback
 import socketserver
 from datetime import datetime
 from contextlib import suppress
@@ -72,7 +73,7 @@ application = get_wsgi_application()
 from django.utils import timezone
 from django.db import IntegrityError, transaction
 from django.db.utils import DataError
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -122,7 +123,7 @@ def get_master_scenario_id(scenario_id):
     """
     try:
         scenario = ScenarioInstance.objects.get(id=scenario_id)
-    except ObjectDoesNotExist:
+    except ScenarioInstance.DoesNotExist:
         return scenario_id
 
     while scenario.openbach_function_instance is not None:
@@ -252,8 +253,9 @@ class ThreadedAction(ConductorAction):
             raise
         except Exception as err:
             infos = {
-                    'error': 'An unexpected error occured: '
-                    '{0.__class__.__name__}({0})'.format(err),
+                    'message': 'An unexpected error occured',
+                    'error': str(err),
+                    'traceback': traceback.format_exc(),
             }
             command_result.update(infos, 500)
             raise
@@ -286,7 +288,7 @@ class CollectorAction(ConductorAction):
     def get_collector_or_not_found_error(self):
         try:
             return Collector.objects.get(address=self.address)
-        except ObjectDoesNotExist:
+        except Collector.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Collector is not in the database',
                     collector_address=self.address)
@@ -331,7 +333,9 @@ class AddCollector(ThreadedAction, CollectorAction):
                 self.database_precision)
         try:
             self._physical_install()
-        except errors.ConductorError as e:
+        except errors.ConductorWarning:
+            raise
+        except Exception:
             collector.delete()
             raise
 
@@ -355,7 +359,7 @@ class AddCollector(ThreadedAction, CollectorAction):
         # A Collector always have an Agent on it, so install an Agent
         try:
             Agent.objects.get(address=self.address)
-        except ObjectDoesNotExist:
+        except Agent.DoesNotExist:
             InstallAgent(self.address, self.username, self.password,
                          self.name, self.address)._action()
 
@@ -421,7 +425,7 @@ class DeleteCollector(ThreadedAction, CollectorAction):
         try:
             agent = collector.agents.get(address=self.address)
             UninstallAgent(agent.address)._action()
-        except ObjectDoesNotExist:
+        except Agent.DoesNotExist:
             pass
         except errors.ConductorError as err:
             raise errors.ConductorWarning(
@@ -464,7 +468,7 @@ class AgentAction(ConductorAction):
     def get_agent_or_not_found_error(self):
         try:
             return Agent.objects.get(address=self.address)
-        except ObjectDoesNotExist:
+        except Agent.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Agent is not in the database',
                     agent_address=self.address)
@@ -508,8 +512,11 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         collector_info = InfosCollector(self.collector_ip)
         collector = collector_info.get_collector_or_not_found_error()
         agent, created = Agent.objects.get_or_create(
-                address=self.address,
-                defaults={'name': self.name, 'username': self.username})
+                address=self.address, defaults={
+                    'name': self.name,
+                    'username': self.username,
+                    'collector': collector,
+                })
         agent.name = self.name
         agent.username = self.username
         agent.set_password(self.password)
@@ -539,13 +546,17 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         """Perform physical installation of the Agent through a playbook"""
         agent = self.get_agent_or_not_found_error()
         playbook_builder = PlaybookBuilder.default(
-                '/opt/openbach-controller/install_collector/collector.yml',
+                '/opt/openbach-controller/install_agent/agent.yml',
                 agent.address, agent.username, agent.password)
         playbook_builder.add_variables(
                 agents=[agent.address],
                 collector_ip=agent.collector.address,
                 logstash_logs_port=agent.collector.logs_port,
-                logstash_stats_port=agent.collector.stats.port,
+                elasticsearch_query_port=agent.collector.logs_query_port,
+                logstash_stats_port=agent.collector.stats_port,
+                influxdb_query_port=agent.collector.stats_query_port,
+                influxdb_database_name=agent.collector.stats_database_name,
+                influxdb_precision=agent.collector.stats_database_precision,
                 local_username=getpass.getuser(),
                 agent_name=agent.name,
         )
@@ -595,7 +606,7 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 class InfosAgent(AgentAction):
     """Action responsible for information retrieval about an Agent"""
 
-    def __init__(self, address, update):
+    def __init__(self, address, update=False):
         super().__init__(address=address, update=update)
 
     def _action(self):
@@ -608,7 +619,7 @@ class InfosAgent(AgentAction):
 class ListAgents(AgentAction):
     """Action responsible for information retrieval about all Agents"""
 
-    def __init__(self, update):
+    def __init__(self, update=False):
         super().__init__(update=update)
 
     def _action(self):
@@ -636,7 +647,7 @@ class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 def RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for status retrieval about several Agents"""
 
-    def __init__(self, addresses, update):
+    def __init__(self, addresses, update=False):
         super().__init__(addresses=addresses, update=update)
 
     def _action(self):
@@ -718,7 +729,7 @@ class JobAction(ConductorAction):
     def get_job_or_not_found_error(self):
         try:
             return Job.objects.get(name=self.name)
-        except ObjectDoesNotExist:
+        except Job.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Job is not in the database',
                     job_name=self.name)
@@ -796,6 +807,7 @@ class AddJob(JobAction):
         job.help = description if help_content is None else help_content
         job.job_version = general_section['job_version']
         job.persistent = general_section['persistent']
+        job.save()
 
         # Associate OSes
         os_commands = content['os']
@@ -848,29 +860,20 @@ class AddJob(JobAction):
         arguments = content.get('arguments', {}).get('required')
         if arguments is not None:
             for rank, argument in enumerate(arguments):
-                name = argument['name']
-                argument, _ = RequiredJobArgument.objects.get_or_create(
-                        job=job, rank=rank, defaults={'name': name})
-                argument.name = name
-                argument.type = argument['type']
-                argument.count = argument['count']
-                argument.description = argument.get('description', '')
-                argument.save()
+                RequiredJobArgument.objects.create(
+                        job=job, rank=rank, name=argument['name'],
+                        type=argument['type'], count=str(argument['count']),
+                        description=argument.get('description', ''))
 
         # Associate "new" optional arguments
         job.optional_arguments.all().delete()
         arguments = content.get('arguments', {}).get('optional')
         if arguments is not None:
             for argument in arguments:
-                name = argument['name']
-                flag = argument['flag']
-                argument, _ = OptionalJobArgument.objects.get_or_create(
-                        job=job, flag=flag, defaults={'name': name})
-                argument.name = name
-                argument.type = argument['type']
-                argument.count = argument['count']
-                argument.description = argument.get('description', '')
-                argument.save()
+                OptionalJobArgument.objects.create(
+                        job=job, name=argument['name'], flag=argument['flag'],
+                        type=argument['type'], count=str(argument['count']),
+                        description=argument.get('description', ''))
 
 
 class AddTarJob(JobAction):
@@ -996,7 +999,7 @@ class InstalledJobAction(ConductorAction):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
         try:
             return InstalledJob.objects.get(agent=agent, job=job)
-        except ObjectDoesNotExist:
+        except InstalledJob.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Installed Job is not in the database',
                     agent_address=self.address, job_name=self.name)
@@ -1273,7 +1276,7 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
         else:
             try:
                 statistic = installed_job.job.statistics.get(name=self.statistic)
-            except ObjectDoesNotExist:
+            except Statistic.DoesNotExist:
                 raise errors.NotFoundError(
                         'The statistic is not generated by the Job',
                         statistic_name=self.statistic,
@@ -1347,7 +1350,7 @@ class JobInstanceAction(ConductorAction):
                     job_name=self.name, agent_address=self.address)
         try:
             return JobInstance.objects.get(id=job_instance_id)
-        except ObjectDoesNotExist:
+        except JobInstance.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Job Instance is not in the database',
                     job_instance_id=self.instance_id)
@@ -1735,7 +1738,7 @@ class ScenarioAction(ConductorAction):
 
         try:
             return Scenario.objects.get(name=self.name, project=project)
-        except ObjectDoesNotExist:
+        except Scenario.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Scenario is not in the database',
                     scenario_name=self.name,
@@ -1841,7 +1844,7 @@ class ScenarioInstanceAction(ConductorAction):
                     scenario_name=self.name, project_name=self.project)
         try:
             return ScenarioInstance.objects.get(id=scenario_instance_id)
-        except ObjectDoesNotExist:
+        except ScenarioInstance.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Scenario Instance is not in the database',
                     scenario_instance_id=self.instance_id)
@@ -2233,7 +2236,7 @@ class ProjectAction(ConductorAction):
     def get_project_or_not_found_error(self):
         try:
             return Project.objects.get(name=self.name)
-        except ObjectDoesNotExist:
+        except Project.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Project is not in the database',
                     project_name=self.name)
@@ -2325,7 +2328,7 @@ class ListProjects(ProjectAction):
 # State #
 #########
 
-class StateCollectorAction(ConductorAction):
+class StateCollector(ConductorAction):
     """Action that retrieve the last action done on a Collector"""
 
     def __init__(self, address):
@@ -2336,7 +2339,7 @@ class StateCollectorAction(ConductorAction):
         return command_result.json, 200
 
 
-class StateAgentAction(ConductorAction):
+class StateAgent(ConductorAction):
     """Action that retrieve the last action done on a Agent"""
 
     def __init__(self, address):
@@ -2347,7 +2350,7 @@ class StateAgentAction(ConductorAction):
         return command_result.json, 200
 
 
-class StateJobAction(ConductorAction):
+class StateJob(ConductorAction):
     """Action that retrieve the last action done on an Installed Job"""
 
     def __init__(self, address, name):
@@ -2358,7 +2361,7 @@ class StateJobAction(ConductorAction):
         return command_result.json, 200
 
 
-class StatePushFileAction(ConductorAction):
+class StatePushFile(ConductorAction):
     """Action that retrieve the last action done on a Pushed File"""
 
     def __init__(self, name, path, address):
@@ -2372,7 +2375,7 @@ class StatePushFileAction(ConductorAction):
         return command_result.json, 200
 
 
-class StateJobInstanceAction(ConductorAction):
+class StateJobInstance(ConductorAction):
     """Action that retrieve the last action done on a JobInstance"""
 
     def __init__(self, instance_id):
@@ -2568,7 +2571,7 @@ def status_manager(job_instance_id, scenario_instance_id):
 
 class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """Choose the underlying technology for our sockets servers"""
-    pass
+    allow_reuse_address = True
 
 
 class BackendHandler(socketserver.BaseRequestHandler):
@@ -2584,28 +2587,31 @@ class BackendHandler(socketserver.BaseRequestHandler):
             response, returncode = self.execute_request(request)
         except errors.ConductorError as e:
             result = {
-                    'response': e,
-                    'returncode': e.returncode,
+                    'response': e.json,
+                    'returncode': e.ERROR_CODE,
             }
         except Exception as e:
             result = {
                     'response': {
                         'message': 'Unexpected exception appeared',
                         'error': str(e),
+                        'traceback': traceback.format_exc(),
                     },
                     'returncode': 500,
             }
         else:
             result = {'response': response, 'returncode': returncode}
         finally:
+            self.request.sendall(b'Done')
             with open(fifoname, 'w') as fifo:
                 json.dump(result, fifo, cls=DjangoJSONEncoder)
-            self.request.sendall(b'Done')
 
     def execute_request(self, request):
         """Analyze the data received to execute the right action"""
         request_name = request.pop('command')
         action_name = ''.join(map(str.title, request_name.split('_')))
+        print('\n#', '-' * 76, '#')
+        print('Executing the action', action_name, 'with parameters', request)
         try:
             action = globals()[action_name]
         except KeyError:
@@ -2618,5 +2624,8 @@ class BackendHandler(socketserver.BaseRequestHandler):
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, signal_term_handler)
 
-    with ConductorServer(('', 1113), BackendHandler) as backend_server:
+    backend_server = ConductorServer(('', 1113), BackendHandler)
+    try:
         backend_server.serve_forever()
+    finally:
+        backend_server.server_close()

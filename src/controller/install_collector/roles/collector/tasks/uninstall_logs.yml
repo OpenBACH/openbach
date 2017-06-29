@@ -34,11 +34,10 @@
 ---
 
 - name: Uninstall LogStash
-  shell: dpkg -P logstash
+  apt: name=logstash state=absent purge=yes
 
 - name: Uninstall ElasticSearch
-  shell: dpkg -P elasticsearch
-    
+  apt: name=elasticsearch state=absent purge=yes
+
 - name: Uninstall openjdk-7-jdk
   apt: pkg=openjdk-7-jdk state=absent update_cache=false
- 

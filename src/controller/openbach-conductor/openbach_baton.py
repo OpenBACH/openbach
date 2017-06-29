@@ -36,7 +36,6 @@ __credits__ = '''Contributors:
 '''
 
 
-import json
 import struct
 import socket
 
@@ -49,7 +48,9 @@ class OpenBachBaton:
         try:
             self.socket = socket.create_connection(address)
         except OSError as e:
-            raise errors.UnprocessableError('Cannot connect to the agent {}: {}'.format(agent_ip, e))
+            raise errors.UnprocessableError(
+                    'Cannot connect to the agent {}: {}'
+                    .format(agent_ip, e))
 
     def __del__(self):
         self.socket.close()
@@ -80,10 +81,14 @@ class OpenBachBaton:
             self.send_message(message)
             response = self.recv_message()
         except OSError as e:
-            raise errors.UnprocessableError('Sending message to the agent failed: {}'.format(e))
+            raise errors.UnprocessableError(
+                    'Sending message to the agent failed: {}'
+                    .format(e))
 
         if not response.startswith('OK'):
-            raise errors.UnprocessableError('The agent did not send a success message', agent_message=response)
+            raise errors.UnprocessableError(
+                    'The agent did not send a success message',
+                    agent_message=response)
 
         return response
 
@@ -99,7 +104,10 @@ class OpenBachBaton:
         return self.communicate(message)
 
     def stop_job_instance(self, job_name, job_id, date):
-        message = 'stop_job_instance_agent "{}" {} date {}'.format(job_name, job_id, date)
+        message = (
+                'stop_job_instance_agent "{}" {} date {}'
+                .format(job_name, job_id, date)
+        )
 
         return self.communicate(message)
 

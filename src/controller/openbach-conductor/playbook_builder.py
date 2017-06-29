@@ -38,12 +38,13 @@ __credits__ = '''Contributors:
 '''
 
 
+from ansible import constants as C
+from ansible.executor.playbook_executor import PlaybookExecutor
 from ansible.executor.task_queue_manager import TaskQueueManager
 from ansible.inventory import Inventory
 from ansible.parsing.dataloader import DataLoader
-from ansible.playbook import Playbook
 from ansible.playbook.play import Play
-from ansible.plugins.callback import CallbackBase
+from ansible.plugins.callback.default import CallbackModule
 from ansible.utils.vars import load_options_vars
 from ansible.vars import VariableManager
 
@@ -51,7 +52,7 @@ import errors
 from playbooks import PREDEFINED_PLAYS
 
 
-class PlayResult(CallbackBase):
+class PlayResult(CallbackModule):
     """Utility class to hook into the Ansible play process.
 
     Most of Ansible actions will call one or several methods of
@@ -66,7 +67,9 @@ class PlayResult(CallbackBase):
     def raise_for_error(self):
         """Raise an error if something failed during an Ansible Play"""
         if self.failure is not None:
-            raise errors.UnprocessableError('Ansible playbook execution failed', **self.failure)
+            raise errors.UnprocessableError(
+                    'Ansible playbook execution failed',
+                    **self.failure)
 
     # From here on, Ansible hooks definition
 
@@ -75,95 +78,25 @@ class PlayResult(CallbackBase):
             self.failure = {
                     result._host.get_name(): result._result,
             }
-
-    def v2_runner_on_ok(self, result):
-        pass
-
-    def v2_runner_on_skipped(self, result):
-        pass
+        super().v2_runner_on_failed(result, ignore_errors)
 
     def v2_runner_on_unreachable(self, result):
         self.failure = {
                 result._host.get_name(): result._result,
         }
-
-    def v2_runner_on_no_hosts(self, task):
-        pass
-
-    def v2_runner_on_async_poll(self, result):
-        pass
-
-    def v2_runner_on_async_ok(self, result):
-        pass
+        super().v2_runner_on_unreachable(result)
 
     def v2_runner_on_async_failed(self, result):
         self.failure = {
                 result._host.get_name(): result._result,
         }
-
-    def v2_runner_on_file_diff(self, result, diff):
-        pass
-
-    def v2_playbook_on_start(self, playbook):
-        pass
-
-    def v2_playbook_on_notify(self, result, handler):
-        pass
-
-    def v2_playbook_on_no_hosts_matched(self):
-        self.playbook_on_no_hosts_matched()
-
-    def v2_playbook_on_no_hosts_remaining(self):
-        self.playbook_on_no_hosts_remaining()
-
-    def v2_playbook_on_task_start(self, task, is_conditional):
-        pass
-
-    def v2_playbook_on_cleanup_task_start(self, task):
-        pass
-
-    def v2_playbook_on_handler_task_start(self, task):
-        pass
-
-    def v2_playbook_on_vars_prompt(self, varname, private=True, prompt=None, encrypt=None, confirm=False, salt_size=None, salt=None, default=None):
-        pass
-
-    def v2_playbook_on_setup(self):
-        pass
-
-    def v2_playbook_on_import_for_host(self, result, imported_file):
-        host = result._host.get_name()
-        self.playbook_on_import_for_host(host, imported_file)
-
-    def v2_playbook_on_not_import_for_host(self, result, missing_file):
-        host = result._host.get_name()
-        self.playbook_on_not_import_for_host(host, missing_file)
-
-    def v2_playbook_on_play_start(self, play):
-        pass
-
-    def v2_playbook_on_stats(self, stats):
-        pass
-
-    def v2_on_file_diff(self, result):
-        pass
-
-    def v2_playbook_on_include(self, included_file):
-        pass
-
-    def v2_runner_item_on_ok(self, result):
-        pass
+        super().v2_runner_on_async_failed(result)
 
     def v2_runner_item_on_failed(self, result):
         self.failure = {
                 result._host.get_name(): result._result,
         }
-
-    def v2_runner_item_on_skipped(self, result):
-        pass
-
-    def v2_runner_retry(self, result):
-        pass
+        super().v2_runner_item_on_failed(result)
 
 
 class Options:
@@ -219,15 +152,21 @@ class PlaybookBuilder():
             # rather the name of a predefined play
             play_builder = PREDEFINED_PLAYS[filename]
         except KeyError:
-            self.play = Playbook.load(filename, self.variables, self.loader)
+            self.play = filename
         else:
             play_source = play_builder(**kwargs)
-            self.play = Play.load(play_source, variable_manager=self.variables, loader=self.loader)
+            self.play = Play.load(
+                    play_source,
+                    variable_manager=self.variables,
+                    loader=self.loader)
 
     def configure_user(self, user, password, sudo_password=None):
         """Configure Ansible's options based on the given user informations"""
+        if sudo_password is None:
+            sudo_password = password
+
         self.passwords['conn_pass'] = password
-        self.passwords['become_pass'] = password if sudo_password is None else sudo_password
+        self.passwords['become_pass'] = sudo_password
         self.options = Options(  # Fill in required default values
                 connection='smart',
                 forks=5,
@@ -237,6 +176,10 @@ class PlaybookBuilder():
                 become_user='root',
                 check=False,
                 remote_user=user,
+                listhosts=False,
+                listtasks=False,
+                listtags=False,
+                syntax=False,
                 tags=[],
         )
         self.variables.options_vars = load_options_vars(self.options)
@@ -250,7 +193,10 @@ class PlaybookBuilder():
 
     @host.setter
     def host(self, agent_ip):
-        self.inventory = Inventory(loader=self.loader, variable_manager=self.variables, host_list=[agent_ip])
+        self.inventory = Inventory(
+                loader=self.loader,
+                variable_manager=self.variables,
+                host_list=[agent_ip])
         self.variables.set_inventory(self.inventory)
 
     @host.deleter
@@ -284,24 +230,38 @@ class PlaybookBuilder():
         and raise a ConductorError if not.
         """
         if self.options is None:
-            raise errors.ConductorError('Programming error: Ansible playbook launched without options')
+            raise errors.ConductorError(
+                    'Programming error: Ansible playbook '
+                    'launched without options')
         if self.inventory is None:
-            raise errors.ConductorError('Programming error: Ansible playbook launched with no associated host')
+            raise errors.ConductorError(
+                    'Programming error: Ansible playbook '
+                    'launched with no associated host')
         if self.play is None:
-            raise errors.ConductorError('Programming error: Ansible playbook launched without a playbook')
+            raise errors.ConductorError(
+                    'Programming error: Ansible playbook '
+                    'launched without a playbook')
 
         self.options.tags.extend(tags)
         playbook_results = PlayResult()
-        tasks = TaskQueueManager(
-                inventory=self.inventory,
-                variable_manager=self.variables,
-                loader=self.loader,
-                options=self.options,
-                passwords=self.passwords,
-                stdout_callback=playbook_results,
-        )
-        try:
-            tasks.run(self.play)
-        finally:
-            tasks.cleanup()
+        C.DEFAULT_STDOUT_CALLBACK = playbook_results
+
+        if isinstance(self.play, Play):
+            tasks = TaskQueueManager(
+                    inventory=self.inventory,
+                    variable_manager=self.variables,
+                    loader=self.loader,
+                    options=self.options,
+                    passwords=self.passwords,
+            )
+            try:
+                tasks.run(self.play)
+            finally:
+                tasks.cleanup()
+        else:
+            tasks = PlaybookExecutor(
+                    playbooks=[self.play], inventory=self.inventory,
+                    variable_manager=self.variables, loader=self.loader,
+                    options=self.options, passwords=self.passwords)
+            tasks.run()
         playbook_results.raise_for_error()

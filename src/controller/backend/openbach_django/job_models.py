@@ -157,8 +157,8 @@ class InstalledJob(models.Model):
             Job, models.CASCADE,
             related_name='installations')
     update_status = models.DateTimeField(null=True, blank=True)
-    severity = models.IntegerField()
-    local_severity = models.IntegerField()
+    severity = models.IntegerField(default=1)
+    local_severity = models.IntegerField(default=1)
     default_stat_storage = models.BooleanField(default=True)
     default_stat_broadcast = models.BooleanField(default=False)
 

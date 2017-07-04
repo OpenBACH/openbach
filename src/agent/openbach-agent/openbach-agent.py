@@ -762,7 +762,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
         message_length, = struct.unpack('>I', message_length)
         message = self._read_all(message_length)
         try:
-            action_name, *arguments = message.decode().split()
+            action_name, *arguments = shlex.split(message.decode())
             action = ''.join(map(str.title, action_name.split('_')))
             handler = globals()[action](*arguments)
         except KeyError:
@@ -791,8 +791,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
                 result = b'OK'
         finally:
             length = struct.pack('>I', len(result))
-            self.request.sendall(length)
-            self.request.sendall(result)
+            self.request.sendall(length + result)
 
 
 if __name__ == '__main__':

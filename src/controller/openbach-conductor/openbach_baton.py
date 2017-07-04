@@ -63,7 +63,7 @@ class OpenBachBaton:
         while amount > 0:
             received = self.socket.recv_into(view[-amount:])
             if not received:
-                return None  # Sure ?
+                break
             amount -= received
         return buffer
 

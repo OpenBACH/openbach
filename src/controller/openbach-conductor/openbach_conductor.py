@@ -360,8 +360,10 @@ class AddCollector(ThreadedAction, CollectorAction):
         try:
             Agent.objects.get(address=self.address)
         except Agent.DoesNotExist:
-            InstallAgent(self.address, self.username, self.password,
-                         self.name, self.address)._action()
+            agent_installer = InstallAgent(
+                    self.address, self.username,
+                    self.password, self.name, self.address)
+            agent_installer._threaded_action(agent_installer._action)
 
 
 class ModifyCollector(ThreadedAction, CollectorAction):
@@ -424,7 +426,8 @@ class DeleteCollector(ThreadedAction, CollectorAction):
         # Uninstall the associated Agent if there is one
         try:
             agent = collector.agents.get(address=self.address)
-            UninstallAgent(agent.address)._action()
+            agent_uninstaller = UninstallAgent(agent.address)
+            agent_uninstaller._threaded_action(agent_uninstaller._action)
         except Agent.DoesNotExist:
             pass
         except errors.ConductorError as err:
@@ -570,7 +573,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
                 job = line.rstrip()
                 install_job = InstallJob(self.address, job)
                 try:
-                    install_job._action()
+                    install_job._threaded_action(install_job._action)
                 except errors.ConductorWarning:
                     pass
                 except errors.ConductorError:
@@ -1038,11 +1041,15 @@ class InstallJob(ThreadedAction, InstalledJobAction):
         installed_job.save()
 
         with suppress(errors.ConductorError):
-            SetLogSeverityJob(self.address, self.name, self.severity, self.local_severity)._action()
+            severity_setter = SetLogSeverityJob(
+                    self.address, self.name,
+                    self.severity, self.local_severity)
+            severity_setter._threaded_action(severity_setter._action)
 
         if not created:
             raise errors.ConductorWarning(
-                    'A Job was already installed on an Agent, configuration updated',
+                    'A Job was already installed on an '
+                    'Agent, configuration updated',
                     agent_address=self.address, job_name=self.name)
 
 
@@ -1247,7 +1254,7 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
             rsyslog_instance._cancel()
             raise
         else:
-            rsyslog_instance._action()
+            rsyslog_instance._threaded_action(rsyslog_instance._action)
 
 
 class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
@@ -1331,7 +1338,7 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
             rstats_instance._cancel()
             raise
         else:
-            rstats_instance._action()
+            rstats_instance._threaded_action(rstats_instance._action)
 
 
 ###############
@@ -2358,7 +2365,9 @@ class StateJob(ConductorAction):
         super().__init__(address=address, name=name)
 
     def _action(self):
-        command_result, _ = InstalledJobCommandResult.objects.get_or_create(address=self.address)
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(
+                agent_ip=self.address,
+                job_name=self.name)
         return command_result.json, 200
 
 

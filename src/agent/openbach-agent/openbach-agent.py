@@ -624,7 +624,7 @@ class StartJobInstanceAgent(AgentAction):
 
         infos = JobManager().get_job(self.name)
         nb_args = len(infos['required'])
-        optional = job['optional']
+        optional = infos['optional']
         if len(self.arguments) < nb_args:
             raise BadRequest(
                     'KO Job {} requires at least {} arguments'
@@ -762,7 +762,9 @@ class RequestHandler(socketserver.BaseRequestHandler):
         message_length, = struct.unpack('>I', message_length)
         message = self._read_all(message_length)
         try:
-            action_name, *arguments = shlex.split(message.decode())
+            message = message.decode()
+            syslog.syslog(syslog.LOG_INFO, message)
+            action_name, *arguments = shlex.split(message)
             action = ''.join(map(str.title, action_name.split('_')))
             handler = globals()[action](*arguments)
         except KeyError:

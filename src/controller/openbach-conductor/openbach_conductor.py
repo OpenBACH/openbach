@@ -1218,22 +1218,16 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
         # Configure the playbook
         transfer_id = next(IDGenerator())
         logs_job_path = rsyslog_installed.job.path
+        agent = rsyslog_installed.agent
         syslogseverity = convert_severity(int(severity))
         syslogseverity_local = convert_severity(int(local_severity))
-        playbook_builder = PlaybookBuilder.from_agent(rsyslog_installed.agent)
+        playbook_builder = PlaybookBuilder.from_agent(agent)
         playbook_builder.add_variables(
                 job=self.name, transfer_id=transfer_id,
-                collector_ip=rsyslog_installed.agent.collector.address)
-
-        disable = 0
-        if syslogseverity == 8:
-            disable += 1
-        else:
-            playbook_builder.add_variables(syslogseverity=syslogseverity)
-        if syslogseverity_local == 8:
-            disable += 2
-        else:
-            playbook_builder.add_variables(syslogseverity_local=syslogseverity_local)
+                collector_ip=agent.collector.address,
+                logstash_logs_port=agent.collector.logs_port,
+                syslogseverity=syslogseverity,
+                syslogseverity_local=syslogseverity_local)
         playbook_builder.configure_playbook(
                 'enable_logs',
                 severity=syslogseverity,
@@ -1241,7 +1235,9 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
                 logs_path=logs_job_path)
 
         arguments = {
-                'disable_code': disable,
+                'disable_code': sum(
+                    (severity == 8) << i for i, severity in
+                    enumerate((syslogseverity, syslogseverity_local))),
                 'transfered_file_id': transfer_id,
                 'job_name': self.name,
         }

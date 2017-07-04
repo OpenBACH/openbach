@@ -97,7 +97,7 @@ class OpenBachBaton:
     def start_job_instance(self, job_name, job_id, scenario_id, owner_id, arguments, date=None, interval=None):
         assert sum(time is not None for time in (date, interval)) == 1
 
-        message = 'start_job_instance_agent "{}" {} {} {} {}{} "{}"'.format(
+        message = 'start_job_instance_agent "{}" {} {} {} {}{} {}'.format(
                 job_name, job_id, scenario_id, owner_id,
                 '' if date is None else 'date {}'.format(date),
                 '' if interval is None else 'interval {}'.format(interval),
@@ -116,7 +116,7 @@ class OpenBachBaton:
     def restart_job_instance(self, job_name, job_id, scenario_id, arguments, date=None, interval=None):
         assert sum(time is not None for time in (date, interval)) == 1
 
-        message = 'restart_job_instance_agent "{}" {} {} {}{} "{}"'.format(
+        message = 'restart_job_instance_agent "{}" {} {} {}{} {}'.format(
                 job_name, job_id, scenario_id,
                 '' if date is None else 'date {}'.format(date),
                 '' if interval is None else 'interval {}'.format(interval),

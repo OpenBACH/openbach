@@ -260,7 +260,7 @@ class JobInstance(models.Model):
         optional_flags_only = self.optional_arguments_values.filter(
                 argument__type='None',
                 value='True')
-        optional_arguments = self.job.job.optional_arguments.exclude(argument__type='None')
+        optional_arguments = self.job.job.optional_arguments.exclude(type='None')
 
         quote = '"{}"'.format
         required = ' '.join(

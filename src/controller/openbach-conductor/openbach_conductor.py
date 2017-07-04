@@ -509,7 +509,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
-        return self.set_running(command_result, 'status_add')
+        return self.set_running(command_result, 'status_install')
 
     def _action(self):
         collector_info = InfosCollector(self.collector_ip)
@@ -1372,7 +1372,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
                          date=date, interval=interval, offset=offset)
 
     def _create_command_result(self):
-        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_start')
 
     def openbach_function(self, openbach_function_instance, waiters):
@@ -1496,7 +1496,7 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
         return super().openbach_function(openbach_function_instance)
 
     def _create_command_result(self):
-        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_stop')
 
     def _action(self):
@@ -1565,7 +1565,7 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
                          date=date, interval=interval)
 
     def _create_command_result(self):
-        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_restart')
 
     def _action(self):
@@ -1607,7 +1607,7 @@ class WatchJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         super().__init__(instance_id=instance_id, date=date, interval=interval, stop=stop)
 
     def _create_command_result(self):
-        command_result, _ = JobInstanceCommandResult.objects.get_or_create(id=self.instance_id)
+        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_watch')
 
     def _action(self):
@@ -2405,6 +2405,13 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
 
     def __init__(self, local_path, remote_path, address):
         super().__init__(local_path=local_path, remote_path=remote_path, address=address)
+
+    def _create_command_result(self):
+        command_result, _ = FileCommandResult.objects.get_or_create(
+                filename=self.local_path,
+                remote_path=self.remote_path,
+                address=self.address)
+        return command_result
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()

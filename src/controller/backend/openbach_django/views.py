@@ -181,7 +181,7 @@ class StateView(GenericView):
         except KeyError as e:
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
-        data = {'address': address, 'job_name': name, 'command': 'state_job'}
+        data = {'address': address, 'name': name, 'command': 'state_job'}
 
         return self.conductor_execute(data)
 
@@ -558,8 +558,8 @@ class JobView(BaseJobView):
         except KeyError:
             return {'msg': 'POST data malformed: \'severity\' missing'}, 400
 
-        data = {'command': 'set_job_log_severity', 'address': address,
-                'job_name': name, 'severity': severity}
+        data = {'command': 'set_log_severity_job', 'address': address,
+                'name': name, 'severity': severity}
 
         local_severity = self.request.JSON.get('local_severity', None)
         if local_severity is not None:
@@ -581,8 +581,8 @@ class JobView(BaseJobView):
             return {'msg': 'POST data malformed: \'addresses\' should '
                     'contain 1 item for action \'stat_policy\''}, 404
 
-        data = {'command': 'set_job_stat_policy', 'address': address,
-                'job_name': name}
+        data = {'command': 'set_statistics_policy_job', 'address': address,
+                'name': name}
 
         request_data = self.request.JSON
         if 'stat_name' in request_data:
@@ -670,7 +670,7 @@ class JobInstancesView(BaseJobInstanceView):
             return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
 
         data = {'command': 'start_job_instance', 'agent_ip': agent_ip,
-                'job_name': job_name, 'instance_args': instance_args}
+                'name': job_name, 'instance_args': instance_args}
 
         request_data = self.request.JSON
         if 'date' in request_data:

@@ -571,9 +571,10 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
                 install_job = InstallJob(self.address, job)
                 try:
                     install_job._action()
-                except errors.ConductorError as e:
-                    if not isinstance(e, errors.ConductorWarning):
-                        yield job
+                except errors.ConductorWarning:
+                    pass
+                except errors.ConductorError:
+                    yield job
 
 
 class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
@@ -1013,7 +1014,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                          severity=severity, local_severity=local_severity)
 
     def _create_command_result(self):
-        command_result, _ = InstalledJobCommandResult.object.get_or_create(
+        command_result, _ = InstalledJobCommandResult.objects.get_or_create(
                 agent_ip=self.address,
                 job_name=self.name)
         return self.set_running(command_result, 'status_install')

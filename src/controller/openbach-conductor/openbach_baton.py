@@ -45,6 +45,7 @@ import errors
 class OpenBachBaton:
     def __init__(self, agent_ip, agent_port=1112):
         address = (agent_ip, agent_port)
+        self.socket = None
         try:
             self.socket = socket.create_connection(address)
         except OSError as e:
@@ -53,13 +54,14 @@ class OpenBachBaton:
                     .format(agent_ip, e))
 
     def __del__(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
 
     def _recv_all(self, amount):
         buffer = bytearray(amount)
         view = memoryview(buffer)
         while amount > 0:
-            received = self.socket.recv_into(view)
+            received = self.socket.recv_into(view[-amount:])
             if not received:
                 return None  # Sure ?
             amount -= received

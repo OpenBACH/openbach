@@ -54,14 +54,15 @@ class Collector(models.Model):
     """Data associated to a Collector"""
 
     address = models.GenericIPAddressField(primary_key=True)
-    username = models.CharField(max_length=500)
-    password = models.CharField(max_length=500)
     logs_port = models.IntegerField(default=10514)
     logs_query_port = models.IntegerField(default=9200)
+    logs_database_name = models.CharField(max_length=500, default='openbach')
     stats_port = models.IntegerField(default=2222)
     stats_query_port = models.IntegerField(default=8086)
     stats_database_name = models.CharField(max_length=500, default='openbach')
     stats_database_precision = models.CharField(max_length=10, default='ms')
+    logstash_broadcast_mode = models.CharField(
+            max_length=3, default='udp', choices=(('udp', 'UDP'), ('tcp', 'TCP')))
 
     def __str__(self):
         return self.address
@@ -108,8 +109,6 @@ class Agent(models.Model):
     update_status = models.DateTimeField(null=True, blank=True)
     reachable = models.BooleanField(default=False)
     update_reachable = models.DateTimeField(null=True, blank=True)
-    username = models.CharField(max_length=500)
-    password = models.CharField(max_length=500, null=True, blank=True)
     collector = models.ForeignKey(Collector, related_name='agents')
 
     def set_password(self, raw_password):

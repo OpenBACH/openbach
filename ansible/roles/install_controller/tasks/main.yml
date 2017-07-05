@@ -1,0 +1,62 @@
+---
+
+- name: Install apt dependencies
+  apt: pkg={{ item }} state=installed update_cache=no
+  with_items:
+    - postgresql-server-dev-9.5
+    - postgresql
+    - libpq-dev  # For psycopg2, necessary for ansible's postgresql_* modules
+    - python-dev  # For psycopg2, necessary for ansible's postgresql_* modules
+  become: yes
+
+- name: Install pip dependencies (for ansible modules to run)
+  pip: name={{ item }} executable=pip
+  with_items:
+    - psycopg2
+  become: yes
+
+- name: Install pip3 dependencies
+  pip: name={{ item.name }} executable=pip3 version={{ item.version }}
+  with_items:
+    - {name: django, version: 1.9.7}
+    - {name: psycopg2, version: 2.6.2}
+    - {name: apscheduler, version: 3.2.0}
+    - {name: uwsgi, version: 2.0.14}
+    - {name: fuzzywuzzy, version: 0.15.0}
+    - {name: ansible, version: 2.2.3}
+  become: yes
+
+- name: Configure Rsyslog
+  template: src={{ item }}.j2 dest=/etc/rsyslog.d/{{ item }}.conf mode=0644
+  with_items:
+    - openbach-conductor
+    - openbach-conductor_local
+    - openbach-backend
+    - openbach-backend_local
+  vars:
+    collector_ip: "{{ collector_machine | default('collector' in groups and groups.collector and groups.collector[0] or inventory_hostname) }}"
+  become: yes
+  notify: restart rsyslog
+
+- name: Change postgresql Method to Trust for User postgres
+  lineinfile: dest=/etc/postgresql/9.5/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
+  become: yes
+  notify: restart postgresql
+
+- meta: flush_handlers
+
+- name: Create the Backend's Database
+  postgresql_db: name=openbach_db state=present
+  become: yes
+
+- name: Create the Password of the Backend's Database Admin User
+  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(10, chars))" | python3
+  register: password
+
+- name: Create the Backend's Database Admin User
+  postgresql_user: db=openbach_db name=openbach password={{ password.stdout }} priv=CONNECT
+  become: yes
+
+- name: Fetch the openbach User's SSH public Key
+  fetch: src=/home/openbach/.ssh/id_rsa.pub dest=/tmp/controller_key
+  become: yes

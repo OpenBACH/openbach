@@ -1,0 +1,9 @@
+---
+
+- name: restart postgresql
+  systemd: name=postgresql state=restarted
+  become: yes
+
+- name: restart rsyslog
+  systemd: name=rsyslog state=restarted
+  become: yes

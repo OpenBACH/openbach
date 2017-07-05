@@ -1,0 +1,25 @@
+---
+
+- name: restart rstats
+  systemd: name=rstats state=restarted enabled=yes daemon_reload=yes
+  remote_user: "{{ ansible_user_id }}"
+  become: yes
+
+- name: build collect agent library
+  make:
+    chdir: /opt/openbach/agent/collect_agent/client_api/
+    target: install
+    params:
+      DESTDIR: /usr/
+  remote_user: "{{ ansible_user_id }}"
+  become: yes
+
+- name: build openbach api packages
+  shell: python3 setup.py install chdir=/opt/openbach/agent/openbach_api/
+  remote_user: "{{ ansible_user_id }}"
+  become: yes
+
+- name: restart openbach agent
+  systemd: name=openbach-agent state=restarted enabled=yes daemon_reload=yes
+  remote_user: "{{ ansible_user_id }}"
+  become: yes

@@ -1,0 +1,19 @@
+---
+
+- name: Execute the Job Installation Playbook
+  include: "{{ job_item.path }}/install_{{ job_item.name }}.yml"
+  args:
+    job_name: "{{ job_item.name }}"
+  with_items: "{{ jobs }}"
+  loop_control:
+    loop_var: job_item
+
+- name: Create the Job stats Folder
+  file: path=/var/openbach_stats/{{ item.name }} state=directory mode=0755 owner=openbach group=openbach
+  become: yes
+  with_items: "{{ jobs }}"
+
+- name: Inform Agent that a new Job is Installed
+  copy: src={{ item.path }}/files/{{ item.name }}.yml dest=/opt/openbach/agent/jobs/ mode=0644
+  remote_user: openbach
+  with_items: "{{ jobs }}"

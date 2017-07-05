@@ -1,0 +1,11 @@
+---
+
+- name: start backend
+  systemd: name=openbach-backend state=restarted enabled=yes daemon_reload=yes
+  remote_user: "{{ ansible_user_id }}"
+  become: yes
+
+- name: start conductor
+  systemd: name=openbach-conductor state=restarted enabled=yes daemon_reload=yes
+  remote_user: "{{ ansible_user_id }}"
+  become: yes

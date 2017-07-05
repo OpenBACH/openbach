@@ -1,0 +1,57 @@
+---
+
+- name: Create openbach-admin user
+  user: name=openbach-admin groups=sudo shell=/bin/bash
+  become: yes
+
+- name: Install apt Packages
+  apt: pkg={{ item }}
+  with_items:
+    - python3-setuptools
+    - rsyslog
+    - make
+    - g++
+  become: yes
+  notify: restart rsyslog
+
+- name: Install pip3 dependencies
+  pip: name={{ item.name }} executable=pip3 version={{ item.version }}
+  with_items:
+    - {name: apscheduler, version: 3.2.0}
+    - {name: psutil, version: 5.2.2}
+    - {name: PyYAML, version: 3.11}
+  become: yes
+
+- name: Create OpenBACH's log folder
+  file: path=/var/log/openbach state=directory mode=0777
+  become: yes
+
+- name: Configure logrotate
+  copy: src=openbach_logrotate.conf dest=/etc/logrotate.d/
+  become: yes
+
+- name: Configure Rsyslog
+  template: src={{ item }}.j2 dest=/etc/rsyslog.d/{{ item }}.conf mode=0644
+  with_items:
+    - rstats
+    - rstats_local
+    - openbach-agent
+    - openbach-agent_local
+  vars:
+    collector_ip: "{{ collector_machine | default('127.0.0.1') }}"
+  become: yes
+
+- name: Create OpenBACH's stats folder
+  file: path=/var/openbach_stats/openbach_agent state=directory mode=0755 owner=openbach group=openbach
+  become: yes
+
+- name: Create OpenBACH's pid folder
+  file: path=/var/run/openbach state=directory mode=0755 owner=openbach group=openbach
+  become: yes
+
+- name: Create Service Files
+  copy: src={{ item }}.service dest=/etc/systemd/system/ mode=0644
+  with_items:
+    - openbach-agent
+    - rstats
+  become: yes

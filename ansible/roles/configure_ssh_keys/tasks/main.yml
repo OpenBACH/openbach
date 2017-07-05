@@ -1,0 +1,12 @@
+---
+
+- name: Trust the SSH key by the openbach-admin user
+  authorized_key: user=openbach-admin key={{ lookup('file', '/tmp/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
+  become: yes
+  with_flattened:
+    - "{{ groups.agent | default([]) }}"
+    - "{{ groups.collector | default([]) }}"
+    - "{{ groups.controller | default([]) }}"
+
+- name: Remove the SSH key from the Local Machine
+  local_action: file path=/tmp/controller_key state=absent

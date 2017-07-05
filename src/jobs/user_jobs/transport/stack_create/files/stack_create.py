@@ -10,25 +10,13 @@ import collect_agent
 
 #Fonction de définition du type ip :
 
-def ip(argument):
-    address = argument.split('.')
-    if len(address) != 4:
-        raise TypeError('Not an IP')
-
-    for elem in map(int, address):
-        if elem not in range(256):
-            raise ValueError('Element of IP address not in range 0 to 255')
-
-    return argument
-
-
 def main(stack_name, flavor, image_id, network, password, RCfile):
     conffile = "/opt/openbach-jobs/stack_create/stack_create_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)     
     if not success:
         return
 
-    collect_agent.send_log(syslog.LOG_ERR, "Starting stack_create")
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting stack_create")
 
     # Create var nets for adding networks
     
@@ -57,14 +45,7 @@ resources:
 
    # Create stack
     try:
-   #     subprocess.check_call('echo "{0}" | source /tmp/CNES-openrc.sh '
-   #                           '&& heat stack-create {1} -f /tmp/{1}.yml'
-   #                           .format(password, stack_name),shell = True,
-   #                           executable = "/bin/bash")
-   #     cmd = 'export OS_PASSWORD=kalimasirriya && source /tmp/CNES-openrc.sh && heat stack-create test2 -f /tmp/test2.yml'
-   #     subprocess.call(cmd, shell = True, executable = "/bin/bash")
- 
-        subprocess.call('export OS_PASSWORD=kalimasirriya && source {2} '
+        subprocess.call('export OS_PASSWORD={0} && source {2} '
                         '&& heat stack-create {1} -f /tmp/{1}.yml'
                         .format(password, stack_name, RCfile), shell = True,
                         executable = "/bin/bash")

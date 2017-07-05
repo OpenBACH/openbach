@@ -7,18 +7,15 @@ import subprocess
 import argparse
 import syslog
 import collect_agent
+import ipaddress
 
 #Fonction de définition du type ip :
 
 def ip(argument):
-    address = argument.split('.')
-    if len(address) != 4:
-        raise TypeError('Not an IP')
-
-    for elem in map(int, address):
-        if elem not in range(256):
-            raise ValueError('Element of IP address not in range 0 to 255')
-
+    try: 
+       ipaddress.ip_address(argument)
+    except Exception as ex:
+                raise TypeError('Network parameter is not an IP')
     return argument
 
 
@@ -28,14 +25,11 @@ def main(net_name, address, password, RCfile):
     if not success:
         return
 
-    collect_agent.send_log(syslog.LOG_ERR, "Stating net_create")
+    collect_agent.send_log(syslog.LOG_DEBUG, "Stating net_create")
 
     
     # Define variable net for pool address allocation
 
-#    address.split(".")
-#    net = var[0] + "." + var[1] + "." + var[2]
-    address.rsplit(".",1)
     net = address.rsplit(".",1)
     
     # CREATE TEMPLATE
@@ -74,7 +68,7 @@ resources:
   
     try:
 
-        subprocess.call('export OS_PASSWORD=kalimasirriya && source {2} '
+        subprocess.call('export OS_PASSWORD={0} && source {2} '
                         '&& heat stack-create {1} -f /tmp/{1}.yml'
                         .format(password, net_name, RCfile), shell = True,
                         executable = "/bin/bash") 

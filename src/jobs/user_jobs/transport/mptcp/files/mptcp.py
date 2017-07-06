@@ -44,8 +44,7 @@ import syslog
 import collect_agent
 
 
-def main(iface_link1, iface_link2, iface_on1, iface_on2,
-         conf_up, checksum, syn_retries, path_manager, scheduler):
+def main(ifaces, enable, checksum, syn_retries, path_manager, scheduler):
     
     conffile = "/opt/openbach-jobs/mptcp/mptcp_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)
@@ -62,7 +61,7 @@ def main(iface_link1, iface_link2, iface_on1, iface_on2,
         quit()
 
     # Configure MPTCP routing
-    if conf_up == 1:
+    if enable :
         # Enable mptcp
         try: 
             subprocess.call(["sysctl", "-w", "net.mptcp.mptcp_enabled=1"])
@@ -116,61 +115,43 @@ def main(iface_link1, iface_link2, iface_on1, iface_on2,
             collect_agent.send_log(syslog.LOG_DEBUG, "MPTCP scheduler updated")
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
-    # Enable interface 1
-    if iface_on1:
+            
+    # Get list of all interfaces
+    all_ifaces = subprocess.check_output("netstat -i | ",
+                                     shell=True).decode().splitlines()
+    enabled_ifaces = ifaces.split(',')
+    if len(enabled_ifaces) == 0:
+        enabled_ifaces = all_ifaces
+    # Enable interfaces
+    for iface in enabled_ifaces:
         try:
-            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath",
+            subprocess.call(["ip", "link", "set", "dev", iface, "multipath",
                              "on"])
         except Exception as ex:
             collect_agent.send_log(syslog.LOG_ERROR, "Error when setting"
-                                   " multipath on interface %s" % iface_link1)
-        else:
-            collect_agent.send_log(syslog.LOG_DEBUG, "Enabled multipath on iface %s"
-                                   % iface_link1)
-    else:
-        try:
-            subprocess.call(["ip", "link", "set", "dev", iface_link1, "multipath",
-                             "off"])
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting off"
-                                   " multipath on interface %s" % iface_link1)
-        else:
-            collect_agent.send_log(syslog.LOG_DEBUG, "Disabled multipath on iface %s"
-                                   % iface_link1)
-    # Enable interface 2
-    if iface_on2:
-        try:
-            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath",
-                             "on"])
-        except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting"
-                                   " multipath on interface %s" % iface_link2)
+                                   " multipath on interface %s" % iface)
         else:
             collect_agent.send_log(syslog.LOG_DEBUG, "Enabled multipath on iface %s"
                                    % iface_link2)
-    else:
+    # Disable the rest of the interfaces
+    for iface in [i for i in all_ifaces if i not in enabled_ifaces]:
         try:
-            subprocess.call(["ip", "link", "set", "dev", iface_link2, "multipath",
+            subprocess.call(["ip", "link", "set", "dev", iface, "multipath",
                              "off"])
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERROR, "Error when setting off"
-                                   " multipath on interface %s" % iface_link2)
+            collect_agent.send_log(syslog.LOG_ERROR, "Error when disabling"
+                                   " multipath on interface %s" % iface)
         else:
             collect_agent.send_log(syslog.LOG_DEBUG, "Disabled multipath on iface %s"
-                                   % iface_link2) 
+                                   % iface)
             
 
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('iface_link1', metavar='iface_link1', type=str,
-                        help='')
-    parser.add_argument('iface_link2', metavar='iface_link2', type=str,
-                        help='')
-    parser.add_argument('-o', '--iface-on1', action='store_true', help='')
-    parser.add_argument('-O', '--iface-on2', action='store_true', help='')
-    parser.add_argument('-c', '--conf_up', type=int, default=1, help='')
+    parser.add_argument('-i', '--ifaces', type=str, help='')
+    parser.add_argument('-e', '--enable', action='store_true')
     parser.add_argument('-k', '--checksum', type=int, help='')
     parser.add_argument('-y', '--syn-retries', type=int, help='')
     parser.add_argument('-p', '--path-manager', type=str, help='')
@@ -178,16 +159,12 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    iface_link1 = args.iface_link1
-    iface_link2 = args.iface_link2
-    iface_on1 = args.iface_on1
-    iface_on2 = args.iface_on2
-    conf_up = args.conf_up
+    ifaces = args.ifaces
+    enable = args.enable
     checksum = args.checksum
     syn_retries = args.syn_retries
     path_manager = args.path_manager
     scheduler = args.scheduler    
 
-    main(iface_link1, iface_link2, iface_on1, iface_on2, conf_up, checksum,
-         syn_retries, path_manager, scheduler) 
+    main(ifaces, enable, checksum, syn_retries, path_manager, scheduler) 
 

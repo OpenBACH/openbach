@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,55 +32,34 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: pep.yml
+- name: Install Pep requirements
+  apt: pkg={{ item }} state=present update_cache=false
+  with_items:
+    - libnetfilter-queue-dev
+  become: yes
 
-  tasks:
-  - name: Create Pep repository
-    file: path=/opt/openbach-jobs/pep state=directory mode=0755
-    become: yes
+- name: Copy Pep sources
+  synchronize: src=pepsal-transparent/ dest=/tmp/pepsal-transparent/ recursive=yes delete=yes
 
-  - name: Install Pep Job
-    copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/pep/{{ item.name }} mode={{ item.mode }}
-    become: yes
-    with_items:
-      - { name: 'set_pep.py', mode: '0755' }
-      - { name: 'unset_pep.sh', mode: '0755' }
-      - { name: 'pep.help', mode: '0644' }
-      - { name: 'pep_rstats_filter.conf', mode: '0644' }
+- name: Compile Pep
+  shell: {{ item }} chdir=/tmp/pepsal-transparent/
+  with_items:
+    - "./configure"
+    - "make"
 
-  - name: Install Pep requirements
-    apt: pkg={{ item }} state=present update_cache=false
-    with_items:
-      - libnetfilter-queue-dev
-    become: yes
+- name: Insall Pep
+  shell: make install chdir=/tmp/pepsal-transparent/
+  become: yes
 
-  - name: Copy Pep sources
-    copy: src=files/pepsal-transparent dest=/tmp/
-    become: yes
+- name: Create the Pep Job repository
+  file: path=/opt/openbach/agent/jobs/pep state=directory
+  remote_user: openbach
 
-  - name: Copy Pep sources (2)
-    copy: src=files/pepsal-transparent/configure dest=/tmp/pepsal-transparent/ mode=0755
-    become: yes
-
-  - name: Compile Pep (configure)
-    shell: ./configure chdir=/tmp/pepsal-transparent
-    become: yes
-
-  - name: Compile Pep (make)
-    shell: make chdir=/tmp/pepsal-transparent
-    become: yes
-
-  - name: Insall Pep
-    shell: make install chdir=/tmp/pepsal-transparent
-    become: yes
-
-  - name: Inform Agent that Pep is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install the Pep Job
+  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/pep/{{ item.name }} mode={{ item.mode }}
+  with_items:
+    - { name: 'set_pep.py', mode: '0755' }
+    - { name: 'unset_pep.sh', mode: '0755' }
+    - { name: 'pep.help', mode: '0644' }
+    - { name: 'pep_rstats_filter.conf', mode: '0644' }
+  remote_user: openbach

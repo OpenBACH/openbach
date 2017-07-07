@@ -1,0 +1,13 @@
+Install & Usage
+
+Get and install matching linux-header package for your kernel and run make.
+
+
+Usage: Same as the original tcp_probe module. I.e:
+
+sudo insmod tcp_probe_new_fix.ko port=8080 full=1
+
+
+To remove the module from the kernel :
+
+sudo rmmod tcp_probe_new_fix

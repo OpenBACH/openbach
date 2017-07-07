@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,27 +32,13 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: smart_iw.yml
+- name: Create the Smart IW Job repository
+  file: path=/opt/openbach/agent/jobs/smart_iw state=directory
+  remote_user: openbach
 
-  tasks:
-  - name: Create Smart IW repository
-    file: path=/opt/openbach-jobs/smart_iw state=directory mode=0755
-    become: yes
-
-  - name: Install Smart IW
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/smart_iw/ mode={{ item.mode }}
-    with_items:
-      - { file: 'smart_iw.py', mode: '0755' }
-      - { file: 'smart_iw.help', mode: '0644' }
-    become: yes
-      
-  - name: Inform Agent that Smart IW is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install the Smart IW Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/smart_iw/ mode={{ item.mode }}
+  with_items:
+    - { file: 'smart_iw.py', mode: '0755' }
+    - { file: 'smart_iw.help', mode: '0644' }
+  remote_user: openbach

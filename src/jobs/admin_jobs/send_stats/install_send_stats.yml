@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,28 +32,14 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: send_stats.yml
+- name: Create the Send_Stats Job repository
+  file: path=/opt/openbach/agent/jobs/send_stats/ state=directory
+  remote_user: openbach
 
-  tasks:
-  - name: Create send_stats repository
-    file: path=/opt/openbach-jobs/send_stats/ state=directory
-    become: yes
-
-  - name: Install send_stats
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/send_stats/ mode={{ item.mode }}
-    with_items:
-      - { file: 'send_stats.py', mode: '0755' }
-      - { file: 'send_stats.help', mode: '0644' }
-      - { file: 'send_stats_rstats_filter.conf', mode: '0644' }
-    become: yes
-    
-  - name: Inform Agent that send_stats is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install send_stats
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/send_stats/ mode={{ item.mode }}
+  with_items:
+    - { file: 'send_stats.py', mode: '0755' }
+    - { file: 'send_stats.help', mode: '0644' }
+    - { file: 'send_stats_rstats_filter.conf', mode: '0644' }
+  remote_user: openbach

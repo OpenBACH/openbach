@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,94 +32,69 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: http2_client.yml
+- name: Create HTTP2 Client repository
+  file: path=/opt/openbach/agent/jobs/http2_client state=directory mode=0755
+  remote_user: openbach
+
+- name: Install nghttpd requirements
+  apt: pkg={{ item }} state=present update_cache=false
+  with_items:
+    - g++
+    - make
+    - binutils
+    - autoconf
+    - automake
+    - autotools-dev
+    - libtool
+    - pkg-config
+    - zlib1g-dev
+    - libcunit1-dev
+    - libssl-dev
+    - libxml2-dev
+    - libev-dev
+    - libevent-dev
+    - libjansson-dev
+    - libjemalloc-dev
+    - cython
+    - python3-dev
+    - python-setuptools
+    - checkinstall
+    - git
+  become: yes
+
+- name: Check if nghttp is installed
+  shell: which nghttp
+  register: nghttp_check_deb
+  failed_when: nghttp_check_deb.rc > 1 
+  changed_when: nghttp_check_deb.rc == 1
   
-  tasks:
-  - name: Create HTTP2 Client repository
-    file: path=/opt/openbach-jobs/http2_client state=directory mode=0755
-    become: yes
+- name: Download nghttp2 sources
+  git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
+  when: nghttp_check_deb.rc == 1
+  
+- name: Compile nghttp2
+  shell: {{ item }} chdir=/tmp/nghttp2/
+  with_items:
+    - "autoreconf -i"
+    - "automake"
+    - "autoconf"
+    - "./configure"
+    - "make"
+  when: nghttp_check_deb.rc == 1
 
-  - name: Check is nghttp is installed
-    shell: which nghttp
-    register: nghttp_check_deb
-    failed_when: nghttp_check_deb.rc > 1 
-    changed_when: nghttp_check_deb.rc == 1
+- name: Install nghttp2
+  shell: checkinstall -y chdir=/tmp/nghttp2/
+  become: yes
+  when: nghttp_check_deb.rc == 1
+    
+- name: Refresh dynamic linker
+  shell: ldconfig
+  become: yes
+  when: nghttp_check_deb.rc == 1
 
-  - name: Install nghttpd requirements
-    apt: pkg={{ item }} state=present update_cache=false
-    with_items:
-      - g++
-      - make
-      - binutils
-      - autoconf
-      - automake
-      - autotools-dev
-      - libtool
-      - pkg-config
-      - zlib1g-dev
-      - libcunit1-dev
-      - libssl-dev
-      - libxml2-dev
-      - libev-dev
-      - libevent-dev
-      - libjansson-dev
-      - libjemalloc-dev
-      - cython
-      - python3-dev
-      - python-setuptools
-      - checkinstall
-      - git
-    become: yes
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Download nghttp2 sources
-    git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (autoreconf -i)
-    shell: autoreconf -i chdir=/tmp/nghttp2/
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (automake)
-    shell: automake chdir=/tmp/nghttp2/
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (autoconf)
-    shell: autoconf chdir=/tmp/nghttp2/
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (configure)
-    shell: ./configure chdir=/tmp/nghttp2/
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (make)
-    shell: make chdir=/tmp/nghttp2/
-    when: nghttp_check_deb.rc == 1
-    
-  - name: Install nghttp2 (checkinstall)
-    shell: checkinstall -y chdir=/tmp/nghttp2/
-    become: yes
-    when: nghttp_check_deb.rc == 1
-      
-  - name: Refresh dynamic linker
-    shell: ldconfig
-    become: yes
-    when: nghttp_check_deb.rc == 1
- 
-  - name: Install HTTP2 Client
-    copy: src=files/{{ item.name }} dest=/opt/openbach-jobs/http2_client/ mode={{ item.mode }}
-    with_items:
-      - { 'name': 'http2_client.py', 'mode': '0755' }
-      - { 'name': 'http2_client.help', 'mode': '0644' }
-    become: yes
-    
-  - name: Install HTTP2 Client configuration file
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install HTTP2 Client
+  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/http2_client/ mode={{ item.mode }}
+  with_items:
+    - { name: 'http2_client.py', mode: '0755' }
+    - { name: 'http2_client.help', mode: '0644' }
+  remote_user: openbach

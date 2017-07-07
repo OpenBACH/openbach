@@ -9,6 +9,10 @@
   become: yes
   ignore_errors: yes
 
+- name: Create SymLink for Java 8
+  file: src=/usr/local/bin/java dest=/usr/bin/java state=link
+  become: yes
+
 - name: Upload binary files
   copy: src={{ item }} dest=/tmp/
   with_items:
@@ -58,3 +62,11 @@
   replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)bind-address = ":8086"(\s+.*)?$' replace='\1bind-address = ":{{ influxdb_port }}"\2' backup=yes
   become: yes
   notify: restart influxdb
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/collector state=directory
+  remote_user: openbach
+
+- name: Copy the version file on the Controller
+  copy: src=../openbach-version dest=/opt/openbach/collector/version
+  remote_user: openbach

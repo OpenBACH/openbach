@@ -1,0 +1,17 @@
+---
+
+- name: Add Agents hostname in the known_hosts File
+  shell: ssh openbach-admin@{{ item }} -o StrictHostKeyChecking=no -q exit
+  with_flattened:
+    - "{{ groups.agent | default([]) }}"
+    - "{{ groups.collector | default([]) }}"
+    - "{{ groups.controller | default([]) }}"
+  remote_user: openbach
+
+# TODO: use the URI module to http://localhost:8000/{{ item }}
+# with_items:
+#   - add_jobs (see defaults for install_job role)
+#   - install_collector
+#   - install_agent
+
+# TODO? Create a YAML/JSON file containing extra vars like controller_ip and proxy

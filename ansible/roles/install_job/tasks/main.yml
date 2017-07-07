@@ -1,5 +1,9 @@
 ---
 
+- name: Setup default Jobs
+  set_fact: jobs={{ (default_jobs + default_collector_jobs) if 'collector' in group_names or ('controller' in group_names and ('collector' not in groups or not groups.collector)) else default_jobs }}
+  when: jobs is not defined
+
 - name: Execute the Job Installation Playbook
   include: "{{ job_item.path }}/install_{{ job_item.name }}.yml"
   args:

@@ -1,5 +1,14 @@
 ---
 
+- hosts: localhost
+  gather_facts: no
+  pre_tasks:
+    - name: Create temporary SSH key
+      shell: ssh-keygen -b 4096 -t rsa -f /tmp/openbach_install_rsa -q -N ""
+      args:
+        creates: /tmp/openbach_install_rsa
+      when: ansible_ssh_private_key_file is not defined
+
 - name: Pre-configure each Host
   hosts:
     - agent
@@ -14,95 +23,36 @@
       become: yes
       ignore_errors: true
 
-    - name: Create temporary SSH key
-      local_action: shell ssh-keygen -b 4096 -t rsa -f /tmp/openbach_install_rsa -q -N ""
-      args:
-        creates: /tmp/openbach_install_rsa
-      when: not ansible_ssh_private_key_file
-
     - name: Use the temporary SSH key as the Default for this Installation
       set_fact: ansible_ssh_private_key_file=/tmp/openbach_install_rsa
-      when: not ansible_ssh_private_key_file
+      when: ansible_ssh_private_key_file is not defined
 
+
+- name: Install Agents
+  hosts: agent
   roles:
-    - install_basics
+    - install_agent
 
 
 - name: Install Collectors
   hosts: collector
   roles:
     - install_collector
-    - role: configure_collector
-      remote_user: openbach
-    - role: install_job
-      vars:
-        jobs:
-          - {name: empty_influxdb_db, path: ../src/jobs/admin_jobs/empty_influxdb_db/}
-          - {name: empty_elasticsearch_db, path: ../src/jobs/admin_jobs/empty_elasticsearch_db/}
-
-
-- name: Install an Agent on each Host
-  hosts:
-    - agent
-    - collector
-    - controller
-  roles:
-    - install_agent
-    - role: configure_agent
-      remote_user: openbach
-    - role: install_job
-      vars:
-        jobs:
-          - {name: rstats_job, path: ../src/jobs/admin_jobs/rstats_job}
-          - {name: rsyslog_job, path: /opt/openbach-controller/jobs/admin_jobs/rsyslog_job}
-          - {name: synchronization, path: /opt/openbach-controller/jobs/admin_jobs/synchronization}
-          - {name: empty_influxdb_db, path: /opt/openbach-controller/jobs/admin_jobs/empty_influxdb_db}
-          - {name: empty_elasticsearch_db, path: /opt/openbach-controller/jobs/admin_jobs/empty_elasticsearch_db}
-          - {name: rate_monitoring, path: /opt/openbach-controller/jobs/user_jobs/network/rate_monitoring}
-          - {name: tcpprobe_monitoring, path: /opt/openbach-controller/jobs/user_jobs/transport/tcpprobe_monitoring}
-          - {name: iperf, path: /opt/openbach-controller/jobs/user_jobs/transport/iperf}
-          - {name: fping, path: /opt/openbach-controller/jobs/user_jobs/transport/fping}
-          - {name: hping, path: /opt/openbach-controller/jobs/user_jobs/transport/hping}
 
 
 - name: Install Controllers
   hosts: controller
-
   roles:
-    # Install a collector on the controller if no collector configured
-    - role: install_collector
-    - role: configure_collector
-      remote_user: openbach
-      when: not ('collector' in groups) or not groups.collector
-    - role: install_job
-      vars:
-        jobs:
-          - {name: empty_influxdb_db, path: ../src/jobs/admin_jobs/empty_influxdb_db/}
-          - {name: empty_elasticsearch_db, path: ../src/jobs/admin_jobs/empty_elasticsearch_db/}
-      when: not ('collector' in groups) or not groups.collector
-    # Install controller after that
     - install_controller
-    - role: configure_controller
-      remote_user: openbach
-    # Install auditorium on the controller if no auditorium configured
-    - role: install_auditorium
-      vars:
-        install_on_controller: true
-      when: not ('auditorium' in groups) or not groups.auditorium
-    - role: configure_auditorium
-      remote_user: openbach
-      when: not ('auditorium' in groups) or not groups.auditorium
 
 
 - name: Install Auditoriums
   hosts: auditorium
   roles:
     - install_auditorium
-    - role: configure_auditorium
-      remote_user: openbach
 
 
-- name: Make each Agent Trust every Controller
+- name: Configure each Agent
   hosts:
     - agent
     - collector
@@ -110,6 +60,7 @@
   gather_facts: no
   roles:
     - configure_ssh_keys
+    - install_job
 
 
 - name: Setup Backend's Database
@@ -131,3 +82,14 @@
     - name: Remove trust of the install SSH key by the openbach user
       authorized_key: user=openbach state=absent key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
       become: yes
+
+
+- hosts: localhost
+  gather_facts: no
+  post_tasks:
+    - name: Remove the Controllers SSH Keys from the Local Machine
+      file: path=/tmp/{{ item }} state=absent
+      with_items:
+        - controller_key
+        - openbach_install_rsa
+        - openbach_install_rsa.pub

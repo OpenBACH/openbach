@@ -1,7 +1,0 @@
----
-
-- name: Create OpenBACH repository
-  file: path=/opt/openbach/collector state=directory
-
-- name: Copy the version file on the Controller
-  copy: src=../openbach-version dest=/opt/openbach/collector/version

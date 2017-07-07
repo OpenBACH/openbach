@@ -1,0 +1,15 @@
+---
+
+dependencies:
+  - role: install_agent
+    is_controller: true
+    # When explicitly neither an agent nor a collector too; and there exist a default collector
+    when: not ('agent' in group_names) and not ('collector' in group_names) and ('collector' in groups) and groups.collector
+  - role: install_collector
+    is_controller: true
+    # When explicitly not a collector too; and there don't exist a default collector
+    when: not ('collector' in group_names) and not ('collector' in groups) or not groups.collector
+  - role: install_auditorium
+    controller_machine: "{{ inventory_hostname }}"
+    # When explicitly not a auditorium too; and there don't exist a default auditorium
+    when: not ('audirotium' in group_names) and not ('auditorium' in groups) or not groups.auditorium

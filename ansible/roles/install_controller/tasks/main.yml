@@ -10,7 +10,7 @@
   become: yes
 
 - name: Install pip dependencies (for ansible modules to run)
-  pip: name={{ item }} executable=pip
+  pip: name={{ item }} executable=pip2
   with_items:
     - psycopg2
   become: yes
@@ -60,3 +60,69 @@
 - name: Fetch the openbach User's SSH public Key
   fetch: src=/home/openbach/.ssh/id_rsa.pub dest=/tmp/controller_key
   become: yes
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/controller/{{ item }} state=directory
+  with_items:
+    - backend/static
+    - conductor
+    - jobs/private_jobs
+    - src/agent
+    - ansible/roles
+  remote_user: openbach
+
+- name: Install the Backend
+  synchronize: src=../src/controller/backend/ dest=/opt/openbach/controller/backend/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+
+- name: Create a Secret Key for Django app
+  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))" | python3
+  register: key
+
+- name: Set up local settings
+  template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py
+  remote_user: openbach
+  notify: start backend
+
+- name: Initialize the Backend's Database
+  shell: /opt/openbach/controller/backend/openbach-backend.py migrate
+  remote_user: openbach
+
+- name: Create a default superuser on the database
+  shell: echo "from django.contrib.auth.models import User; User.objects.create_superuser('openbach', '', 'openbach')" | /opt/openbach/controller/backend/openbach-backend.py shell
+  remote_user: openbach
+
+- name: Collect Django's static files
+  shell: yes yes | /opt/openbach/controller/backend/openbach-backend.py collectstatic -l
+  remote_user: openbach
+
+- name: Create the Backend service
+  copy: src=openbach-backend.service dest=/etc/systemd/system/ mode=0644
+  become: yes
+  notify: start backend
+
+- name: Install the Conductor
+  synchronize: src=../src/controller/openbach-conductor/ dest=/opt/openbach/controller/conductor/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+  notify: start conductor
+
+- name: Create the Conductor service
+  copy: src=openbach-conductor.service dest=/etc/systemd/system/ mode=0644
+  become: yes
+  notify: start conductor
+
+- name: Copy the sources of the Agent
+  synchronize: src=../src/agent/ dest=/opt/openbach/controller/src/agent/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+
+- name: Copy the installation Playbooks
+  synchronize: src=../ansible/roles/ dest=/opt/openbach/controller/ansible/roles/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+
+- name: Copy the sources of the Jobs
+  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/jobs/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+
+- name: Copy the version file on the Controller
+  copy: src=../openbach-version dest=/opt/openbach/controller/version
+  remote_user: openbach

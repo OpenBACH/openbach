@@ -1,5 +1,43 @@
 ---
 
+- name: restart ntp
+  systemd: name=ntp state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
 - name: restart rsyslog
   systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
+- name: restart rstats
+  systemd: name=rstats state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
+- name: build collect agent library
+  make:
+    chdir: /opt/openbach/agent/collect_agent/client_api/
+    target: install
+    params:
+      DESTDIR: /usr/
+  become: yes
+  notify: remove collect agent build files
+
+- name: remove collect agent build files
+  file: path=/opt/openbach/agent/collect_agent/client_api/build/ state=absent
+  become: yes
+
+- name: build openbach api packages
+  shell: python3 setup.py install chdir=/opt/openbach/agent/openbach_api/
+  become: yes
+  notify: remove openbach api build files
+
+- name: remove openbach api build files
+  file: path=/opt/openbach/agent/openbach_api/{{ item }}/ state=absent
+  with_items:
+    - build
+    - dist
+    - openbach_api.egg-info
+  become: yes
+
+- name: restart openbach agent
+  systemd: name=openbach-agent state=restarted enabled=yes daemon_reload=yes
   become: yes

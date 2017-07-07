@@ -40,13 +40,9 @@
   notify: restart kibana
 
 - name: Create Kibana's Service File
-  template: src=kibana.service.j2 dest=/lib/systemd/system/ mode=0644
+  template: src=kibana.service.j2 dest=/etc/systemd/system/kibana.service mode=0644
   become: yes
   notify: restart kibana
-
-- name: Set the Controller IP to the Current Host if Installing a default Auditorium on a Controller
-  set_fact: controller_machine={{ inventory_hostname }}
-  when: install_on_controller | default(False)
 
 - name: Configure Nginx
   template: src=default.j2 dest=/etc/nginx/sites-available/default
@@ -56,3 +52,15 @@
     collector_ip: "{{ collector_machine | default('collector' in groups and groups.collector and groups.collector[0] or inventory_hostname) }}"
   become: yes
   notify: restart nginx
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/auditorium/frontend state=directory
+  remote_user: openbach
+
+- name: Upload Auditorium Frontend
+  synchronize: src=frontend/ dest=/opt/openbach/auditorium/frontend/ recursive=yes delete=yes
+  remote_user: openbach
+
+- name: Copy the version file on the Auditorium
+  copy: src=../openbach-version dest=/opt/openbach/auditorium/version
+  remote_user: openbach

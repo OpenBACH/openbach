@@ -1,18 +1,53 @@
 ---
 
-- name: Create openbach-admin user
-  user: name=openbach-admin groups=sudo shell=/bin/bash
+- name: Check if this Agent is Installed on a Collector
+  set_fact: is_collector={{ is_collector | default('collector' in group_names) }}
+
+- name: Check if this Agent is Installed on a Controller
+  set_fact: is_controller={{ is_controller | default('controller' in group_names) }}
+
+- name: Create openbach user
+  user: name=openbach generate_ssh_key=yes ssh_key_bits=4096 shell=/bin/bash
   become: yes
 
-- name: Install apt Packages
-  apt: pkg={{ item }}
+- name: Create openbach-admin user
+  user: name=openbach-admin groups=sudo,openbach shell=/bin/bash
+  become: yes
+
+- name: Trust the install SSH key by the openbach user
+  authorized_key: user=openbach key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
+  become: yes
+
+- name: Create openbach folder in /opt
+  file: path=/opt/openbach owner=openbach group=openbach state=directory
+  become: yes
+
+- name: Update apt cache
+  apt: update_cache=yes
+  become: yes
+
+- name: Install apt dependencies
+  apt: pkg={{ item }} state=installed update_cache=no
   with_items:
+    - ntp
+    - ntpdate
+    - python-pip
+    - python3-pip
     - python3-setuptools
     - rsyslog
     - make
     - g++
   become: yes
-  notify: restart rsyslog
+  notify:
+    - restart ntp
+    - restart rsyslog
+
+- name: Upgrade pip to the latests versions
+  pip: name=pip executable={{ item }} extra_args='-U'
+  with_items:
+    - pip2
+    - pip3
+  become: yes
 
 - name: Install pip3 dependencies
   pip: name={{ item.name }} executable=pip3 version={{ item.version }}
@@ -21,6 +56,21 @@
     - {name: psutil, version: 5.2.2}
     - {name: PyYAML, version: 3.11}
   become: yes
+
+- name: Configure NTP Server (remove pools and source servers)
+  lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^{{ item }}
+  with_items:
+    - pool
+    - server
+  become: yes
+  when: not is_controller and ('controller' in groups) and groups.controller
+  notify: restart ntp
+
+- name: Configure NTP Server (add Controller as the NTP source)
+  lineinfile: backup=yes dest=/etc/ntp.conf state=present line="server {{ controller_machine | default(groups.controller[0]) }}"
+  become: yes
+  when: not is_controller and ('controller' in groups) and groups.controller
+  notify: restart ntp
 
 - name: Create OpenBACH's log folder
   file: path=/var/log/openbach state=directory mode=0777
@@ -38,7 +88,7 @@
     - openbach-agent
     - openbach-agent_local
   vars:
-    collector_ip: "{{ collector_machine | default('127.0.0.1') }}"
+    collector_ip: "{{ collector_machine | default(is_collector and inventory_hostname or '127.0.0.1') }}"
   become: yes
 
 - name: Create OpenBACH's stats folder
@@ -55,3 +105,58 @@
     - openbach-agent
     - rstats
   become: yes
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/agent/{{ item }} state=directory
+  with_items:
+    - jobs
+    - job_instances
+    - rstats
+    - collect_agent
+    - openbach_api
+  remote_user: openbach
+
+- name: Install Rstats
+  copy: src=../src/agent/rstats/{{ item }}.py dest=/opt/openbach/agent/rstats/ mode=0755
+  with_items:
+    - rstats
+    - rstats_reload
+  remote_user: openbach
+  notify: restart rstats
+
+- name: Configure Rstats
+  template: src=rstats.yml.j2 dest=/opt/openbach/agent/rstats/rstats.yml
+  remote_user: openbach
+  notify: restart rstats
+
+- name: Install Collect Agent
+  synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes
+  remote_user: openbach
+  notify: build collect agent library
+
+- name: Install OpenBACH API
+  synchronize: src=../src/agent/openbach-api/ dest=/opt/openbach/agent/openbach_api/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  remote_user: openbach
+  notify: build openbach api packages
+
+- name: Install the Agent's Daemon
+  copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}
+  with_items:
+    - {name: 'openbach_agent.py', mode: '0755'}
+    - {name: 'openbach_agent_filter.conf', mode: '0644'}
+  remote_user: openbach
+  notify: restart openbach agent
+
+- name: Configure the Agent
+  template: src={{ item }}.j2 dest=/opt/openbach/agent/{{ item }}
+  with_items:
+    - agent_name
+    - collector.yml
+  vars:
+    collector_ip: "{{ collector_machine | default(is_collector and inventory_hostname or '127.0.0.1') }}"
+  remote_user: openbach
+  notify: restart openbach agent
+
+- name: Copy the version file on the Agent
+  copy: src=../openbach-version dest=/opt/openbach/agent/version
+  remote_user: openbach

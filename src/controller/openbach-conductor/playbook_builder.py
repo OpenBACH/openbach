@@ -38,18 +38,18 @@ __credits__ = '''Contributors:
 '''
 
 
+import os
+import tempfile
+
 from ansible import constants as C
 from ansible.executor.playbook_executor import PlaybookExecutor
-from ansible.executor.task_queue_manager import TaskQueueManager
 from ansible.inventory import Inventory
 from ansible.parsing.dataloader import DataLoader
-from ansible.playbook.play import Play
 from ansible.plugins.callback.default import CallbackModule
 from ansible.utils.vars import load_options_vars
 from ansible.vars import VariableManager
 
 import errors
-from playbooks import PREDEFINED_PLAYS
 
 
 class PlayResult(CallbackModule):
@@ -109,64 +109,21 @@ class Options:
 
 
 class PlaybookBuilder():
-    """Easy Playbook/Plays configuration and launching"""
+    """Easy Playbook configuration and launching"""
 
-    def __init__(self):
+    def __init__(self, agent_address, group_name='agent'):
+        self.inventory_filename = None
+        with tempfile.NamedTemporaryFile('w', delete=False) as inventory:
+            print('[{}]'.format(group_name), file=inventory)
+            print(agent_address, file=inventory)
+            self.inventory_filename = inventory.name
+
         self.variables = VariableManager()
         self.loader = DataLoader()
-        self.passwords = {}
-        self.options = None
-        self.inventory = None
-        self.play = None
-
-    @classmethod
-    def from_agent(cls, agent):
-        """Create an instance of the class where most of the
-        configuration is extracted from the provided agent.
-        """
-        instance = cls()
-        instance.host = agent.address
-        instance.configure_user(agent.username, agent.password)
-        return instance
-
-    @classmethod
-    def default(cls, filename, address, username, password):
-        """Create an instance of the class using default
-        OpenBACH's extra_vars files.
-        """
-        instance = cls()
-        instance.host = address
-        instance.load_variables('/opt/openbach-controller/configs/all')
-        instance.load_variables('/opt/openbach-controller/configs/ips')
-        instance.load_variables('/opt/openbach-controller/configs/proxy')
-        instance.configure_user(username, password)
-        instance.configure_playbook(filename)
-        return instance
-
-    def configure_playbook(self, filename, **kwargs):
-        """Plan the execution of the given playbook or a predefined
-        Play that can be configured using keyword parameters.
-        """
-        try:
-            # Check if filename is actually a file name or
-            # rather the name of a predefined play
-            play_builder = PREDEFINED_PLAYS[filename]
-        except KeyError:
-            self.play = filename
-        else:
-            play_source = play_builder(**kwargs)
-            self.play = Play.load(
-                    play_source,
-                    variable_manager=self.variables,
-                    loader=self.loader)
-
-    def configure_user(self, user, password, sudo_password=None):
-        """Configure Ansible's options based on the given user informations"""
-        if sudo_password is None:
-            sudo_password = password
-
-        self.passwords['conn_pass'] = password
-        self.passwords['become_pass'] = sudo_password
+        self.passwords = {
+                'conn_pass': None,
+                'become_pass': None,
+        }
         self.options = Options(  # Fill in required default values
                 connection='smart',
                 forks=5,
@@ -175,7 +132,7 @@ class PlaybookBuilder():
                 become_method='sudo',
                 become_user='root',
                 check=False,
-                remote_user=user,
+                remote_user='openbach-admin',
                 listhosts=False,
                 listtasks=False,
                 listtags=False,
@@ -183,26 +140,16 @@ class PlaybookBuilder():
                 tags=[],
         )
         self.variables.options_vars = load_options_vars(self.options)
-
-    @property
-    def host(self):
-        """Manage the name/ip of the agent the playbook will run on"""
-        if self.inventory is None:
-            return None
-        return self.inventory.groups['all'].hosts[0].get_name()
-
-    @host.setter
-    def host(self, agent_ip):
         self.inventory = Inventory(
                 loader=self.loader,
                 variable_manager=self.variables,
-                host_list=[agent_ip])
+                host_list=self.inventory_filename)
         self.variables.set_inventory(self.inventory)
 
-    @host.deleter
-    def host(self):
-        self.inventory = None
-        self.variables.set_inventory(None)
+    def __del__(self):
+        """Remove the Inventory file when this object is garbage collected"""
+        if self.inventory_filename is not None:
+            os.remove(self.inventory_filename)
 
     def add_variables(self, **kwargs):
         """Add extra_vars for the current playbook execution.
@@ -214,54 +161,138 @@ class PlaybookBuilder():
         variables.update(kwargs)
         self.variables.extra_vars = variables
 
-    def load_variables(self, filename):
-        """Load extra_vars from a file for the current playbook execution.
-
-        Equivalent to using -e @filename on the Ansible command line.
-        """
-        variables = self.variables.extra_vars
-        variables.update(self.loader.load_from_file(filename))
-        self.variables.extra_vars = variables
-
     def launch_playbook(self, *tags):
-        """Actually run the configured Playbook/Play.
+        """Actually run the configured Playbook.
 
         Check that the configuration is valid before doing so
         and raise a ConductorError if not.
         """
-        if self.options is None:
-            raise errors.ConductorError(
-                    'Programming error: Ansible playbook '
-                    'launched without options')
-        if self.inventory is None:
-            raise errors.ConductorError(
-                    'Programming error: Ansible playbook '
-                    'launched with no associated host')
-        if self.play is None:
-            raise errors.ConductorError(
-                    'Programming error: Ansible playbook '
-                    'launched without a playbook')
-
-        self.options.tags.extend(tags)
+        self.options.tags[:] = tags
         playbook_results = PlayResult()
         C.DEFAULT_STDOUT_CALLBACK = playbook_results
 
-        if isinstance(self.play, Play):
-            tasks = TaskQueueManager(
-                    inventory=self.inventory,
-                    variable_manager=self.variables,
-                    loader=self.loader,
-                    options=self.options,
-                    passwords=self.passwords,
-            )
-            try:
-                tasks.run(self.play)
-            finally:
-                tasks.cleanup()
-        else:
-            tasks = PlaybookExecutor(
-                    playbooks=[self.play], inventory=self.inventory,
-                    variable_manager=self.variables, loader=self.loader,
-                    options=self.options, passwords=self.passwords)
-            tasks.run()
+        tasks = PlaybookExecutor(
+                playbooks=['/opt/openbach/controller/ansible/conductor.yml'],
+                inventory=self.inventory, variable_manager=self.variables,
+                loader=self.loader, options=self.options,
+                passwords=self.passwords)
+        tasks.run()
         playbook_results.raise_for_error()
+
+    @classmethod
+    def install_collector(cls, collector):
+        self = cls(collector.address, group_name='collector')
+        self.add_variables(
+                openbach_collector=collector.address,
+                logstash_logs_port=collector.logs_port,
+                logstash_stats_port=collector.stats_port,
+                elasticsearch_port=collector.logs_query_port,
+                elasticsearch_cluster_name=collector.logs_database_name,
+                influxdb_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_database_precision=collector.stats_database_precision,
+                broadcast_mode=collector.logstash_broadcast_mode,
+                auditorium_broadcast_port=collector.logstash_broadcast_port)
+        self.launch_playbook('install_collector')
+
+    @classmethod
+    def uninstall_collector(cls, collector):
+        self = cls(collector.address, group_name='collector')
+        self.add_variables(
+                openbach_collector=collector.address,
+                logstash_logs_port=collector.logs_port,
+                logstash_stats_port=collector.stats_port,
+                elasticsearch_port=collector.logs_query_port,
+                elasticsearch_cluster_name=collector.logs_database_name,
+                influxdb_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_database_precision=collector.stats_database_precision,
+                broadcast_mode=collector.logstash_broadcast_mode,
+                auditorium_broadcast_port=collector.logstash_broadcast_port)
+        self.launch_playbook('uninstall_collector')
+
+    @classmethod
+    def install_agent(cls, agent):
+        self = cls(agent.address)
+        collector = agent.collector
+        self.add_variables(
+                openbach_collector=collector.address,
+                logstash_logs_port=collector.logs_port,
+                logstash_stats_port=collector.stats_port,
+                elasticsearch_port=collector.logs_query_port,
+                elasticsearch_cluster_name=collector.logs_database_name,
+                influxdb_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_database_precision=collector.stats_database_precision,
+                broadcast_mode=collector.logstash_broadcast_mode)
+        self.launch_playbook('install_agent')
+
+    @classmethod
+    def uninstall_agent(cls, agent):
+        self = cls(agent.address)
+        collector = agent.collector
+        self.add_variables(
+                openbach_collector=collector.address,
+                logstash_logs_port=collector.logs_port,
+                logstash_stats_port=collector.stats_port,
+                elasticsearch_port=collector.logs_query_port,
+                elasticsearch_cluster_name=collector.logs_database_name,
+                influxdb_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_database_precision=collector.stats_database_precision,
+                broadcast_mode=collector.logstash_broadcast_mode)
+        self.launch_playbook('install_agent')
+
+    @classmethod
+    def check_connection(cls, address):
+        self = cls(address)
+        self.launch_playbook('check_connection')
+
+    @classmethod
+    def assign_collector(cls, address, collector):
+        self = cls(address)
+        self.add_variables(
+                collector_ip=collector.address,
+                logstash_logs_port=collector.logs_port,
+                elasticsearch_port=collector.logs_query_port,
+                logstash_stats_port=collector.stats_port,
+                influxdb_port=collector.stats_query_port,
+                influxdb_database_name=collector.stats_database_name,
+                influxdb_database_precision=collector.stats_database_precision)
+        self.launch_playbook('assign_collector')
+
+    @classmethod
+    def install_job(cls, agent, job):
+        self = cls(agent.address)
+        job_name = job.name
+        job_path = job.path
+        self.add_variables(
+                openbach_collector=agent.collector.address,
+                jobs=[{'name': job_name, 'path': job_path}])
+        self.launch_playbook('install_a_job')
+
+    @classmethod
+    def uninstall_job(cls, agent, job):
+        self = cls(agent.address)
+        job_name = job.name
+        job_path = job.path
+        self.add_variables(
+                openbach_collector=agent.collector.address,
+                jobs=[{'name': job_name, 'path': job_path}])
+        self.launch_playbook('uninstall_a_job')
+
+    @classmethod
+    def enable_logs(cls, address, job, transfer_id, severity, local_severity):
+        self = cls(address)
+        self.add_variables(job=job, transfer_id=transfer_id)
+        if severity != 8:
+            self.add_variables(syslogseverity=severity)
+        if local_severity != 8:
+            self.add_variables(syslogseverity_local=local_severity)
+        self.launch_playbook('enable_logs')
+
+    @classmethod
+    def push_file(cls, address, local_path, remote_path):
+        self = cls(address)
+        self.add_variables(local_path=local_path, remote_path=remote_path)
+        self.launch_playbook('push_file')

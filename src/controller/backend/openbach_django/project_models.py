@@ -63,19 +63,24 @@ class Collector(models.Model):
     stats_database_precision = models.CharField(max_length=10, default='ms')
     logstash_broadcast_mode = models.CharField(
             max_length=3, default='udp', choices=(('udp', 'UDP'), ('tcp', 'TCP')))
+    logstash_broadcast_port = models.IntegerField(default=2223)
 
     def __str__(self):
         return self.address
 
-    def update(self, logs_port=None, logs_query=None, stats_port=None,
-               stats_query=None, database_name=None, database_precision=None):
+    def update(self, logs_port=None, logs_query=None, logs_cluster=None,
+               stats_port=None, stats_query=None, database_name=None,
+               database_precision=None, broadcast=None, broadcast_port=None):
         new_values = {
                 'logs_port': logs_port,
                 'logs_query_port': logs_query,
+                'logs_database_name': logs_cluster,
                 'stats_port': stats_port,
                 'stats_query_port': stats_query,
                 'stats_database_name': database_name,
                 'stats_database_precision': database_precision,
+                'logstash_broadcast_mode': broadcast,
+                'logstash_broadcast_port': broadcast_port,
         }
 
         updated = False
@@ -110,14 +115,6 @@ class Agent(models.Model):
     reachable = models.BooleanField(default=False)
     update_reachable = models.DateTimeField(null=True, blank=True)
     collector = models.ForeignKey(Collector, related_name='agents')
-
-    def set_password(self, raw_password):
-        # https://docs.djangoproject.com/en/1.9/topics/auth/passwords/
-        # self.password = hashers.make_password(raw_password, algo='sha1')
-        self.password = raw_password
-
-    def check_password(self, raw_password):
-        return hashers.check_password(raw_password, self.password)
 
     def set_status(self, status):
         self.status = status

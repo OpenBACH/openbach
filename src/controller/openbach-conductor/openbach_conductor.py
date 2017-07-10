@@ -96,11 +96,9 @@ from openbach_baton import OpenBachBaton
 from playbook_builder import PlaybookBuilder
 
 
-syslog.openlog('openbach-conductor', syslog.LOG_PID, syslog.LOG_USER)
+syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
-PATH_SRC = '/opt/openbach-controller/openbach-conductor/'
-DEFAULT_JOBS_ON_AGENT = '/opt/openbach-controller/install_agent/list_default_jobs.txt'
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -297,89 +295,79 @@ class CollectorAction(ConductorAction):
 class AddCollector(ThreadedAction, CollectorAction):
     """Action responsible for the installation of a Collector"""
 
-    def __init__(self, address, username, password, name,
-                 logs_port=None, logs_query_port=None,
+    def __init__(self, address, name, logs_port=None,
+                 logs_query_port=None, cluster_name=None,
                  stats_port=None, stats_query_port=None,
-                 database_name=None, database_precision=None):
+                 database_name=None, database_precision=None,
+                 broadcast_mode=None, broadcast_port=None):
         super().__init__(
-                address=address, username=username, password=password,
-                name=name, logs_port=logs_port, stats_port=stats_port,
+                address=address, name=name, logs_port=logs_port,
+                stats_port=stats_port, cluster_name=cluster_name,
                 logs_query_port=logs_query_port,
                 stats_query_port=stats_query_port,
                 database_name=database_name,
-                database_precision=database_precision)
+                database_precision=database_precision,
+                broadcast_mode=broadcast_mode,
+                broadcast_port=broadcast_port)
 
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_add')
 
     def _action(self):
-        collector, created = Collector.objects.get_or_create(
-                address=self.address,
-                defaults={
-                    'username': self.username,
-                    'password': self.password,
-                })
-        # Create + Update to be sure to use default
-        # values for parameters that are None
-        collector.username = self.username
-        collector.password = self.password
+        collector, created = Collector.objects.get_or_create(address=self.address)
         collector.update(
                 self.logs_port,
                 self.logs_query_port,
+                self.cluster_name,
                 self.stats_port,
                 self.stats_query_port,
                 self.database_name,
-                self.database_precision)
+                self.database_precision,
+                self.broadcast_mode,
+                self.broadcast_port)
+
         try:
-            self._physical_install()
-        except errors.ConductorWarning:
-            raise
-        except Exception:
+            # Perform physical installation through a playbook
+            PlaybookBuilder.install_collector(collector)
+        except errors.ConductorError:
             collector.delete()
             raise
+
+        # An agent was installed by the playbook so create it in DB
+        agent, _ = Agent.objects.get_or_create(
+                address=self.address,
+                defaults={
+                    'name': self.name,
+                    'collector': collector,
+                })
+        agent.name = self.name
+        agent.collector = collector
+        agent.save()
 
         if not created:
             raise errors.ConductorWarning(
                     'A Collector was already installed, configuration updated',
                     collector_address=self.address)
 
-    def _physical_install(self):
-        """Perform physical installation of the Collector through a playbook"""
-        playbook_builder = PlaybookBuilder.default(
-                '/opt/openbach-controller/install_collector/collector.yml',
-                self.address, self.username, self.password)
-        playbook_builder.add_variables(
-                collector_ip=self.address,
-                logstash_logs_port=self.logs_port,
-                logstash_stats_port=self.stats_port,
-        )
-        playbook_builder.launch_playbook('install')
-
-        # A Collector always have an Agent on it, so install an Agent
-        try:
-            Agent.objects.get(address=self.address)
-        except Agent.DoesNotExist:
-            agent_installer = InstallAgent(
-                    self.address, self.username,
-                    self.password, self.name, self.address)
-            agent_installer._threaded_action(agent_installer._action)
-
 
 class ModifyCollector(ThreadedAction, CollectorAction):
     """Action responsible of modifying the configuration of a Collector"""
 
-    def __init__(self, address, username=None, password=None,
-                 name=None, logs_port=None, logs_query_port=None,
+    def __init__(self, address, logs_port=None,
+                 logs_query_port=None, cluster_name=None,
                  stats_port=None, stats_query_port=None,
-                 database_name=None, database_precision=None):
+                 database_name=None, database_precision=None,
+                 broadcast_mode=None, broadcast_port=None):
         super().__init__(
-                address=address, username=username, password=password,
-                name=name, logs_port=logs_port, stats_port=stats_port,
+                address=address, logs_port=logs_port,
+                stats_port=stats_port, cluster_name=cluster_name,
                 logs_query_port=logs_query_port,
                 stats_query_port=stats_query_port,
                 database_name=database_name,
-                database_precision=database_precision)
+                database_precision=database_precision,
+                broadcast_mode=broadcast_mode,
+                broadcast_port=broadcast_port)
 
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
@@ -387,14 +375,22 @@ class ModifyCollector(ThreadedAction, CollectorAction):
 
     def _action(self):
         collector = self.get_collector_or_not_found_error()
-        updated = collector.update(self.logs_port, self.logs_query_port,
-                                   self.stats_port, self.stats_query_port,
-                                   self.database_name, self.database_precision)
+        updated = collector.update(
+                self.logs_port,
+                self.logs_query_port,
+                self.cluster_name,
+                self.stats_port,
+                self.stats_query_port,
+                self.database_name,
+                self.database_precision,
+                self.broadcast_mode,
+                self.broadcast_port)
+
         if not updated:
             raise errors.ConductorWarning('No modification to do')
 
         for agent in collector.agents.all():
-            AssignCollector(agent, self)._physical_install()
+            PlaybookBuilder.assign_collector(agent.address, collector)
 
 
 class DeleteCollector(ThreadedAction, CollectorAction):
@@ -417,24 +413,15 @@ class DeleteCollector(ThreadedAction, CollectorAction):
                     agents_addresses=[agent.address for agent in other_agents])
 
         # Perform physical uninstallation through a playbook
-        playbook_builder = PlaybookBuilder.default(
-                '/opt/openbach-controller/install_collector/collector.yml',
-                self.address, collector.username, collector.password)
-        playbook_builder.add_variables(collector_ip=self.address)
-        playbook_builder.launch_playbook('uninstall')
+        PlaybookBuilder.uninstall_collector(collector)
 
-        # Uninstall the associated Agent if there is one
+        # The associated Agent was removed by the playbook, remove it from DB
         try:
             agent = collector.agents.get(address=self.address)
-            agent_uninstaller = UninstallAgent(agent.address)
-            agent_uninstaller._threaded_action(agent_uninstaller._action)
         except Agent.DoesNotExist:
             pass
-        except errors.ConductorError as err:
-            raise errors.ConductorWarning(
-                    'Collector uninstalled successfully but the '
-                    'associated Agent uninstallation failed',
-                    agent_error=err.error)
+        else:
+            agent.delete()
         finally:
             collector.delete()
 
@@ -479,11 +466,8 @@ class AgentAction(ConductorAction):
     def _update_agent(self):
         """Update the local status of an Agent by trying to connect to it"""
         agent = self.get_agent_or_not_found_error()
-
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        playbook_builder.configure_playbook('check_connection')
         try:
-            playbook_builder.launch_playbook()
+            PlaybookBuilder.check_connection(agent.address)
         except errors.ConductorError:
             agent.set_reachable(False)
             agent.set_status('Agent unreachable')
@@ -503,9 +487,8 @@ class AgentAction(ConductorAction):
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
 
-    def __init__(self, address, username, password, name, collector_ip):
-        super().__init__(address=address, username=username, password=password,
-                         name=name, collector_ip=collector_ip)
+    def __init__(self, address, name, collector_ip):
+        super().__init__(address=address, name=name, collector_ip=collector_ip)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -517,67 +500,27 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent, created = Agent.objects.get_or_create(
                 address=self.address, defaults={
                     'name': self.name,
-                    'username': self.username,
                     'collector': collector,
                 })
         agent.name = self.name
-        agent.username = self.username
-        agent.set_password(self.password)
         agent.set_reachable(True)
         agent.set_status('Installing...')
         agent.collector = collector
         agent.save()
 
         try:
-            self._physical_install()
+            # Perform physical installation through a playbook
+            PlaybookBuilder.install_agent(agent)
         except errors.ConductorError as e:
             agent.delete()
             raise
-
-        failures = list(self._install_default_jobs())
-        if failures:
-            raise errors.ConductorWarning(
-                    'Some of the default Jobs could not be installed',
-                    installation_failed=failures)
+        agent.set_status('Available')
+        agent.save()
 
         if not created:
             raise errors.ConductorWarning(
                     'An Agent was already installed, configuration updated',
                     agent_address=self.address)
-
-    def _physical_install(self):
-        """Perform physical installation of the Agent through a playbook"""
-        agent = self.get_agent_or_not_found_error()
-        playbook_builder = PlaybookBuilder.default(
-                '/opt/openbach-controller/install_agent/agent.yml',
-                agent.address, agent.username, agent.password)
-        playbook_builder.add_variables(
-                agents=[agent.address],
-                collector_ip=agent.collector.address,
-                logstash_logs_port=agent.collector.logs_port,
-                elasticsearch_query_port=agent.collector.logs_query_port,
-                logstash_stats_port=agent.collector.stats_port,
-                influxdb_query_port=agent.collector.stats_query_port,
-                influxdb_database_name=agent.collector.stats_database_name,
-                influxdb_precision=agent.collector.stats_database_precision,
-                local_username=getpass.getuser(),
-                agent_name=agent.name,
-        )
-        playbook_builder.launch_playbook('install')
-        agent.set_status('Available')
-        agent.save()
-
-    def _install_default_jobs(self):
-        with open(DEFAULT_JOBS_ON_AGENT) as jobs:
-            for line in jobs:
-                job = line.rstrip()
-                install_job = InstallJob(self.address, job)
-                try:
-                    install_job._threaded_action(install_job._action)
-                except errors.ConductorWarning:
-                    pass
-                except errors.ConductorError:
-                    yield job
 
 
 class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
@@ -594,11 +537,7 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent = self.get_agent_or_not_found_error()
         try:
             # Perform physical uninstallation through a playbook
-            playbook_builder = PlaybookBuilder.default(
-                    '/opt/openbach-controller/install_collector/collector.yml',
-                    agent.address, agent.username, agent.password)
-            playbook_builder.add_variables(agents=[agent.address], local_username=getpass.getuser())
-            playbook_builder.launch_playbook('uninstall')
+            PlaybookBuilder.uninstall_agent(agent)
         except errors.ConductorError:
             agent.set_status('Uninstall failed')
             agent.save()
@@ -651,12 +590,12 @@ class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 def RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for status retrieval about several Agents"""
 
-    def __init__(self, addresses, update=False):
-        super().__init__(addresses=addresses, update=update)
+    def __init__(self, addresses):
+        super().__init__(addresses=addresses)
 
     def _action(self):
         for address in self.addresses:
-            RetrieveStatusAgent(address, self.update).action()
+            RetrieveStatusAgent(address).action()
         return {}, 202
 
 
@@ -705,22 +644,9 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent = self.get_agent_or_not_found_error()
         collector_infos = InfosCollector(self.collector_ip)
         collector = collector_infos.get_collector_or_not_found_error()
-        self._physical_install(agent, collector)
-
-    def _physical_install(self, agent, collector):
-        """Perform the physical association through a playbook"""
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        playbook_builder.configure_playbook('assign_collector')
-        playbook_builder.add_variables(
-                collector_ip=collector.address,
-                logstash_logs_port=collector.logs_port,
-                logstash_stats_port=collector.stats_port,
-                elasticsearch_query_port=collector.logs_query_port,
-                influxdb_query_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_precision=collector.stats_database_precision)
-        playbook_builder.launch_playbook()
+        PlaybookBuilder.assign_collector(self.address, collector)
         agent.collector = collector
+        agent.save()
 
 
 ########
@@ -765,7 +691,7 @@ class AddJob(JobAction):
                 raise errors.BadRequestError(
                         'The configuration file of the Job does not '
                         'contain valid YAML data',
-                        job_name=self.name, error=str(err),
+                        job_name=self.name, error_message=str(err),
                         configuration_file=config_file)
 
         # Load the help file
@@ -787,13 +713,13 @@ class AddJob(JobAction):
             raise errors.BadRequestError(
                     'The configuration file of the Job contains entries '
                     'whose values are not of the required type',
-                    job_name=self.name, error=str(err),
+                    job_name=self.name, error_message=str(err),
                     configuration_file=config_file)
         except IntegrityError as err:
             raise errors.BadRequestError(
                     'The configuration file of the Job contains '
                     'duplicated entries',
-                    job_name=self.name, error=str(err),
+                    job_name=self.name, error_message=str(err),
                     configuration_file=config_file)
 
         return InfosJob(self.name).action()
@@ -811,6 +737,7 @@ class AddJob(JobAction):
         job.help = description if help_content is None else help_content
         job.job_version = general_section['job_version']
         job.persistent = general_section['persistent']
+        job.has_has_uncertain_required_arg = False
         job.save()
 
         # Associate OSes
@@ -889,14 +816,14 @@ class AddTarJob(JobAction):
         super().__init__(name=name, path=path)
 
     def _action(self):
-        path = '/opt/openbach-controller/jobs/private_jobs/{}'.format(self.name)
+        path = '/opt/openbach/controller/src/jobs/private_jobs/{}'.format(self.name)
         try:
             with tarfile.open(self.path) as tar_file:
                 tar_file.extractall(path)
         except tarfile.ReadError as err:
             raise errors.ConductorError(
                     'Failed to uncompress the provided tar file',
-                    error=str(err))
+                    error_message=str(err))
         add_job_action = AddJob(self.name, path)
         return add_job_action.action()
 
@@ -1027,11 +954,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
         job = InfosJob(self.name).get_job_or_not_found_error()
 
         # Physically install the job on the agent
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        playbook_builder.load_variables('/opt/openbach-controller/configs/proxy')
-        # playbook_builder.add_variables(path_src=PATH_SRC)
-        playbook_builder.configure_playbook('{job.path}/install_{job.name}.yml'.format(job=job))
-        playbook_builder.launch_playbook()
+        PlaybookBuilder.install_job(agent, job)
         OpenBachBaton(self.address).add_job(self.name)
 
         installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)
@@ -1082,10 +1005,7 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
         installed_job = self.get_installed_job_or_not_found_error()
         agent = installed_job.agent
         job = installed_job.job
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        # playbook_builder.add_variables(path_src=PATH_SRC)
-        playbook_builder.configure_playbook('{job.path}/uninstall_{job.name}'.format(job=job))
-        playbook_builder.launch_playbook()
+        PlaybookBuilder.uninstall_job(agent, job)
         OpenBachBaton(agent.address).remove_job(job.name)
         installed_job.delete()
 
@@ -1121,7 +1041,7 @@ class ListInstalledJobs(InstalledJobAction):
             'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
             'db={agent.collector.stats_database_name}&'
             'epoch={agent.collector.stats_database_precision}&'
-            'q=SELECT+*+FROM+"openbach-agent"+'
+            'q=SELECT+*+FROM+"openbach_agent"+'
             'WHERE+"@agent_name"+=+\'{agent.name}\'+'
             'AND+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1')
 
@@ -1217,23 +1137,11 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
 
         # Configure the playbook
         transfer_id = next(IDGenerator())
-        logs_job_path = rsyslog_installed.job.path
         agent = rsyslog_installed.agent
         syslogseverity = convert_severity(int(severity))
         syslogseverity_local = convert_severity(int(local_severity))
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        playbook_builder.add_variables(
-                job=self.name, transfer_id=transfer_id,
-                collector_ip=agent.collector.address,
-                logstash_logs_port=agent.collector.logs_port,
-                syslogseverity=syslogseverity,
-                syslogseverity_local=syslogseverity_local)
-        playbook_builder.configure_playbook(
-                'enable_logs',
-                severity=syslogseverity,
-                local_severity=syslogseverity_local,
-                logs_path=logs_job_path)
 
+        # Prepare the start_job_instance associated action
         arguments = {
                 'disable_code': sum(
                     (severity == 8) << i for i, severity in
@@ -1245,7 +1153,12 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
         rsyslog_instance.openbach_function_instance = self.openbach_function_instance
         rsyslog_instance._build_job_instance()
         try:
-            playbook_builder.launch_playbook()
+            # Launch the playbook
+            PlaybookBuilder.enable_logs(
+                    agent.address, job=self.name,
+                    transfer_id=transfer_id,
+                    severity=syslogseverity,
+                    local_severity=syslogseverity_local)
         except errors.ConductorError:
             rsyslog_instance._cancel()
             raise
@@ -1312,15 +1225,8 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
                 print('storage =', stat.storage, file=rstats_filter)
                 print('broadcast =', stat.broadcast, file=rstats_filter)
 
-        # Configure the playbook
+        # Prepare the start_job_instance associated action
         transfer_id = next(IDGenerator())
-        remote_path_template = '/opt/openbach-jobs/{0}/{0}{1}_rstats_filter.conf.locked'
-        playbook_builder = PlaybookBuilder.from_agent(rstats_installed.agent)
-        playbook_builder.configure_playbook(
-                'push_file',
-                local_path=rstats_filter.name,
-                remote_path=remote_path_template.format(self.name, transfer_id))
-
         arguments = {
             'transfered_file_id': transfer_id,
             'job_name': self.name,
@@ -1329,7 +1235,13 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
         rstats_instance.openbach_function_instance = self.openbach_function_instance
         rstats_instance._build_job_instance()
         try:
-            playbook_builder.launch_playbook()
+            # Launch the playbook
+            PlaybookBuilder.push_file(
+                    rstats_installed.agent.address,
+                    rstats_filter.name,
+                    '/opt/openbach/agent/jobs/{0}/{0}'
+                    '{1}_rstats_filter.conf.locked'
+                    .format(self.name, transfer_id))
         except errors.ConductorError:
             rstats_instance._cancel()
             raise
@@ -1427,7 +1339,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
             raise errors.BadRequestError(
                     'An error occured when configuring the JobInstance',
                     job_name=self.name, agent_address=self.address,
-                    arguments=self.arguments, error=str(err))
+                    arguments=self.arguments, error_message=str(err))
         else:
             job_instance.save()
         self.instance_id = job_instance.id
@@ -1574,7 +1486,7 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
                         'An error occured when reconfiguring the JobInstance',
                         job_name=self.name, agent_address=self.address,
                         job_instance_id=self.instance_id,
-                        arguments=self.arguments, error=str(err))
+                        arguments=self.arguments, error_message=str(err))
             ofi = self.openbach_function_instance
             if ofi is not None:
                 job_instance.openbach_function_instance = ofi
@@ -1645,7 +1557,7 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
             'db={agent.collector.stats_database_name}&'
             'epoch={agent.collector.stats_database_precision}&'
-            'q=SELECT+last("status")+FROM+"openbach-agent"+'
+            'q=SELECT+last("status")+FROM+"openbach_agent"+'
             'WHERE+"@agent_name"+=+\'{agent.name}\'+'
             'AND+job_name+=+\'{}\'+AND+job_instance_id+=+{}')
 
@@ -1763,7 +1675,7 @@ class ScenarioAction(ConductorAction):
             raise errors.BadRequestError(
                     'Data of the Scenario are malformed',
                     scenario_name=self.name,
-                    error=e.error,
+                    error_message=e.error,
                     scenario_data=self.json_data)
         else:
             scenario.save()
@@ -2257,7 +2169,7 @@ class ProjectAction(ConductorAction):
             raise errors.BadRequestError(
                     'Data of the Project are malformed',
                     project_name=self.name,
-                    error=e.error,
+                    error_message=e.error,
                     project_data=self.json_data)
         else:
             project.save()
@@ -2411,15 +2323,13 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
-        playbook_builder = PlaybookBuilder.from_agent(agent)
-        playbook_builder.configure_playbook(
-                'push_file',
-                local_path=self.local_path,
-                remote_path=self.remote_path)
-        playbook_builder.launch_playbook()
+        PlaybookBuilder.push_file(
+                agent.address,
+                self.local_path,
+                self.remote_path)
 
 
-class KillAction(ConductorAction):
+class KillAll(ConductorAction):
     """Action that kills all instances: Scenarios, Jobs and Watches"""
 
     def __init__(self, date=None):

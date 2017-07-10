@@ -63,7 +63,7 @@ class Job(models.Model):
 
     name = models.CharField(max_length=500, primary_key=True)
     path = models.FilePathField(
-            path="/opt/openbach-controller/jobs", recursive=True,
+            path="/opt/openbach/controller/src/jobs", recursive=True,
             allow_folders=True, allow_files=False)
     help = models.TextField(null=True, blank=True)
     job_version = models.CharField(max_length=500, null=True, blank=True)

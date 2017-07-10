@@ -29,17 +29,17 @@
 - name: Configure Rsyslog
   template: src={{ item }}.j2 dest=/etc/rsyslog.d/{{ item }}.conf mode=0644
   with_items:
-    - openbach-conductor
-    - openbach-conductor_local
-    - openbach-backend
-    - openbach-backend_local
+    - openbach_conductor
+    - openbach_conductor_local
+    - openbach_backend
+    - openbach_backend_local
   vars:
-    collector_ip: "{{ collector_machine | default('collector' in groups and groups.collector and groups.collector[0] or inventory_hostname) }}"
+    collector_ip: "{{ openbach_collector }}"
   become: yes
   notify: restart rsyslog
 
 - name: Change postgresql Method to Trust for User postgres
-  lineinfile: dest=/etc/postgresql/9.5/main/pg_hba.conf regexp='^local[ ]+all[ ]+postgres[ ]+peer' line='local all postgres trust' backup=yes
+  replace: dest=/etc/postgresql/9.5/main/pg_hba.conf regexp='^local\s+all\s+postgres\s+peer' replace='local   all             postgres                                trust' backup=yes
   become: yes
   notify: restart postgresql
 
@@ -50,7 +50,7 @@
   become: yes
 
 - name: Create the Password of the Backend's Database Admin User
-  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(10, chars))" | python3
+  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))" | python3
   register: password
 
 - name: Create the Backend's Database Admin User
@@ -82,7 +82,9 @@
 - name: Set up local settings
   template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py
   remote_user: openbach
-  notify: start backend
+  notify:
+    - start backend
+    - start conductor
 
 - name: Initialize the Backend's Database
   shell: /opt/openbach/controller/backend/openbach-backend.py migrate
@@ -97,7 +99,7 @@
   remote_user: openbach
 
 - name: Create the Backend service
-  copy: src=openbach-backend.service dest=/etc/systemd/system/ mode=0644
+  copy: src=openbach_backend.service dest=/etc/systemd/system/ mode=0644
   become: yes
   notify: start backend
 
@@ -107,7 +109,7 @@
   notify: start conductor
 
 - name: Create the Conductor service
-  copy: src=openbach-conductor.service dest=/etc/systemd/system/ mode=0644
+  copy: src=openbach_conductor.service dest=/etc/systemd/system/ mode=0644
   become: yes
   notify: start conductor
 
@@ -120,7 +122,7 @@
   remote_user: openbach
 
 - name: Copy the sources of the Jobs
-  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/jobs/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
   remote_user: openbach
 
 - name: Copy the version file on the Controller

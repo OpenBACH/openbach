@@ -41,7 +41,7 @@
 - name: Configure Logstash
   template: src=collector.conf.j2 dest=/etc/logstash/conf.d/collector.conf owner=root group=root
   vars:
-    auditorium_ip: "{{ auditorium_machine | default('auditorium' in groups and groups.auditorium and groups.auditorium[0] or inventory_hostname) }}"
+    auditorium_ip: "{{ openbach_auditorium | default(('auditorium' in group_names and inventory_hostname) or ('auditorium' in groups and groups.auditorium and groups.auditorium[0]) or inventory_hostname) }}"
   become: yes
   notify: restart logstash
 
@@ -67,6 +67,6 @@
   file: path=/opt/openbach/collector state=directory
   remote_user: openbach
 
-- name: Copy the version file on the Controller
+- name: Copy the version file on the Collector
   copy: src=../openbach-version dest=/opt/openbach/collector/version
   remote_user: openbach

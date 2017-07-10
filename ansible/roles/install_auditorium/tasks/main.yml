@@ -35,7 +35,7 @@
 - name: Configure Kibana
   template: src=kibana.yml.j2 dest=/opt/{{ kibana_filename }}/config/kibana.yml
   vars:
-    collector_ip: "{{ collector_machine | default('collector' in groups and groups.collector and groups.collector[0] or inventory_hostname) }}"
+    collector_ip: "{{ openbach_collector }}"
   become: yes
   notify: restart kibana
 
@@ -47,9 +47,9 @@
 - name: Configure Nginx
   template: src=default.j2 dest=/etc/nginx/sites-available/default
   vars:
-    controller_ip: "{{ controller_machine | default('controller' in groups and groups.controller and groups.controller[0] or inventory_hostname) }}"
+    controller_ip: "{{ openbach_controller }}"
     auditorium_ip: "{{ inventory_hostname }}"
-    collector_ip: "{{ collector_machine | default('collector' in groups and groups.collector and groups.collector[0] or inventory_hostname) }}"
+    collector_ip: "{{ openbach_collector }}"
   become: yes
   notify: restart nginx
 

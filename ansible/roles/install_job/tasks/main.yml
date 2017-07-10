@@ -9,6 +9,7 @@
   args:
     job_name: "{{ job_item.name }}"
   with_items: "{{ jobs }}"
+  when: jobs is defined
   loop_control:
     loop_var: job_item
 
@@ -16,8 +17,29 @@
   file: path=/var/openbach_stats/{{ item.name }} state=directory mode=0755 owner=openbach group=openbach
   become: yes
   with_items: "{{ jobs }}"
+  when: jobs is defined
+
+- name: Set Default Logs Severity
+  template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job.j2 dest=/etc/rsyslog.d/{{ item.name }}.conf
+  vars:
+    job: "{{ item.name }}"
+    syslogseverity: 1
+    collector_ip: "{{ openbach_collector }}"
+  become: yes
+  with_items: "{{ jobs }}"
+  when: jobs is defined
+
+- name: Set Default Logs Local Severity
+  template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job_local.j2 dest=/etc/rsyslog.d/{{ item.name }}_local.conf
+  vars:
+    job: "{{ item.name }}"
+    syslogseverity_local: 1
+  become: yes
+  with_items: "{{ jobs }}"
+  when: jobs is defined
 
 - name: Inform Agent that a new Job is Installed
   copy: src={{ item.path }}/files/{{ item.name }}.yml dest=/opt/openbach/agent/jobs/ mode=0644
   remote_user: openbach
   with_items: "{{ jobs }}"
+  when: jobs is defined

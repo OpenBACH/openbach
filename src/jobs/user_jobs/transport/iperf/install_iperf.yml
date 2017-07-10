@@ -37,7 +37,7 @@
   become: yes
   
 - name: Create Iperf repository
-  file: path=/opt/openbach/agentêjobs/iperf state=directory mode=0755
+  file: path=/opt/openbach/agent/jobs/iperf state=directory mode=0755
   remote_user: openbach
 
 - name: Install Iperf

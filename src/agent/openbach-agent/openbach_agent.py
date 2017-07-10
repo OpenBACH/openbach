@@ -81,7 +81,7 @@ except ImportError:
 
 
 # Configure logger
-syslog.openlog('openbach-agent', syslog.LOG_PID, syslog.LOG_USER)
+syslog.openlog('openbach_agent', syslog.LOG_PID, syslog.LOG_USER)
 
 
 def signal_term_handler(signal, frame):

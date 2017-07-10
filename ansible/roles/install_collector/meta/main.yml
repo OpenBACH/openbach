@@ -1,6 +1,0 @@
----
-
-dependencies:
-  - role: install_agent
-    is_collector: true
-    when: not ('agent' in group_names)

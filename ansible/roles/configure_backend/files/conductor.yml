@@ -1,0 +1,53 @@
+---
+
+- include: install.yml
+  tags:
+    - install_collector
+    - install_agent
+
+- include: uninstall.yml
+  tags:
+    - uninstall_collector
+    - uninstall_agent
+
+- hosts: all
+  tasks:
+    - name: Assign a new Collector to an Agent
+      template: src=roles/install_agent/templates/collector.yml.j2 dest=/opt/openbach/agent/collector.yml
+      remote_user: openbach
+      tags:
+        - assign_collector
+
+    - name: Change Logs Severity
+      template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job.j2 dest=/etc/rsyslog.d/{{ job }}{{ transfer_id }}.conf.locked owner=root group=root
+      become: yes
+      when: syslogseverity is defined
+      tags:
+        - enable_logs
+
+    - name: Change Logs Local Severity
+      template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job_local.j2 dest=/etc/rsyslog.d/{{ job }}{{ transfer_id }}_local.conf.locked owner=root group=root
+      become: yes
+      when: syslogseverity_local is defined
+      tags:
+        - enable_logs
+
+    - name: Copy a File to the Remote Host
+      copy: src={{ local_path }} dest={{ remote_path }}
+      remote_user: openbach
+      tags:
+        - push_file
+
+    - name: Check that a Connection was Successful
+      debug: msg={{ ansible_default_ipv4.address }}
+      tags:
+        - check_connection
+
+  roles:
+    - role: install_job
+      tags:
+        - install_a_job
+
+    - role: uninstall_job
+      tags:
+        - uninstall_a_job

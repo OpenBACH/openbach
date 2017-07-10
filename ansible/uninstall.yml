@@ -1,0 +1,7 @@
+---
+
+- name: Debug Uninstall
+  hosts: all
+  tasks:
+    - name: Debug
+      debug: msg=debug

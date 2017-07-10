@@ -39,5 +39,5 @@
   become: yes
 
 - name: restart openbach agent
-  systemd: name=openbach-agent state=restarted enabled=yes daemon_reload=yes
+  systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
   become: yes

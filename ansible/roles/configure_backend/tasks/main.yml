@@ -67,11 +67,19 @@
     method: POST
     body_format: json
     body:
-      address: "{{ hostvars[item].inventory_hostname }}"
+      address: "{{ item }}"
       name: "{{ hostvars[item].openbach_name }}"
-  with_flattened:
-    - "{{ groups.collector | default([]) }}"
-    - "{{ [] if ('collector' in groups) and groups.collector else [inventory_hostname] }}"
+      skip_playbook: true
+    status_code: 202
+  with_items: "{{ groups.collector | default([]) }}"
+
+- name: Wait until Playbook Finishes
+  uri: url=http://localhost:8000/collector/{{ item }}/state
+  register: response
+  with_items: "{{ groups.collector | default([]) }}"
+  delay: 5
+  retries: 10
+  until: response.json.add.returncode in (200, 204)
 
 - name: Add Agents into the Backend Database
   uri:
@@ -79,10 +87,17 @@
     method: POST
     body_format: json
     body:
-      address: "{{ hostvars[item].inventory_hostname }}"
+      address: "{{ item }}"
       name: "{{ hostvars[item].openbach_name }}"
-      collector_ip: "{{ hostvars[item].openbach_controller }}"
-  with_flattened:
-    - "{{ groups.agent | default([]) }}"
-    - "{{ groups.collector | default([]) }}"
-    - "{{ groups.controller | default([]) }}"
+      collector_ip: "{{ hostvars[item].openbach_collector }}"
+      skip_playbook: true
+    status_code: 202
+  with_items: "{{ groups.agent | default([]) }}"
+
+- name: Wait until Playbook Finishes
+  uri: url=http://localhost:8000/agent/{{ item }}/state
+  register: response
+  with_items: "{{ groups.agent | default([]) }}"
+  delay: 5
+  retries: 10
+  until: response.json.install.returncode in (200, 204)

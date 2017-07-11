@@ -126,5 +126,5 @@
   remote_user: openbach
 
 - name: Copy the version file on the Controller
-  copy: src=../openbach-version dest=/opt/openbach/controller/version
+  copy: src=../version dest=/opt/openbach/controller/version
   remote_user: openbach

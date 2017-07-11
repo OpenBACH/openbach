@@ -62,5 +62,5 @@
   remote_user: openbach
 
 - name: Copy the version file on the Auditorium
-  copy: src=../openbach-version dest=/opt/openbach/auditorium/version
+  copy: src=../version dest=/opt/openbach/auditorium/version
   remote_user: openbach

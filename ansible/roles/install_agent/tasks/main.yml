@@ -163,5 +163,5 @@
   notify: restart openbach agent
 
 - name: Copy the version file on the Agent
-  copy: src=../openbach-version dest=/opt/openbach/agent/version
+  copy: src=../version dest=/opt/openbach/agent/version
   remote_user: openbach

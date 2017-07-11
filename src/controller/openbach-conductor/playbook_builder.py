@@ -133,6 +133,7 @@ class PlaybookBuilder():
                 become_user='root',
                 check=False,
                 remote_user='openbach-admin',
+                private_key_file='/home/openbach/.ssh/id_rsa',
                 listhosts=False,
                 listtasks=False,
                 listtags=False,
@@ -241,7 +242,7 @@ class PlaybookBuilder():
                 influxdb_database_name=collector.stats_database_name,
                 influxdb_database_precision=collector.stats_database_precision,
                 broadcast_mode=collector.logstash_broadcast_mode)
-        self.launch_playbook('install_agent')
+        self.launch_playbook('uninstall_agent')
 
     @classmethod
     def check_connection(cls, address):

@@ -53,7 +53,6 @@ import queue
 import shutil
 import signal
 import syslog
-import getpass
 import tarfile
 import threading
 import itertools
@@ -99,6 +98,7 @@ from playbook_builder import PlaybookBuilder
 syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
+DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defauts/main.yml'
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -127,6 +127,19 @@ def get_master_scenario_id(scenario_id):
     while scenario.openbach_function_instance is not None:
         scenario = scenario.openbach_function_instance.scenario_instance
     return scenario.id
+
+
+def get_default_jobs(section):
+    """Generate the names of default jobs found in the given section.
+
+    If an error occurs (no file, parsing error, missing section...),
+    gracefully return without exceptions.
+    """
+    with suppress(IOError, KeyError, yaml.YAMLError):
+        with open(DEFAULT_JOBS) as stream:
+            content = yaml.load(stream)
+        for job in content[section]:
+            yield job['name']
 
 
 def extract_and_check_name_from_json(json_data, existing_name=None, *, kind):
@@ -299,7 +312,8 @@ class AddCollector(ThreadedAction, CollectorAction):
                  logs_query_port=None, cluster_name=None,
                  stats_port=None, stats_query_port=None,
                  database_name=None, database_precision=None,
-                 broadcast_mode=None, broadcast_port=None):
+                 broadcast_mode=None, broadcast_port=None,
+                 skip_playbook=False):
         super().__init__(
                 address=address, name=name, logs_port=logs_port,
                 stats_port=stats_port, cluster_name=cluster_name,
@@ -308,7 +322,8 @@ class AddCollector(ThreadedAction, CollectorAction):
                 database_name=database_name,
                 database_precision=database_precision,
                 broadcast_mode=broadcast_mode,
-                broadcast_port=broadcast_port)
+                broadcast_port=broadcast_port,
+                skip_playbook=skip_playbook)
 
     def _create_command_result(self):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
@@ -327,23 +342,21 @@ class AddCollector(ThreadedAction, CollectorAction):
                 self.broadcast_mode,
                 self.broadcast_port)
 
-        try:
-            # Perform physical installation through a playbook
-            PlaybookBuilder.install_collector(collector)
-        except errors.ConductorError:
-            collector.delete()
-            raise
+        if not self.skip_playbook:
+            try:
+                # Perform physical installation through a playbook
+                PlaybookBuilder.install_collector(collector)
+            except errors.ConductorError:
+                collector.delete()
+                raise
 
         # An agent was installed by the playbook so create it in DB
-        agent, _ = Agent.objects.get_or_create(
-                address=self.address,
-                defaults={
-                    'name': self.name,
-                    'collector': collector,
-                })
-        agent.name = self.name
-        agent.collector = collector
-        agent.save()
+        agent = InstallAgent(self.address, self.name, self.address, True)
+        agent._threaded_action(agent._action)
+
+        for job_name in get_default_jobs('default_collector_jobs'):
+            job = InstallJob(self.address, job_name, skip_playbook=True)
+            job._threaded_action(job._action)
 
         if not created:
             raise errors.ConductorWarning(
@@ -487,8 +500,10 @@ class AgentAction(ConductorAction):
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
 
-    def __init__(self, address, name, collector_ip):
-        super().__init__(address=address, name=name, collector_ip=collector_ip)
+    def __init__(self, address, name, collector_ip, skip_playbook=False):
+        super().__init__(address=address, name=name,
+                         collector_ip=collector_ip,
+                         skip_playbook=skip_playbook)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -508,14 +523,19 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent.collector = collector
         agent.save()
 
-        try:
-            # Perform physical installation through a playbook
-            PlaybookBuilder.install_agent(agent)
-        except errors.ConductorError as e:
-            agent.delete()
-            raise
+        if not self.skip_playbook:
+            try:
+                # Perform physical installation through a playbook
+                PlaybookBuilder.install_agent(agent)
+            except errors.ConductorError as e:
+                agent.delete()
+                raise
         agent.set_status('Available')
         agent.save()
+
+        for job_name in get_default_jobs('default_jobs'):
+            job = InstallJob(self.address, job_name, skip_playbook=True)
+            job._threaded_action(job._action)
 
         if not created:
             raise errors.ConductorWarning(
@@ -737,7 +757,7 @@ class AddJob(JobAction):
         job.help = description if help_content is None else help_content
         job.job_version = general_section['job_version']
         job.persistent = general_section['persistent']
-        job.has_has_uncertain_required_arg = False
+        job.has_uncertain_required_arg = False
         job.save()
 
         # Associate OSes
@@ -939,8 +959,8 @@ class InstalledJobAction(ConductorAction):
 class InstallJob(ThreadedAction, InstalledJobAction):
     """Action responsible for installing a Job on an Agent"""
 
-    def __init__(self, address, name, severity=1, local_severity=1):
-        super().__init__(address=address, name=name,
+    def __init__(self, address, name, severity=1, local_severity=1, skip_playbook=False):
+        super().__init__(address=address, name=name, skip_playbook=skip_playbook,
                          severity=severity, local_severity=local_severity)
 
     def _create_command_result(self):
@@ -953,8 +973,9 @@ class InstallJob(ThreadedAction, InstalledJobAction):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
         job = InfosJob(self.name).get_job_or_not_found_error()
 
-        # Physically install the job on the agent
-        PlaybookBuilder.install_job(agent, job)
+        if not self.skip_playbook:
+            # Physically install the job on the agent
+            PlaybookBuilder.install_job(agent, job)
         OpenBachBaton(self.address).add_job(self.name)
 
         installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)

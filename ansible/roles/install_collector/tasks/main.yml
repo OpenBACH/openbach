@@ -68,5 +68,5 @@
   remote_user: openbach
 
 - name: Copy the version file on the Collector
-  copy: src=../openbach-version dest=/opt/openbach/collector/version
+  copy: src=../version dest=/opt/openbach/collector/version
   remote_user: openbach

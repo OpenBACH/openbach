@@ -223,7 +223,8 @@ class CollectorsView(GenericView):
                 database_name=request.JSON.get('database_name'),
                 database_precision=request.JSON.get('database_precision'),
                 broadcast_mode=request.JSON.get('broadcast_mode'),
-                broadcast_port=request.JSON.get('broadcast_port'))
+                broadcast_port=request.JSON.get('broadcast_port'),
+                skip_playbook=request.JSON.get('skip_playbook', False))
 
 
 class CollectorView(GenericView):
@@ -284,7 +285,8 @@ class AgentsView(BaseAgentView):
                         command='install_agent',
                         name=request.JSON['name'],
                         address=request.JSON['address'],
-                        collector_ip=request.JSON['collector_ip'])
+                        collector_ip=request.JSON['collector_ip'],
+                        skip_playbook=request.JSON.get('skip_playbook', False))
             except KeyError as e:
                 return {'msg': 'Missing parameter {}'.format(e)}, 400
         else:

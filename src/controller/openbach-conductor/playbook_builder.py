@@ -183,7 +183,9 @@ class PlaybookBuilder():
         tasks.run()
         playbook_results.raise_for_error()
 
-    def install_collector(self, collector):
+    @classmethod
+    def install_collector(cls, collector, username=None, password=None):
+        self = cls(collector.address, 'collector', username, password)
         self.add_variables(
                 openbach_collector=collector.address,
                 logstash_logs_port=collector.logs_port,
@@ -213,7 +215,9 @@ class PlaybookBuilder():
                 auditorium_broadcast_port=collector.logstash_broadcast_port)
         self.launch_playbook('uninstall_collector')
 
-    def install_agent(self, agent):
+    @classmethod
+    def install_agent(cls, agent, username=None, password=None):
+        self = cls(agent.address, username=username, password=password)
         collector = agent.collector
         self.add_variables(
                 openbach_collector=collector.address,

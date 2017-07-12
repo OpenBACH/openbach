@@ -1,0 +1,10 @@
+---
+
+{% if hostvars[item].openbach_proxy is defined %}
+openbach_proxy: {{ hostvars[item].openbach_proxy }}
+{% endif %}
+{% if hostvars[item].ansible_connection is defined %}
+ansible_connection: {{ hostvars[item].ansible_connection }}
+{% if hostvars[item].ansible_winrm_server_cert_validation is defined %}
+ansible_winrm_server_cert_validation: {{ hostvars[item].ansible_winrm_server_cert_validation }}
+{% endif %}{% endif %}

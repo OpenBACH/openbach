@@ -347,16 +347,16 @@ class AddCollector(ThreadedAction, CollectorAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                installer = PlaybookBuilder(
-                        self.address, 'collector',
-                        self.username, self.password)
-                installer.install_collector(collector)
+                PlaybookBuilder.install_collector(
+                        collector, self.username, self.password)
             except errors.ConductorError:
                 collector.delete()
                 raise
 
         # An agent was installed by the playbook so create it in DB
-        agent = InstallAgent(self.address, self.name, self.address, True)
+        agent = InstallAgent(
+                self.address, self.name,
+                self.address, skip_playbook=True)
         agent._threaded_action(agent._action)
 
         for job_name in get_default_jobs('default_collector_jobs'):
@@ -533,10 +533,8 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                installer = PlaybookBuilder(
-                        self.address, username=self.username,
-                        password=self.password)
-                installer.install_agent(agent)
+                PlaybookBuilder.install_agent(
+                        agent, self.username, self.password)
             except errors.ConductorError as e:
                 agent.delete()
                 raise

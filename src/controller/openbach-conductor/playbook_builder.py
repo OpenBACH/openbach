@@ -139,7 +139,7 @@ class PlaybookBuilder():
                 tags=[],
         )
         if username is None:
-            self.options.remote_user = 'openbach-admin'
+            self.options.remote_user = 'openbach'
             self.options.private_key_file = '/home/openbach/.ssh/id_rsa'
         else:
             self.options.remote_user = username

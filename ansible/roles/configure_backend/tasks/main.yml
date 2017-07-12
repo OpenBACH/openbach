@@ -1,7 +1,7 @@
 ---
 
 - name: Add Agents hostname in the known_hosts File
-  shell: ssh openbach-admin@{{ item }} -o StrictHostKeyChecking=no -q exit
+  shell: ssh openbach@{{ item }} -o StrictHostKeyChecking=no -q exit
   with_items: "{{ groups.agent | default([]) }}"
   remote_user: openbach
 

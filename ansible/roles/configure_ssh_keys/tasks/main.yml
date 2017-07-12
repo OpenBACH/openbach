@@ -1,7 +1,7 @@
 ---
 
-- name: Trust the SSH key by the openbach-admin user
-  authorized_key: user=openbach-admin key={{ lookup('file', '/tmp/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
+- name: Trust the SSH key by the openbach user
+  authorized_key: user=openbach key={{ lookup('file', '/tmp/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
   become: yes
   with_flattened:
     - "{{ groups.controller | default([]) }}"

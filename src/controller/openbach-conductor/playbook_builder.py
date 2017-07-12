@@ -111,7 +111,7 @@ class Options:
 class PlaybookBuilder():
     """Easy Playbook configuration and launching"""
 
-    def __init__(self, agent_address, group_name='agent'):
+    def __init__(self, agent_address, group_name='agent', username=None, password=None):
         self.inventory_filename = None
         with tempfile.NamedTemporaryFile('w', delete=False) as inventory:
             print('[{}]'.format(group_name), file=inventory)
@@ -121,8 +121,8 @@ class PlaybookBuilder():
         self.variables = VariableManager()
         self.loader = DataLoader()
         self.passwords = {
-                'conn_pass': None,
-                'become_pass': None,
+                'conn_pass': password,
+                'become_pass': password,
         }
         self.options = Options(  # Fill in required default values
                 connection='smart',
@@ -132,14 +132,17 @@ class PlaybookBuilder():
                 become_method='sudo',
                 become_user='root',
                 check=False,
-                remote_user='openbach-admin',
-                private_key_file='/home/openbach/.ssh/id_rsa',
                 listhosts=False,
                 listtasks=False,
                 listtags=False,
                 syntax=False,
                 tags=[],
         )
+        if username is None:
+            self.options.remote_user = 'openbach-admin'
+            self.options.private_key_file = '/home/openbach/.ssh/id_rsa'
+        else:
+            self.options.remote_user = username
         self.variables.options_vars = load_options_vars(self.options)
         self.inventory = Inventory(
                 loader=self.loader,
@@ -180,9 +183,7 @@ class PlaybookBuilder():
         tasks.run()
         playbook_results.raise_for_error()
 
-    @classmethod
-    def install_collector(cls, collector):
-        self = cls(collector.address, group_name='collector')
+    def install_collector(self, collector):
         self.add_variables(
                 openbach_collector=collector.address,
                 logstash_logs_port=collector.logs_port,
@@ -212,9 +213,7 @@ class PlaybookBuilder():
                 auditorium_broadcast_port=collector.logstash_broadcast_port)
         self.launch_playbook('uninstall_collector')
 
-    @classmethod
-    def install_agent(cls, agent):
-        self = cls(agent.address)
+    def install_agent(self, agent):
         collector = agent.collector
         self.add_variables(
                 openbach_collector=collector.address,

@@ -215,6 +215,8 @@ class CollectorsView(GenericView):
         return self.conductor_execute(
                 command='add_collector',
                 address=address, name=name,
+                username=request.JSON.get('username'),
+                password=request.JSON.get('password'),
                 logs_port=request.JSON.get('logs_port'),
                 logs_query_port=request.JSON.get('logs_query_port'),
                 cluster_name=request.JSON.get('cluster_name'),
@@ -286,6 +288,8 @@ class AgentsView(BaseAgentView):
                         name=request.JSON['name'],
                         address=request.JSON['address'],
                         collector_ip=request.JSON['collector_ip'],
+                        username=request.JSON.get('username'),
+                        password=request.JSON.get('password'),
                         skip_playbook=request.JSON.get('skip_playbook', False))
             except KeyError as e:
                 return {'msg': 'Missing parameter {}'.format(e)}, 400

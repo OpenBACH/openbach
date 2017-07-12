@@ -308,14 +308,16 @@ class CollectorAction(ConductorAction):
 class AddCollector(ThreadedAction, CollectorAction):
     """Action responsible for the installation of a Collector"""
 
-    def __init__(self, address, name, logs_port=None,
+    def __init__(self, address, name, username=None,
+                 password=None, logs_port=None,
                  logs_query_port=None, cluster_name=None,
                  stats_port=None, stats_query_port=None,
                  database_name=None, database_precision=None,
                  broadcast_mode=None, broadcast_port=None,
                  skip_playbook=False):
         super().__init__(
-                address=address, name=name, logs_port=logs_port,
+                address=address, name=name, username=username,
+                password=password, logs_port=logs_port,
                 stats_port=stats_port, cluster_name=cluster_name,
                 logs_query_port=logs_query_port,
                 stats_query_port=stats_query_port,
@@ -345,7 +347,10 @@ class AddCollector(ThreadedAction, CollectorAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                PlaybookBuilder.install_collector(collector)
+                installer = PlaybookBuilder(
+                        self.address, 'collector',
+                        self.username, self.password)
+                installer.install_collector(collector)
             except errors.ConductorError:
                 collector.delete()
                 raise
@@ -500,8 +505,10 @@ class AgentAction(ConductorAction):
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
 
-    def __init__(self, address, name, collector_ip, skip_playbook=False):
-        super().__init__(address=address, name=name,
+    def __init__(self, address, name, collector_ip,
+                 username=None, password=None, skip_playbook=False):
+        super().__init__(address=address, username=username,
+                         name=name, password=password,
                          collector_ip=collector_ip,
                          skip_playbook=skip_playbook)
 
@@ -526,7 +533,10 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                PlaybookBuilder.install_agent(agent)
+                installer = PlaybookBuilder(
+                        self.address, username=self.username,
+                        password=self.password)
+                installer.install_agent(agent)
             except errors.ConductorError as e:
                 agent.delete()
                 raise

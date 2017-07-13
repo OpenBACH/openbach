@@ -154,7 +154,7 @@ class Rstats:
         self._logger = logging.getLogger(logger_name)
         self._logger.setLevel(logging.INFO)
         date = strftime("%Y-%m-%dT%H%M%S")
-        filename = '{}_{}.log'.format(self.metadata['job_name'], date)
+        filename = '{}_{}.stats'.format(self.metadata['job_name'], date)
         logfile = os.path.join(logpath, self.metadata['job_name'], filename)
         try:
             fhd = logging.FileHandler(logfile, mode='a')

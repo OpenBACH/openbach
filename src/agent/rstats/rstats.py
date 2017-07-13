@@ -25,6 +25,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see http://www.gnu.org/licenses/.
 
+
 """RStats daemon
 
 This module defines the necessary building blocks to receive, tag and
@@ -33,8 +34,11 @@ testbed.
 """
 
 
-__author__ = 'Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>'
-__credits__ = 'Maintainer: Mathias ETTINGER <mettinger@toulouse.viveris.com>'
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
 
 
 import threading
@@ -150,7 +154,7 @@ class Rstats:
         self._logger = logging.getLogger(logger_name)
         self._logger.setLevel(logging.INFO)
         date = strftime("%Y-%m-%dT%H%M%S")
-        filename = '{}_{}.stats'.format(self.metadata['job_name'], date)
+        filename = '{}_{}.log'.format(self.metadata['job_name'], date)
         logfile = os.path.join(logpath, self.metadata['job_name'], filename)
         try:
             fhd = logging.FileHandler(logfile, mode='a')

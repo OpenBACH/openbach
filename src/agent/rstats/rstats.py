@@ -62,7 +62,7 @@ import yaml
 
 DEFAULT_LOG_PATH = '/var/openbach_stats/'
 RSTATS_CONFIG_FILE = '/opt/rstats/rstats.yml'
-COLLECTOR_CONFIG_FILE = '/opt/openbach-agent/collector.yml'
+COLLECTOR_CONFIG_FILE = '/opt/openbach/agent/collector.yml'
 
 BOOLEAN_TRUE = frozenset({'t', 'T', 'true', 'True', 'TRUE'})
 BOOLEAN_FALSE = frozenset({'f', 'F', 'false', 'False', 'FALSE'})

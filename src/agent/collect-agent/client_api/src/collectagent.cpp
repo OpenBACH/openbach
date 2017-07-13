@@ -91,7 +91,7 @@ bool register_collect(
   owner_scenario_instance_id = from_env("OWNER_SCENARIO_INSTANCE_ID", 0);
   std::ifstream agent_name_file;
   
-  agent_name_file.open("/opt/openbach-agent/agent_name");
+  agent_name_file.open("/opt/openbach/agent/agent_name");
   if (agent_name_file.is_open()) {
     goto read;
   }

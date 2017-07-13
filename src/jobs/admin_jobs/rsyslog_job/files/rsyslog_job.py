@@ -57,7 +57,7 @@ def main(file_id, job_name, disable_code):
     if disable_code & 0x10:
         remove(pattern.format('_local', ''))
 
-    subprocess.check_call(['service', 'rsyslog', 'restart'])
+    subprocess.check_call(['systemctl', 'restart', 'rsyslog'])
 
 
 if __name__ == "__main__":

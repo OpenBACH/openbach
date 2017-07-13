@@ -45,10 +45,10 @@ from os import rename
 
 
 def main(file_id, job_name):
-    template = '/opt/openbach-jobs/{0}/{0}{1}_rstats_filter.conf'
+    template = '/opt/openbach/agent/jobs/{0}/{0}{1}_rstats_filter.conf'
     path = template.format(job_name, file_id)
-    rename('{}.locked'.format(path), path)
-    subprocess.check_call(['service', 'rstats', 'reload'])
+    rename(path + '.locked', path)
+    subprocess.check_call(['systemctl', 'restart', 'rstats.service'])
 
 
 if __name__ == "__main__":

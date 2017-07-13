@@ -1,19 +1,11 @@
 ---
 
-- name: Create openbach User
+- name: Expand openbach User
   user: name=openbach generate_ssh_key=yes ssh_key_bits=4096 shell=/bin/bash groups=root
   become: yes
 
 - name: Enable SUDO Right for openbach User
   copy: src=sudoers dest=/etc/sudoers.d/passwordless_openbach mode='0440'
-  become: yes
-
-- name: Trust the install SSH key by the openbach user
-  authorized_key: user=openbach key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
-  become: yes
-
-- name: Create openbach folder in /opt
-  file: path=/opt/openbach owner=openbach group=openbach state=directory
   become: yes
 
 - name: Update apt cache

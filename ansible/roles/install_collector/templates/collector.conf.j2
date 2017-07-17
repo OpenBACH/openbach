@@ -16,13 +16,12 @@ input {
 }
 
 filter {
-	mutate {
-		# Remove these fields first so stats can override them
-		remove_field => [ "@version", "host", "tags", "type", "port" ]
-	}
-
 	# If the type is 'stats', we parse the message and delete useless field
 	if [@metadata][type] == "stats" {
+		mutate {
+			# Remove these fields first so stats can override them
+			remove_field => [ "@version", "host", "tags", "type", "port" ]
+		}
 		json {
 			source => "message"
 		}
@@ -67,6 +66,10 @@ filter {
 		grok {
 			patterns_dir => ["/etc/logstash/conf.d/pattern/"]
 			match => { "message" => "OWNER_SCENARIO_INSTANCE_ID %{NUMBER:owner_scenario_instance_id}, SCENARIO_INSTANCE_ID %{NUMBER:scenario_instance_id}, JOB_INSTANCE_ID %{NUMBER:job_instance_id}, AGENT_NAME %{HOSTNAME:agent_name}, %{GREEDYDATA:syslog_message}" }
+		}
+		mutate {
+			convert => { "[@metadata][flag]" => "integer" }
+			remove_field => [ "tags", "type", "port" ]
 		}
 		if "_grokparsefailure" in [tags] {
 			mutate {

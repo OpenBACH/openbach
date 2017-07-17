@@ -26,13 +26,25 @@
 #   
 #   
 #   
-#   @file     uninstall_running.yml
-#   @brief    Tasks that uninstall the version file on the Controller
-#   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+#   @file     uninstall_socat.yml
+#   @brief    Playbook that uninstall the Job socat
+#   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 
 
 ---
 
-- name: Informs that an uninstall is running
-  shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
-  ignore_errors: yes
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Uninstall Job
+    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
+    become: yes
+    
+  - name: Inform Agent that socat is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
+    become: yes
+
+  - include: '{{ path_src }}/del_job.yml'
+

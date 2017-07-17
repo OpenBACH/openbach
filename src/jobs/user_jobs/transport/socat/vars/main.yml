@@ -26,13 +26,11 @@
 #   
 #   
 #   
-#   @file     uninstall_running.yml
-#   @brief    Tasks that uninstall the version file on the Controller
-#   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+#   @file     main.yml
+#   @brief    File that containts all the variable needed for the playbooks
+#   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 
 
 ---
 
-- name: Informs that an uninstall is running
-  shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
-  ignore_errors: yes
+job_name: socat

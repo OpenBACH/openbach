@@ -39,11 +39,12 @@ import time
 import syslog
 import argparse
 import subprocess
+from functools import partial
 
 import collect_agent
 
 
-def main(mode, port, persist, measure_t, filename):
+def main(mode, port, persist, measure_t, filename, n_times):
     # Connect to collect agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/netcat/'
@@ -55,43 +56,48 @@ def main(mode, port, persist, measure_t, filename):
 
     cmd = ['nc', mode, str(port)]
     if persist:
-        cmd.append('-k')
+        cmd.insert(1, '-k')
     if measure_t:
         cmd = ['/usr/bin/time', '-f', '%e', '--quiet'] + cmd
 
-    if filename:
-        with open(filename) as file_in:
-            try:
-                p = subprocess.run(
-                        cmd, stdin=file_in,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
-            except Exception as ex:
-                collect_agent.send_log(
-                        syslog.LOG_ERR,
-                        'ERROR executing netcat: {}'.format(ex))
-    else:
+    process = partial(
+            subprocess.run, cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE)
+    for _ in range(n_times):
         try:
-            p = subprocess.run(
-                    cmd, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
+            if filename:
+                with open(filename) as file_in:
+                    p = process(stdin=file_in)
+            else:
+                p = process()
         except Exception as ex:
             collect_agent.send_log(
                     syslog.LOG_ERR,
                     'ERROR executing netcat: {}'.format(ex))
+            continue
 
-    timestamp = int(time.time() * 1000)
-    if measure_t and p.returncode == 0:
-        try:
-            duration = float(p.stderr)
-        except ValueError:
-            return
-    try:
-        collect_agent.send_stat(timestamp, duration=duration)
-    except Exception as ex:
-        collect_agent.send_log(
-                syslog.LOG_ERR,
-                'ERROR sending stat: {}'.format(ex))
+        if measure_t and p.returncode == 0:
+            timestamp = int(time.time() * 1000)
+            stderr = p.stderr
+            try:
+                duration = float(stderr)
+            except ValueError:
+                collect_agent.send_log(
+                        syslog.LOG_ERR,
+                        'ERROR: cannot convert output to '
+                        'duration value: {}'.format(stderr))
+            else:
+                try:
+                    collect_agent.send_stat(timestamp, duration=duration)
+                except Exception as ex:
+                    collect_agent.send_log(
+                            syslog.LOG_ERR,
+                            'ERROR sending stat: {}'.format(ex))
+        elif p.returncode:
+            collect_agent.send_log(
+                    syslog.LOG_ERR,
+                    'ERROR: return code {}: {}'.format(p.returncode, p.stderr))
 
 
 if __name__ == '__main__':
@@ -106,7 +112,7 @@ if __name__ == '__main__':
     group.add_argument(
             '-c', '--client', type=str,
             help='Run in client mode (specify remote IP address)')
-    group.add_argument(
+    parser.add_argument(
             '-p', '--port', type=int, default=5000,
             help='The port number')
     parser.add_argument(
@@ -116,6 +122,9 @@ if __name__ == '__main__':
             '-t', '--time', action='store_true',
             help='Measure the duration of the process')
     parser.add_argument(
+            '-n', '--n-times', type=int, default=1,
+            help='The number of times the connection is established')
+    parser.add_argument(
             '-f', '--file', type=str,
             help='The path of a file to send to the server')
 
@@ -123,10 +132,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     server = args.listen
     client = args.client
+    n_times = args.n_times
     port = args.port
     mode = '-l' if server else client
     persist = args.persist
     measure_t = args.time
     filename = args.file
 
-    main(mode, port, persist, measure_t, filename)
+    main(mode, port, persist, measure_t, filename, n_times)

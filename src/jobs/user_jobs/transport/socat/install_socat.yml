@@ -26,13 +26,43 @@
 #   
 #   
 #   
-#   @file     uninstall_running.yml
-#   @brief    Tasks that uninstall the version file on the Controller
-#   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+#   @file     install_socat.yml
+#   @brief    Playbook that install the Job socat
+#   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 
 
 ---
 
-- name: Informs that an uninstall is running
-  shell: '(echo -en "\nuninstallation: running\ndate: "; date +"%m-%d-%y") >> /opt/openbach-controller/version'
-  ignore_errors: yes
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+  vars:
+    - job_conf: socat.yml
+
+  tasks:
+  - name: Install package socat
+    apt: name=socat state=present
+    become: yes
+    
+  - name: Create socat repository
+    file: path=/opt/openbach-jobs/socat state=directory mode=0755
+    become: yes
+  
+  - name: Create socat stats repository
+    file: path=/var/openbach_stats/socat state=directory mode=0755
+    become: yes
+  
+  - name: Install socat
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/socat/ mode={{ item.mode }}
+    with_items:
+      - { file: 'socat.help', mode: '0644' }
+      - { file: 'socat.py', mode: '0755' }
+      - { file: 'socat_rstats_filter.conf', mode: '0644' }
+    become: yes
+
+  - name: Inform Agent that socat is installed
+    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+
+  - include: '{{ path_src }}/add_job.yml'
+  

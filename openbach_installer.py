@@ -37,8 +37,9 @@ __credits__ = '''Contributors:
 
 
 import os
-import textwrap
+import sys
 import tempfile
+import textwrap
 import subprocess
 from functools import partial
 from argparse import ArgumentParser, Namespace
@@ -226,6 +227,16 @@ def main(args, is_controller_local):
 
 
 if __name__ == '__main__':
+    # Check ansible and sshpass versions
+    try:
+        for program, version, flag in [('ansible', '2.2', '--version'), ('sshpass', '1', '-V')]:
+            output = subprocess.run([program, flag], stdout=subprocess.PIPE)
+            real_version = output.stdout.split()[1].decode()
+            if real_version < version:
+                sys.exit('[ERROR] {} should be at least version {}'.format(program, version))
+    except FileNotFoundError:
+        sys.exit('[ERROR] {} should be installed on the system to run the installer'.format(program))
+
     ips_list = machine_ips()
     # if controller IP is not specififed, take the first interface IP
     parser = build_parser(ips_list[0])

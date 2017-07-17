@@ -1,0 +1,41 @@
+---
+
+general:
+  name:            socat
+  description: >
+      This Job only launch the socat command
+  job_version:     0.1
+  keywords:        [socat]
+  persistent:      True
+
+os:
+  linux:
+    requirements:  'Ubuntu 14.04/16.04'
+    command:       '/opt/openbach-jobs/socat/socat.py'
+    command_stop:
+
+arguments:
+  required:
+    - name:        input
+      type:        'str'
+      count:        1
+      description: >
+          The input for socat
+    - name:        output
+      type:        'str'
+      count:        1
+      description: >
+          The output for socat
+  optional:
+    - name:        measure_time
+      type:        'None'
+      count:       0
+      flag:        '-t'
+      description: >
+          Measure the duration of the connection (for the client)
+
+statistics:
+    - name:        duration
+      description: >
+          The measured connection time
+      frequency:   'each time the connection ends'

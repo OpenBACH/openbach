@@ -49,9 +49,20 @@
   postgresql_db: name=openbach_db state=present
   become: yes
 
-- name: Create the Password of the Backend's Database Admin User
-  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))" | python3
-  register: password
+- block:
+    - name: Retrieve the Password of the Backend's Database Admin User
+      shell: python3 -c "from local_settings import *; print(DATABASES['default']['PASSWORD'])" chdir=/opt/openbach/controller/backend/backend/
+      register: password
+    - name: Retrieve the Secret Key for Django app
+      shell: python3 -c "from local_settings import *; print(SECRET_KEY)" chdir=/opt/openbach/controller/backend/backend/
+      register: key
+  rescue:
+    - name: Create the Password of the Backend's Database Admin User
+      shell: python3 -c "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))"
+      register: password
+    - name: Create a Secret Key for Django app
+      shell: python3 -c "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))"
+      register: key
 
 - name: Create the Backend's Database Admin User
   postgresql_user: db=openbach_db name=openbach password={{ password.stdout }} priv=CONNECT
@@ -74,10 +85,6 @@
 - name: Install the Backend
   synchronize: src=../src/controller/backend/ dest=/opt/openbach/controller/backend/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
   remote_user: openbach
-
-- name: Create a Secret Key for Django app
-  shell: echo "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))" | python3
-  register: key
 
 - name: Set up local settings
   template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py

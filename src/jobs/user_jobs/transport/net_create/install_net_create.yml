@@ -1,0 +1,32 @@
+---
+
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Install heatclient
+    apt: name=python-heatclient state=present
+    become: yes
+
+  - name: Create net_create repository
+    file: path=/opt/openbach-jobs/net_create state=directory mode=0755
+    become: yes
+
+  - name: Create net_create stats repository
+    file: path=/var/openbach_stats/net_create state=directory mode=0755
+    become: yes
+
+  - name: Install net_create Job
+    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/net_create/ mode={{ item.mode }}
+    with_items:
+      - { file: 'net_create.py', mode: '0755' }
+      - { file: 'net_create.help', mode: '0644' }
+      - { file: 'net_create_rstats_filter.conf', mode: '0644' }
+    become: yes
+
+  - name: Informs Agent that net_create Job is installed
+    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
+    become: yes
+    
+  - include: '{{ path_src }}/add_job.yml'

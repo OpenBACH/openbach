@@ -1,0 +1,16 @@
+---
+- hosts: Agents
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+  - name: Uninstall ip_route Job
+    file: path=/opt/openbach-jobs/ip_route state=absent
+    become: yes
+    
+  - name: Informs Agent that ip_route is uninstalled
+    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
+    become: yes
+    
+  - include: '{{ path_src }}/del_job.yml'
+  

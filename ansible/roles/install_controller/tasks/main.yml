@@ -9,21 +9,21 @@
     - python-dev  # For psycopg2, necessary for ansible's postgresql_* modules
   become: yes
 
-- name: Install pip dependencies (for ansible modules to run)
-  pip: name={{ item }} executable=pip2
+- name: Install pip Dependencies (for ansible modules to run)
+  pip: name={{ item }} executable=pip2 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python2/'
   with_items:
     - psycopg2
   become: yes
 
-- name: Install pip3 dependencies
-  pip: name={{ item.name }} executable=pip3 version={{ item.version }}
+- name: Install pip3 Dependencies
+  pip: name={{ item }} executable=pip3 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python3/'
   with_items:
-    - {name: django, version: 1.9.7}
-    - {name: psycopg2, version: 2.6.2}
-    - {name: apscheduler, version: 3.2.0}
-    - {name: uwsgi, version: 2.0.14}
-    - {name: fuzzywuzzy, version: 0.15.0}
-    - {name: ansible, version: 2.2.3}
+    - django
+    - psycopg2
+    - apscheduler
+    - uwsgi
+    - fuzzywuzzy
+    - ansible
   become: yes
 
 - name: Configure Rsyslog

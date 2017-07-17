@@ -23,24 +23,31 @@
     - rsyslog
     - make
     - g++
+    - rsync
   become: yes
   notify:
     - restart ntp
     - restart rsyslog
 
-- name: Upgrade pip to the latests versions
-  pip: name=pip executable={{ item }} extra_args='-U'
+- name: Upload pip Mirror
+  synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/
+  remote_user: openbach
+
+- name: Install pip2 Dependencies
+  pip: name={{ item }} executable=pip2 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python2/'
   with_items:
-    - pip2
-    - pip3
+    - pip
+    - setuptools
   become: yes
 
-- name: Install pip3 dependencies
-  pip: name={{ item.name }} executable=pip3 version={{ item.version }}
+- name: Install pip3 Dependencies
+  pip: name={{ item }} executable=pip3 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python3/'
   with_items:
-    - {name: apscheduler, version: 3.2.0}
-    - {name: psutil, version: 5.2.2}
-    - {name: PyYAML, version: 3.11}
+    - pip
+    - setuptools
+    - apscheduler
+    - psutil
+    - PyYAML
   become: yes
 
 - name: Configure NTP Server (remove pools and source servers)

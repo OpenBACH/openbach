@@ -50,23 +50,9 @@
     - PyYAML
   become: yes
 
-- name: Configure NTP Server (remove pools and source servers)
-  lineinfile: backup=yes dest=/etc/ntp.conf state=absent regexp=^{{ item }}
-  with_items:
-    - pool
-    - server
+- name: Configure NTP Server
+  template: backup=yes src=ntp.conf.j2 dest=/etc/ntp.conf
   become: yes
-  when: openbach_controller != inventory_hostname
-  notify: restart ntp
-
-- name: Configure NTP Server (add Controller as the NTP source)
-  lineinfile:
-    dest: /etc/ntp.conf
-    state: present
-    line: "server {{ openbach_controller }}  # Use the Controller's NTP server"
-    backup: yes
-  become: yes
-  when: openbach_controller != inventory_hostname
   notify: restart ntp
 
 - name: Create OpenBACH's log folder

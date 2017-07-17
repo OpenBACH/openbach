@@ -128,6 +128,10 @@
   synchronize: src=../ansible/roles/ dest=/opt/openbach/controller/ansible/roles/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
   remote_user: openbach
 
+- name: Place a Link to /opt/openbach/pip_mirror so that Playbooks can Find it
+  file: path=/opt/openbach/controller/pip_mirror src=/opt/openbach/pip_mirror state=link
+  remote_user: openbach
+
 - name: Copy the sources of the Jobs
   synchronize: src=../src/jobs/ dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
   remote_user: openbach

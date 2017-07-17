@@ -1,119 +1,115 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import subprocess
-import argparse
+# OpenBACH is a generic testbed able to control/configure multiple
+# network/physical entities (under test) and collect data from them. It is
+# composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+# Agents (one for each network entity that wants to be tested).
+#
+#
+# Copyright © 2016 CNES
+#
+#
+# This file is part of the OpenBACH testbed.
+#
+#
+# OpenBACH is a free software : you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see http://www.gnu.org/licenses/.
+
+
+"""Sources of the Job ifconfig"""
+
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Oumaima ZERROUQ <oumaima.zerrouq@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
+
 import syslog
+import argparse
+import ipaddress
+import subprocess
+
 import collect_agent
 
 
-#Fonction de définition du type ip :
-
-def ip(argument):
-    address = argument.split('.')
-    if len(address) != 4:
-        raise TypeError('Not an IP')
-
-    for elem in map(int, address):
-        if elem not in range(256):
-            raise ValueError('Element of IP address not in range 0 to 255')
-
-    return argument
-
-
 def main(interface_name, ip_address, action):
-    conffile = "/opt/openbach-jobs/ifconfig/ifconfig_rstats_filter.conf"
-    success = collect_agent.register_collect(conffile)     
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/ifconfig/'
+            'ifconfig_rstats_filter.conf')     
     if not success:
         return
 
-    collect_agent.send_log(syslog.LOG_ERR, "Starting ifconfig job")
-#   collect_agent.send_log(syslog.LOG_INFO,== c'etait log info avant 
+    collect_agent.send_log(syslog.LOG_ERR, 'Starting ifconfig job')
 
-##################################################
-
-
-    # Je défini une liste avec mes arguments et je fais ensuite appel à ma liste en utilisant le module subprocess
-
-#    commande = ["ifconfig", interface_name, ip_address]
-#    subprocess.check_call(commande)
-#    collect_agent.send_log(syslog.LOG_INFO, "ifconfig job done") 
-
-###############################################
-
-
-    # Adding a new variable "action" for the addition/deletion of an ip address
-
-    if action == 1 :
-	#Add an ip add
+    if action == 1:
+        # Add an ip add
         try:
-            subprocess.check_call(["ifconfig", interface_name, ip_address])
-            collect_agent.send_log(syslog.LOG_DEBUG, "New ip address added")
+            subprocess.check_call(['ifconfig', interface_name, ip_address])
+            collect_agent.send_log(syslog.LOG_DEBUG, 'New ip address added')
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
-# Essai 1 : ecriture d'une chaîne de car = OK
+            collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
 
-#        with open('/etc/network/interfaces', 'a') as file :
-#            file.writelines('\niface koukou ')
+        with open('/etc/network/interfaces') as interfaces:
+            content = interfaces.readlines()
 
-
-##########
-
-# Essai 2 :Remplacement D'uen CHAR :  OK
-    
-#         # Read in the file
-#        with open('/etc/network/interfaces', 'r') as file :
-#            filedata = file.read()
-#         # Replace the target string
-#        filedata = filedata.replace('address', 'abcd')
-
-#         # Write the file out again
-#        with open('/etc/network/interfaces', 'w') as file:
-#            file.write(filedata)
-#########              
-
-# Essai 3 : Remplacement après split : OK 
-        found = False
-        
-        with open('/etc/network/interfaces', 'r+') as file :
-            l = file.readlines()
-        for index, line in enumerate(l): 
+        found_iface = None
+        found_address = False
+        last_seen_interface_name = None
+        for index, line in enumerate(content):
             liste = line.split()
-            if len(liste) > 2 and liste[1] == interface_name :
-                l[index+1] = '    address ' + ip_address + '\n'
-                                                            
-                with open('/etc/network/interfaces', 'w') as file :        
-                             file.writelines(l)
-                found = True
-         
-         
-        if not found:
-            with open('/etc/network/interfaces', 'a') as file :
-                 file.writelines('\nauto ' + interface_name + '\niface ' +
-                                 interface_name + ' inet static\n' + '    address ' +
-                                 ip_address + '\n'+ '    netmask 255.255.255.0')
+            if liste and liste[0] == 'iface':
+                last_seen_interface_name = liste[1]
+                if last_seen_interface_name == interface_name:
+                    content[index] = 'iface {} inet static\n'.format(interface_name)
+                    found_iface = index
 
+            if last_seen_interface_name == interface_name and liste and liste[0] == 'address':
+                content[index] = '    address {}\n'.format(ip_address)
+                found_address = True
 
- 
+        if found_iface is None:
+            content += [
+                    '\n', 'auto {}\n'.format(interface_name),
+                    'iface {} inet static\n'.format(interface_name),
+                    '    address {}\n'.format(ip_address),
+                    '    netmask 255.255.255.0\n',
+            ]
+        elif not found_address:
+            content.insert(found_iface + 1, '    address {}\n'.format(ip_address))
+
+        with open('/etc/network/interfaces', 'w') as interfaces:
+            interfaces.writelines(content)
     else:
-	#Delete an interface's ip address
+        # Delete an interface's ip address
         try:
-            subprocess.check_call(["ifconfig", interface_name, "0"])
-            collect_agent.send_log(syslog.LOG_DEBUG, "ip address deleted")
+            subprocess.check_call(['ifconfig', interface_name, '0'])
+            collect_agent.send_log(syslog.LOG_DEBUG, 'ip address deleted')
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR" + str(ex))
+            collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
 
-##################################################################################
 
-if __name__ == "__main__":
-
+if __name__ == '__main__':
     # Define Usage
-    parser = argparse.ArgumentParser(description='',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+            description=__doc__,
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('interface_name', type=str, help='')
-    parser.add_argument('-i','--ip_address', type=ip, help='') 
+    parser.add_argument(
+            '-i', '--ip_address', type=ipaddress.ip_address,
+            help='')
     parser.add_argument('-a', '--action', type=int, default=1, help='')
-   
+
     # get args
     args = parser.parse_args()
     interface_name = args.interface_name

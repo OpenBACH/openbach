@@ -1,32 +1,17 @@
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+- name: Install ip_route
+  apt: name=iproute state=present
+  become: yes
 
-  tasks:
-  - name: Install ip_route
-    apt: name=iproute state=present
-    become: yes
+- name: Create ip_route repository
+  file: path=/opt/openbach/agent/jobs/ip_route state=directory mode=0755
+  remote_user: openbach
 
-  - name: Create ip_route repository
-    file: path=/opt/openbach-jobs/ip_route state=directory mode=0755
-    become: yes
-
-  - name: Create ip_route stats repository
-    file: path=/var/openbach_stats/ip_route state=directory mode=0755
-    become: yes
-
-  - name: Install ip_route Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/ip_route/ mode={{ item.mode }}
-    with_items:
-      - { file: 'ip_route.py', mode: '0755' }
-      - { file: 'ip_route.help', mode: '0644' }
-      - { file: 'ip_route_rstats_filter.conf', mode: '0644' }
-    become: yes
-
-  - name: Informs Agent that ip_route Job is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
+- name: Install ip_route Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/ip_route/ mode={{ item.mode }}
+  with_items:
+    - { file: 'ip_route.py', mode: '0755' }
+    - { file: 'ip_route.help', mode: '0644' }
+    - { file: 'ip_route_rstats_filter.conf', mode: '0644' }
+  remote_user: openbach

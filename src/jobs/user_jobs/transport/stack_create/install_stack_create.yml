@@ -1,32 +1,17 @@
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+- name: Install heatclient
+  apt: name=python-heatclient state=present
+  become: yes
 
-  tasks:
-  - name: Install heatclient
-    apt: name=python-heatclient state=present
-    become: yes
+- name: Create stack_create repository
+  file: path=/opt/openbach/agent/jobs/stack_create state=directory mode=0755
+  remote_user: openbach
 
-  - name: Create stack_create repository
-    file: path=/opt/openbach-jobs/stack_create state=directory mode=0755
-    become: yes
-
-  - name: Create stack_create stats repository
-    file: path=/var/openbach_stats/stack_create state=directory mode=0755
-    become: yes
-
-  - name: Install stack_create Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/stack_create/ mode={{ item.mode }}
-    with_items:
-      - { file: 'stack_create.py', mode: '0755' }
-      - { file: 'stack_create.help', mode: '0644' }
-      - { file: 'stack_create_rstats_filter.conf', mode: '0644' }
-    become: yes
-    
-  - name: Informs Agent that stack_create Job is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach_agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
+- name: Install stack_create Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/stack_create/ mode={{ item.mode }}
+  with_items:
+    - { file: 'stack_create.py', mode: '0755' }
+    - { file: 'stack_create.help', mode: '0644' }
+    - { file: 'stack_create_rstats_filter.conf', mode: '0644' }
+  remote_user: openbach

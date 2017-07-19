@@ -221,7 +221,7 @@
   copy: src=../src/jobs.tar.gz dest=/opt/openbach-controller/jobs.tar.gz
 
 - name: Uncompress the src of the Jobs
-  unarchive: src=/opt/openbach-controller/jobs.tar.gz dest=/opt/openbach-controller
+  unarchive: src=/opt/openbach-controller/jobs.tar.gz dest=/opt/openbach-controller copy=no
   
 - name: Remove tar.gz
   file: path={{ item.src }}/jobs.tar.gz state=absent

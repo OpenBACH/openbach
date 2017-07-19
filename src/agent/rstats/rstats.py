@@ -436,5 +436,5 @@ if __name__ == '__main__':
     udp_socket.bind(('', 1111))
 
     while True:
-        data, remote = udp_socket.recvfrom(2048)
+        data, remote = udp_socket.recvfrom(8192)
         ClientThread(data, remote).start()

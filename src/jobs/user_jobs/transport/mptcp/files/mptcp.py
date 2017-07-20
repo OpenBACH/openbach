@@ -117,7 +117,8 @@ def main(ifaces, enable, checksum, syn_retries, path_manager, scheduler):
             collect_agent.send_log(syslog.LOG_ERR, "ERROR modifying sysctl " + str(ex))
             
     # Get list of all interfaces
-    all_ifaces = subprocess.check_output("netstat -i | ",
+    all_ifaces = subprocess.check_output("netstat -i | awk '{print $1}' | tail"
+                                         " -n +3",
                                      shell=True).decode().splitlines()
     enabled_ifaces = ifaces.split(',')
     if len(enabled_ifaces) == 0:
@@ -132,7 +133,7 @@ def main(ifaces, enable, checksum, syn_retries, path_manager, scheduler):
                                    " multipath on interface %s" % iface)
         else:
             collect_agent.send_log(syslog.LOG_DEBUG, "Enabled multipath on iface %s"
-                                   % iface_link2)
+                                   % iface)
     # Disable the rest of the interfaces
     for iface in [i for i in all_ifaces if i not in enabled_ifaces]:
         try:

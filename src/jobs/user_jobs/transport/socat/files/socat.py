@@ -40,8 +40,30 @@ import time
 import sys
 import syslog
 import collect_agent
+import re
+import os
 
-def main(input_s, output_t, measure_t):
+TMP_FILENAME='/tmp/socat.out'
+
+def get_file_size(name):
+    if len(name.split('/')) > 1:
+        return 0
+    
+    size, unit = re.search("([0-9]*)([a-zA-Z]*)", name).groups()
+    
+    try:
+        size = int(size)
+    except ValueError:
+        return 0
+    
+    if 'm' in unit.lower():
+        size = size * 1024 * 1024
+    elif 'k' in unit.lower():
+        size = size * 1024
+    return size
+    
+
+def main(server, dest, port, fn, measure_t, create_f):
     conffile = "/opt/openbach-jobs/socat/netcat_rstats_filter.conf"
     
     # Connect to collect agent
@@ -50,26 +72,80 @@ def main(input_s, output_t, measure_t):
         collect_agent.send_log(syslog.LOG_ERR, "ERROR connecting to "
                                "collect-agent")
         quit(1)
-      
-    cmd = ['socat']
-    cmd.append(input_s)
-    cmd.append(output_s)
+    
+    # Verify arguments
+    if server:
+        if not port:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing port"
+                                   " parameter")
+            quit(1)
+        if not fn:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing file"
+                                   " parameter")
+            quit(1)
+    else:
+        if not dest:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing dest"
+                                   " parameter")
+            quit(1)
+        if not port:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing port"
+                                   " parameter")
+            quit(1)
+
+    # Create file if necessary
+    if server and create_f:
+        # get file size from name
+        size = get_file_size(fn)
+        if not size:
+            collect_agent.send_log(syslog.LOG_ERR, "ERROR wrong file"
+                                   " name")
+            quit(1)
+        cmd = ['dd', 'if=/dev/zero', 'of={}'.format(TMP_FILENAME),
+               'bs=1', 'count={}'.format(size)]
+        p = subprocess.run(cmd)
+        if p.returncode != 0:
+            collect_agent.send_log(syslog.LOG_WARNING, "Wrong return code"
+                                   " when creating file")
+
+    if server:
+        cmd = ['socat', 'TCP-LISTEN:{},reuseaddr,fork,crlf'.format(port),
+               'SYSTEM:"cat {}"'.format(TMP_FILENAME if create_f else fn)]
+    else:
+        cmd = ['socat', '-u', 'TCP:{}:{}'.format(dest, port),
+               'OPEN:{},creat,trunc'.format(TMP_FILENAME)]
+        
     if measure_t:
-        cmd = ['/usb/bin/time', '-f', '%e', '--quiet'] + cmd
+        cmd = ['/usr/bin/time', '-f', '%e', '--quiet'] + cmd
     try:
         p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                              stdin=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         p.wait()
     except:
-        collect_agent.send_log(syslog.LOG_ERR, "ERROR executing netcat:"
+        collect_agent.send_log(syslog.LOG_ERR, "ERROR executing socat:"
                                " %s" % ex)
     
+    # Check if file is correct
+    all_ok = True
+    if not server:
+        size = get_file_size(fn)
+        if size and size != os.path.getsize(TMP_FILENAME):
+            collect_agent.send_log(syslog.LOG_WARNING, "Wrong file size:"
+                                   " expecting {}, got {}".format(size,
+                                                                os.path.getsize(TMP_FILENAME)))
+            all_ok = False
+    
+    # Delete file 
+    cmd = ['rm', TMP_FILENAME]
+    r = subprocess.run(cmd)
+    
+    # Send statistics
     statistics = {}
     timestamp = int(round(time.time() * 1000))
     if not measure_t:
         return
-    if p.returncode == 0:
+    if p.returncode == 0 and all_ok:
         try:
             duration = float(p.stderr.read())
             statistics = { 'duration' : duration }
@@ -91,17 +167,26 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     #group = parser.add_mutually_exclusive_group(required=True)
     # TODO: add mutual exclusivities
-    parser.add_argument('input', metavar='input', type=str,
-                       help='The input to socat')
-    parser.add_argument('output', metavar='output', type=str,
-                       help='The output of socat')
+    parser.add_argument('-s', '--server', action='store_true',
+                        help='Launch on server mode')
+    parser.add_argument('-d', '--dest', type=str, default='',
+                        help='The dest IP address')
+    parser.add_argument('-p', '--port', type=int, default=0,
+                        help='The TCP port number')
+    parser.add_argument('-f', '--file', type=str, default='',
+                        help='The output file path')
     parser.add_argument('-t', '--time', action='store_true',
                         help='Measure the duration of the process')
+    parser.add_argument('-c', '--create', action='store_true',
+                        help='Create the file')
 
     # get args
     args = parser.parse_args()
-    input_s = args.input
-    output_s = args.output
+    server = args.server
+    dest = args.dest
+    port = args.port
+    fn = args.file
     measure_t = args.time
+    create_f = args.create
 
-    main(input_s, output_s, measure_t)
+    main(server, dest, port, fn, measure_t, create_f)

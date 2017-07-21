@@ -82,7 +82,7 @@
   register: response
   with_items: "{{ groups.collector | default([]) }}"
   delay: 5
-  retries: 10
+  retries: 20
   until: response.json.add.returncode in (200, 204)
 
 - name: Add Agents into the Backend Database
@@ -103,5 +103,5 @@
   register: response
   with_items: "{{ groups.agent | default([]) }}"
   delay: 5
-  retries: 10
+  retries: 20
   until: response.json.install.returncode in (200, 204)

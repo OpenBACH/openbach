@@ -39,9 +39,11 @@ __credits__ = '''Contributors:
 
 
 import os
+import atexit
 import tempfile
+import threading
+import multiprocessing
 
-from ansible import constants as C
 from ansible.executor.playbook_executor import PlaybookExecutor
 from ansible.inventory import Inventory
 from ansible.parsing.dataloader import DataLoader
@@ -184,66 +186,64 @@ class PlaybookBuilder():
 
     @classmethod
     def install_collector(cls, collector, username=None, password=None):
-        self = cls(collector.address, 'collector', username, password)
+        self = cls(collector['address'], 'collector', username, password)
         self.add_variables(
-                openbach_collector=collector.address,
-                logstash_logs_port=collector.logs_port,
-                logstash_stats_port=collector.stats_port,
-                elasticsearch_port=collector.logs_query_port,
-                elasticsearch_cluster_name=collector.logs_database_name,
-                influxdb_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_database_precision=collector.stats_database_precision,
-                broadcast_mode=collector.logstash_broadcast_mode,
-                auditorium_broadcast_port=collector.logstash_broadcast_port)
+                openbach_collector=collector['address'],
+                logstash_logs_port=collector['logs_port'],
+                logstash_stats_port=collector['stats_port'],
+                elasticsearch_port=collector['logs_query_port'],
+                elasticsearch_cluster_name=collector['logs_database_name'],
+                influxdb_port=collector['stats_query_port'],
+                influxdb_database_name=collector['stats_database_name'],
+                influxdb_database_precision=collector['stats_database_precision'],
+                broadcast_mode=collector['logstash_broadcast_mode'],
+                auditorium_broadcast_port=collector['logstash_broadcast_port'])
         self.launch_playbook('install_collector')
 
     @classmethod
     def uninstall_collector(cls, collector):
-        self = cls(collector.address, group_name='collector')
+        self = cls(collector['address'], group_name='collector')
         self.add_variables(
-                openbach_collector=collector.address,
-                logstash_logs_port=collector.logs_port,
-                logstash_stats_port=collector.stats_port,
-                elasticsearch_port=collector.logs_query_port,
-                elasticsearch_cluster_name=collector.logs_database_name,
-                influxdb_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_database_precision=collector.stats_database_precision,
-                broadcast_mode=collector.logstash_broadcast_mode,
-                auditorium_broadcast_port=collector.logstash_broadcast_port)
+                openbach_collector=collector['address'],
+                logstash_logs_port=collector['logs_port'],
+                logstash_stats_port=collector['stats_port'],
+                elasticsearch_port=collector['logs_query_port'],
+                elasticsearch_cluster_name=collector['logs_database_name'],
+                influxdb_port=collector['stats_query_port'],
+                influxdb_database_name=collector['stats_database_name'],
+                influxdb_database_precision=collector['stats_database_precision'],
+                broadcast_mode=collector['logstash_broadcast_mode'],
+                auditorium_broadcast_port=collector['logstash_broadcast_port'])
         self.launch_playbook('uninstall_collector')
 
     @classmethod
-    def install_agent(cls, agent, username=None, password=None):
-        self = cls(agent.address, username=username, password=password)
-        collector = agent.collector
+    def install_agent(cls, address, collector, username=None, password=None):
+        self = cls(address, username=username, password=password)
         self.add_variables(
-                openbach_collector=collector.address,
-                logstash_logs_port=collector.logs_port,
-                logstash_stats_port=collector.stats_port,
-                elasticsearch_port=collector.logs_query_port,
-                elasticsearch_cluster_name=collector.logs_database_name,
-                influxdb_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_database_precision=collector.stats_database_precision,
-                broadcast_mode=collector.logstash_broadcast_mode)
+                openbach_collector=collector['address'],
+                logstash_logs_port=collector['logs_port'],
+                logstash_stats_port=collector['stats_port'],
+                elasticsearch_port=collector['logs_query_port'],
+                elasticsearch_cluster_name=collector['logs_database_name'],
+                influxdb_port=collector['stats_query_port'],
+                influxdb_database_name=collector['stats_database_name'],
+                influxdb_database_precision=collector['stats_database_precision'],
+                broadcast_mode=collector['logstash_broadcast_mode'])
         self.launch_playbook('install_agent')
 
     @classmethod
-    def uninstall_agent(cls, agent):
-        self = cls(agent.address)
-        collector = agent.collector
+    def uninstall_agent(cls, address, collector):
+        self = cls(address)
         self.add_variables(
-                openbach_collector=collector.address,
-                logstash_logs_port=collector.logs_port,
-                logstash_stats_port=collector.stats_port,
-                elasticsearch_port=collector.logs_query_port,
-                elasticsearch_cluster_name=collector.logs_database_name,
-                influxdb_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_database_precision=collector.stats_database_precision,
-                broadcast_mode=collector.logstash_broadcast_mode)
+                openbach_collector=collector['address'],
+                logstash_logs_port=collector['logs_port'],
+                logstash_stats_port=collector['stats_port'],
+                elasticsearch_port=collector['logs_query_port'],
+                elasticsearch_cluster_name=collector['logs_database_name'],
+                influxdb_port=collector['stats_query_port'],
+                influxdb_database_name=collector['stats_database_name'],
+                influxdb_database_precision=collector['stats_database_precision'],
+                broadcast_mode=collector['logstash_broadcast_mode'])
         self.launch_playbook('uninstall_agent')
 
     @classmethod
@@ -255,45 +255,40 @@ class PlaybookBuilder():
     def assign_collector(cls, address, collector):
         self = cls(address)
         self.add_variables(
-                collector_ip=collector.address,
-                logstash_logs_port=collector.logs_port,
-                elasticsearch_port=collector.logs_query_port,
-                logstash_stats_port=collector.stats_port,
-                influxdb_port=collector.stats_query_port,
-                influxdb_database_name=collector.stats_database_name,
-                influxdb_database_precision=collector.stats_database_precision)
+                collector_ip=collector['address'],
+                logstash_logs_port=collector['logs_port'],
+                elasticsearch_port=collector['logs_query_port'],
+                logstash_stats_port=collector['stats_port'],
+                influxdb_port=collector['stats_query_port'],
+                influxdb_database_name=collector['stats_database_name'],
+                influxdb_database_precision=collector['stats_database_precision'])
         self.launch_playbook('assign_collector')
 
     @classmethod
-    def install_job(cls, agent, job):
-        self = cls(agent.address)
-        job_name = job.name
-        job_path = job.path
+    def install_job(cls, address, collector_ip, job_name, job_path):
+        self = cls(address)
         self.add_variables(
-                openbach_collector=agent.collector.address,
+                openbach_collector=collector_ip,
                 jobs=[{'name': job_name, 'path': job_path}])
         self.launch_playbook('install_a_job')
 
     @classmethod
-    def uninstall_job(cls, agent, job):
-        self = cls(agent.address)
-        job_name = job.name
-        job_path = job.path
+    def uninstall_job(cls, address, collector_ip, job_name, job_path):
+        self = cls(address)
         self.add_variables(
-                openbach_collector=agent.collector.address,
+                openbach_collector=collector_ip,
                 jobs=[{'name': job_name, 'path': job_path}])
         self.launch_playbook('uninstall_a_job')
 
     @classmethod
-    def enable_logs(cls, agent, job, transfer_id, severity, local_severity):
-        self = cls(agent.address)
-        collector = agent.collector
+    def enable_logs(cls, address, collector, job, transfer_id, severity, local_severity):
+        self = cls(address)
         self.add_variables(job=job, transfer_id=transfer_id)
         if severity != 8:
             self.add_variables(
                     syslogseverity=severity,
-                    collector_ip=collector.address,
-                    logstash_logs_port=collector.logs_port)
+                    collector_ip=collector['address'],
+                    logstash_logs_port=collector['logs_port'])
         if local_severity != 8:
             self.add_variables(syslogseverity_local=local_severity)
         self.launch_playbook('enable_logs')
@@ -303,3 +298,89 @@ class PlaybookBuilder():
         self = cls(address)
         self.add_variables(local_path=local_path, remote_path=remote_path)
         self.launch_playbook('push_file')
+
+
+def _run_playbook(queue):
+    running_threads = set()
+
+    while True:
+        check_error = None
+        action = queue.get()
+        if action is None:
+            for thread in running_threads:
+                thread.join()
+            return
+
+        try:
+            pipe, order, args, kwargs = action
+        except ValueError as e:
+            check_error = errors.ConductorError(
+                    'Playbook manager received the wrong '
+                    'number of arguments: {}'.format(e))
+        else:
+            try:
+                # Get the desired method
+                play = getattr(PlaybookBuilder, order)
+                # and check is it a classmethod
+                cls = play.__self__
+            except AttributeError:
+                check_error = errors.ConductorError(
+                        'Unknow playbook builder method '
+                        '\'{}\''.format(order))
+            else:
+                if cls != PlaybookBuilder:
+                    check_error = errors.ConductorError(
+                            'Playbook builder method {} '
+                            'is not a classmethod'.format(order))
+
+        if check_error is not None:
+            _terminate_playbook(pipe, check_error.json)
+        else:
+            play_thread = threading.Thread(
+                    target=_execute_playbook,
+                    args=(play, pipe, args, kwargs))
+            play_thread.start()
+            running_threads.add(play_thread)
+
+        _join_threads(running_threads)
+
+
+def _join_threads(threads):
+    for thread in threads:
+        thread.join(0.05)
+    terminated = [thread for thread in threads if not thread.is_alive()]
+    for thread in terminated:
+        threads.remove(thread)
+
+
+def _execute_playbook(method, pipe, args, kwargs):
+    try:
+        method(*args, **kwargs)
+    except errors.ConductorError as e:
+        _terminate_playbook(pipe, e.json)
+    else:
+        _terminate_playbook(pipe)
+
+
+def _terminate_playbook(pipe, error=None):
+    pipe.send(error)
+    pipe.close()
+
+
+def start_playbook(name, *args, **kwargs):
+    parent_conn, child_conn = multiprocessing.Pipe()
+    _COMMUNICATOR.put((child_conn, name, args, kwargs))
+    result = parent_conn.recv()
+    if result is not None:
+        raise errors.ConductorError.copy_from(result)
+
+
+def setup_playbook_manager():
+    playbook_manager = multiprocessing.Process(
+            target=_run_playbook, args=(_COMMUNICATOR,))
+    playbook_manager.start()
+    atexit.register(playbook_manager.join)
+    atexit.register(_COMMUNICATOR.put, None)
+
+
+_COMMUNICATOR = multiprocessing.Queue()

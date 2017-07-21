@@ -57,6 +57,18 @@ class ConductorError(Exception):
                 'returncode': self.ERROR_CODE,
         }
 
+    @classmethod
+    def copy_from(cls, json_data):
+        """Build a new error based on an existing one or its JSON representation"""
+        if isinstance(json_data, ConductorError):
+            json_data = json_data.json
+        response = json_data['response']
+        return_code = json_data['returncode']
+        reason = response.pop('error')
+        self = cls(reason, **response)
+        self.ERROR_CODE = return_code
+        return self
+
 
 class NotFoundError(ConductorError):
     """Error dedicated to objects not found in the database"""

@@ -65,6 +65,21 @@ from collections import defaultdict
 import yaml
 import requests
 from fuzzywuzzy import fuzz
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.base import JobLookupError
+
+import errors
+from openbach_baton import OpenBachBaton
+from playbook_builder import start_playbook, setup_playbook_manager
+
+
+# We need to use ansible from Python code so we can easily get failure
+# messages. But its forking behaviour is causing troubles with Django
+# (namely, closing database connections at the end of the forked
+# process). So we setup a fork here before any of the Django stuff so
+# connections are not shared with ansible workers.
+setup_playbook_manager()
+
 
 from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
@@ -74,8 +89,6 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.base import JobLookupError
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
@@ -88,10 +101,6 @@ from openbach_django.models import (
         Watch, Scenario, Project, FileCommandResult,
         ScenarioArgument, ScenarioArgumentValue,
 )
-
-import errors
-from openbach_baton import OpenBachBaton
-from playbook_builder import PlaybookBuilder
 
 
 syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
@@ -346,8 +355,11 @@ class AddCollector(ThreadedAction, CollectorAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                PlaybookBuilder.install_collector(
-                        collector, self.username, self.password)
+                start_playbook(
+                        'install_collector',
+                        collector.json,
+                        self.username,
+                        self.password)
             except errors.ConductorError:
                 collector.delete()
                 raise
@@ -409,7 +421,7 @@ class ModifyCollector(ThreadedAction, CollectorAction):
             raise errors.ConductorWarning('No modification to do')
 
         for agent in collector.agents.all():
-            PlaybookBuilder.assign_collector(agent.address, collector)
+            start_playbook('assign_collector', agent.address, collector.json)
 
 
 class DeleteCollector(ThreadedAction, CollectorAction):
@@ -432,7 +444,7 @@ class DeleteCollector(ThreadedAction, CollectorAction):
                     agents_addresses=[agent.address for agent in other_agents])
 
         # Perform physical uninstallation through a playbook
-        PlaybookBuilder.uninstall_collector(collector)
+        start_playbook('uninstall_collector', collector.json)
 
         # The associated Agent was removed by the playbook, remove it from DB
         try:
@@ -486,7 +498,7 @@ class AgentAction(ConductorAction):
         """Update the local status of an Agent by trying to connect to it"""
         agent = self.get_agent_or_not_found_error()
         try:
-            PlaybookBuilder.check_connection(agent.address)
+            start_playbook('check_connection', agent.address)
         except errors.ConductorError:
             agent.set_reachable(False)
             agent.set_status('Agent unreachable')
@@ -534,8 +546,12 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         if not self.skip_playbook:
             try:
                 # Perform physical installation through a playbook
-                PlaybookBuilder.install_agent(
-                        agent, self.username, self.password)
+                start_playbook(
+                        'install_agent',
+                        agent.address,
+                        collector.json,
+                        self.username,
+                        self.password)
             except errors.ConductorError as e:
                 agent.delete()
                 raise
@@ -567,7 +583,7 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent = self.get_agent_or_not_found_error()
         try:
             # Perform physical uninstallation through a playbook
-            PlaybookBuilder.uninstall_agent(agent)
+            start_playbook('uninstall_agent', agent.address, agent.collector.json)
         except errors.ConductorError:
             agent.set_status('Uninstall failed')
             agent.save()
@@ -674,7 +690,7 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent = self.get_agent_or_not_found_error()
         collector_infos = InfosCollector(self.collector_ip)
         collector = collector_infos.get_collector_or_not_found_error()
-        PlaybookBuilder.assign_collector(self.address, collector)
+        start_playbook('assign_collector', self.address, collector.json)
         agent.collector = collector
         agent.save()
 
@@ -985,7 +1001,11 @@ class InstallJob(ThreadedAction, InstalledJobAction):
 
         if not self.skip_playbook:
             # Physically install the job on the agent
-            PlaybookBuilder.install_job(agent, job)
+            start_playbook(
+                    'install_job',
+                    agent.address,
+                    agent.collector.address,
+                    job.name, job.path)
         OpenBachBaton(self.address).add_job(self.name)
 
         installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)
@@ -1036,7 +1056,11 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
         installed_job = self.get_installed_job_or_not_found_error()
         agent = installed_job.agent
         job = installed_job.job
-        PlaybookBuilder.uninstall_job(agent, job)
+        start_playbook(
+                'uninstall_job',
+                agent.address,
+                agent.collector.address,
+                job.name, job.path)
         OpenBachBaton(agent.address).remove_job(job.name)
         installed_job.delete()
 
@@ -1182,8 +1206,11 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
         }
 
         # Launch the playbook and the associated job
-        PlaybookBuilder.enable_logs(
-                agent, job=self.name,
+        start_playbook(
+                'enable_logs',
+                agent.address,
+                agent.collector.json,
+                job=self.name,
                 transfer_id=transfer_id,
                 severity=syslogseverity,
                 local_severity=syslogseverity_local)
@@ -1260,7 +1287,8 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
         }
 
         # Launch the playbook and the associated job
-        PlaybookBuilder.push_file(
+        start_playbook(
+                'push_file',
                 rstats_installed.agent.address,
                 rstats_filter.name,
                 '/opt/openbach/agent/jobs/{0}/{0}'
@@ -2340,7 +2368,8 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
 
     def _action(self):
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
-        PlaybookBuilder.push_file(
+        start_playbook(
+                'push_file',
                 agent.address,
                 self.local_path,
                 self.remote_path)

@@ -45,14 +45,14 @@ from ansible import constants as C
 from ansible.executor.playbook_executor import PlaybookExecutor
 from ansible.inventory import Inventory
 from ansible.parsing.dataloader import DataLoader
-from ansible.plugins.callback.default import CallbackModule
+from ansible.plugins.callback import CallbackBase
 from ansible.utils.vars import load_options_vars
 from ansible.vars import VariableManager
 
 import errors
 
 
-class PlayResult(CallbackModule):
+class PlayResult(CallbackBase):
     """Utility class to hook into the Ansible play process.
 
     Most of Ansible actions will call one or several methods of
@@ -62,41 +62,41 @@ class PlayResult(CallbackModule):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.failure = None
+        self.failure = {}
+        self._context = None
+
+    def set_play_context(self, play_context):
+        self._context = play_context
 
     def raise_for_error(self):
         """Raise an error if something failed during an Ansible Play"""
-        if self.failure is not None:
+        if self._context is not None:
+            # Clear tags at the end of a play (ansible bug?)
+            self._context.only_tags.clear()
+            self._context.skip_tags.clear()
+
+        if self.failure:
             raise errors.UnprocessableError(
                     'Ansible playbook execution failed',
                     **self.failure)
+
+    def _store_failure(self, result):
+        self.failure[result._host.get_name()] = result._result
 
     # From here on, Ansible hooks definition
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
         if not ignore_errors:
-            self.failure = {
-                    result._host.get_name(): result._result,
-            }
-        super().v2_runner_on_failed(result, ignore_errors)
+            self._store_failure(result)
 
     def v2_runner_on_unreachable(self, result):
-        self.failure = {
-                result._host.get_name(): result._result,
-        }
-        super().v2_runner_on_unreachable(result)
+        self._store_failure(result)
 
     def v2_runner_on_async_failed(self, result):
-        self.failure = {
-                result._host.get_name(): result._result,
-        }
-        super().v2_runner_on_async_failed(result)
+        self._store_failure(result)
 
     def v2_runner_item_on_failed(self, result):
-        self.failure = {
-                result._host.get_name(): result._result,
-        }
-        super().v2_runner_item_on_failed(result)
+        self._store_failure(result)
 
 
 class Options:
@@ -104,8 +104,7 @@ class Options:
     so that Ansible can extract out whatever option we pass in.
     """
     def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        self.__dict__.update(kwargs)
 
 
 class PlaybookBuilder():
@@ -173,13 +172,13 @@ class PlaybookBuilder():
         """
         self.options.tags[:] = tags
         playbook_results = PlayResult()
-        C.DEFAULT_STDOUT_CALLBACK = playbook_results
 
         tasks = PlaybookExecutor(
                 playbooks=['/opt/openbach/controller/ansible/conductor.yml'],
                 inventory=self.inventory, variable_manager=self.variables,
                 loader=self.loader, options=self.options,
                 passwords=self.passwords)
+        tasks._tqm._callback_plugins.append(playbook_results)
         tasks.run()
         playbook_results.raise_for_error()
 
@@ -286,11 +285,15 @@ class PlaybookBuilder():
         self.launch_playbook('uninstall_a_job')
 
     @classmethod
-    def enable_logs(cls, address, job, transfer_id, severity, local_severity):
-        self = cls(address)
+    def enable_logs(cls, agent, job, transfer_id, severity, local_severity):
+        self = cls(agent.address)
+        collector = agent.collector
         self.add_variables(job=job, transfer_id=transfer_id)
         if severity != 8:
-            self.add_variables(syslogseverity=severity)
+            self.add_variables(
+                    syslogseverity=severity,
+                    collector_ip=collector.address,
+                    logstash_logs_port=collector.logs_port)
         if local_severity != 8:
             self.add_variables(syslogseverity_local=local_severity)
         self.launch_playbook('enable_logs')

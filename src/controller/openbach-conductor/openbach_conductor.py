@@ -69,9 +69,8 @@ from fuzzywuzzy import fuzz
 from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 application = get_wsgi_application()
+from django import db
 from django.utils import timezone
-from django.db import IntegrityError, transaction
-from django.db.utils import DataError
 from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -98,7 +97,7 @@ from playbook_builder import PlaybookBuilder
 syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
-DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defauts/main.yml'
+DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defaults/main.yml'
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -357,11 +356,13 @@ class AddCollector(ThreadedAction, CollectorAction):
         agent = InstallAgent(
                 self.address, self.name,
                 self.address, skip_playbook=True)
-        agent._threaded_action(agent._action)
+        with suppress(errors.ConductorWarning):
+            agent._threaded_action(agent._action)
 
         for job_name in get_default_jobs('default_collector_jobs'):
-            job = InstallJob(self.address, job_name, skip_playbook=True)
-            job._threaded_action(job._action)
+            with suppress(errors.ConductorError):
+                job = InstallJob(self.address, job_name, skip_playbook=True)
+                job._threaded_action(job._action)
 
         if not created:
             raise errors.ConductorWarning(
@@ -542,8 +543,9 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent.save()
 
         for job_name in get_default_jobs('default_jobs'):
-            job = InstallJob(self.address, job_name, skip_playbook=True)
-            job._threaded_action(job._action)
+            with suppress(errors.ConductorError):
+                job = InstallJob(self.address, job_name, skip_playbook=True)
+                job._threaded_action(job._action)
 
         if not created:
             raise errors.ConductorWarning(
@@ -730,20 +732,20 @@ class AddJob(JobAction):
             help_content = None
 
         try:
-            with transaction.atomic():
+            with db.transaction.atomic():
                 self._update_job(content, help_content)
         except KeyError as err:
             raise errors.BadRequestError(
                     'The configuration file of the Job is missing an entry',
                     entry_name=str(err), job_name=self.name,
                     configuration_file=config_file)
-        except (TypeError, DataError) as err:
+        except (TypeError, db.utils.DataError) as err:
             raise errors.BadRequestError(
                     'The configuration file of the Job contains entries '
                     'whose values are not of the required type',
                     job_name=self.name, error_message=str(err),
                     configuration_file=config_file)
-        except IntegrityError as err:
+        except db.IntegrityError as err:
             raise errors.BadRequestError(
                     'The configuration file of the Job contains '
                     'duplicated entries',
@@ -1178,21 +1180,17 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
                 'transfered_file_id': transfer_id,
                 'job_name': self.name,
         }
+
+        # Launch the playbook and the associated job
+        PlaybookBuilder.enable_logs(
+                agent, job=self.name,
+                transfer_id=transfer_id,
+                severity=syslogseverity,
+                local_severity=syslogseverity_local)
         rsyslog_instance = StartJobInstance(self.address, job_name, arguments, self.date)
         rsyslog_instance.openbach_function_instance = self.openbach_function_instance
         rsyslog_instance._build_job_instance()
-        try:
-            # Launch the playbook
-            PlaybookBuilder.enable_logs(
-                    agent.address, job=self.name,
-                    transfer_id=transfer_id,
-                    severity=syslogseverity,
-                    local_severity=syslogseverity_local)
-        except errors.ConductorError:
-            rsyslog_instance._cancel()
-            raise
-        else:
-            rsyslog_instance._threaded_action(rsyslog_instance._action)
+        rsyslog_instance._threaded_action(rsyslog_instance._action)
 
 
 class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobAction):
@@ -1260,22 +1258,18 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
             'transfered_file_id': transfer_id,
             'job_name': self.name,
         }
+
+        # Launch the playbook and the associated job
+        PlaybookBuilder.push_file(
+                rstats_installed.agent.address,
+                rstats_filter.name,
+                '/opt/openbach/agent/jobs/{0}/{0}'
+                '{1}_rstats_filter.conf.locked'
+                .format(self.name, transfer_id))
         rstats_instance = StartJobInstance(self.address, job_name, arguments, self.date)
         rstats_instance.openbach_function_instance = self.openbach_function_instance
         rstats_instance._build_job_instance()
-        try:
-            # Launch the playbook
-            PlaybookBuilder.push_file(
-                    rstats_installed.agent.address,
-                    rstats_filter.name,
-                    '/opt/openbach/agent/jobs/{0}/{0}'
-                    '{1}_rstats_filter.conf.locked'
-                    .format(self.name, transfer_id))
-        except errors.ConductorError:
-            rstats_instance._cancel()
-            raise
-        else:
-            rstats_instance._threaded_action(rstats_instance._action)
+        rstats_instance._threaded_action(rstats_instance._action)
 
 
 ###############
@@ -1386,18 +1380,11 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
                     scenario_id, owner_id,
                     arguments, date, self.interval)
         except errors.ConductorError:
-            self._cancel()
+            job_instance.delete()
             raise
 
         job_instance.set_status('Running')
         job_instance.save()
-
-    def _cancel(self):
-        """Cancel the launching of this JobInstance by
-        destroying it in the database.
-        """
-        job_instance = self.get_job_instance_or_not_found_error()
-        job_instance.delete()
 
 
 class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
@@ -1507,7 +1494,7 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
 
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
-        with transaction.atomic():
+        with db.transaction.atomic():
             try:
                 job_instance.configure(self.arguments, self.date, self.interval)
             except (KeyError, ValueError) as err:
@@ -1743,7 +1730,7 @@ class ModifyScenario(ScenarioAction):
 
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Scenario')
-        with transaction.atomic():
+        with db.transaction.atomic():
             self._register_scenario()
         scenario = self.get_scenario_or_not_found_error()
         return scenario.json, 200
@@ -2089,10 +2076,11 @@ class OpenbachFunctionThread(threading.Thread):
             threads = self._run_openbach_function()
         except errors.ConductorWarning:
             pass
-        except errors.ConductorError:
+        except errors.ConductorError as error:
             scenario_id = self.openbach_function.scenario_instance.id
             StopScenarioInstance(scenario_id).action()
-            self.openbach_function.set_status('Error')
+            self.openbach_function.scenario_instance.stop(stop_status='Finished KO')
+            self.openbach_function.set_status('Error: {}'.format(error))
             return
 
         if self._stopped.is_set():
@@ -2237,7 +2225,7 @@ class ModifyProject(ProjectAction):
 
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
-        with transaction.atomic():
+        with db.transaction.atomic():
             self._register_project()
         project = self.get_project_or_not_found_error()
         return project.json, 200

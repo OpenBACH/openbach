@@ -1,0 +1,34 @@
+---
+
+- name: Execute the Job Uninstallation Playbook
+  include: "{{ job_item.path }}/install_{{ job_item.name }}.yml"
+  args:
+    job_name: "{{ job_item.name }}"
+  with_items: "{{ jobs }}"
+  when: jobs is defined
+  loop_control:
+    loop_var: job_item
+
+- name: Remove the Job stats Folder
+  file: path=/var/openbach_stats/{{ item.name }} state=absent
+  become: yes
+  with_items: "{{ jobs }}"
+  when: jobs is defined
+
+- name: Remove Default Logs Severity
+  file: path=/etc/rsyslog.d/{{ item.name }}.conf state=absent
+  become: yes
+  with_items: "{{ jobs }}"
+  when: jobs is defined
+
+- name: Remove Default Logs Local Severity
+  file: path=/etc/rsyslog.d/{{ item.name }}_local.conf state=absent
+  become: yes
+  with_items: "{{ jobs }}"
+  when: jobs is defined
+
+- name: Inform Agent that a Job is Uninstalled
+  file: path=/opt/openbach/agent/jobs/{{ item.name }}.yml state=absent
+  remote_user: openbach
+  with_items: "{{ jobs }}"
+  when: jobs is defined

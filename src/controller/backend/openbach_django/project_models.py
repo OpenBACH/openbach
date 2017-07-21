@@ -133,9 +133,8 @@ class Agent(models.Model):
     @property
     def json(self):
         return {
-                'address': self.address,
                 'name': self.name,
-                'username': self.username,
+                'address': self.address,
                 'collector_ip': self.collector.address,
                 'reachable': self.reachable,
                 'status': self.status,

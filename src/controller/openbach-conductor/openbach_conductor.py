@@ -1730,7 +1730,7 @@ class CreateScenario(ScenarioAction):
 
     def __init__(self, json_data, project=None):
         name = extract_and_check_name_from_json(json_data, kind='Scenario')
-        super().__init__(self, json_data=json_data, name=name, project=project)
+        super().__init__(json_data=json_data, name=name, project=project)
 
     def _action(self):
         self._register_scenario()
@@ -2016,7 +2016,7 @@ def create_thread(openbach_function, functions_table):
 
 class WaitScenarioToFinish(threading.Thread):
     def __init__(self, instance_id, openbach_function_threads):
-        super().__init__(self)
+        super().__init__()
         self.instance_id = instance_id
         self.threads = openbach_function_threads
 

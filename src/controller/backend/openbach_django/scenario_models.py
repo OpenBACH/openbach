@@ -202,7 +202,7 @@ class Scenario(models.Model):
                             data, dict)
             if not isinstance(data, expected_type):
                 raise Scenario.MalformedError(
-                        '.'.join(keys),
+                        '.'.join(map(str, keys)),
                         data, expected_type)
             return data
 

@@ -98,10 +98,13 @@ class Collector(models.Model):
                 'address': self.address,
                 'logs_port': self.logs_port,
                 'logs_query_port': self.logs_query_port,
+                'logs_database_name': self.logs_database_name,
                 'stats_port': self.stats_port,
                 'stats_query_port': self.stats_query_port,
                 'stats_database_name': self.stats_database_name,
                 'stats_database_precision': self.stats_database_precision,
+                'logstash_broadcast_mode': self.logstash_broadcast_mode,
+                'logstash_broadcast_port': self.logstash_broadcast_port,
         }
 
 

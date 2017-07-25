@@ -92,7 +92,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
-        Statistic, OsCommand,
+        Statistic, OsCommand, Entity, Network,
         RequiredJobArgument, OptionalJobArgument,
         InstalledJob, InstalledJobCommandResult,
         JobInstance, JobInstanceCommandResult,
@@ -1056,13 +1056,13 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
         installed_job = self.get_installed_job_or_not_found_error()
         agent = installed_job.agent
         job = installed_job.job
+        installed_job.delete()
+        OpenBachBaton(agent.address).remove_job(job.name)
         start_playbook(
                 'uninstall_job',
                 agent.address,
                 agent.collector.address,
                 job.name, job.path)
-        OpenBachBaton(agent.address).remove_job(job.name)
-        installed_job.delete()
 
 
 class UninstallJobs(InstalledJobAction):
@@ -2234,7 +2234,7 @@ class CreateProject(ProjectAction):
 
 
 class DeleteProject(ProjectAction):
-    """Action responsible for deleting an existing Scenario"""
+    """Action responsible for deleting an existing Project"""
 
     def __init__(self, name):
         super().__init__(name=name)
@@ -2246,7 +2246,7 @@ class DeleteProject(ProjectAction):
 
 
 class ModifyProject(ProjectAction):
-    """Action responsible for modifying an existing Scenario"""
+    """Action responsible for modifying an existing Project"""
 
     def __init__(self, name, json_data):
         super().__init__(name=name, json_data=json_data)
@@ -2283,6 +2283,116 @@ class ListProjects(ProjectAction):
 
     def _action(self):
         return [project.json for project in Project.objects.all()], 200
+
+
+##########
+# Entity #
+##########
+
+class EntityAction(ConductorAction):
+    """Base class that defines helper methods to deal with Entities"""
+
+    def get_entity_or_not_found_error(self):
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        try:
+            return Entity.objects.get(name=self.name, project=project)
+        except Entity.DoesNotExist:
+            raise errors.NotFoundError(
+                    'The requested Entity is not in the database',
+                    project_name=self.project, entity_name=self.entity)
+
+    def _register_entity(self):
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        description = self.json_data.get('description')
+        agent = self.json_data.get('agent')
+        if agent is not None:
+            agent = InfosAgent(agent).get_agent_or_not_found_error()
+        networks = self.json_data.get('networks', [])
+        if not isinstance(networks, list):
+            raise errors.BadRequestError(
+                    'The networks of an entity should be a list of network names')
+
+        entity, _ = Entity.objects.get_or_create(name=self.name, project=project)
+        entity.description = description
+        entity.agent = agent
+        entity.save()
+
+        entity.networks.clear()
+        for network in networks:
+            try:
+                entity_network = Network.objects.get(name=network, project=project)
+            except Network.DoesNotExist:
+                raise errors.NotFoundError(
+                        'The requested Network is not in the database',
+                        project_name=self.project, network_name=network)
+            else:
+                entity.networks.add(entity_network)
+
+
+class AddEntity(EntityAction):
+    """Action responsible for creating a new Entity"""
+
+    def __init__(self, project, json_data):
+        name = extract_and_check_name_from_json(self.json_data, kind='Entity')
+        super().__init__(
+                name=name, project=project,
+                json_data=json_data)
+
+    def _action(self):
+        self._register_entity()
+        entity = self.get_entity_or_not_found_error()
+        return entity.json, 200
+
+
+class ModifyEntity(EntityAction):
+    """Action responsible for modifying an existing Entity"""
+
+    def __init__(self, name, project, json_data):
+        super().__init__(
+                name=name, project=project,
+                json_data=json_data)
+
+    def _action(self):
+        extract_and_check_name_from_json(self.json_data, self.name, kind='Entity')
+        with db.transaction.atomic():
+            self._register_entity()
+        entity = self.get_entity_or_not_found_error()
+        return entity.json, 200
+
+
+class DeleteEntity(EntityAction):
+    """Action responsible for deleting an existing Entity"""
+
+    def __init__(self, name, project):
+        super().__init__(name=name, project=project)
+
+    def _action(self):
+        entity = self.get_entity_or_not_found_error()
+        entity.delete()
+        return None, 204
+
+
+class InfosEntity(EntityAction):
+    """Action responsible for information retrieval about an Entity"""
+
+    def __init__(self, name, project):
+        super().__init__(name=name, project=project)
+
+    def _action(self):
+        entity = self.get_entity_or_not_found_error()
+        return entity.json, 200
+
+
+class ListEntities(EntityAction):
+    """Action responsible for information retrieval about all Entities"""
+
+    def __init__(self, project):
+        super().__init__(project=project)
+
+    def _action(self):
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        entities = Entity.objects.filter(project=project)
+        return [entity.json for entity in entities], 200
 
 
 #########

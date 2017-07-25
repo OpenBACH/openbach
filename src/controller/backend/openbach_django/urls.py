@@ -95,10 +95,16 @@ urlpatterns = [
     url(r'^project/(?P<project_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
         name='project_scenario_instance_view'),
-    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/?$',
+    url(r'^project/(?P<project_name>[^/]+)/scenario/'
+        '(?P<scenario_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
         name='project_scenario_instance_view2'),
-    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
+    url(r'^project/(?P<project_name>[^/]+)/scenario/'
+        '(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
         views.ScenarioInstanceView.as_view(),
         name='project_scenario_instance_view3'),
+    url(r'^project/(?P<project_name>[^/]+)/entity/?$',
+        views.EntitiesView.as_view(), name='entities_view'),
+    url(r'^project/(?P<project_name>[^/]+)/entity/(?P<entity_name>[^/]+)/?$',
+        views.EntityView.as_view(), name='entity_view'),
 ]

@@ -752,6 +752,49 @@ class ProjectView(GenericView):
                 command='delete_project', name=project_name)
 
 
+class EntitiesView(GenericView):
+    """Manage actions on entities for a project"""
+
+    def get(self, request, project_name):
+        """List all entities for the project"""
+        return self.conductor_execute(
+                command='list_entities',
+                project=project_name)
+
+    def post(self, request, project_name):
+        """Create a new entity for the project"""
+        return self.conductor_execute(
+                command='add_entity',
+                project=project_name,
+                json_data=request.JSON)
+
+
+class EntityView(GenericView):
+    """Manage actions on specific entities for a project"""
+
+    def get(self, request, project_name, entity_name):
+        """Return informations on the requested entity"""
+        return self.conductor_execute(
+                command='infos_entity',
+                project=project_name,
+                name=entity_name)
+
+    def put(self, request, project_name, entity_name):
+        """Modify an existing entity"""
+        return self.conductor_execute(
+                command='modify_entity',
+                project=project_name,
+                name=entity_name,
+                json_data=request.JSON)
+
+    def delete(self, request, project_name, entity_name):
+        """Delete an existing entity"""
+        return self.conductor_execute(
+                command='delete_entity',
+                project=project_name,
+                name=entity_name)
+
+
 def push_file(request):
     try:
         uploaded_file = request.FILES['file']

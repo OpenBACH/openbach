@@ -53,9 +53,14 @@
     - name: Retrieve the Password of the Backend's Database Admin User
       shell: python3 -c "from local_settings import *; print(DATABASES['default']['PASSWORD'])" chdir=/opt/openbach/controller/backend/backend/
       register: password
+      failed_when: false
     - name: Retrieve the Secret Key for Django app
       shell: python3 -c "from local_settings import *; print(SECRET_KEY)" chdir=/opt/openbach/controller/backend/backend/
       register: key
+      failed_when: false
+    - name: Check that Informations were Actually Present
+      fail: msg="Could not retrieve required informations (this is OK on a fresh install); will generate them instead."
+      when: password.rc != 0 or key.rc != 0
   rescue:
     - name: Create the Password of the Backend's Database Admin User
       shell: python3 -c "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))"

@@ -2304,9 +2304,10 @@ class EntityAction(ConductorAction):
     def _register_entity(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
         description = self.json_data.get('description')
-        agent = self.json_data.get('agent')
-        if agent is not None:
-            agent = InfosAgent(agent).get_agent_or_not_found_error()
+        agent = self.json_data.get('agent', {})
+        if agent:
+            address = agent.get('address')
+            agent = InfosAgent(address).get_agent_or_not_found_error()
         networks = self.json_data.get('networks', [])
         if not isinstance(networks, list):
             raise errors.BadRequestError(
@@ -2333,7 +2334,7 @@ class AddEntity(EntityAction):
     """Action responsible for creating a new Entity"""
 
     def __init__(self, project, json_data):
-        name = extract_and_check_name_from_json(self.json_data, kind='Entity')
+        name = extract_and_check_name_from_json(json_data, kind='Entity')
         super().__init__(
                 name=name, project=project,
                 json_data=json_data)

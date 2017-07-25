@@ -96,7 +96,7 @@ class OpenbachFunction(ContentTyped):
             ]
         if self.finished_waiters.count():
             wait['launched_ids'] = [
-                    waited.job_instance_waited.function_id
+                    waited.openbach_function_waited.function_id
                     for waited in self.finished_waiters.all()
             ]
         if wait:

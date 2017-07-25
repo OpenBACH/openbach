@@ -2209,7 +2209,7 @@ class ProjectAction(ConductorAction):
         project.save()
         try:
             project.load_from_json(self.json_data)
-        except Project.MalformedProjectError as e:
+        except Project.MalformedError as e:
             project.delete()
             raise errors.BadRequestError(
                     'Data of the Project are malformed',
@@ -2559,6 +2559,7 @@ class BackendHandler(socketserver.BaseRequestHandler):
                     'response': e.json,
                     'returncode': e.ERROR_CODE,
             }
+            syslog.syslog(syslog.LOG_ERR, '{}'.format(result))
         except Exception as e:
             result = {
                     'response': {
@@ -2568,8 +2569,10 @@ class BackendHandler(socketserver.BaseRequestHandler):
                     },
                     'returncode': 500,
             }
+            syslog.syslog(syslog.LOG_ALERT, '{}'.format(result))
         else:
             result = {'response': response, 'returncode': returncode}
+            syslog.syslog(syslog.LOG_INFO, '{}'.format(result))
         finally:
             self.request.sendall(b'Done')
             with open(fifoname, 'w') as fifo:

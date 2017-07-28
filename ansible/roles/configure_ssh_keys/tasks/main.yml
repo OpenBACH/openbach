@@ -1,7 +1,11 @@
 ---
 
-- name: Trust the SSH key by the openbach user
+- name: Trust the SSH key of the Controllers by the Agents
   authorized_key: user=openbach key={{ lookup('file', '/tmp/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
   become: yes
-  with_flattened:
-    - "{{ groups.controller | default([]) }}"
+  with_items: "{{ groups.controller | default([]) }}"
+
+- name: Trust the SSH key of the openbach User by the Agents
+  authorized_key: user=openbach key={{ lookup('file', '/home/openbach/.ssh/id_rsa.pub') }}
+  become: yes
+  when: is_run_from_conductor

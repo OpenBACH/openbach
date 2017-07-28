@@ -1,7 +1,11 @@
 ---
 
 - name: Expand openbach User
-  user: name=openbach generate_ssh_key=yes ssh_key_bits=4096 shell=/bin/bash groups=sudo
+  user: name=openbach generate_ssh_key=yes ssh_key_bits=4096 shell=/bin/bash
+  become: yes
+
+- name: Enable SUDO Rights for openbach User
+  copy: src=sudoers dest=/etc/sudoers.d/passwordless_openbach mode='0440'
   become: yes
 
 - name: Update apt cache

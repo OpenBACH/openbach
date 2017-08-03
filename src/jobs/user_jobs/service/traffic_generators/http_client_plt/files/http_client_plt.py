@@ -52,20 +52,20 @@ from subprocess import call
 import collect_agent
 
 
-def worker_loop(q, server_address, page):
+def worker_loop(q, server_address, page, measure):
     global Running
     try:
         while Running:
             try:
                 q.get(timeout=1)
-                get_url(server_address, port, page)
+                get_url(server_address, port, page, measure)
             except Empty:
                 collect_agent.send_log(syslog.LOG_DEBUG, "No more workers on queue")
     except Exception as ex:
         collect_agent.send_log(syslog.LOG_ERR, "ERROR on worker do get_url: %s" + ex)
 
 
-def get_url(server_address, port, page):
+def get_url(server_address, port, page, measure):
     try:
         start_time = time.time()
         if page == 0:
@@ -93,6 +93,8 @@ def get_url(server_address, port, page):
         conntime = round(time.time() - start_time,3)
         collect_agent.send_log(syslog.LOG_NOTICE, "The Page Load Time is= " + str(conntime))
         timestamp = int(round(time.time() * 1000))
+        if not measure:
+            return
         try:
             # Send the stat to the Collector
             statistics = {'load_time': conntime}
@@ -103,7 +105,7 @@ def get_url(server_address, port, page):
     except Exception as ex:
         collect_agent.send_log(syslog.LOG_ERR, "ERROR getting url (the server might not be running)")
 
-def main(server_address, port, mode, lambd, sim_t, n_req, page):
+def main(server_address, port, mode, lambd, sim_t, n_req, page, measure):
     # Connect to the collect-agent service
     conffile = "/opt/openbach-jobs/http_client_plt/http_client_plt_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)
@@ -123,7 +125,7 @@ def main(server_address, port, mode, lambd, sim_t, n_req, page):
         # start workers
         thread_pool = []
         for i in range(N_workers):
-            t = Thread(target=worker_loop,args=(q, server_address, page))
+            t = Thread(target=worker_loop,args=(q, server_address, page, measure))
             t.start()
             thread_pool.append(t)
 
@@ -153,7 +155,7 @@ def main(server_address, port, mode, lambd, sim_t, n_req, page):
         init_time = time.time()
         n=0
         while (round(time.time() - init_time,3) < sim_t) or (n_req > n):
-            get_url(server_address, port, page)
+            get_url(server_address, port, page, measure)
             n += 1
             
     else:
@@ -173,6 +175,8 @@ if __name__ == "__main__":
     parser.add_argument('--sim-t', type=float, default=60.0, help='Simulation time in seconds')
     parser.add_argument('-n', '--n-req', type=int, default=0, help='Number of connections')
     parser.add_argument('-p', '--page', type=int, default=1, help='Page number')
+    parser.add_argument('-t', '--measure-time', action='store_true',
+                        help='Measure page loading time')
 
     # get args
     args = parser.parse_args()
@@ -183,5 +187,6 @@ if __name__ == "__main__":
     sim_t = args.sim_t
     n_req = args.n_req
     page = args.page
+    measure = args.measure_time
 
-    main(server_address, port, mode, lambd, sim_t, n_req, page)
+    main(server_address, port, mode, lambd, sim_t, n_req, page, measure)

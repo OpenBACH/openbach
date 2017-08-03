@@ -58,6 +58,12 @@ arguments:
       flag:        '-p'
       description: >
           Page number (default=1). Different test pages are available in this jobs (lemonde, wiki, reddit)
+    - name:        measure_time
+      type:        'None'
+      count:       0
+      flag:        '-t'
+      description: >
+          Measure the page loading time. 
 
 statistics:
   - name:          load_time 

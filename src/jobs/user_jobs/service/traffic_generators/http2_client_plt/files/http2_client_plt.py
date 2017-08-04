@@ -86,7 +86,7 @@ def get_url(server_address, page):
     except:
         collect_agent.send_log(syslog.LOG_ERR, "ERROR getting url (the server might not be running)")
 
-def main(server_address, mode, lambd, sim_t, n_req, page):
+def main(server_address, port, mode, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
     conffile = "/opt/openbach-jobs.http2_client_plt/http2_client_plt_rstats_filter.conf"
     success = collect_agent.register_collect(conffile)
@@ -94,6 +94,7 @@ def main(server_address, mode, lambd, sim_t, n_req, page):
         collect_agent.send_log(syslog.LOG_ERR, "ERROR connecting to collect-agent")
         quit()
         
+    server_address = "{}:{}".format(server_address, port)
     #mode with inter-arrivals (following an exponential law) 
     if mode == 1:
         N_workers = 150
@@ -146,8 +147,10 @@ if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(description='',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('server-address', metavar='server-address', type=str,
-                        help='The IP address of the server')
+    parser.add_argument('server_address', metavar='server_address', type=str,
+                        help='The server IP address')
+    parser.add_argument('port', metavar='port', type=int,
+                        help='The port number of the server')
     parser.add_argument('-m', '--mode', type=int, default=0, help='Two modes of performing requests (mode=0 for normal'
                         'http requests one after another, mode=1 for requests following and exponential law')
     parser.add_argument('-l', '--lambd', type=float, default=1.0,
@@ -162,10 +165,11 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
     server_address = args.server_address
+    port = args.port
     mode = args.mode
     lambd = args.lambd
     sim_t = args.sim_t
     n_req = args.n_req
     page = args.page
 
-    main(server_address, mode, lambd, sim_t, n_req, page)
+    main(server_address, port, mode, lambd, sim_t, n_req, page)

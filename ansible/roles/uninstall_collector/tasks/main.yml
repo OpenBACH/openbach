@@ -1,0 +1,36 @@
+---
+
+- name: Stop Controller Services
+  systemd: name={{ item }} state=stopped enabled=no daemon_reload=yes
+  with_items:
+    - elasticsearch
+    - logstash
+    - influxdb
+  become: yes
+
+- name: Remove Elasticsearch Config File
+  file: path=/etc/elasticsearch/elasticsearch.yml state=absent
+  become: yes
+
+- name: Remove Logstash Config Files
+  file: path=/etc/logstash/conf.d/{{ item }} state=absent
+  with_items:
+    - pattern
+    - collector.conf
+  become: yes
+
+- name: Remove Collector Packages
+  apt: name={{ item }} state=absent
+  with_items:
+    - elasticsearch
+    - influxdb
+    - logstash
+  become: yes
+
+- name: Remove Leftovers of Logstash Plugins
+  file: path=/usr/share/logstash state=absent
+  become: yes
+
+- name: Remove Collector Repository
+  file: path=/opt/openbach/collector state=absent
+  become: yes

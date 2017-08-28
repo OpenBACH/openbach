@@ -1,0 +1,25 @@
+---
+
+- name: Stop Auditorium Services
+  systemd: name={{ item }} state=stopped enabled=no daemon_reload=yes
+  with_items:
+    - nginx
+    - kibana
+    - grafana-server
+  become: yes
+
+- name: Remove Kibana Service File
+  file: path=/etc/systemd/system/kibana.service state=absent
+  become: yes
+
+- name: Remove Kibana Sources
+  file: path=/opt/{{ kibana_filename }} state=absent
+  become: yes
+
+- name: Remove Nginx Site
+  file: path=/etc/nginx/sites-available/default state=absent
+  become: yes
+
+- name: Remove Auditorium Repository
+  file: path=/opt/openbach/auditiorium state=absent
+  become: yes

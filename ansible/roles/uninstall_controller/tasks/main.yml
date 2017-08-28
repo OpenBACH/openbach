@@ -1,0 +1,32 @@
+---
+
+- name: Stop Controller Services
+  systemd: name={{ item }} state=stopped enabled=no daemon_reload=yes
+  with_items:
+    - postgresql
+    - rsyslog
+    - openbach_backend
+    - openbach_conductor
+  become: yes
+
+- name: Remove Controller Services Files
+  file: path=/etc/systemd/system/{{ item }}.service state=absent
+  with_items:
+    - openbach_backend
+    - openbach_conductor
+  become: yes
+
+- name: Remove Rsyslog Configuration
+  file: path=/etc/rsyslog.d/{{ item }}.conf state=absent
+  with_items:
+    - openbach_conductor
+    - openbach_conductor_local
+    - openbach_backend
+    - openbach_backend_local
+  become: yes
+
+# TODO: restore postgresql backup
+
+- name: Remove Controller Repository
+  file: path=/opt/openbach/controller state=absent
+  become: yes

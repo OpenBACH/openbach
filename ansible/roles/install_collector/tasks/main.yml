@@ -48,8 +48,9 @@
   notify: restart logstash
 
 - name: Install logstash-output-influxdb
-  shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins.zip chdir=/usr/share/logstash
+  shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins.zip
   args:
+    chdir: /usr/share/logstash
     creates: /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-influxdb-5.0.0
   become: yes
   become_user: logstash

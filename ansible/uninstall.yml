@@ -45,24 +45,20 @@
       when: ansible_ssh_private_key_file is not defined
 
 
-- name: Uninstall Agents
-  hosts: agent
+- name: Uninstall Controllers
+  hosts: controller
   roles:
-    - uninstall_job
-    - uninstall_agent
+    - role: clear_backend
+      when: openbach_clear_databases | default(False)
+    - uninstall_controller
 
 
 - name: Uninstall Collectors
   hosts: collector
   roles:
+    - role: clear_data
+      when: openbach_clear_databases | default(False)
     - uninstall_collector
-
-
-- name: Uninstall Controllers
-  hosts: controller
-  roles:
-    - clear_backend
-    - uninstall_controller
 
 
 - name: Uninstall Auditoriums
@@ -71,14 +67,20 @@
     - uninstall_auditorium
 
 
-- name: Cleanup Generated Files
+- name: Uninstall Agents
+  hosts: agent
+  roles:
+    - uninstall_agent
+
+
+- name: Cleanup Accounts
   hosts:
     - agent
     - auditorium
   gather_facts: no
   post_tasks:
-    - name: Remove trust of the install SSH key by the openbach user
-      authorized_key: user=openbach state=absent key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
+    - name: Remove the openbach user
+      user: user=openbach state=absent remove=yes
       become: yes
 
 
@@ -88,6 +90,5 @@
     - name: Remove the Controllers SSH Keys from the Local Machine
       file: path=/tmp/{{ item }} state=absent
       with_items:
-        - controller_key
         - openbach_install_rsa
         - openbach_install_rsa.pub

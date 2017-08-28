@@ -10,6 +10,9 @@
     job_name: "{{ job_item.name }}"
   with_items: "{{ jobs }}"
   when: jobs is defined
+  environment:
+    http_proxy: openbach_http_proxy
+    https_proxy: openbach_https_proxy
   loop_control:
     loop_var: job_item
 

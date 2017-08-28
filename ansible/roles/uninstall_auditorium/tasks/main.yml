@@ -16,6 +16,16 @@
   file: path=/opt/{{ kibana_filename }} state=absent
   become: yes
 
+- name: Remove Grafana Config File
+  file: path=/etc/grafana/grafana.ini state=absent
+  become: yes
+
+- name: Remove Auditorium Packages
+  apt: name={{ item }} state=absent
+  with_items:
+    - grafana
+  become: yes
+
 - name: Remove Nginx Site
   file: path=/etc/nginx/sites-available/default state=absent
   become: yes

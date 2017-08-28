@@ -45,5 +45,5 @@
   remote_user: openbach
   
 - name: Download the HTTP Server sources
-  synchronize: src=www/ dest=/opt/openbach/agent/jobs/http_server/ recursive=yes delete=no
+  synchronize: src=../src/jobs/user_jobs/service/traffic_generators/http_server/files/www/ dest=/opt/openbach/agent/jobs/http_server/ recursive=yes delete=no
   remote_user: openbach

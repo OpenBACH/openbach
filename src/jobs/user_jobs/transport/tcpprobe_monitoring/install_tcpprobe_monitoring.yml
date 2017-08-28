@@ -45,7 +45,7 @@
   remote_user: openbach
 
 - name: Upload tcpprobe_new_fix module sources
-  synchronize: src=tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
+  synchronize: src=../src/jobs/user_jobs/transport/tcpprobe_monitoring/files/tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
   remote_user: openbach
 
 - name: Modify tcp_probe module

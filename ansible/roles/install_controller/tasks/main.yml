@@ -11,6 +11,7 @@
   environment:
     http_proxy: openbach_http_proxy
     https_proxy: openbach_https_proxy
+  notify: restart postgresql
 
 - name: Install pip Dependencies (for ansible modules to run)
   pip: name={{ item }} executable=pip2 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python2/'

@@ -18,7 +18,10 @@
   file: path=/opt/openbach/pip_mirror state=absent
   become: yes
 
-# TODO: restore ntp backup
+- name: Restore ntp Backup
+  shell: ls -t1 ntp.conf.* | tail -1 | xargs -I XXX mv XXX ntp.conf chdir=/etc/
+  ignore_errors: yes
+  become: yes
 
 - name: Remove Log Folder
   file: path=/var/log/openbach state=absent

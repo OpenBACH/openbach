@@ -25,7 +25,10 @@
     - openbach_backend_local
   become: yes
 
-# TODO: restore postgresql backup
+- name: Restore postgresql Backup
+  shell: ls -t1 pg_hba.conf.* | tail -1 | xargs -I XXX mv XXX pg_hba.conf chdir=/etc/postgresql/9.5/main/
+  ignore_errors: yes
+  become: yes
 
 - name: Remove Controller Repository
   file: path=/opt/openbach/controller state=absent

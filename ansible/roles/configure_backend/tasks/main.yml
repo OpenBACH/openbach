@@ -16,6 +16,11 @@
   template: src=group_vars_all.j2 dest=/opt/openbach/controller/ansible/group_vars/all
   remote_user: openbach
 
+- name: Add Proxies for each Agent
+  template: src=host_vars_all.j2 dest=/opt/openbach/controller/ansible/host_vars/{{ item.key }}
+  with_dict: "{{ hostvars }}"
+  remote_user: openbach
+
 - name: Copy the Required Playbooks
   copy: src={{ item }} dest=/opt/openbach/controller/ansible
   with_items:

@@ -5,6 +5,9 @@
   with_items:
     - python-influxdb
     - openjdk-8-jdk
+  environment:
+    http_proxy: openbach_http_proxy
+    https_proxy: openbach_https_proxy
   become: yes
 
 - name: Upload Binary Files

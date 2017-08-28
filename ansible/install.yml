@@ -40,6 +40,12 @@
     - name: Configure Collector Machine
       set_fact: openbach_collector={{ openbach_collector | default(('collector' in group_names and inventory_hostname) or ('collector' in groups and groups.collector and groups.collector[0]) or '127.0.0.1') }}
 
+    - name: Configure Http Proxy
+      set_fact: openbach_http_proxy={{ openbach_http_proxy is defined and openbach_http_proxy or lookup('env', 'HTTP_PROXY') }}
+
+    - name: Configure Https Proxy
+      set_fact: openbach_https_proxy={{ openbach_https_proxy is defined and openbach_https_proxy or lookup('env', 'HTTPS_PROXY') or openbach_http_proxy }}
+
     - name: Install python-minimal
       raw: sudo apt-get -y install python-minimal
       become: yes

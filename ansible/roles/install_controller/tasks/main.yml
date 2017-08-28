@@ -8,6 +8,9 @@
     - libpq-dev  # For psycopg2, necessary for ansible's postgresql_* modules
     - python-dev  # For psycopg2, necessary for ansible's postgresql_* modules
   become: yes
+  environment:
+    http_proxy: openbach_http_proxy
+    https_proxy: openbach_https_proxy
 
 - name: Install pip Dependencies (for ansible modules to run)
   pip: name={{ item }} executable=pip2 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python2/'
@@ -60,7 +63,7 @@
       failed_when: false
     - name: Check that Informations were Actually Present
       fail: msg="Could not retrieve required informations (this is OK on a fresh install); will generate them instead."
-      when: password.rc != 0 or key.rc != 0
+      when: password.rc != 0 or ('msg' in password and password.msg == 'MODULE FAILURE') or key.rc != 0 or ('msg' in key and key.msg == 'MODULE FAILURE')
   rescue:
     - name: Create the Password of the Backend's Database Admin User
       shell: python3 -c "from django.utils.crypto import get_random_string; chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'; print(get_random_string(50, chars))"

@@ -11,6 +11,9 @@
     - libfontconfig
     - nginx-extras
   become: yes
+  environment:
+    http_proxy: openbach_http_proxy
+    https_proxy: openbach_https_proxy
   notify: restart nginx
 
 - name: Install .deb Packages

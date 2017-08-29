@@ -65,3 +65,7 @@
 - name: Remove Agent Repository
   file: path=/opt/openbach/agent state=absent
   become: yes
+
+- name: Remove SUDO Rights for openbach User
+  file: path=/etc/sudoers.d/passwordless_openbach state=absent
+  become: yes

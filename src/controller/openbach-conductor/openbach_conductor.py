@@ -501,6 +501,7 @@ class AgentAction(ConductorAction):
             start_playbook('check_connection', agent.address)
         except errors.ConductorError:
             agent.set_reachable(False)
+            agent.set_available(False)
             agent.set_status('Agent unreachable')
             agent.save()
             return
@@ -509,8 +510,10 @@ class AgentAction(ConductorAction):
         try:
             OpenBachBaton(agent.address)
         except errors.UnprocessableError:
+            agent.set_available(False)
             agent.set_status('Agent reachable but daemon not available')
         else:
+            agent.set_available(True)
             agent.set_status('Available')
         agent.save()
 
@@ -539,6 +542,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
                 })
         agent.name = self.name
         agent.set_reachable(True)
+        agent.set_available(False)
         agent.set_status('Installing...')
         agent.collector = collector
         agent.save()
@@ -555,6 +559,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
             except errors.ConductorError as e:
                 agent.delete()
                 raise
+        agent.set_available(True)
         agent.set_status('Available')
         agent.save()
 

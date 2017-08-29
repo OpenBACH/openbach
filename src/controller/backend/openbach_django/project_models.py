@@ -117,6 +117,8 @@ class Agent(models.Model):
     update_status = models.DateTimeField(null=True, blank=True)
     reachable = models.BooleanField(default=False)
     update_reachable = models.DateTimeField(null=True, blank=True)
+    available = models.BooleanField(default=False)
+    update_available = models.DateTimeField(null=True, blank=True)
     collector = models.ForeignKey(Collector, related_name='agents')
 
     def set_status(self, status):
@@ -126,6 +128,10 @@ class Agent(models.Model):
     def set_reachable(self, reachable):
         self.reachable = reachable
         self.update_reachable = timezone.now()
+
+    def set_available(self, available):
+        self.available = available
+        self.update_available = timezone.now()
 
     def __str__(self):
         return '{0.name} ({0.address})'.format(self)
@@ -137,6 +143,7 @@ class Agent(models.Model):
                 'address': self.address,
                 'collector_ip': self.collector.address,
                 'reachable': self.reachable,
+                'available': self.available,
                 'status': self.status,
         }
 

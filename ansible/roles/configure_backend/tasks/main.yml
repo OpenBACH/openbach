@@ -82,7 +82,7 @@
   uri: url=http://localhost:8000/collector/{{ item }}/state
   register: response
   with_items: "{{ groups.collector | default([]) }}"
-  delay: openbach_backend_retry_delay | default(5)
+  delay: "{{ openbach_backend_retry_delay | default(5) }}"
   retries: 20
   until: response.json.add.returncode in (200, 204)
 
@@ -103,6 +103,6 @@
   uri: url=http://localhost:8000/agent/{{ item }}/state
   register: response
   with_items: "{{ groups.agent | default([]) }}"
-  delay: openbach_backend_retry_delay | default(5)
+  delay: "{{ openbach_backend_retry_delay | default(5) }}"
   retries: 20
   until: response.json.install.returncode in (200, 204)

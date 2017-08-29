@@ -126,10 +126,13 @@
   remote_user: openbach
   notify: build collect agent library
 
-- name: Install OpenBACH API
-  synchronize: src=../src/agent/openbach-api/ dest=/opt/openbach/agent/openbach_api/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+- name: Upload OpenBACH API
+  copy: src=openbach_api-{{ openbach_api_version }}-py3-none-any.whl dest=/opt/openbach/agent/openbach_api/
   remote_user: openbach
-  notify: build openbach api packages
+
+- name: Install OpenBACH API
+  pip: executable=pip3 name=/opt/openbach/agent/openbach_api/openbach_api-{{ openbach_api_version }}-py3-none-any.whl
+  become: yes
 
 - name: Install the Agent's Daemon
   copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}

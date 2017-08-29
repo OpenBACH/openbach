@@ -633,7 +633,7 @@ class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         self._update_agent()
 
 
-def RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
+class RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
     """Action responsible for status retrieval about several Agents"""
 
     def __init__(self, addresses):

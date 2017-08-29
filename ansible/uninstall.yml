@@ -48,16 +48,12 @@
 - name: Uninstall Controllers
   hosts: controller
   roles:
-    - role: clear_backend
-      when: openbach_clear_databases | default(False)
     - uninstall_controller
 
 
 - name: Uninstall Collectors
   hosts: collector
   roles:
-    - role: clear_data
-      when: openbach_clear_databases | default(False)
     - uninstall_collector
 
 

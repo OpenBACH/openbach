@@ -25,6 +25,11 @@
     - openbach_backend_local
   become: yes
 
+- name: Drop the Backend Database
+  postgresql_db: name=openbach_db state=absent
+  become: yes
+  when: openbach_clear_databases | default(False)
+
 - name: Restore postgresql Backup
   shell: ls -t1 pg_hba.conf.* | tail -1 | xargs -I XXX mv XXX pg_hba.conf chdir=/etc/postgresql/9.5/main/
   ignore_errors: yes

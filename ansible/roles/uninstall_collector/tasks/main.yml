@@ -1,6 +1,6 @@
 ---
 
-- name: Stop Controller Services
+- name: Stop Collector Services
   systemd: name={{ item }} state=stopped enabled=no daemon_reload=yes
   with_items:
     - elasticsearch
@@ -12,12 +12,32 @@
   file: path=/etc/elasticsearch/elasticsearch.yml state=absent
   become: yes
 
+- name: Remove Elasticsearch Data
+  file: path=/var/lib/elasticsearch/openbach state=absent
+  become: yes
+  when: openbach_clear_database | default(False)
+
 - name: Remove Logstash Config Files
   file: path=/etc/logstash/conf.d/{{ item }} state=absent
   with_items:
     - pattern
     - collector.conf
   become: yes
+
+- name: Remove Logstash Logs
+  file: path=/var/log/logstash state=absent
+  become: yes
+  when: openbach_clear_database | default(False)
+
+- name: Remove InfluxDB Logs
+  file: path=/var/log/influxdb state=absent
+  become: yes
+  when: openbach_clear_database | default(False)
+
+- name: Remove InfluxDB Data
+  file: path=/var/lib/influxdb state=absent
+  become: yes
+  when: openbach_clear_database | default(False)
 
 - name: Remove Collector Packages
   apt: name={{ item }} state=absent

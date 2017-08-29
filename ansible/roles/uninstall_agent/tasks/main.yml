@@ -58,7 +58,9 @@
       DESTDIR: /usr/
   become: yes
 
-# TODO: remove openbach-api egg
+- name: Remove Openbach API Modules
+  pip: executable=pip3 name=openbach_api state=absent
+  become: yes
 
 - name: Remove Agent Repository
   file: path=/opt/openbach/agent state=absent

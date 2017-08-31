@@ -41,7 +41,6 @@ __credits__ = '''Contributors:
 import os
 import atexit
 import tempfile
-import threading
 import multiprocessing
 
 from ansible.executor.playbook_executor import PlaybookExecutor
@@ -302,14 +301,14 @@ class PlaybookBuilder():
 
 
 def _run_playbook(queue):
-    running_threads = set()
+    running_playbooks = set()
 
     while True:
         check_error = None
         action = queue.get()
         if action is None:
-            for thread in running_threads:
-                thread.join()
+            for playbook in running_playbooks:
+                playbook.join()
             return
 
         try:
@@ -337,21 +336,21 @@ def _run_playbook(queue):
         if check_error is not None:
             _terminate_playbook(pipe, check_error.json)
         else:
-            play_thread = threading.Thread(
+            play_book = multiprocessing.Process(
                     target=_execute_playbook,
                     args=(play, pipe, args, kwargs))
-            play_thread.start()
-            running_threads.add(play_thread)
+            play_book.start()
+            running_playbooks.add(play_book)
 
-        _join_threads(running_threads)
+        _clean_finished_playbooks(running_playbooks)
 
 
-def _join_threads(threads):
-    for thread in threads:
-        thread.join(0.05)
-    terminated = [thread for thread in threads if not thread.is_alive()]
-    for thread in terminated:
-        threads.remove(thread)
+def _clean_finished_playbooks(playbooks):
+    for playbook in playbooks:
+        playbook.join(0.05)
+    terminated = [playbook for playbook in playbooks if not playbook.is_alive()]
+    for playbook in terminated:
+        playbooks.remove(playbook)
 
 
 def _execute_playbook(method, pipe, args, kwargs):
@@ -359,6 +358,8 @@ def _execute_playbook(method, pipe, args, kwargs):
         method(*args, **kwargs)
     except errors.ConductorError as e:
         _terminate_playbook(pipe, e.json)
+    except Exception as e:
+        _terminate_playbook(pipe, {'error': str(e)})
     else:
         _terminate_playbook(pipe)
 

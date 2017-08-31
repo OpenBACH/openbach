@@ -4,6 +4,14 @@
   shell: ssh openbach@{{ item }} -o StrictHostKeyChecking=no -q exit
   with_items: "{{ groups.agent | default([]) }}"
   remote_user: openbach
+  tags:
+    - consider_safe_network
+
+- name: Deactivate Ansible Host Key Checking on the Controller
+  copy: src=ansible.cfg dest=/home/openbach/.ansible.cfg
+  remote_user: openbach
+  tags:
+    - consider_safe_network
 
 - name: Create the Variables Folder
   file: path=/opt/openbach/controller/ansible/{{ item }} state=directory

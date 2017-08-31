@@ -3,14 +3,13 @@
 - name: Install apt dependencies
   apt: pkg={{ item }} state=installed update_cache=no
   with_items:
+    - sshpass
     - postgresql-server-dev-9.5
     - postgresql
     - libpq-dev  # For psycopg2, necessary for ansible's postgresql_* modules
     - python-dev  # For psycopg2, necessary for ansible's postgresql_* modules
   become: yes
-  environment:
-    http_proxy: openbach_http_proxy
-    https_proxy: openbach_https_proxy
+  environment: "{{ openbach_proxy_env }}"
   notify: restart postgresql
 
 - name: Install pip Dependencies (for ansible modules to run)

@@ -11,9 +11,7 @@
 - name: Update apt cache
   apt: update_cache=yes
   become: yes
-  environment:
-    http_proxy: openbach_http_proxy
-    https_proxy: openbach_https_proxy
+  environment: "{{ openbach_proxy_env }}"
 
 - name: Install apt dependencies
   apt: pkg={{ item }} state=installed update_cache=no
@@ -28,9 +26,7 @@
     - g++
     - rsync
   become: yes
-  environment:
-    http_proxy: openbach_http_proxy
-    https_proxy: openbach_https_proxy
+  environment: "{{ openbach_proxy_env }}"
   notify:
     - restart ntp
     - restart rsyslog

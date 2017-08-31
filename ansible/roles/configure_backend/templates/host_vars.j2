@@ -1,11 +1,6 @@
 ---
 
-{% if hostvars[item].openbach_http_proxy %}
-openbach_http_proxy: {{ hostvars[item].openbach_http_proxy }}
-{% endif %}
-{% if hostvars[item].openbach_https_proxy %}
-openbach_https_proxy: {{ hostvars[item].openbach_https_proxy }}
-{% endif %}
+openbach_proxy_env: {{ hostvars[item].openbach_proxy_env }}
 {% if hostvars[item].ansible_connection is defined %}
 ansible_connection: {{ hostvars[item].ansible_connection }}
 {% if hostvars[item].ansible_winrm_server_cert_validation is defined %}

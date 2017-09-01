@@ -172,7 +172,6 @@ class PlaybookBuilder():
         and raise a ConductorError if not.
         """
         self.options.tags[:] = tags
-        self.add_variables(is_run_from_conductor=True)
         playbook_results = PlayResult()
 
         tasks = PlaybookExecutor(

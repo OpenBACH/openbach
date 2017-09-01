@@ -75,8 +75,14 @@
     - auditorium
   gather_facts: no
   post_tasks:
-    - name: Remove the openbach user
+    - name: Remove the Controller Public Key from the openbach User Authorized Keys
       authorized_key: user=openbach state=absent key={{ lookup('file', '/home/openbach/.ssh/id_rsa.pub') }}
+      when: is_run_from_conductor
+
+    - name: Remove the openbach User
+      user: user=openbach state=absent remove=yes
+      become: yes
+      when: not is_run_from_conductor
 
 
 - hosts: localhost

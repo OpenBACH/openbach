@@ -76,8 +76,7 @@
   gather_facts: no
   post_tasks:
     - name: Remove the openbach user
-      user: user=openbach state=absent remove=yes
-      become: yes
+      authorized_key: user=openbach state=absent key={{ lookup('file', '/home/openbach/.ssh/id_rsa.pub') }}
 
 
 - hosts: localhost

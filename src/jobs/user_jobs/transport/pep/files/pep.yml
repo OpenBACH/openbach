@@ -11,8 +11,8 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/pep/set_pep.py'
-    command_stop:  '/opt/openbach-jobs/pep/unset_pep.sh'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/pep/set_pep.py'
+    command_stop:  '/bin/bash /opt/openbach/agent/jobs/pep/unset_pep.sh'
 
 arguments:
   required:

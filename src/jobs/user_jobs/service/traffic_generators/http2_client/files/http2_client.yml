@@ -12,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'python /opt/openbach-jobs/http2_client/http2_client.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_client/http2_client.py'
     command_stop:
 
 arguments:

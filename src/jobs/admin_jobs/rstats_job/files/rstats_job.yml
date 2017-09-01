@@ -13,7 +13,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/rstats_job/rstats_job.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/rstats_job/rstats_job.py'
     command_stop:
 
 arguments:

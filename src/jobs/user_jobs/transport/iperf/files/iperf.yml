@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'python3 /opt/openbach-jobs/iperf/iperf.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/iperf/iperf.py'
     command_stop:
 
 arguments:

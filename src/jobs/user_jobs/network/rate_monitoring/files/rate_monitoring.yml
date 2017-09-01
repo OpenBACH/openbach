@@ -10,7 +10,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       'python /opt/openbach-jobs/rate_monitoring/rate_monitoring.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/rate_monitoring/rate_monitoring.py'
     command_stop:
 
 arguments:

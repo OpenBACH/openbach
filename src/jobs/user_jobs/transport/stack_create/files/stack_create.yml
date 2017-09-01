@@ -12,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach-jobs/stack_create/stack_create.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/stack_create/stack_create.py'
     command_stop:
 
 arguments:

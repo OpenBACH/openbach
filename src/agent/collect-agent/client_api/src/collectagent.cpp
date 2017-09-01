@@ -21,7 +21,6 @@ namespace collect_agent {
  */
 asio::io_service io_service;
 asio::ip::udp::resolver resolver(io_service);
-asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::query(asio::ip::udp::v4(), "", "1111"));
 
 
 inline unsigned int from_env(const char* name, unsigned int default_value) {
@@ -51,6 +50,7 @@ inline unsigned int from_env(const char* name, unsigned int default_value) {
  */
 std::string rstats_messager(const std::string& message) {
   asio::error_code error;
+  static asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::query(asio::ip::udp::v4(), "", "1111"));
 
   // Connect to the RStats service and send our message
   asio::ip::udp::socket sock(io_service);

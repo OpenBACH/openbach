@@ -1,7 +1,7 @@
 [Unit]
 Description=Startup script for OpenBACH Agent
-Requires=network.target
-Requires=rstats.service
+Requires=network.target rstats.service
+After=rstats.service
 
 [Service]
 Type=simple

@@ -186,6 +186,17 @@ class NoSuchJobException(Exception):
     pass
 
 
+class TruncatedMessageException(Exception):
+    def __init__(self, expected_length, length):
+        message = (
+                'Message trunctated before '
+                'reading the whole content. '
+                'Expected {} bytes but read {}'
+                .format(expected_length, length)
+        )
+        super().__init__(message)
+
+
 def popen(command, args, **kwargs):
     return psutil.Popen(
             shlex.split(command) + shlex.split(args),
@@ -745,26 +756,34 @@ class AgentServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 class RequestHandler(socketserver.BaseRequestHandler):
     def _read_all(self, amount):
+        expected = amount
         buffer = bytearray(amount)
         view = memoryview(buffer)
         while amount > 0:
             received = self.request.recv_into(view[-amount:])
             if not received:
-                break
+                raise TruncatedMessageException(expected, expected - amount)
             amount -= received
         return buffer
 
     def handle(self):
         """Handle message comming from the conductor"""
-        message_length = self._read_all(4)
-        message_length, = struct.unpack('>I', message_length)
-        message = self._read_all(message_length)
         try:
-            message = message.decode()
+            message_length = self._read_all(4)
+            message_length, = struct.unpack('>I', message_length)
+            message = self._read_all(message_length).decode()
             syslog.syslog(syslog.LOG_INFO, message)
             action_name, *arguments = shlex.split(message)
             action = ''.join(map(str.title, action_name.split('_')))
             handler = globals()[action](*arguments)
+        except TruncatedMessageException as e:
+            msg = str(e)
+            syslog.syslog(syslog.LOG_WARNING, msg)
+            result = 'KO {}'.format(msg).encode()
+        except struct.error as e:
+            msg = 'Error converting the message length to an integer: {}'.format(e)
+            syslog.syslog(syslog.LOG_CRIT, msg)
+            result = 'KO {}'.format(msg).encode()
         except KeyError:
             msg = 'Unknown action: {}'.format(action_name)
             syslog.syslog(syslog.LOG_CRIT, msg)

@@ -165,20 +165,18 @@ class PlaybookBuilder():
         variables.update(kwargs)
         self.variables.extra_vars = variables
 
-    def launch_playbook(self, *tags):
+    def launch_playbook(self, play_name):
         """Actually run the configured Playbook.
 
         Check that the configuration is valid before doing so
         and raise a ConductorError if not.
         """
-        self.options.tags[:] = tags
+        playbook = '/opt/openbach/controller/ansible/{}.yml'.format(play_name)
         playbook_results = PlayResult()
-
         tasks = PlaybookExecutor(
-                playbooks=['/opt/openbach/controller/ansible/conductor.yml'],
-                inventory=self.inventory, variable_manager=self.variables,
-                loader=self.loader, options=self.options,
-                passwords=self.passwords)
+                playbooks=[playbook], inventory=self.inventory,
+                variable_manager=self.variables, loader=self.loader,
+                options=self.options, passwords=self.passwords)
         tasks._tqm._callback_plugins.append(playbook_results)
         tasks.run()
         playbook_results.raise_for_error()
@@ -197,7 +195,7 @@ class PlaybookBuilder():
                 influxdb_database_precision=collector['stats_database_precision'],
                 broadcast_mode=collector['logstash_broadcast_mode'],
                 auditorium_broadcast_port=collector['logstash_broadcast_port'])
-        self.launch_playbook('install_collector')
+        self.launch_playbook('install')
 
     @classmethod
     def uninstall_collector(cls, collector):
@@ -213,7 +211,7 @@ class PlaybookBuilder():
                 influxdb_database_precision=collector['stats_database_precision'],
                 broadcast_mode=collector['logstash_broadcast_mode'],
                 auditorium_broadcast_port=collector['logstash_broadcast_port'])
-        self.launch_playbook('uninstall_collector')
+        self.launch_playbook('uninstall')
 
     @classmethod
     def install_agent(cls, address, collector, username=None, password=None):
@@ -228,7 +226,7 @@ class PlaybookBuilder():
                 influxdb_database_name=collector['stats_database_name'],
                 influxdb_database_precision=collector['stats_database_precision'],
                 broadcast_mode=collector['logstash_broadcast_mode'])
-        self.launch_playbook('install_agent')
+        self.launch_playbook('install')
 
     @classmethod
     def uninstall_agent(cls, address, collector):
@@ -243,7 +241,7 @@ class PlaybookBuilder():
                 influxdb_database_name=collector['stats_database_name'],
                 influxdb_database_precision=collector['stats_database_precision'],
                 broadcast_mode=collector['logstash_broadcast_mode'])
-        self.launch_playbook('uninstall_agent')
+        self.launch_playbook('uninstall')
 
     @classmethod
     def check_connection(cls, address):

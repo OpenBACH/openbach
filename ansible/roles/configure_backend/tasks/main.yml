@@ -29,7 +29,12 @@
   with_items:
     - install.yml
     - uninstall.yml
-    - conductor.yml
+    - assign_collector.yml
+    - check_connection.yml
+    - enable_logs.yml
+    - install_a_job.yml
+    - push_files.yml
+    - uninstall_a_job.yml
   remote_user: openbach
 
 - name: Configure HTTP Proxies for Agents

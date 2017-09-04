@@ -1,0 +1,7 @@
+---
+
+- hosts: all
+  tasks:
+    - name: Assign a new Collector to an Agent
+      template: src=roles/install_agent/templates/collector.yml.j2 dest=/opt/openbach/agent/collector.yml
+      remote_user: openbach

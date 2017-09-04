@@ -2694,9 +2694,9 @@ class BackendHandler(socketserver.BaseRequestHandler):
             result = {'response': response, 'returncode': returncode}
             syslog.syslog(syslog.LOG_INFO, '{}'.format(result))
         finally:
+            self.request.sendall(b'Done')
             with open(fifoname, 'w') as fifo:
                 json.dump(result, fifo, cls=DjangoJSONEncoder)
-            self.request.sendall(b'Done')
 
     def execute_request(self, request):
         """Analyze the data received to execute the right action"""

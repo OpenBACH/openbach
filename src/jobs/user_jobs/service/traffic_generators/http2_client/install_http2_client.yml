@@ -32,9 +32,8 @@
 
 ---
 
-- name: Create HTTP2 Client repository
-  file: path=/opt/openbach/agent/jobs/http2_client state=directory mode=0755
-  remote_user: openbach
+- name: Create the HTTP2 Client Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Install nghttpd requirements
   apt: pkg={{ item }} state=present update_cache=false
@@ -93,8 +92,7 @@
   when: nghttp_check_deb.rc == 1
 
 - name: Install HTTP2 Client
-  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/http2_client/ mode={{ item.mode }}
+  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { name: 'http2_client.py', mode: '0755' }
     - { name: 'http2_client.help', mode: '0644' }
-  remote_user: openbach

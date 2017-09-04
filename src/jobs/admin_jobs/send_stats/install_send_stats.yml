@@ -32,9 +32,8 @@
 
 ---
 
-- name: Create the Send_Stats Job repository
+- name: Create the Send_Stats Job Repository
   file: path=/opt/openbach/agent/jobs/send_stats/ state=directory
-  remote_user: openbach
 
 - name: Install send_stats
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/send_stats/ mode={{ item.mode }}
@@ -42,4 +41,3 @@
     - { file: 'send_stats.py', mode: '0755' }
     - { file: 'send_stats.help', mode: '0644' }
     - { file: 'send_stats_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

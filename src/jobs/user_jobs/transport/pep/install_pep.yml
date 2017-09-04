@@ -51,15 +51,13 @@
   shell: make install chdir=/tmp/pepsal-transparent/
   become: yes
 
-- name: Create the Pep Job repository
-  file: path=/opt/openbach/agent/jobs/pep state=directory
-  remote_user: openbach
+- name: Create the Pep Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
 - name: Install the Pep Job
-  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/pep/{{ item.name }} mode={{ item.mode }}
+  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/{{ job_name }}/{{ item.name }} mode={{ item.mode }}
   with_items:
     - { name: 'set_pep.py', mode: '0755' }
     - { name: 'unset_pep.sh', mode: '0755' }
     - { name: 'pep.help', mode: '0644' }
     - { name: 'pep_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

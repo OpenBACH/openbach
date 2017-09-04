@@ -58,9 +58,8 @@
   shell: make install chdir=/tmp/iproute-mptcp/
   become: yes
 
-- name: Create the mptcp Job repository
+- name: Create the Mptcp Job Repository
   file: path=/opt/openbach/agent/jobs/mptcp state=directory
-  remote_user: openbach
 
 - name: Install the mptcp Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/mptcp/ mode={{ item.mode }}
@@ -68,4 +67,3 @@
     - { file: 'mptcp.py', mode: '0755' }
     - { file: 'mptcp.help', mode: '0644' }
     - { file: 'mptcp_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

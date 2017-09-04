@@ -40,9 +40,8 @@
     - lxml
   become: yes
   
-- name: Create the HTTP Client Job repository
+- name: Create the HTTP Client Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
-  remote_user: openbach
 
 - name: Install the HTTP Client Job
   copy: src={{ item.file }} dest=/opt/openbach/agentêjobs/{{ job_name }}/ mode={{ item.mode }}
@@ -50,4 +49,3 @@
     - { file: 'http_client_plt.help', mode: '0644' }
     - { file: 'http_client_plt.py', mode: '0755' }
     - { file: 'http_client_plt_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

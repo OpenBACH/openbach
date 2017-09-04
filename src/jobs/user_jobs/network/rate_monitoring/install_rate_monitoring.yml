@@ -39,9 +39,8 @@
     - {name: apscheduler, version: 3.2.0}
   become: yes
   
-- name: Create the Rate Monitoring Job repository
+- name: Create the Rate Monitoring Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
-  remote_user: openbach
 
 - name: Install the Rate Monitoring Job
   copy: src={{ item }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode=0644
@@ -49,4 +48,3 @@
     - rate_monitoring.py
     - rate_monitoring_rstats_filter.conf
     - rate_monitoring.help
-  remote_user: openbach

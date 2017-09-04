@@ -32,13 +32,11 @@
 
 ---
 
-- name: Create the Rsyslog_Job Job repository
+- name: Create the Rsyslog_Job Job Repository
   file: path=/opt/openbach/agent/jobs/rsyslog_job/ state=directory
-  remote_user: openbach
 
 - name: Install the Rsyslog_Job Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/rsyslog_job/ mode={{ item.mode }}
   with_items:
     - { file: 'rsyslog_job.py', mode: '0755' }
     - { file: 'rsyslog_job.help', mode: '0644' }
-  remote_user: openbach

@@ -32,9 +32,8 @@
 
 ---
 
-- name: Create HTTP2 Client repository
+- name: Create HTTP2 Client Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
-  remote_user: openbach
 
 - name: Install nghttpd requirements
   apt: pkg={{ item }} state=present update_cache=false
@@ -98,4 +97,3 @@
     - { file: '{{ job_name }}.py', mode: '0755' }
     - { file: '{{ job_name }}.help', mode: '0644' }
     - { file: '{{ job_name }}_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

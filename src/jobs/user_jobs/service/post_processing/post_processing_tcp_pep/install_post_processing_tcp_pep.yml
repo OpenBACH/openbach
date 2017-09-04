@@ -32,9 +32,8 @@
 
 ---
 
-- name: Create the Tcp Pep Job repository
+- name: Create the Tcp Pep Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
-  remote_user: openbach
 
 - name: Install the Tcp Pep Job
   copy: src={{ item }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode=0644
@@ -42,4 +41,3 @@
     - "{{ job_name }}.py"
     - "{{ job_name }}.help"
     - "{{ job_name }}_rstats_filter.conf"
-  remote_user: openbach

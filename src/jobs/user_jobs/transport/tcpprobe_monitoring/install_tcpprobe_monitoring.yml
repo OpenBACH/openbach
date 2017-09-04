@@ -32,9 +32,8 @@
 
 ---
 
-- name: Create the Tcpprobe Monitoring Job repository
+- name: Create the Tcpprobe Monitoring Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
-  remote_user: openbach
 
 - name: Install the Tcpprobe Monitoring Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
@@ -42,17 +41,13 @@
     - { file: 'tcpprobe_monitoring.py', mode: '0755' } 
     - { file: 'tcpprobe_monitoring_rstats_filter.conf', mode: '0644' }
     - { file: 'tcpprobe_monitoring.help', mode: '0644' }
-  remote_user: openbach
 
 - name: Upload tcpprobe_new_fix module sources
   synchronize: src=../src/jobs/user_jobs/transport/tcpprobe_monitoring/files/tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
-  remote_user: openbach
 
 - name: Modify tcp_probe module
   replace: dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/tcp_probe_new_fix.c regexp='^(.*)srtt_us(.*)$' replace='\1srtt\2'
   when: ansible_distribution_version == "14.04"
-  remote_user: openbach
    
 - name: Build tcpprobe_new_fix module 
   make: chdir=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/
-  remote_user: openbach

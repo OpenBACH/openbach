@@ -35,14 +35,12 @@
 - name: Install package iperf
   apt: name=iperf state=present
   become: yes
-  
-- name: Create Iperf repository
-  file: path=/opt/openbach/agent/jobs/iperf state=directory mode=0755
-  remote_user: openbach
+
+- name: Create the Iperf Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Install Iperf
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/iperf/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'iperf.help', mode: '0644' }
     - { file: 'iperf.py', mode: '0755' }
-  remote_user: openbach

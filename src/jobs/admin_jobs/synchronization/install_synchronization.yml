@@ -32,13 +32,11 @@
 
 ---
 
-- name: Create Synchronization repository
+- name: Create Synchronization Repository
   file: path=/opt/openbach/agent/jobs/synchronization state=directory mode=0755
-  remote_user: openbach
 
 - name: Install Synchronization Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/synchronization/ mode={{ item.mode }}
   with_items:
     - { file: 'synchronization.py', mode: '0755' }
     - { file: 'synchronization.help', mode: '0644' }
-  remote_user: openbach

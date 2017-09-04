@@ -32,13 +32,11 @@
 
 ---
 
-- name: Create the Empty_InfluxDB_DB Job repository
+- name: Create the Empty_InfluxDB_DB Job Repository
   file: path=/opt/openbach/agent/jobs/empty_influxdb_db/ state=directory
-  remote_user: openbach
 
 - name: Install the Empty_InfluxDB_DB Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/empty_influxdb_db/ mode={{ item.mode }}
   with_items:
     - { file: 'empty_influxdb_db.py', mode: '0755' }
     - { file: 'empty_influxdb_db.help', mode: '0644' }
-  remote_user: openbach

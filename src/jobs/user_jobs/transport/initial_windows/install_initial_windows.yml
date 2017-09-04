@@ -32,13 +32,11 @@
 
 ---
 
-- name: Create the Initial Windows Job repository
-  file: path=/opt/openbach/agent/jobs/initial_windows state=directory mode=0755
-  remote_user: openbach
+- name: Create the Initial Windows Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Install the Initial Windows Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/initial_windows/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'initial_windows.py', mode: '0755' }
     - { file: 'initial_windows.help', mode: '0644' }
-  remote_user: openbach

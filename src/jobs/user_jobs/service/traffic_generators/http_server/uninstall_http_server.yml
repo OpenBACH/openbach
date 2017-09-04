@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: http_server.yml
-  
-  tasks:
-  - name: Remove http Server repository
-    file: path=/opt/openbach-jobs/http_server state=absent
-    become: yes
-
-  - name: Remove http Server configuration file
-    file: path= /opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-    
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the HTTP Server Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

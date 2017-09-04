@@ -32,13 +32,11 @@
 
 ---
 
-- name: Create the Send_Logs Job repository
+- name: Create the Send_Logs Job Repository
   file: path=/opt/openbach/agent/jobs/send_logs/ state=directory
-  remote_user: openbach
 
 - name: Install the Send_Logs Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/send_logs/ mode={{ item.mode }}
   with_items:
     - { file: 'send_logs.py', mode: '0755' }
     - { file: 'send_logs.help', mode: '0644' }
-  remote_user: openbach

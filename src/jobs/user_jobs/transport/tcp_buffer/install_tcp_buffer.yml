@@ -33,12 +33,10 @@
 ---
 
 - name: Create the Tcp Buffer Job repository
-  file: path=/opt/openbach/agent/jobs/tcp_buffer state=directory
-  remote_user: openbach
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
 - name: Install the Tcp Buffer Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/tcp_buffer/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'tcp_buffer.py', mode: '0755' }
     - { file: 'tcp_buffer.help', mode: '0644' }
-  remote_user: openbach

@@ -35,15 +35,13 @@
 - name: Install package netcat
   apt: name=netcat state=present
   become: yes
-  
-- name: Create the netcat Job repository
-  file: path=/opt/openbach/agent/jobs/netcat state=directory
-  remote_user: openbach
+
+- name: Create the netcat Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
 - name: Install the netcat Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/netcat/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'netcat.help', mode: '0644' }
     - { file: 'netcat.py', mode: '0755' }
     - { file: 'netcat_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

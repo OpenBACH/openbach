@@ -4,14 +4,12 @@
   apt: name=net-tools state=present
   become: yes
 
-- name: Create ifconfig repository
-  file: path=/opt/openbach/agent/jobs/ifconfig state=directory mode=0755
-  remote_user: openbach
+- name: Create the Ifconfig Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
-- name: Install ifconfig Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/ifconfig/ mode={{ item.mode }}
+- name: Install the Ifconfig Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'ifconfig.py', mode: '0755' }
     - { file: 'ifconfig.help', mode: '0644' }
     - { file: 'ifconfig_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

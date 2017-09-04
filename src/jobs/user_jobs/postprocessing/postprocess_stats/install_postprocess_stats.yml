@@ -44,9 +44,8 @@
   apt: pkg=python3-tk update_cache=false
   become: yes
       
-- name: Create the PostProcess_Stats Job repository
+- name: Create the PostProcess_Stats Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
-  remote_user: openbach
 
 - name: Install the PostProcess_Stats Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
@@ -54,4 +53,3 @@
     - { file: 'postprocess_stats.help', mode: '0644' }
     - { file: 'postprocess_stats.py', mode: '0755' }
     - { file: 'postprocess_stats_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

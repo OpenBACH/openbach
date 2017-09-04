@@ -88,17 +88,14 @@
   become: yes
   when: nghttp_check_deb.rc == 1
   
-- name: Create the HTTP2 Server Job repository
-  file: path=/opt/openbach/agent/jobs/http2_server state=directory mode=0755
-  remote_user: openbach
+- name: Create the HTTP2 Server Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Download the HTTP2 Server Job sources
-  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/http2_server/ mode={{ item.mode }}
+  copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { name: 'http2_server.help', mode: '0644' }
     - { name: 'http2_server.py', mode: '0755' }
-  remote_user: openbach
   
 - name: Install HTTP2 Server
-  unarchive: src=www/ dest=/opt/openbach/agent/jobs/http2_server/ recursive=yes delete=no
-  remote_user: openbach
+  synchronize: src=../src/jobs/user_jobs/service/traffic_generators/http2_server/files/www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no

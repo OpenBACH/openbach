@@ -39,14 +39,12 @@
     - fping
   become: yes
 
-- name: Create the Fping Job repository
-  file: path=/opt/openbach/agent/jobs/fping state=directory
-  remote_user: openbach
+- name: Create the Fping Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
 - name: Install the Fping Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/fping/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'fping.py', mode: '0755' }
     - { file: 'fping.help', mode: '0644' }
     - { file: 'fping_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

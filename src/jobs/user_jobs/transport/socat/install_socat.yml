@@ -36,15 +36,13 @@
 - name: Install package socat
   apt: name=socat state=present
   become: yes
-  
-- name: Create socat repository
-  file: path=/opt/openbach/agent/jobs/socat state=directory mode=0755
-  remote_user: openbach
+
+- name: Create the Socat Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Install socat
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/socat/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'socat.py', mode: '0755' }
     - { file: 'socat.help', mode: '0644' }
     - { file: 'socat_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

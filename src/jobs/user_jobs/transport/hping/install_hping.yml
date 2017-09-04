@@ -35,15 +35,13 @@
 - name: Install Hping
   apt: name=hping3 state=present
   become: yes
-  
-- name: Create the Hping Job repository
-  file: path=/opt/openbach/agent/jobs/hping state=directory mode=0755
-  remote_user: openbach
+
+- name: Create the Hping Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
 - name: Install the Hping Job
-  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/hping/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'hping.py', mode: '0755' }
     - { file: 'hping.help', mode: '0644' }
     - { file: 'hping_rstats_filter.conf', mode: '0644' }
-  remote_user: openbach

@@ -66,6 +66,7 @@
 - name: Uninstall Agents
   hosts: agent
   roles:
+    - uninstall_job
     - uninstall_agent
 
 

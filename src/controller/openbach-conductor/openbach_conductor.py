@@ -586,9 +586,17 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
 
     def _action(self):
         agent = self.get_agent_or_not_found_error()
+        installed_jobs = [
+                {'name': installed.job.name, 'path': installed.job.path}
+                for installed in agent.installed_jobs.all()
+        ]
         try:
             # Perform physical uninstallation through a playbook
-            start_playbook('uninstall_agent', agent.address, agent.collector.json)
+            start_playbook(
+                    'uninstall_agent',
+                    agent.address,
+                    agent.collector.json,
+                    jobs=installed_jobs)
         except errors.ConductorError:
             agent.set_status('Uninstall failed')
             agent.save()

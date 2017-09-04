@@ -229,8 +229,10 @@ class PlaybookBuilder():
         self.launch_playbook('install')
 
     @classmethod
-    def uninstall_agent(cls, address, collector):
+    def uninstall_agent(cls, address, collector, jobs=None):
         self = cls(address)
+        if jobs is not None:
+            self.add_variables(jobs=jobs)
         self.add_variables(
                 openbach_collector=collector['address'],
                 logstash_logs_port=collector['logs_port'],
@@ -356,7 +358,8 @@ def _execute_playbook(method, pipe, args, kwargs):
     except errors.ConductorError as e:
         _terminate_playbook(pipe, e.json)
     except Exception as e:
-        _terminate_playbook(pipe, {'error': str(e)})
+        error = errors.ConductorError(str(e))
+        _terminate_playbook(pipe, error.json)
     else:
         _terminate_playbook(pipe)
 

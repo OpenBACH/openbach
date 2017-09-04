@@ -2660,6 +2660,10 @@ class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 class BackendHandler(socketserver.BaseRequestHandler):
+    def finish(self):
+        """Close the connection after handling a request"""
+        self.request.close()
+
     def handle(self):
         """Handle message comming from the backend"""
 
@@ -2690,9 +2694,9 @@ class BackendHandler(socketserver.BaseRequestHandler):
             result = {'response': response, 'returncode': returncode}
             syslog.syslog(syslog.LOG_INFO, '{}'.format(result))
         finally:
-            self.request.sendall(b'Done')
             with open(fifoname, 'w') as fifo:
                 json.dump(result, fifo, cls=DjangoJSONEncoder)
+            self.request.sendall(b'Done')
 
     def execute_request(self, request):
         """Analyze the data received to execute the right action"""

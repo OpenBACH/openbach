@@ -766,6 +766,9 @@ class RequestHandler(socketserver.BaseRequestHandler):
             amount -= received
         return buffer
 
+    def finish(self):
+        self.request.close()
+
     def handle(self):
         """Handle message comming from the conductor"""
         try:

@@ -89,9 +89,7 @@ def send_log(priority, log):
 def send_stat(timestamp, suffix=None, **kwargs):
     if suffix is None:
         suffix = ''
-    stats = ' '.join(
-            '{} {}'.format(quote(k), quote(v))
-            for k, v in kwargs.items())
+    stats = ' '.join(quote(str(value)) for item in kwargs.items() for value in item)
     response = _send_stat(timestamp, quote(suffix).encode(), stats.encode())
     return response.decode(errors='replace')
 

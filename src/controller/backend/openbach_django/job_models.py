@@ -264,13 +264,13 @@ class JobInstance(models.Model):
         optional_arguments = self.job.job.optional_arguments.exclude(type='None')
 
         required = ' '.join(
-                quote(value) for argument in required_args
+                quote(str(value)) for argument in required_args
                 for value in argument.values.filter(job_instance=self))
         optional = ' '.join('{} {}'.format(
                     argument.flag,
                     ' '.join(
-                        quote(value) for value in
-                        argument.values.filter(job_instance=self).order_by('id')))
+                        quote(str(value)) for value in
+                        argument.values.filter(job_instance=self).order_by('argument_value_id')))
                 for argument in optional_arguments)
         flags = ' '.join(value.argument.flag for value in optional_flags_only)
 

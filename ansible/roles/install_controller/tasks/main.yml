@@ -95,6 +95,7 @@
   remote_user: openbach
   notify:
     - start backend
+    - start conductor
 
 - name: Set up local settings
   template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py

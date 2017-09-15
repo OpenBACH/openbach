@@ -17,7 +17,6 @@
   apt: pkg={{ item }} state=installed update_cache=no
   with_items:
     - ntp
-    - ntpdate
     - python-pip
     - python3-pip
     - python3-setuptools
@@ -56,6 +55,8 @@
   template: backup=yes src=ntp.conf.j2 dest=/etc/ntp.conf
   become: yes
   notify: restart ntp
+  tags:
+    - configure_ntp_server
 
 - name: Create OpenBACH's log folder
   file: path=/var/log/openbach state=directory mode=0777

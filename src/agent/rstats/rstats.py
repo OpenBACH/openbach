@@ -41,14 +41,15 @@ __credits__ = '''Contributors:
 '''
 
 
-import threading
-import logging
-import socket
 import shlex
+import socket
 import os.path
+import logging
 import functools
+import threading
 import contextlib
 import configparser
+import socketserver
 from itertools import groupby
 from time import strftime
 from collections import namedtuple
@@ -61,7 +62,7 @@ import yaml
 
 
 DEFAULT_LOG_PATH = '/var/openbach_stats/'
-RSTATS_CONFIG_FILE = '/opt/rstats/rstats.yml'
+RSTATS_CONFIG_FILE = '/opt/openbach/agent/rstats/rstats.yml'
 COLLECTOR_CONFIG_FILE = '/opt/openbach/agent/collector.yml'
 
 BOOLEAN_TRUE = frozenset({'t', 'T', 'true', 'True', 'TRUE'})
@@ -135,10 +136,10 @@ def get_statistics_sender():
 
 
 class Rstats:
-    def __init__(self, logpath=DEFAULT_LOG_PATH, confpath='',
-                 suffix=None, id=None, job_name=None, job_instance_id=0,
+    def __init__(self, connection_id, logpath=DEFAULT_LOG_PATH, confpath='',
+                 suffix=None, job_name=None, job_instance_id=0,
                  scenario_instance_id=0, owner_scenario_instance_id=0,
-                 agent_name='agent_name_not_found'):
+                 agent_name='agent_name_not_found', reset_handlers=False):
         self._mutex = threading.Lock()
         self.metadata = {
                 'job_name': 'rstats' if job_name is None else job_name,
@@ -150,19 +151,22 @@ class Rstats:
         if suffix is not None:
             self.metadata['suffix'] = suffix
 
-        logger_name = 'Rstats' if id is None else 'Rstats{}'.format(id)
-        self._logger = logging.getLogger(logger_name)
-        self._logger.setLevel(logging.INFO)
-        date = strftime("%Y-%m-%dT%H%M%S")
-        filename = '{}_{}.stats'.format(self.metadata['job_name'], date)
-        logfile = os.path.join(logpath, self.metadata['job_name'], filename)
-        try:
-            fhd = logging.FileHandler(logfile, mode='a')
-        except OSError:
-            pass
-        else:
-            fhd.setFormatter(logging.Formatter('{message}\n', style='{'))
-            self._logger.addHandler(fhd)
+        self._logger = logging.getLogger('rstats-{}'.format(connection_id))
+        if reset_handlers:
+            for handler in self._logger.handlers:
+                self._logger.removeHandler(handler)
+
+        if not self._logger.hasHandlers():
+            self._logger.setLevel(logging.INFO)
+            filename = '{}_{}.stats'.format(self.metadata['job_name'], strftime("%Y-%m-%dT%H%M%S"))
+            logfile = os.path.join(logpath, self.metadata['job_name'], filename)
+            try:
+                fhd = logging.FileHandler(logfile, mode='a')
+            except OSError:
+                pass
+            else:
+                fhd.setFormatter(logging.Formatter('{message}\n', style='{'))
+                self._logger.addHandler(fhd)
 
         self._confpath = confpath
         self.reload_conf()
@@ -295,127 +299,118 @@ class StatsManager:
             yield from self.stats.items()
 
 
-class ClientThread(threading.Thread):
-    def __init__(self, data, client_addr):
-        super().__init__()
-        self.data = data
-        self.client = client_addr
+######################################
+# Implementation of allowed requests #
+######################################
 
-    @contextlib.contextmanager
-    def _handle_parse_errors(self, name, expected_type):
-        try:
-            yield
-        except ValueError:
-            raise BadRequest('Message not formed well. Argument {} should '
-                             'be of type {}'.format(name, expected_type))
+@contextlib.contextmanager
+def _handle_parse_errors(name, expected_type):
+    try:
+        yield
+    except ValueError:
+        raise BadRequest('Message not formed well. Argument {} should '
+                         'be of type {}'.format(name, expected_type))
 
-    def create_stat(self, confpath, job, job_instance_id, scenario_instance_id,
-                    owner_scenario_instance_id, agent_name, new=False):
-        # Type conversion
-        with self._handle_parse_errors('job_instance_id', 'integer'):
-            job_instance_id = int(job_instance_id)
-        with self._handle_parse_errors('scenario_instance_id', 'integer'):
-            scenario_instance_id = int(scenario_instance_id)
-        with self._handle_parse_errors('owner_scenario_instance_id', 'integer'):
-            owner_scenario_instance_id = int(owner_scenario_instance_id)
-        with self._handle_parse_errors('new', 'boolean'):
-            new = bool(int(new))
 
-        manager = StatsManager()
-        statistic_id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
+def create_stat(confpath, job, job_instance_id, scenario_instance_id,
+                owner_scenario_instance_id, agent_name, new=False):
+    # Type conversion
+    with _handle_parse_errors('job_instance_id', 'integer'):
+        job_instance_id = int(job_instance_id)
+    with _handle_parse_errors('scenario_instance_id', 'integer'):
+        scenario_instance_id = int(scenario_instance_id)
+    with _handle_parse_errors('owner_scenario_instance_id', 'integer'):
+        owner_scenario_instance_id = int(owner_scenario_instance_id)
+    with _handle_parse_errors('new', 'boolean'):
+        new = bool(int(new))
 
-        if not new:
-            try:
-                manager[statistic_id]
-            except BadRequest:
-                new = True
+    manager = StatsManager()
+    statistic_id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
 
-        if new:
-            manager[statistic_id] = Rstats(
-                    confpath=confpath,
-                    job_name=job,
-                    id=statistic_id,
-                    job_instance_id=job_instance_id,
-                    scenario_instance_id=scenario_instance_id,
-                    owner_scenario_instance_id=owner_scenario_instance_id,
-                    agent_name=agent_name)
+    if new or statistic_id not in manager:
+        manager[statistic_id] = Rstats(
+                statistic_id,
+                confpath=confpath,
+                job_name=job,
+                job_instance_id=job_instance_id,
+                scenario_instance_id=scenario_instance_id,
+                owner_scenario_instance_id=owner_scenario_instance_id,
+                agent_name=agent_name,
+                reset_handlers=new)
 
-        return statistic_id
+    return statistic_id
 
-    def send_stat(self, connection_id, timestamp, *statistics):
-        # Type conversion
-        with self._handle_parse_errors('connection_id', 'integer'):
-            connection_id = int(connection_id)
-        with self._handle_parse_errors('timestamp', 'integer'):
-            timestamp = int(timestamp)
 
-        client_connection = StatsManager()[connection_id]
-        suffix = statistics[-1] if len(statistics) % 2 else None
-        statistics = dict(grouper(statistics, 2))
-        client_connection.send_stat(suffix, timestamp, statistics)
+def send_stat(connection_id, timestamp, *statistics):
+    # Type conversion
+    with _handle_parse_errors('connection_id', 'integer'):
+        connection_id = int(connection_id)
+    with _handle_parse_errors('timestamp', 'integer'):
+        timestamp = int(timestamp)
 
-    def reload_stat(self, connection_id):
-        # Type conversion
-        with self._handle_parse_errors('connection_id', 'integer'):
-            connection_id = int(connection_id)
+    client_connection = StatsManager()[connection_id]
+    suffix = statistics[-1] if len(statistics) % 2 else None
+    statistics = dict(grouper(statistics, 2))
+    client_connection.send_stat(suffix, timestamp, statistics)
 
-        client_connection = StatsManager()[connection_id]
+
+def reload_stat(connection_id):
+    # Type conversion
+    with _handle_parse_errors('connection_id', 'integer'):
+        connection_id = int(connection_id)
+
+    client_connection = StatsManager()[connection_id]
+    client_connection.reload_conf()
+
+
+def remove_stat(connection_id):
+    # Type conversion
+    with _handle_parse_errors('connection_id', 'integer'):
+        connection_id = int(connection_id)
+
+    del StatsManager()[connection_id]
+
+
+def reload_stats():
+    for _, client_connection in StatsManager():
         client_connection.reload_conf()
 
-    def remove_stat(self, connection_id):
-        # Type conversion
-        with self._handle_parse_errors('connection_id', 'integer'):
-            connection_id = int(connection_id)
 
-        del StatsManager()[connection_id]
+def change_config(scenario_instance_id, job_instance_id, broadcast, storage):
+    # Type conversion
+    with _handle_parse_errors('job_instance_id', 'integer'):
+        job_instance_id = int(job_instance_id)
+    with _handle_parse_errors('scenario_instance_id', 'integer'):
+        scenario_instance_id = int(scenario_instance_id)
+    with _handle_parse_errors('broadcast', 'boolean'):
+        broadcast = bool(int(broadcast))
+    with _handle_parse_errors('storage', 'boolean'):
+        storage = bool(int(storage))
 
-    def reload_stats(self):
-        for _, client_connection in StatsManager():
-            client_connection.reload_conf()
+    manager = StatsManager()
+    id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
+    client_connection = manager[id]
+    client_connection._rules['default'] = RstatsRule('default', storage, broadcast)
 
-    def change_config(self, scenario_instance_id, job_instance_id, broadcast, storage):
-        # Type conversion
-        with self._handle_parse_errors('job_instance_id', 'integer'):
-            job_instance_id = int(job_instance_id)
-        with self._handle_parse_errors('scenario_instance_id', 'integer'):
-            scenario_instance_id = int(scenario_instance_id)
-        with self._handle_parse_errors('broadcast', 'boolean'):
-            broadcast = bool(int(broadcast))
-        with self._handle_parse_errors('storage', 'boolean'):
-            storage = bool(int(storage))
 
-        manager = StatsManager()
-        id = manager.statistic_lookup(job_instance_id, scenario_instance_id)
-        client_connection = manager[id]
-        client_connection._rules['default'] = RstatsRule('default', storage, broadcast)
+#####################
+# Requests handling #
+#####################
 
-    def execute_request(self, data):
+class RstatsRequestHandler(socketserver.BaseRequestHandler):
+    AVAILABLE_FUNCTIONS = [
+            create_stat,
+            send_stat,
+            reload_stat,
+            remove_stat,
+            reload_stats,
+            change_config,
+    ]
+
+    def handle(self):
+        data, sock = self.request
         try:
-            request, *args = shlex.split(data)
-            request = int(request) - 1  # Compensate for collect_agent using 1-based indexing
-        except ValueError:
-            raise BadRequest('Type of request not recognized')
-
-        functions = [
-                self.create_stat,
-                self.send_stat,
-                self.reload_stat,
-                self.remove_stat,
-                self.reload_stats,
-                self.change_config,
-        ]
-        if request not in range(len(functions)):
-            raise BadRequest('Type of request not recognized')
-
-        try:
-            return functions[request](*args)
-        except TypeError as e:
-            raise BadRequest('Arguments length mismatch: {}'.format(e))
-
-    def run(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            result = self.execute_request(self.data.decode())
+            result = self.execute_request(data.decode())
         except BadRequest as e:
             msg = 'KO: {}\0'.format(e.reason)
             sock.sendto(msg.encode(), self.client)
@@ -428,17 +423,28 @@ class ClientThread(threading.Thread):
             else:
                 msg = 'OK {}\0'.format(result)
                 sock.sendto(msg.encode(), self.client)
-        finally:
-            sock.close()
+
+    def execute_request(self, data):
+        try:
+            request, *args = shlex.split(data)
+            request = int(request) - 1  # Compensate for collect_agent using 1-based indexing
+        except ValueError:
+            raise BadRequest('Type of request not recognized')
+
+        if request not in range(len(self.AVAILABLE_FUNCTIONS)):
+            raise BadRequest('Type of request not recognized')
+
+        try:
+            return self.AVAILABLE_FUNCTIONS[request](*args)
+        except TypeError as e:
+            raise BadRequest('Arguments length mismatch: {}'.format(e))
+
+
+class RstatsServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
+    allow_reuse_address = True
+    max_packet_size = 2**14
 
 
 if __name__ == '__main__':
-    import resource
-    resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
-
-    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.bind(('', 1111))
-
-    while True:
-        data, remote = udp_socket.recvfrom(2048)
-        ClientThread(data, remote).start()
+    with RstatsServer(('', 1111), RstatsRequestHandler) as server:
+        server.serve_forever()

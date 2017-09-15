@@ -36,6 +36,7 @@ __credits__ = '''Contributors:
 
 
 import ctypes
+from shlex import quote
 
 
 try:
@@ -89,10 +90,10 @@ def send_stat(timestamp, suffix=None, **kwargs):
     if suffix is None:
         suffix = ''
     stats = ' '.join(
-            '"{}" "{}"'.format(k, v)
+            '{} {}'.format(quote(k), quote(v))
             for k, v in kwargs.items())
-    return _send_stat(timestamp, suffix.encode(), stats.encode()).decode(
-        errors='replace')
+    response = _send_stat(timestamp, quote(suffix).encode(), stats.encode())
+    return response.decode(errors='replace')
 
 
 def reload_stat():

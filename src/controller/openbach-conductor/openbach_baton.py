@@ -36,6 +36,7 @@ __credits__ = '''Contributors:
 '''
 
 
+import shlex
 import struct
 import socket
 
@@ -97,8 +98,8 @@ class OpenBachBaton:
     def start_job_instance(self, job_name, job_id, scenario_id, owner_id, arguments, date=None, interval=None):
         assert sum(time is not None for time in (date, interval)) == 1
 
-        message = 'start_job_instance_agent "{}" {} {} {} {}{} {}'.format(
-                job_name, job_id, scenario_id, owner_id,
+        message = 'start_job_instance_agent {} {} {} {} {}{} {}'.format(
+                shlex.quote(job_name), job_id, scenario_id, owner_id,
                 '' if date is None else 'date {}'.format(date),
                 '' if interval is None else 'interval {}'.format(interval),
                 arguments)
@@ -107,8 +108,8 @@ class OpenBachBaton:
 
     def stop_job_instance(self, job_name, job_id, date):
         message = (
-                'stop_job_instance_agent "{}" {} date {}'
-                .format(job_name, job_id, date)
+                'stop_job_instance_agent {} {} date {}'
+                .format(shlex.quote(job_name), job_id, date)
         )
 
         return self.communicate(message)
@@ -116,8 +117,8 @@ class OpenBachBaton:
     def restart_job_instance(self, job_name, job_id, scenario_id, arguments, date=None, interval=None):
         assert sum(time is not None for time in (date, interval)) == 1
 
-        message = 'restart_job_instance_agent "{}" {} {} {}{} {}'.format(
-                job_name, job_id, scenario_id,
+        message = 'restart_job_instance_agent {} {} {} {}{} {}'.format(
+                shlex.quote(job_name), job_id, scenario_id,
                 '' if date is None else 'date {}'.format(date),
                 '' if interval is None else 'interval {}'.format(interval),
                 arguments)
@@ -127,8 +128,8 @@ class OpenBachBaton:
     def status_job_instance(self, job_name, job_id, date=None, interval=None, stop=None):
         assert sum(time is not None for time in (date, interval, stop)) == 1
 
-        message = 'status_job_instance_agent "{}" {} {}{}{}'.format(
-                job_name, job_id,
+        message = 'status_job_instance_agent {} {} {}{}{}'.format(
+                shlex.quote(job_name), job_id,
                 '' if date is None else 'date {}'.format(date),
                 '' if interval is None else 'interval {}'.format(interval),
                 '' if stop is None else 'stop {}'.format(stop))
@@ -139,7 +140,7 @@ class OpenBachBaton:
         return self.communicate('status_jobs_agent')
 
     def add_job(self, job_name):
-        return self.communicate('add_job_agent "{}"'.format(job_name))
+        return self.communicate('add_job_agent {}'.format(shlex.quote(job_name)))
 
     def remove_job(self, job_name):
-        return self.communicate('del_job_agent "{}"'.format(job_name))
+        return self.communicate('del_job_agent {}'.format(shlex.quote(job_name)))

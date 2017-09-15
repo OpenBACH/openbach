@@ -780,40 +780,33 @@ class RequestHandler(socketserver.BaseRequestHandler):
             action = ''.join(map(str.title, action_name.split('_')))
             handler = globals()[action](*arguments)
         except TruncatedMessageException as e:
-            msg = str(e)
-            syslog.syslog(syslog.LOG_WARNING, msg)
-            result = 'KO {}'.format(msg).encode()
+            self.send_response(str(e), syslog.LOG_WARNING)
         except struct.error as e:
-            msg = 'Error converting the message length to an integer: {}'.format(e)
-            syslog.syslog(syslog.LOG_CRIT, msg)
-            result = 'KO {}'.format(msg).encode()
+            self.send_response('Error converting the message length to an integer: {}'.format(e), syslog.LOG_CRIT)
         except KeyError:
-            msg = 'Unknown action: {}'.format(action_name)
-            syslog.syslog(syslog.LOG_CRIT, msg)
-            result = 'KO {}'.format(msg).encode()
+            self.send_response('Unknown action: {}'.format(action_name), syslog.LOG_CRIT)
         except TypeError as e:
-            msg = 'Bad parameters: {}'.format(e)
-            syslog.syslog(syslog.LOG_CRIT, msg)
-            result = 'KO {}'.format(msg).encode()
+            self.send_response('Bad parameters: {}'.format(e), syslog.LOG_CRIT)
         except Exception as e:
-            msg = 'Error on request: {} {}'.format(e.__class__.__name__, e)
-            syslog.syslog(syslog.LOG_ERR, msg)
-            result = 'KO {}'.format(msg).encode()
+            self.send_response('Error on request: {0.__class__.__name__} {0}'.format(e), syslog.LOG_ERR)
         else:
             try:
                 handler.action()
             except BadRequest as e:
-                syslog.syslog(syslog.LOG_ERR, e.reason)
-                result = e.reason.encode()
+                self.send_response(e.reason, syslog.LOG_ERR, False)
             except Exception as e:
-                msg = 'Error on request: {} {}'.format(e.__class__.__name__, e)
-                syslog.syslog(syslog.LOG_ERR, msg)
-                result = 'KO {}'.format(msg).encode()
+                self.send_response('Error on request: {0.__class__.__name__} {0}'.format(e), syslog.LOG_ERR)
             else:
-                result = b'OK'
-        finally:
-            length = struct.pack('>I', len(result))
-            self.request.sendall(length + result)
+                self.send_response('OK', add_ko=False)
+
+    def send_response(self, message, severity=None, add_ko=True):
+        if severity is not None:
+            syslog.syslog(severity, message)
+        if add_ko:
+            message = 'KO {}'.format(message)
+        result = message.encode()
+        length = struct.pack('>I', len(result))
+        self.request.sendall(length + result)
 
 
 if __name__ == '__main__':

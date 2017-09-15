@@ -42,6 +42,7 @@ __credits__ = '''Contributors:
 '''
 
 
+from shlex import quote
 from datetime import datetime
 
 from django.db import models, IntegrityError
@@ -262,13 +263,14 @@ class JobInstance(models.Model):
                 value='True')
         optional_arguments = self.job.job.optional_arguments.exclude(type='None')
 
-        quote = '"{}"'.format
         required = ' '.join(
                 quote(value) for argument in required_args
                 for value in argument.values.filter(job_instance=self))
         optional = ' '.join('{} {}'.format(
                     argument.flag,
-                    ' '.join(quote(value) for value in argument.values.filter(job_instance=self)))
+                    ' '.join(
+                        quote(value) for value in
+                        argument.values.filter(job_instance=self).order_by('id')))
                 for argument in optional_arguments)
         flags = ' '.join(value.argument.flag for value in optional_flags_only)
 

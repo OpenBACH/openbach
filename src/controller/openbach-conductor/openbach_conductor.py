@@ -2542,10 +2542,10 @@ class OrphanedLogs(ConductorAction):
         severity = self.level
         for collector in Collector.objects.all():
             connection = ElasticSearchConnection(collector.address, collector.logs_query_port)
-            logs = connection.orphans()
+            logs = connection.orphans(timestamps=self.timestamp)
             for log in logs.numbered_data.values():
                 if log.severity <= severity:
-                    yield log._timestamp, log.severity_label, log.logsource, log.message
+                    yield log._id, log._timestamp, log.severity_label, log.logsource, log.message
 
 
 ########

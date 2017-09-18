@@ -99,6 +99,24 @@ def extract_models(cls):
         yield from extract_models(sub_class)
 
 
+def extract_integer(container, name, *, default=None):
+    """Extract a field named `name` from the given container and
+    tries to convert it to an integer.
+
+    Return the default value if the field is not present or an
+    integer otherwise. Raise ValueError on failure.
+    """
+    try:
+        value = container[name]
+    except KeyError:
+        return default
+    else:
+        try:
+            return int(value)
+        except ValueError:
+            raise ValueError(name) from None
+
+
 class ValuesType(enum.Enum):
     INTEGER = 'int'
     BOOLEAN = 'bool'

@@ -50,7 +50,7 @@ except ImportError:
 from django.views.generic import base
 from django.http import JsonResponse, HttpResponse
 
-from .utils import send_fifo
+from .utils import send_fifo, extract_integer
 
 
 class GenericView(base.View):
@@ -354,11 +354,17 @@ class BaseJobView(GenericView):
 
     def _action_install(self, names, addresses):
         """Install jobs on some agents"""
+        try:
+            severity = extract_integer(self.request.JSON, 'severity', default=1)
+            l_severity = extract_integer(self.request.JSON, 'local_severity', default=1)
+        except ValueError as e:
+            return {'msg': 'POST data malformed: {} '
+                    'should be an integer'.format(e)}, 400
+
         return self.conductor_execute(
                 command='install_jobs',
                 names=names, addresses=addresses,
-                severity=self.request.JSON.get('severity', 1),
-                local_severity=self.request.JSON.get('local_severity', 1))
+                severity=severity, local_severity=l_severity)
 
     def _action_uninstall(self, names, addresses):
         """Uninstall jobs from some agents"""
@@ -793,6 +799,26 @@ class EntityView(GenericView):
                 command='delete_entity',
                 project=project_name,
                 name=entity_name)
+
+
+class LogsView(GenericView):
+    """Manage actions relative to logs retrieval"""
+
+    def get(self, request):
+        """Return the list of orphaned logs"""
+        try:
+            level = extract_integer(request.GET, 'level', default=5)
+            t_from = extract_integer(request.GET, 'timestamp_from')
+            t_to = extract_integer(request.GET, 'timestamp_to')
+        except ValueError as e:
+            return {'msg': 'GET data malformed: {} '
+                    'should be an integer'.format(e)}, 400
+
+        return self.conductor_execute(
+                command='orphaned_logs',
+                level=level,
+                timestamp_from=t_from,
+                timestamp_to=t_to)
 
 
 def push_file(request):

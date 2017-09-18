@@ -71,6 +71,7 @@ from apscheduler.jobstores.base import JobLookupError
 import errors
 from openbach_baton import OpenBachBaton
 from playbook_builder import start_playbook, setup_playbook_manager
+from data_access.elasticsearch_tools import ElasticSearchConnection
 
 
 # We need to use ansible from Python code so we can easily get failure
@@ -2516,6 +2517,35 @@ class KillAll(ConductorAction):
             WatchJobInstance(watch.job_instance.id, stop='now').action()
 
         return None, 204
+
+
+class OrphanedLogs(ConductorAction):
+    """Action that retrieve orphaned logs from all collectors"""
+
+    def __init__(self, level=7, timestamp_from=None, timestamp_to=None):
+        if timestamp_from is None and timestamp_to is None:
+            timestamp = None
+        else:
+            if timestamp_to is None:
+                timestamp_to = int(datetime.now().timestamp() * 1000)
+            if timestamp_from is None:
+                timestamp_from = timestamp_to
+            timestamp = (timestamp_from, timestamp_to)
+        super().__init__(level=level, timestamp=timestamp)
+
+    def _action(self):
+        logs = list(self._retrieve_orphans())
+        logs.sort()
+        return logs, 200
+
+    def _retrieve_orphans(self):
+        severity = self.level
+        for collector in Collector.objects.all():
+            connection = ElasticSearchConnection(collector.address, collector.logs_query_port)
+            logs = connection.orphans()
+            for log in logs.numbered_data.values():
+                if log.severity <= severity:
+                    yield log._timestamp, log.severity_label, log.logsource, log.message
 
 
 ########

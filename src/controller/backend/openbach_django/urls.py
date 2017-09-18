@@ -42,6 +42,8 @@ from . import views
 
 app_name = 'openbach_django'
 urlpatterns = [
+    url(r'^logs/?$', views.LogsView.as_view(), name='logs_view'),
+
     url(r'^collector/(?P<address>[^/]+)/state/?$',
         views.StateView.as_view(state_type='collector'),
         name='state_collector'),

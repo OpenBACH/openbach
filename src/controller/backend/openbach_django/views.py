@@ -808,17 +808,14 @@ class LogsView(GenericView):
         """Return the list of orphaned logs"""
         try:
             level = extract_integer(request.GET, 'level', default=5)
-            t_from = extract_integer(request.GET, 'timestamp_from')
-            t_to = extract_integer(request.GET, 'timestamp_to')
+            delay = extract_integer(request.GET, 'delay')
         except ValueError as e:
             return {'msg': 'GET data malformed: {} '
                     'should be an integer'.format(e)}, 400
 
         return self.conductor_execute(
                 command='orphaned_logs',
-                level=level,
-                timestamp_from=t_from,
-                timestamp_to=t_to)
+                level=level, delay=delay)
 
 
 def push_file(request):

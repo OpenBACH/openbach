@@ -2522,16 +2522,8 @@ class KillAll(ConductorAction):
 class OrphanedLogs(ConductorAction):
     """Action that retrieve orphaned logs from all collectors"""
 
-    def __init__(self, level=7, timestamp_from=None, timestamp_to=None):
-        if timestamp_from is None and timestamp_to is None:
-            timestamp = None
-        else:
-            if timestamp_to is None:
-                timestamp_to = int(datetime.now().timestamp() * 1000)
-            if timestamp_from is None:
-                timestamp_from = timestamp_to
-            timestamp = (timestamp_from, timestamp_to)
-        super().__init__(level=level, timestamp=timestamp)
+    def __init__(self, level=7, delay=None):
+        super().__init__(level=level, delay=delay)
 
     def _action(self):
         logs = list(self._retrieve_orphans())
@@ -2540,9 +2532,15 @@ class OrphanedLogs(ConductorAction):
 
     def _retrieve_orphans(self):
         severity = self.level
+        if self.delay is None:
+            timestamps = None
+        else:
+            now = int(datetime.now().timestamp() * 1000)
+            timestamps = (now - self.delay, now)
+
         for collector in Collector.objects.all():
             connection = ElasticSearchConnection(collector.address, collector.logs_query_port)
-            logs = connection.orphans(timestamps=self.timestamp)
+            logs = connection.orphans(timestamps=timestamps)
             for log in logs.numbered_data.values():
                 if log.severity <= severity:
                     yield log._id, log._timestamp, log.severity_label, log.logsource, log.message

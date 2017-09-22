@@ -1019,6 +1019,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                     'install_job',
                     agent.address,
                     agent.collector.address,
+                    agent.collector.logs_port,
                     job.name, job.path)
         OpenBachBaton(self.address).add_job(self.name)
 

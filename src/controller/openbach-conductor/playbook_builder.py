@@ -264,10 +264,11 @@ class PlaybookBuilder():
         self.launch_playbook('assign_collector')
 
     @classmethod
-    def install_job(cls, address, collector_ip, job_name, job_path):
+    def install_job(cls, address, collector_ip, logs_port, job_name, job_path):
         self = cls(address)
         self.add_variables(
                 openbach_collector=collector_ip,
+                logstash_logs_port=logs_port,
                 jobs=[{'name': job_name, 'path': job_path}])
         self.launch_playbook('install_a_job')
 

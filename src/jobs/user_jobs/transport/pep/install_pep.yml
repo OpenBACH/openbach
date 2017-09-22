@@ -42,7 +42,7 @@
   synchronize: src=../src/jobs/user_jobs/transport/pep/files/pepsal-transparent/ dest=/tmp/pepsal-transparent/ recursive=yes delete=yes
 
 - name: Compile Pep
-  shell: {{ item }} chdir=/tmp/pepsal-transparent/
+  shell: "{{ item }} chdir=/tmp/pepsal-transparent/"
   with_items:
     - "./configure"
     - "make"

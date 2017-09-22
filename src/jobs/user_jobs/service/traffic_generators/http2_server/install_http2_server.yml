@@ -65,11 +65,11 @@
   changed_when: nghttp_check_deb.rc == 1
   
 - name: Download nghttp2 sources
-  git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2
+  git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2 force=yes
   when: nghttp_check_deb.rc == 1
   
 - name: Compile nghttp2
-  shell: {{ item }} chdir=/tmp/nghttp2/
+  shell: "{{ item }} chdir=/tmp/nghttp2/"
   with_items:
     - "autoreconf -i"
     - "automake"

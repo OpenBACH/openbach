@@ -33,7 +33,7 @@
 ---
 
 - name: Create the Initial Spreading Fq Job Repository
-  file: path=/opt/openbach-jobs/{{ job_name }} state=directory
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
 - name: Install the Initial Spreading Fq Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}

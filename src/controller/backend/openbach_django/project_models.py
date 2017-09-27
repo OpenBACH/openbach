@@ -138,6 +138,13 @@ class Agent(models.Model):
 
     @property
     def json(self):
+        try:
+            entity = self.entity
+        except Entity.DoesNotExist:
+            project = None
+        else:
+            project = entity.project.name
+
         return {
                 'name': self.name,
                 'address': self.address,
@@ -145,6 +152,7 @@ class Agent(models.Model):
                 'reachable': self.reachable,
                 'available': self.available,
                 'status': self.status,
+                'project': project,
         }
 
 

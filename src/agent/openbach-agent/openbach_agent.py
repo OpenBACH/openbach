@@ -46,6 +46,7 @@ import socketserver
 from datetime import datetime
 from functools import partial
 from subprocess import DEVNULL
+from contextlib import suppress
 
 import yaml
 import psutil
@@ -88,8 +89,7 @@ def signal_term_handler(signal, frame):
     """ Function that handle the kill of the Openbach Agent """
     manager = JobManager()
     manager.scheduler.remove_all_jobs()
-    for name in JobManager().job_names:
-        DelJobAgent(name).action()
+    RestartAgent().action()
     while manager.scheduler.get_jobs():
         time.sleep(0.5)
     manager.scheduler.shutdown()
@@ -255,9 +255,13 @@ def stop_job_already_running(job_name, job_instance_id):
         return
 
     # Get the process
-    proc = psutil.Process(pid)
+    os.remove(pid_filename(job_name, job_instance_id))
+    try:
+        proc = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return
 
-    # Kill all its childs
+    # Kill all its children
     children = proc.children(recursive=True)
     for child in children:
         child.terminate()
@@ -271,8 +275,6 @@ def stop_job_already_running(job_name, job_instance_id):
         proc.wait(timeout=2)
     except psutil.TimeoutExpired:
         proc.kill()
-
-    os.remove(pid_filename(job_name, job_instance_id))
 
 
 def stop_job(job_name, job_instance_id, command=None, args=None):
@@ -288,10 +290,8 @@ def stop_job(job_name, job_instance_id, command=None, args=None):
             popen(command, args).wait()
 
     # Remove the Job Instance to the JobManager
-    try:
+    with suppress(KeyError):
         JobManager().pop_instance(job_name, job_instance_id)
-    except KeyError:
-        pass
 
 
 def status_job(job_name, job_instance_id):
@@ -330,10 +330,8 @@ def status_job(job_name, job_instance_id):
 
 def stop_watch(job_id):
     """ Function that stops the watch of the Job Instance """
-    try:
+    with suppress(JobLookupError):
         JobManager().scheduler.remove_job(job_id)
-    except JobLookupError:
-        pass
 
 
 def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
@@ -539,11 +537,11 @@ class DelJobAgent(AgentAction):
         manager = JobManager()
         job = manager.pop_job(self.name)
         command_stop = job['command_stop']
-        for job_instance_id, parameters in job['instances'].items():
-            if command_stop:
-                arguments = parameters['args']
-            else:
-                arguments = ''
+        jobs_to_stop = [
+                (job_instance_id, command_stop and parameters['args'] or '')
+                for job_instance_id, parameters in job['instances'].items()
+        ]
+        for job_instance_id, arguments in jobs_to_stop:
             manager.scheduler.add_job(
                     stop_job, 'date',
                     args=(self.name, job_instance_id, command_stop, arguments),
@@ -695,11 +693,8 @@ class RestartJobInstanceAgent(StartJobInstanceAgent):
         pass
 
     def _action(self):
-        try:
+        with suppress(KeyError):
             job = JobManager().pop_instance(self.name, self.instance_id)
-        except KeyError:
-            pass
-        else:
             infos = JobManager().get_job(self.name)
             command_stop = infos['command_stop']
             arguments = job['args']
@@ -749,6 +744,26 @@ class StatusJobsAgent(AgentAction):
         JobManager().scheduler.add_job(ls_jobs, 'date', id='ls_jobs')
 
 
+class RestartAgent(AgentAction):
+    def __init__(self):
+        super().__init__()
+
+    def _action(self):
+        manager = JobManager()
+        for job_name in manager.job_names:
+            job = manager.get_job(job_name)
+            command_stop = job['command_stop']
+            jobs_to_stop = [
+                    (job_instance_id, command_stop and parameters['args'] or '')
+                    for job_instance_id, parameters in manager.get_instances(job_name)
+            ]
+            for job_instance_id, arguments in jobs_to_stop:
+                manager.scheduler.add_job(
+                        stop_job, 'date',
+                        args=(job_name, job_instance_id, command_stop, arguments),
+                        id='{}{}_stop'.format(self.name, job_instance_id))
+
+
 class AgentServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """Choose the underlying technology for our sockets servers"""
     allow_reuse_address = True
@@ -793,7 +808,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
             try:
                 handler.action()
             except BadRequest as e:
-                self.send_response(e.reason, syslog.LOG_ERR, False)
+                self.send_response(e.reason, syslog.LOG_WARNING if e.reason.startswith('OK') else syslog.LOG_ERR, False)
             except Exception as e:
                 self.send_response('Error on request: {0.__class__.__name__} {0}'.format(e), syslog.LOG_ERR)
             else:

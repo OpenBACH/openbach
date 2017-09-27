@@ -750,6 +750,13 @@ class RestartAgent(AgentAction):
 
     def _action(self):
         manager = JobManager()
+
+        # Stop watches
+        for job in manager.scheduler.get_jobs():
+            if job.id.endswith('_status'):
+                job.remove()
+
+        # Stop actual jobs
         for job_name in manager.job_names:
             job = manager.get_job(job_name)
             command_stop = job['command_stop']

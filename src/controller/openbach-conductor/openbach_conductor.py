@@ -2319,7 +2319,7 @@ class EntityAction(ConductorAction):
     def _register_entity(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
         description = self.json_data.get('description')
-        agent = self.json_data.get('agent', {})
+        agent = self.json_data.get('agent')
         if agent:
             address = agent.get('address')
             agent = InfosAgent(address).get_agent_or_not_found_error()

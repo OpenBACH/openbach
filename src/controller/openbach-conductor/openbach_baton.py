@@ -144,3 +144,6 @@ class OpenBachBaton:
 
     def remove_job(self, job_name):
         return self.communicate('del_job_agent {}'.format(shlex.quote(job_name)))
+
+    def restart_agent(self):
+        return self.communicate('restart_agent')

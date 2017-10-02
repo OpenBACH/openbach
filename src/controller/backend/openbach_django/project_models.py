@@ -43,11 +43,10 @@ __credits__ = '''Contributors:
 
 
 from django.db import models
-from django.contrib.auth import hashers
 from django.utils import timezone
 
-from .utils import nullable_json
 from .scenario_models import Scenario
+from .utils import nullable_json
 
 
 class Collector(models.Model):

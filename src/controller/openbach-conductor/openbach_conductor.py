@@ -2020,13 +2020,15 @@ def get_waited(waiters, scenario_instance):
 
 
 def create_thread(openbach_function, functions_table):
+    thread_chooser = {
+            'If': IfThread,
+            'While': WhileThread,
+            'StartJobInstance': StartJobInstanceThread,
+    }
     openbach_function_model = openbach_function.openbach_function.get_content_model()
     openbach_function_name = openbach_function_model.__class__.__name__
-    if openbach_function_name == 'If':
-        return IfThread(openbach_function, functions_table)
-    if openbach_function_name == 'While':
-        return WhileThread(openbach_function, functions_table)
-    return OpenbachFunctionThread(openbach_function, functions_table)
+    openbach_function_thread_class = thread_chooser.get(openbach_function_name, OpenbachFunctionThread)
+    return openbach_function_thread_class(openbach_function, functions_table)
 
 
 class WaitScenarioToFinish(threading.Thread):
@@ -2142,17 +2144,36 @@ class OpenbachFunctionThread(threading.Thread):
         arguments = self.openbach_function.arguments
         # try:
         action = self.action(**arguments)
-        if self.action == StartJobInstance:
-            return action.openbach_function(
-                    self.openbach_function,
-                    self.wait_for_finished_queues)
-        else:
-            return action.openbach_function(self.openbach_function)
         # except TypeError:
         #     ??? TODO
+        return action.openbach_function(self.openbach_function)
 
     def stop(self):
         self._stopped.set()
+
+
+class StartJobInstanceThread(OpenbachFunctionThread):
+    def _run_openbach_function(self):
+        self.openbach_function.start()
+        arguments = self.openbach_function.arguments
+        entity_name = arguments.pop('entity_name')
+        project = self.openbach_function.scenario_instance.scenario.project
+        try:
+            entity = Entity.objects.get(name=entity_name, project=project)
+        except Entity.DoesNotExist:
+            raise errors.ConductorError(
+                    'Entity does not exist in the project',
+                    entity_name=entity_name, project_name=project.name)
+
+        if entity.agent is None:
+            raise errors.ConductorError(
+                    'Entity does not have an associated agent',
+                    entity_name=entity_name, project_name=project.name)
+
+        action = StartJobInstance(address=entity.agent.address, **arguments)
+        return action.openbach_function(
+                self.openbach_function,
+                self.wait_for_finished_queues)
 
 
 class IfThread(OpenbachFunctionThread):

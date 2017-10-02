@@ -56,7 +56,7 @@ from .openbach_function_models import (
         WaitForLaunched, WaitForFinished
 )
 
-from .utils import ValuesType, check_and_get_value
+from .utils import check_and_get_value
 
 
 def prepare_arguments(arguments, function_name):
@@ -72,7 +72,7 @@ def prepare_start_job_instance(arguments):
     offset = arguments.pop('offset', 0)
     if not isinstance(offset, int):
         raise TypeError(int, offset)
-    agent_ip = arguments.pop('agent_ip')
+    entity_name = arguments.pop('entity_name')
     if len(arguments) > 1:
         raise ValueError('Too much job names to start')
     if len(arguments) < 1:
@@ -83,7 +83,7 @@ def prepare_start_job_instance(arguments):
 
     return {
             'offset': offset,
-            'agent_ip': agent_ip,
+            'entity_name': entity_name,
             'job_name': job_name,
     }
 

@@ -398,34 +398,14 @@ class PushFile(OpenbachFunction):
 
 
 class StartJobInstance(OpenbachFunction):
-    agent_ip = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    entity_name = OpenbachFunctionArgument(type=str)
     job_name = OpenbachFunctionArgument(type=str)
     offset = OpenbachFunctionArgument(type=int)
 
-    @property
-    def _json(self):
+    def _prepare_arguments(self, parameters=None):
         arguments = {}
         for argument in self.arguments.all():
-            try:
-                old_value = arguments[argument.name]
-            except KeyError:
-                arguments[argument.name] = argument.value
-            else:
-                if isinstance(old_value, list):
-                    old_value.append(argument.value)
-                else:
-                    arguments[argument.name] = [old_value, argument.value]
-
-        return {'start_job_instance': {
-            self.job_name: arguments,
-            'offset': self.offset,
-            'agent_ip': self.agent_ip.compressed,
-        }}
-
-    def _get_arguments(self, parameters):
-        arguments = {}
-        for argument in self.arguments.all():
-            value = argument.get_value(parameters)
+            value = argument.get_value(parameters) if parameters is not None else argument.value
             try:
                 old_value = arguments[argument.name]
             except KeyError:
@@ -436,11 +416,22 @@ class StartJobInstance(OpenbachFunction):
                 else:
                     arguments[argument.name] = [old_value, value]
 
+        return arguments
+
+    @property
+    def _json(self):
+        return {'start_job_instance': {
+            self.job_name: self._prepare_arguments(),
+            'offset': self.offset,
+            'entity_name': self.entity_name,
+        }}
+
+    def _get_arguments(self, parameters):
         return {
-                'address': self.instance_value('agent_ip', parameters),
+                'entity_name': self.instance_value('entity_name', parameters),
                 'name': self.instance_value('job_name', parameters),
                 'offset': self.instance_value('offset', parameters),
-                'arguments': arguments,
+                'arguments': self._prepare_arguments(parameters),
         }
 
 

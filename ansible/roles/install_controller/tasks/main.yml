@@ -113,7 +113,7 @@
   remote_user: openbach
 
 - name: Collect Django's static files
-  shell: yes yes | /opt/openbach/controller/backend/openbach-backend.py collectstatic -l
+  shell: yes yes | /opt/openbach/controller/backend/openbach-backend.py collectstatic
   remote_user: openbach
 
 - name: Create the Backend service

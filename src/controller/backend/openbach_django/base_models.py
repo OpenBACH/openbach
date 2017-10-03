@@ -81,9 +81,9 @@ class OpenbachFunctionArgument(models.CharField):
                         'symbol ($) but does not provide a '
                         'valid identifier', code='invalid_template')
             if named is not None:
-                yield named[1:]
+                yield named
             if braced is not None:
-                yield braced[2:-1]
+                yield braced
 
     @staticmethod
     def has_placeholders(value):

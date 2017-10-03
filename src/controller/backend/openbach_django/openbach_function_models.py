@@ -108,11 +108,14 @@ class OpenbachFunction(ContentTyped):
 
     def set_arguments_count(self, arguments):
         this = self.get_content_model()
-        for field in this._meta.fields:
+        for value in this._openbach_function_argument_values():
+            for placeholder in OpenbachFunctionArgument.placeholders(value):
+                arguments[placeholder] += 1
+
+    def _openbach_function_argument_values(self):
+        for field in self._meta.fields:
             if isinstance(field, OpenbachFunctionArgument):
-                value = getattr(this, field.name)
-                for placeholder in field.placeholders(value):
-                    arguments[placeholder] += 1
+                yield getattr(self, field.name)
 
     def instance_value(self, field_name, parameters):
         value = getattr(self, field_name)
@@ -394,6 +397,11 @@ class StartJobInstance(OpenbachFunction):
     entity_name = OpenbachFunctionArgument(type=str)
     job_name = OpenbachFunctionArgument(type=str)
     offset = OpenbachFunctionArgument(type=int)
+
+    def _openbach_function_argument_values(self):
+        yield from super()._openbach_function_argument_values()
+        for argument in self.arguments.all():
+            yield argument.value
 
     def _prepare_arguments(self, parameters=None):
         arguments = {}

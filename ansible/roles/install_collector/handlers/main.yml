@@ -11,11 +11,12 @@
 - name: restart influxdb
   systemd: name=influxdb state=restarted enabled=yes daemon_reload=yes
   become: yes
-  notify: wait for influxdb to start
+  notify:
+    - wait for influxdb to start
+    - create default influxdb database
 
 - name: wait for influxdb to start
   wait_for: port={{ influxdb_port }} timeout=10
-  notify: create default influxdb database
 
 - name: create default influxdb database
   influxdb_database: hostname=localhost database_name={{ influxdb_database_name }} state=present

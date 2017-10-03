@@ -121,9 +121,6 @@ class OpenbachFunction(ContentTyped):
             value = field.validate_openbach_value(value, parameters)
         return value
 
-    def check_arguments_type(self, parameters):
-        self.get_content_model().check_arguments_type(parameters)
-
     def get_arguments(self, parameters):
         return self.get_content_model()._get_arguments(parameters)
 
@@ -149,10 +146,6 @@ class OpenbachFunctionInstance(models.Model):
                 self.scenario_instance.scenario.name,
                 self.instance_id,
                 self.scenario_instance.id))
-
-    def check_arguments_type(self):
-        parameters = self.scenario_instance.parameters
-        self.openbach_function.check_arguments_type(parameters)
 
     def start(self):
         self.status = 'Running'

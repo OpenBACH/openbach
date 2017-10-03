@@ -1880,7 +1880,8 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
                     openbach_function=openbach_function,
                     scenario_instance=scenario_instance)
             try:
-                openbach_function_instance.check_arguments_type()
+                # Validate the values of the arguments
+                openbach_function_instance.arguments
             except ValidationError as e:
                 raise errors.BadRequestError(
                         'Arguments of an OpenbachFunction have '

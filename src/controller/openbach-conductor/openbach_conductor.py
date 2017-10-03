@@ -2102,7 +2102,7 @@ class OpenbachFunctionThread(threading.Thread):
         ]
         self.wait_for_finished_queues = [
                 table[id]['queue'] for id, data in table.items()
-                if self.instance_id in data['is_waited_for_finished']
+                if self.instance_id in data['is_waited_for_finish']
         ]
 
     def run(self):

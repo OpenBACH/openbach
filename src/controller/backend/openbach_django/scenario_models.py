@@ -472,7 +472,7 @@ class ScenarioInstance(models.Model):
         for openbach_function in self.openbach_functions_instances.all():
             try:
                 sub_scenario = openbach_function.started_scenario
-            except OpenbachFunctionInstance.DoesNotExist:
+            except ScenarioInstance.DoesNotExist:
                 pass
             else:
                 sub_scenario_ids.add(sub_scenario.id)

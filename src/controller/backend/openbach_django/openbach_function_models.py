@@ -167,14 +167,14 @@ class OpenbachFunctionInstance(models.Model):
     @property
     def json(self):
         # Late imports to avoid circular dependencies
-        from .scenario_models import Scenario
+        from .scenario_models import ScenarioInstance
         from .job_models import JobInstance
 
         json_data = self.openbach_function.json
         json_data['status'] = self.status
         json_data['launch_date'] = self.launch_date
 
-        with suppress(Scenario.DoesNotExist):
+        with suppress(ScenarioInstance.DoesNotExist):
             scenario = self.started_scenario
             json_data['scenario'] = scenario.json
 

@@ -446,5 +446,8 @@ class RstatsServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
 
 
 if __name__ == '__main__':
-    with RstatsServer(('', 1111), RstatsRequestHandler) as server:
+    server = RstatsServer(('', 1111), RstatsRequestHandler)
+    try:
         server.serve_forever()
+    finally:
+        server.server_close()

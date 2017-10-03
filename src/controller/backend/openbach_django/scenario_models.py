@@ -71,7 +71,7 @@ def prepare_arguments(arguments, function_name):
 def prepare_start_job_instance(arguments):
     offset = arguments.pop('offset', 0)
     if not isinstance(offset, int):
-        raise TypeError(int, offset)
+        raise TypeError(int, offset, 'offset')
     entity_name = arguments.pop('entity_name')
     if len(arguments) > 1:
         raise ValueError('Too much job names to start')
@@ -79,7 +79,7 @@ def prepare_start_job_instance(arguments):
         raise ValueError('The name of the job to start is missing')
     job_name, = arguments
     if not isinstance(arguments[job_name], dict):
-        raise TypeError(dict, arguments[job_name])
+        raise TypeError(dict, arguments[job_name], job_name)
 
     return {
             'offset': offset,
@@ -89,32 +89,28 @@ def prepare_start_job_instance(arguments):
 
 
 def prepare_if(arguments):
-    condition = arguments['condition']
-    condition = Condition.load_from_json(condition)
-    functions_true = arguments['openbach_functions_true_ids']
-    functions_false = arguments['openbach_functions_false_ids']
-    for functions in (functions_true, functions_false):
+    condition = Condition.load_from_json(arguments['condition'])
+    for name in ('openbach_functions_true_ids', 'openbach_functions_false_ids'):
+        functions = arguments[name]
         if not isinstance(functions, list):
-            raise TypeError(list, functions)
+            raise TypeError(list, functions, name)
     return {
             'condition': condition,
-            'functions_true': functions_true,
-            'functions_false': functions_false,
+            'functions_true': arguments['openbach_functions_true_ids'],
+            'functions_false': arguments['openbach_functions_false_ids'],
     }
 
 
 def prepare_while(arguments):
-    condition = arguments['condition']
-    condition = Condition.load_from_json(condition)
-    functions_while = arguments['openbach_functions_while_ids']
-    functions_end = arguments['openbach_functions_end_ids']
-    for functions in (functions_while, functions_end):
+    condition = Condition.load_from_json(arguments['condition'])
+    for name in ('openbach_functions_while_ids', 'openbach_functions_end_ids'):
+        functions = arguments[name]
         if not isinstance(functions, list):
-            raise TypeError(list, functions)
+            raise TypeError(list, functions, name)
     return {
             'condition': condition,
-            'functions_while': functions_while,
-            'functions_end': functions_end,
+            'functions_while': arguments['openbach_functions_while_ids'],
+            'functions_end': arguments['openbach_functions_end_ids'],
     }
 
 
@@ -283,14 +279,14 @@ class Scenario(models.Model):
                         override_error=str(e))
             except TypeError as e:
                 try:
-                    expected_type, value = e.args
+                    expected_type, value, name = e.args
                 except ValueError:
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.{}'.format(index, function_name),
                             override_error=str(e))
                 else:
                     raise Scenario.MalformedError(
-                            'openbach_functions.{}.{}'.format(index, function_name),
+                            'openbach_functions.{}.{}.{}'.format(index, function_name, name),
                             value=value, expected_type=expected_type)
 
             try:

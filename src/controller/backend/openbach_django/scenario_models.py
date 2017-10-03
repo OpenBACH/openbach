@@ -391,8 +391,13 @@ class Scenario(models.Model):
 
         # Check that all arguments are used
         scenario_arguments = {
-                argument.name: 0 for argument in self.arguments.all()
+                argument.name: 0
+                for argument in self.arguments.all()
         }
+        scenario_arguments.update(
+                (constant.name, 0)
+                for constant in self.constants.all()
+        )
 
         for openbach_function in self.openbach_functions.all():
             try:

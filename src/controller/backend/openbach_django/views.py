@@ -704,7 +704,7 @@ class ScenarioInstancesView(GenericView):
         return self.conductor_execute(
                 command='start_scenario_instance',
                 name=scenario_name, project=project_name,
-                arguments=request.JSON.get('args'),
+                arguments=request.JSON.get('arguments'),
                 date=request.JSON.get('date'))
 
 

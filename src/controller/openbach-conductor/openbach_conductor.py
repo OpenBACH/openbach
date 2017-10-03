@@ -1859,7 +1859,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         self.instance_id = scenario_instance.id
 
         # Populate values for ScenarioArguments
-        for argument, value in self.arguments:
+        for argument, value in self.arguments.items():
             try:
                 argument_instance = ScenarioArgument.objects.get(name=argument, scenario=scenario)
             except ScenarioArgument.DoesNotExist:

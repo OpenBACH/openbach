@@ -96,7 +96,7 @@
   when: ansible_distribution_version != "16.04"
 
 - name: Install logstash plugins
-  shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins-{{ version_logstash }}.zip chdir=/usr/share/logstash
+  shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins-{{ version_logstash }}.zip chdir=/usr/share/logstash creates=/usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-influxdb-5.0.0
   become_user: logstash
 
 - name: Start LogStash

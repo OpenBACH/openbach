@@ -1,0 +1,16 @@
+#!/bin/bash
+
+cd -P -- "$(dirname -- "$0")"
+ACTIVATE_VENV=.ansible_venv/bin/activate
+
+if [ ! -f .ansible_venv/bin/ansible-playbook ]
+then
+  python3 -m venv .ansible_venv
+  source $ACTIVATE_VENV
+  pip install ansible==2.3.2.0
+  deactivate
+fi
+
+source $ACTIVATE_VENV
+ansible-playbook $*
+deactivate

@@ -271,7 +271,8 @@ class JobInstance(models.Model):
                     ' '.join(
                         quote(str(value)) for value in
                         argument.values.filter(job_instance=self).order_by('argument_value_id')))
-                for argument in optional_arguments)
+                for argument in optional_arguments
+                if argument.values.filter(job_instance=self))
         flags = ' '.join(value.argument.flag for value in optional_flags_only)
 
         return '{} {} {}'.format(required, flags, optional)

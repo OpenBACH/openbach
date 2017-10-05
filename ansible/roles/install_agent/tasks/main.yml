@@ -111,12 +111,16 @@
     - rstats
     - rstats_reload
   remote_user: openbach
-  notify: restart rstats
+  notify:
+    - restart rstats
+    - restart openbach agent
 
 - name: Configure Rstats
   template: src=rstats.yml.j2 dest=/opt/openbach/agent/rstats/rstats.yml
   remote_user: openbach
-  notify: restart rstats
+  notify:
+    - restart rstats
+    - restart openbach agent
 
 - name: Install Collect Agent
   synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*

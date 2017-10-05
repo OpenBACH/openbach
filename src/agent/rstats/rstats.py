@@ -409,20 +409,20 @@ class RstatsRequestHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         data, sock = self.request
+        msg = 'KO: Unhandled exception occured\0'
         try:
             result = self.execute_request(data.decode())
         except BadRequest as e:
             msg = 'KO: {}\0'.format(e.reason)
-            sock.sendto(msg.encode(), self.client)
         except Exception as e:
             msg = 'KO: An error occured: {}\0'.format(e)
-            sock.sendto(msg.encode(), self.client)
         else:
             if result is None:
-                sock.sendto(b'OK\0', self.client)
+                msg = 'OK\0'
             else:
                 msg = 'OK {}\0'.format(result)
-                sock.sendto(msg.encode(), self.client)
+        finally:
+            sock.sendto(msg.encode(), self.client_address)
 
     def execute_request(self, data):
         try:

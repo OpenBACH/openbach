@@ -1364,10 +1364,10 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         WaitingQueueManager().add_job(
                 self.instance_id,
                 scenario.id,
-                openbach_function_instance.instance_id,
+                openbach_function_instance.id,
                 waiters)
         StatusManager().add(scenario.id, self.instance_id)
-        return []
+        return super().openbach_function(openbach_function_instance)
 
     def action(self):
         """Override the base threaded action handler to build the JobInstance
@@ -1809,7 +1809,7 @@ class ListScenarios(ScenarioAction):
 class ScenarioInstanceAction(ConductorAction):
     """Base class that defines helper methods to deal with ScenarioInstances"""
 
-    def get_scenario_instance_or_not_found_errror(self):
+    def get_scenario_instance_or_not_found_error(self):
         try:
             scenario_instance_id = self.instance_id
         except AttributeError:
@@ -1945,7 +1945,7 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         super().__init__(instance_id=instance_id, date=date)
 
     def _action(self):
-        scenario_instance = self.get_scenario_instance_or_not_found_errror()
+        scenario_instance = self.get_scenario_instance_or_not_found_error()
         if not scenario_instance.is_stopped:
             scenario_instance.stop()
             try:
@@ -1970,7 +1970,7 @@ class InfosScenarioInstance(ScenarioInstanceAction):
         super().__init__(instance_id=instance_id)
 
     def _action(self):
-        scenario_instance = self.get_scenario_instance_or_not_found_errror()
+        scenario_instance = self.get_scenario_instance_or_not_found_error()
         return scenario_instance.json, 200
 
 
@@ -2044,7 +2044,12 @@ class WaitScenarioToFinish(threading.Thread):
         for thread in self.threads:
             thread.join()
 
-        scenario = InfosScenarioInstance(self.instance_id)
+        scenario_fetcher = InfosScenarioInstance(self.instance_id)
+        try:
+            scenario = scenario_fetcher.get_scenario_instance_or_not_found_error()
+        except errors.ConductorError:
+            return
+
         if scenario.is_stopped:
             return
 
@@ -2073,7 +2078,7 @@ class OpenbachFunctionThread(threading.Thread):
     def __init__(self, openbach_function_instance, table):
         super().__init__()
         self._table = table
-        self._stop = threading.Event()
+        self._stopped = threading.Event()
 
         openbach_function = openbach_function_instance.openbach_function
         action_name = openbach_function.get_content_model().__class__.__name__
@@ -2119,7 +2124,7 @@ class OpenbachFunctionThread(threading.Thread):
                     # and the path is not taken
                     return
                 self.waited_ids.remove(id_)
-        time.sleep(self.openbach_function.wait_time)
+        time.sleep(self.openbach_function.openbach_function.wait_time)
         try:
             threads = self._run_openbach_function()
         except errors.ConductorWarning:
@@ -2584,7 +2589,6 @@ class ThreadManager:
         self.__dict__ = self.__class__.__shared_state
 
     def add_and_launch(self, thread, scenario_id, openbach_function_id):
-        thread.do_run = True
         thread.start()
         with self.mutex:
             self._threads[scenario_id][openbach_function_id] = thread

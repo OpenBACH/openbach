@@ -49,6 +49,7 @@
   shell: bin/logstash-plugin install file:///tmp/logstash-offline-plugins.zip
   args:
     chdir: /usr/share/logstash
+    executable: /bin/bash
     creates: /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-influxdb-5.0.0
   become: yes
   become_user: logstash

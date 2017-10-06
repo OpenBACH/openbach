@@ -2126,9 +2126,11 @@ class OpenbachFunctionThread(threading.Thread):
         time.sleep(self.openbach_function.openbach_function.wait_time)
         try:
             threads = self._run_openbach_function()
-        except errors.ConductorWarning:
+        except errors.ConductorWarning as error:
+            syslog.syslog(syslog.LOG_WARNING, '{}'.format(error.json))
             pass
         except errors.ConductorError as error:
+            syslog.syslog(syslog.LOG_ERR, '{}'.format(error.json))
             scenario_id = self.openbach_function.scenario_instance.id
             StopScenarioInstance(scenario_id).action()
             self.openbach_function.scenario_instance.stop(stop_status='Finished KO')
@@ -2743,7 +2745,9 @@ class BackendHandler(socketserver.BaseRequestHandler):
                     'response': e.json,
                     'returncode': e.ERROR_CODE,
             }
-            syslog.syslog(syslog.LOG_ERR, '{}'.format(result))
+            is_warning = isinstance(e, errors.ConductorWarning)
+            log_level = syslog.LOG_WARNING if is_warning else syslog.LOG_ERR
+            syslog.syslog(log_level, '{}'.format(result))
         except Exception as e:
             result = {
                     'response': {

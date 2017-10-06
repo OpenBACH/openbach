@@ -1443,7 +1443,7 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
         """
         scenario = openbach_function_instance.scenario_instance
         try:
-            openbach_function_to_stop = scenario.instances.get(id=self.openbach_function_id)
+            openbach_function_to_stop = scenario.openbach_functions_instances.get(id=self.openbach_function_id)
         except OpenbachFunctionInstance.DoesNotExist:
             raise errors.NotFoundError(
                     'The provided Openbach Function Instance is '
@@ -1451,9 +1451,8 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
                     openbach_function_id=self.openbach_function_id,
                     scenario_name=scenario.scenario.name)
 
-        start_job_instance = openbach_function_to_stop.get_content_type()
         try:
-            self.instance_id = start_job_instance.started_job.id
+            self.instance_id = openbach_function_to_stop.started_job.id
         except JobInstance.DoesNotExist:
             raise errors.NotFoundError(
                     'The provided Openbach Function Instance is '

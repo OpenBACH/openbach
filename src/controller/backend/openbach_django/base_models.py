@@ -96,20 +96,22 @@ class OpenbachFunctionArgument(models.CharField):
         """Interpolate placeholders of the stored value to
         provide the actual value of this field.
         """
-        if self.has_placeholders(value):
-            templated = string.Template(value)
-            try:
-                value = templated.substitute(parameters)
-            except KeyError as e:
-                raise ValidationError(
-                        'value contains a placeholder (%(key)s) '
-                        'that is not found in provided parameters',
-                        code='invalid_placeholder',
-                        params={'key': str(e)})
-            except ValueError as e:
-                raise ValidationError(
-                        'value contains an invalid placeholder',
-                        code='invalid_placeholder')
+        if not self.has_placeholders(value):
+            return value
+
+        templated = string.Template(value)
+        try:
+            value = templated.substitute(parameters)
+        except KeyError as e:
+            raise ValidationError(
+                    'value contains a placeholder (%(key)s) '
+                    'that is not found in provided parameters',
+                    code='invalid_placeholder',
+                    params={'key': str(e)})
+        except ValueError as e:
+            raise ValidationError(
+                    'value contains an invalid placeholder',
+                    code='invalid_placeholder')
 
         return self._convert_from_db_value(value)
 

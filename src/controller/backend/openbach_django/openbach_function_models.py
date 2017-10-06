@@ -455,12 +455,12 @@ class StartJobInstanceArgument(models.Model):
         return field.validate_openbach_value(value, parameters)
 
 
-class StopJobInstance(OpenbachFunction):
+class StopJobInstances(OpenbachFunction):
     openbach_function_ids = OpenbachFunctionArgument(type=list)
 
     @property
     def _json(self):
-        return {'stop_job_instance': {
+        return {'stop_job_instances': {
             'openbach_function_ids': [int(id) for id in self.openbach_function_ids],
         }}
 

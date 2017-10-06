@@ -1514,7 +1514,7 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
                     errors=issues)
         elif issues:
             raise errors.ConductorWarning(
-                    'Stopping one or more JobInstance produced an error',
+                    'Stopping one or more JobInstance produced a warning',
                     warnings=issues)
         return []
 

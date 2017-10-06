@@ -167,10 +167,7 @@ class Scenario(models.Model):
 
     @property
     def json(self):
-        functions = [
-                f.get_content_model().json
-                for f in self.openbach_functions.all()
-        ]
+        functions = [f.json for f in self.openbach_functions.order_by('id')]
         return {
                 'name': self.name,
                 'description': self.description,

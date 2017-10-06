@@ -300,7 +300,7 @@ class ProjectTestCase(TestCase):
                         },
                     }, {
                         "id": 8,
-                        "stop_job_instance": {
+                        "stop_job_instances": {
                             "openbach_function_ids": [5, 6],
                         },
                         "wait": {
@@ -309,7 +309,7 @@ class ProjectTestCase(TestCase):
                         },
                     }, {
                         "id": 9,
-                        "stop_job_instance": {
+                        "stop_job_instances": {
                             "openbach_function_ids": [1, 2, 3, 4, 5],
                         },
                         "wait": {

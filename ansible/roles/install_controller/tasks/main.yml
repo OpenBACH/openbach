@@ -105,7 +105,7 @@
     - start conductor
 
 - name: Initialize the Backend's Database
-  shell: /opt/openbach/controller/backend/openbach-backend.py migrate
+  shell: /opt/openbach/controller/backend/openbach-backend.py migrate --no-input
   remote_user: openbach
 
 - name: Create a default superuser on the database

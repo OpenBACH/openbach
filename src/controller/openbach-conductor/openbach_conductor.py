@@ -1498,9 +1498,16 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
     def openbach_function(self, openbach_function_instance):
         issues = []
         has_error = False
+        scenario = openbach_function_instance.scenario_instance
         for stop_id in self.openbach_function_ids:
+            actual_id = (
+                    scenario
+                    .openbach_functions_instances
+                    .filter(openbach_function__function_id=stop_id)
+                    .latest('id').id
+            )
             try:
-                stop_job = StopJobInstance(date=self.date, openbach_function_id=stop_id)
+                stop_job = StopJobInstance(date=self.date, openbach_function_id=actual_id)
                 stop_job.openbach_function(openbach_function_instance)
             except errors.ConductorWarning as e:
                 issues.append(e.json)

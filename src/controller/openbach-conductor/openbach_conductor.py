@@ -2047,14 +2047,17 @@ class WaitScenarioToFinish(threading.Thread):
         self.threads = openbach_function_threads
 
     def run(self):
-        for thread in self.threads:
-            thread.join()
-
         scenario_fetcher = InfosScenarioInstance(self.instance_id)
         try:
             scenario = scenario_fetcher.get_scenario_instance_or_not_found_error()
         except errors.ConductorError:
             return
+        else:
+            scenario.status = 'Running'
+            scenario.save()
+        finally:
+            for thread in self.threads:
+                thread.join()
 
         if scenario.is_stopped:
             return
@@ -2071,13 +2074,7 @@ class WaitScenarioToFinish(threading.Thread):
                 if not subscenario_instance.is_stopped:
                     break
         else:  # No break
-            scenario.stop()
-            scenario.status = 'Finished OK'
-            scenario.save()
-            return
-
-        scenario.status = 'Running'
-        scenario.save()
+            scenario.stop(stop_status='Finished OK')
 
 
 class OpenbachFunctionThread(threading.Thread):

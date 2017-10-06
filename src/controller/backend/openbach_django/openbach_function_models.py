@@ -147,8 +147,7 @@ class OpenbachFunctionInstance(models.Model):
             '(instance {} of scenario {})'.format(
                 self.openbach_function.name,
                 self.scenario_instance.scenario.name,
-                self.instance_id,
-                self.scenario_instance.id))
+                self.id, self.scenario_instance.id))
 
     def start(self):
         self.status = 'Running'

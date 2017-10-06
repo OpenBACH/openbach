@@ -465,7 +465,7 @@ class StopJobInstance(OpenbachFunction):
         }}
 
     def _get_arguments(self, parameters):
-        field_name = 'openbach_functions_ids'
+        field_name = 'openbach_function_ids'
         stop_ids = self.instance_value(field_name, parameters)
         return {
                 field_name: [int(id) for id in stop_ids],

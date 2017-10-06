@@ -194,7 +194,7 @@ class StateView(GenericView):
         """Return the state of the commands on the Job_Instance"""
         return self.conductor_execute(
                 command='state_job_instance',
-                instance_id=id)
+                instance_id=int(id))
 
 
 class CollectorsView(GenericView):
@@ -611,7 +611,8 @@ class JobInstanceView(BaseJobInstanceView):
     def get(self, request, id):
         """compute status of a job instance"""
         return self.conductor_execute(
-                command='status_job_instance', instance_id=id,
+                command='status_job_instance',
+                instance_id=int(id),
                 update='update' in request.GET)
 
     def post(self, request, id):
@@ -628,6 +629,7 @@ class JobInstanceView(BaseJobInstanceView):
             return {'msg': 'POST data malformed: unknown action '
                     '\'{}\' for this route'.format(action)}, 400
 
+        id = int(id)
         if action == 'stop':
             return function([id])
         return function(id)
@@ -715,13 +717,13 @@ class ScenarioInstanceView(GenericView):
         """get infos of a scenario instance"""
         return self.conductor_execute(
                 command='infos_scenario_instance',
-                instance_id=id)
+                instance_id=int(id))
 
     def post(self, request, id, scenario_name=None, project_name=None):
         """stop a scenario instance"""
         return self.conductor_execute(
                 command='stop_scenario_instance',
-                instance_id=id, date=request.JSON.get('date'))
+                instance_id=int(id), date=request.JSON.get('date'))
 
 
 class ProjectsView(GenericView):

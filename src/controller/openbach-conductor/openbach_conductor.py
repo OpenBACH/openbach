@@ -1969,6 +1969,24 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         return None, 204
 
 
+class RemoveScenarioInstance(ScenarioInstanceAction):
+    """Action responsible of removing an existing
+    Scenario Instance from the database.
+    """
+
+    def __init__(self, instance_id):
+        super().__init__(instance_id=instance_id)
+
+    def _action(self):
+        scenario_instance = self.get_scenario_instance_or_not_found_error()
+        if not scenario_instance.is_stopped:
+            raise errors.ConflictError(
+                    'Trying to remove a scenario_instance still running',
+                    scenario_instance_id=self.instance_id)
+        scenario_instance.delete()
+        return None, 204
+
+
 class InfosScenarioInstance(ScenarioInstanceAction):
     """Action responsible for information retrieval about a ScenarioInstance"""
 

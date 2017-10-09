@@ -725,6 +725,12 @@ class ScenarioInstanceView(GenericView):
                 command='stop_scenario_instance',
                 instance_id=int(id), date=request.JSON.get('date'))
 
+    def delete(self, request, id):
+        """remove a scenario instance from the database"""
+        return self.conductor_execute(
+                command='remove_scenario_instance',
+                instance_id=int(id))
+
 
 class ProjectsView(GenericView):
     """Manage actions on projects without an ID"""

@@ -713,13 +713,13 @@ class ScenarioInstancesView(GenericView):
 class ScenarioInstanceView(GenericView):
     """Manage action on specific scenario"""
 
-    def get(self, request, id, scenario_name=None, project_name=None):
+    def get(self, request, id):
         """get infos of a scenario instance"""
         return self.conductor_execute(
                 command='infos_scenario_instance',
                 instance_id=int(id))
 
-    def post(self, request, id, scenario_name=None, project_name=None):
+    def post(self, request, id):
         """stop a scenario instance"""
         return self.conductor_execute(
                 command='stop_scenario_instance',

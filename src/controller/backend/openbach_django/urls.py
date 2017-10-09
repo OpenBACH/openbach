@@ -100,11 +100,7 @@ urlpatterns = [
     url(r'^project/(?P<project_name>[^/]+)/scenario/'
         '(?P<scenario_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
-        name='project_scenario_instance_view2'),
-    url(r'^project/(?P<project_name>[^/]+)/scenario/'
-        '(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
-        views.ScenarioInstanceView.as_view(),
-        name='project_scenario_instance_view3'),
+        name='project_scenario_instance_view_filtered'),
     url(r'^project/(?P<project_name>[^/]+)/entity/?$',
         views.EntitiesView.as_view(), name='entities_view'),
     url(r'^project/(?P<project_name>[^/]+)/entity/(?P<entity_name>[^/]+)/?$',

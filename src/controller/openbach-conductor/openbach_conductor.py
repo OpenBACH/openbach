@@ -72,6 +72,7 @@ import errors
 from openbach_baton import OpenBachBaton
 from playbook_builder import start_playbook, setup_playbook_manager
 from data_access.elasticsearch_tools import ElasticSearchConnection
+from data_access.influxdb_tools import InfluxDBConnection, Operator, ConditionField, select_query
 
 
 # We need to use ansible from Python code so we can easily get failure
@@ -1618,13 +1619,6 @@ class WatchJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
 
 class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
     """Action responsible for retrieving the status of a JobInstance"""
-    UPDATE_INSTANCE_URL = (
-            'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
-            'db={agent.collector.stats_database_name}&'
-            'epoch={agent.collector.stats_database_precision}&'
-            'q=SELECT+last("status")+FROM+"openbach_agent"+'
-            'WHERE+"@agent_name"+=+\'{agent.name}\'+'
-            'AND+job_name+=+\'{}\'+AND+job_instance_id+=+{}')
 
     def __init__(self, instance_id, update=False):
         super().__init__(instance_id=instance_id, update=update)
@@ -1633,13 +1627,15 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
         job_instance = self.get_job_instance_or_not_found_error()
 
         status = {}
-        # TODO better update
         if self.update:
-            url = self.UPDATE_INSTANCE_URL.format(
-                    job_instance.job.job.name,
-                    self.instance_id,
-                    agent=job_instance.job.agent)
-            result = requests.get(url).json()
+            collector = job_instance.job.agent.collector
+            connection = InfluxDBConnection(
+                    collector.address,
+                    collector.stats_query_port,
+                    collector.stats_database_name,
+                    collector.stats_database_precision)
+            condition = ConditionField('job_instance_id', Operator.Equal, self.instance_id)
+            result = connection.sql_query(select_query('openbach_agent', 'last("status")', condition))
             try:
                 serie = result['results'][0]['series'][0]
                 columns = serie['columns']
@@ -1656,9 +1652,9 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
                     if column == 'time':
                         date = datetime.fromtimestamp(value / 1000, tz=tz)
                     elif column == 'last':
-                        status = value
+                        job_status = value
                 job_instance.update_status = date
-                job_instance.status = status
+                job_instance.status = job_status
                 job_instance.save()
 
         status.update(job_instance.json)
@@ -2672,6 +2668,10 @@ class WaitingQueueManager:
 
 
 class StatusManager:
+    """Manage watches on the conductor to regularly check in
+    the database for JobInstances statuses.
+    """
+
     __state = {
             'scenarios': {},
             '_mutex': threading.Lock(),
@@ -2712,34 +2712,45 @@ class StatusManager:
 
 
 def status_manager(job_instance_id, scenario_instance_id):
+    """Check and update the status of a job instance based
+    on the informations store in database.
+
+    When jobs finish, update scenarios informations as well
+    and stop all the various watches.
+    """
+
+    # Check JobInstance status in database
     job_status_manager = StatusJobInstance(job_instance_id, update=True)
     job_status_manager.action()
     job_instance = job_status_manager.get_job_instance_or_not_found_error()
-    if job_instance.status in ('Error', 'Finished', 'Not Running'):
-        job_instance.is_stopped = True
-        job_instance.save()
-        StatusManager().remove(scenario_instance_id, job_instance_id)
-        WatchJobInstance(job_instance_id, stop='now').action()
-        if job_instance.status == 'Error':
-            # TODO: stop the scenario
-            pass
-        else:
-            si_id = WaitingQueueManager().remove_job(job_instance_id)
-            assert scenario_instance_id == si_id
-            scenario_instance = ScenarioInstance.objects.get(id=si_id)
-            if not scenario_instance.is_stopped:
-                ofis = scenario_instance.openbach_function_instances
-                # Check if all JobInstance and all ScenarioInstance
-                # launched by the ScenarioInstance are finished
-                if (all(
-                        job_instance.is_stopped for job_instance in
-                        JobInstance.objects.filter(openbach_function_instance__in=ofis))
-                    and all(
-                        sub_scenario.is_stopped for sub_scenario in
-                        ScenarioInstance.objects.filter(openbach_function_instance__in=ofis))):
-                    # Update the status of the Scenario Instance if it is finished
-                    if ThreadManager().is_scenario_stopped(scenario_instance.id):
-                        scenario_instance.stop('Finished OK')
+    if job_instance.status not in ('Error', 'Finished', 'Not Running'):
+        return
+
+    # Update JobInstance as being stopped and stop watches
+    job_instance.is_stopped = True
+    job_instance.save()
+    StatusManager().remove(scenario_instance_id, job_instance_id)
+    WatchJobInstance(job_instance_id, stop='now').action()
+    if job_instance.status == 'Error':
+        StopScenarioInstance(scenario_instance_id).action()
+    si_id = WaitingQueueManager().remove_job(job_instance_id)
+    assert scenario_instance_id == si_id
+    scenario_instance = ScenarioInstance.objects.get(id=si_id)
+    if scenario_instance.is_stopped:
+        return
+
+    ofis = scenario_instance.openbach_functions_instances.all()
+    # Check if all JobInstance and all ScenarioInstance
+    # launched by the ScenarioInstance are finished
+    if (all(
+            job_instance.is_stopped for job_instance in
+            JobInstance.objects.filter(openbach_function_instance__in=ofis))
+        and all(
+            sub_scenario.is_stopped for sub_scenario in
+            ScenarioInstance.objects.filter(openbach_function_instance__in=ofis))):
+        # Update the status of the Scenario Instance if it is finished
+        if ThreadManager().is_scenario_stopped(scenario_instance.id):
+            scenario_instance.stop('Finished OK')
 
 
 class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

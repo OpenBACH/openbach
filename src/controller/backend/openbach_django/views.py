@@ -879,10 +879,10 @@ class LoginView(GenericView):
         except IntegrityError:
             return {'msg': 'Cannot create a new user \'{}\': '
                     'the username already exists'.format(username)}, 409
-        user.first_name = request.JSON.get('first_name')
-        user.last_name = request.JSON.get('last_name')
         user.is_active = False
         user.is_staff = False
+        user.first_name = request.JSON.get('first_name', '')
+        user.last_name = request.JSON.get('last_name', '')
         user.save()
         return None, 204
 
@@ -913,9 +913,9 @@ class LoginView(GenericView):
             return {'msg': 'Error: the provided username and the '
                     'username of the current user does not match'}, 400
 
-        user.email = request.JSON.get('email')
-        user.first_name = request.JSON.get('first_name')
-        user.last_name = request.JSON.get('last_name')
+        user.email = request.JSON.get('email', '')
+        user.first_name = request.JSON.get('first_name', '')
+        user.last_name = request.JSON.get('last_name', '')
         if 'password' in request.JSON:
             user.set_password(request.JSON['password'])
         user.save()

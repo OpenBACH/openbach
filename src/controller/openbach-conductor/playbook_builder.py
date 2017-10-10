@@ -182,9 +182,10 @@ class PlaybookBuilder():
         playbook_results.raise_for_error()
 
     @classmethod
-    def install_collector(cls, collector, username=None, password=None):
+    def install_collector(cls, collector, name, username=None, password=None):
         self = cls(collector['address'], 'collector', username, password)
         self.add_variables(
+                openbach_name=name,
                 openbach_collector=collector['address'],
                 logstash_logs_port=collector['logs_port'],
                 logstash_stats_port=collector['stats_port'],
@@ -214,9 +215,10 @@ class PlaybookBuilder():
         self.launch_playbook('uninstall')
 
     @classmethod
-    def install_agent(cls, address, collector, username=None, password=None):
+    def install_agent(cls, address, name, collector, username=None, password=None):
         self = cls(address, username=username, password=password)
         self.add_variables(
+                openbach_name=name,
                 openbach_collector=collector['address'],
                 logstash_logs_port=collector['logs_port'],
                 logstash_stats_port=collector['stats_port'],

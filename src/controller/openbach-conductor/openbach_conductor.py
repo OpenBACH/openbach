@@ -360,6 +360,7 @@ class AddCollector(ThreadedAction, CollectorAction):
                 start_playbook(
                         'install_collector',
                         collector.json,
+                        self.name,
                         self.username,
                         self.password)
             except errors.ConductorError:
@@ -555,6 +556,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
                 start_playbook(
                         'install_agent',
                         agent.address,
+                        agent.name,
                         collector.json,
                         self.username,
                         self.password)

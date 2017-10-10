@@ -48,7 +48,10 @@ except ImportError:
     import json
 
 from django.views.generic import base
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse, HttpResponse
+from django.db.utils import IntegrityError
 
 from .utils import send_fifo, extract_integer
 
@@ -98,16 +101,19 @@ class GenericView(base.View):
         response = self._dispatch(request, *args, **kwargs)
         response['Access-Control-Allow-Credentials'] = True
         response['Access-Control-Allow-Origin'] = '*'
-        try:
-            response['Access-Control-Allow-Methods'] = response['Allow']
-        except KeyError:
-            pass
-        else:
-            response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, HEAD, OPTIONS'
+        response['Access-Control-Allow-Methods'] = self.allowed_methods
         with suppress(KeyError):
-            access_control = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
-            response['Access-Control-Allow-Headers'] = access_control
+            requested_headers = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
+            response['Access-Control-Allow-Headers'] = requested_headers
         return response
+
+    @property
+    def allowed_methods(self):
+        return ', '.join(
+                verb.upper()
+                for verb in self.http_method_names
+                if hasattr(self, verb)
+        )
 
     @staticmethod
     def conductor_execute(**command):
@@ -824,6 +830,101 @@ class LogsView(GenericView):
         return self.conductor_execute(
                 command='orphaned_logs',
                 level=level, delay=delay)
+
+
+class LoginView(GenericView):
+    """Manage actions relative to user authentication"""
+
+    @staticmethod
+    def _user_to_json(user):
+        """Helper method to convert a user to its JSON response"""
+        return {
+                'username': user.get_username(),
+                'name': user.get_full_name(),
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_user': user.is_active,
+                'is_admin': user.is_staff,
+                'email': user.email,
+        }
+
+    def get(self, request):
+        """Return profile of connected user, or None if anonymous user"""
+        user = request.user
+        if not user.is_authenticated():
+            return {}, 200
+
+        return self._user_to_json(user), 200
+
+    def post(self, request):
+        """Create new or authenticate user"""
+        action = request.JSON.get('action', 'authenticate')
+        try:
+            action_handler = getattr(self, '_do_' + action)
+        except AttributeError:
+            return {'msg': 'Unknown login action \'{}\''.format(action)}, 400
+
+        try:
+            username = request.JSON['login']
+            password = request.JSON['password']
+        except KeyError as e:
+            return {'msg': 'Missing login field \'{}\''.format(e)}, 400
+        return action_handler(request, username, password)
+
+    def _do_create(self, request, username, password):
+        """Handle creation of a new user"""
+        email = request.JSON.get('email')
+        try:
+            user = User.objects.create_user(username, email, password)
+        except IntegrityError:
+            return {'msg': 'Cannot create a new user \'{}\': '
+                    'the username already exists'.format(username)}, 409
+        user.first_name = request.JSON.get('first_name')
+        user.last_name = request.JSON.get('last_name')
+        user.is_active = False
+        user.is_staff = False
+        user.save()
+        return None, 204
+
+    def _do_authenticate(self, request, username, password):
+        """Handle authentication of the current user"""
+        if request.user.is_authenticated():
+            return {'msg': 'A user is already connected. Please '
+                    'logout first and then log back in.'}, 409
+
+        user = authenticate(username=username, password=password)
+        if user is None:
+            return {'msg': 'Wrong Credentials'}, 401
+        login(request, user)
+        return self._user_to_json(user), 200
+
+    def put(self, request):
+        """Modify profile of connected user"""
+        user = request.user
+        if not user.is_authenticated():
+            return {'msg': 'User is disconnected, cannot modify profile'}, 403
+
+        try:
+            username = request.JSON['login']
+        except KeyError as e:
+            return {'msg': 'Missing profile field \'{}\''.format(e)}, 400
+
+        if user.get_username() != username:
+            return {'msg': 'Error: the provided username and the '
+                    'username of the current user does not match'}, 400
+
+        user.email = request.JSON.get('email')
+        user.first_name = request.JSON.get('first_name')
+        user.last_name = request.JSON.get('last_name')
+        if 'password' in request.JSON:
+            user.set_password(request.JSON['password'])
+        user.save()
+        return None, 204
+
+    def delete(self, request):
+        """Disconnect connected user"""
+        logout(request)
+        return None, 204
 
 
 def push_file(request):

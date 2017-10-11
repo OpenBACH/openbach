@@ -165,7 +165,7 @@ class Rstats:
             except OSError:
                 pass
             else:
-                fhd.setFormatter(logging.Formatter('{message}\n', style='{'))
+                fhd.setFormatter(logging.Formatter('{message}', style='{'))
                 self._logger.addHandler(fhd)
 
         self._confpath = confpath

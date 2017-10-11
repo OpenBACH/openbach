@@ -100,7 +100,7 @@ from openbach_django.models import (
         JobInstance, JobInstanceCommandResult,
         StatisticInstance, ScenarioInstance,
         OpenbachFunction, OpenbachFunctionInstance,
-        Watch, Scenario, Project, FileCommandResult,
+        Scenario, Project, FileCommandResult,
         ScenarioArgument, ScenarioArgumentValue,
 )
 
@@ -1363,7 +1363,6 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         self._build_job_instance(date)
 
         scenario = openbach_function_instance.scenario_instance
-        WatchJobInstance(self.instance_id, interval=2).action()
         WaitingQueueManager().add_job(
                 self.instance_id,
                 scenario.id,
@@ -1576,49 +1575,6 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
         job_instance.save()
 
 
-class WatchJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
-    """Action responsible for managing Watches on a JobInstance"""
-
-    def __init__(self, instance_id, date=None, interval=None, stop=None):
-        super().__init__(instance_id=instance_id, date=date, interval=interval, stop=stop)
-
-    def _create_command_result(self):
-        command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
-        return self.set_running(command_result, 'status_watch')
-
-    def _action(self):
-        job_instance = self.get_job_instance_or_not_found_error()
-        watch, created = Watch.objects.get_or_create(job_instance=job_instance)
-        if not created and self.interval is None and self.stop is None:
-            raise errors.BadRequestError(
-                    'A Watch already exists in the database',
-                    job_instance_id=self.instance_id,
-                    job_name=job_instance.job.job.name,
-                    agent_address=job_instance.job.agent.address)
-
-        if self.interval is not None:
-            watch.interval = self.interval
-            watch.save()
-        date = self.date
-        if date is None and self.interval is None and self.stop is None:
-            date = 'now'
-
-        # Configure the playbook
-        job = job_instance.job.job
-        agent = job_instance.job.agent
-        try:
-            OpenBachBaton(agent.address).status_job_instance(
-                    job.name, self.instance_id,
-                    date, self.interval, self.stop)
-        except errors.ConductorError:
-            watch.delete()
-            raise
-
-        if self.interval is None:
-            # Do not keep one-shot or stopped watches
-            watch.delete()
-
-
 class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
     """Action responsible for retrieving the status of a JobInstance"""
 
@@ -1628,39 +1584,22 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
 
-        status = {}
         if self.update:
-            collector = job_instance.job.agent.collector
-            connection = InfluxDBConnection(
-                    collector.address,
-                    collector.stats_query_port,
-                    collector.stats_database_name,
-                    collector.stats_database_precision)
-            condition = ConditionField('job_instance_id', Operator.Equal, self.instance_id)
-            result = connection.sql_query(select_query('openbach_agent', 'last("status")', condition))
+            address = job_instance.job.agent.address
+            job_name = job_instance.job.job.name
             try:
-                serie = result['results'][0]['series'][0]
-                columns = serie['columns']
-                values = serie['values'][0]
-            except LookupError:
-                status['error'] = {
-                        'message': 'Cannot retrieve the job '
-                        'instance status in the Collector',
-                        'collector_response': result,
-                }
+                baton = OpenBachBaton(address)
+                response = baton.status_job_instance(job_name, self.instance_id)
+            except errors.UnprocessableError:
+                job_status = 'Error Agent'
             else:
-                tz = timezone.get_current_timezone()
-                for column, value in zip(columns, values):
-                    if column == 'time':
-                        date = datetime.fromtimestamp(value / 1000, tz=tz)
-                    elif column == 'last':
-                        job_status = value
-                job_instance.update_status = date
+                job_status = response[3:]
+            finally:
+                job_instance.update_status = timezone.now()
                 job_instance.status = job_status
                 job_instance.save()
 
-        status.update(job_instance.json)
-        return status, 200
+        return job_instance.json, 200
 
 
 class ListJobInstance(JobInstanceAction):
@@ -2552,7 +2491,7 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
 
 
 class KillAll(ConductorAction):
-    """Action that kills all instances: Scenarios, Jobs and Watches"""
+    """Action that kills all instances: Scenarios and Jobs"""
 
     def __init__(self, date=None):
         super().__init__(date=date)
@@ -2563,9 +2502,6 @@ class KillAll(ConductorAction):
 
         for job in JobInstance.objects.filter(is_stopped=False):
             StopJobInstance(job.id).action()
-
-        for watch in Watch.objects.all():
-            WatchJobInstance(watch.job_instance.id, stop='now').action()
 
         return None, 204
 
@@ -2671,7 +2607,7 @@ class WaitingQueueManager:
 
 class StatusManager:
     """Manage watches on the conductor to regularly check in
-    the database for JobInstances statuses.
+    agents for JobInstances statuses.
     """
 
     __state = {
@@ -2718,22 +2654,21 @@ def status_manager(job_instance_id, scenario_instance_id):
     on the informations store in database.
 
     When jobs finish, update scenarios informations as well
-    and stop all the various watches.
+    and stop StatusManager watches.
     """
 
     # Check JobInstance status in database
     job_status_manager = StatusJobInstance(job_instance_id, update=True)
     job_status_manager.action()
     job_instance = job_status_manager.get_job_instance_or_not_found_error()
-    if job_instance.status not in ('Error', 'Finished', 'Not Running'):
+    if job_instance.status in ('Scheduled', 'Running'):
         return
 
     # Update JobInstance as being stopped and stop watches
     job_instance.is_stopped = True
     job_instance.save()
     StatusManager().remove(scenario_instance_id, job_instance_id)
-    WatchJobInstance(job_instance_id, stop='now').action()
-    if job_instance.status == 'Error':
+    if job_instance.status.startswith('Error'):
         StopScenarioInstance(scenario_instance_id).action()
     si_id = WaitingQueueManager().remove_job(job_instance_id)
     assert scenario_instance_id == si_id

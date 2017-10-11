@@ -545,15 +545,6 @@ class BaseJobInstanceView(GenericView):
                 command='stop_job_instances', instance_ids=ids,
                 date=self.request.JSON.get('date'))
 
-    def _job_instance_status(self, job_instance_id, data):
-        """query the status of the given installed job"""
-        return self.conductor_execute(
-                command='watch_job_instance',
-                instance_id=job_instance_id,
-                date=data.get('date'),
-                interval=data.get('interval'),
-                stop=data.get('stop'))
-
 
 class JobInstancesView(BaseJobInstanceView):
     """Manage actions on job instances without an ID"""
@@ -579,14 +570,15 @@ class JobInstancesView(BaseJobInstanceView):
             return {'msg': 'POST data malformed: unknown action '
                     '\'{}\' for this route'.format(action)}, 400
 
-        if action == 'stop':
-            try:
-                ids = request.JSON['job_instance_ids']
-            except KeyError:
-                return {'msg': 'POST data malformed: missing job_instance_ids'}, 400
-            return function(ids)
-
         return function()
+
+    def _action_stop(self):
+        """stop the job instances provided in the request body"""
+        try:
+            ids = self.request.JSON['job_instance_ids']
+        except KeyError:
+            return {'msg': 'POST data malformed: missing job_instance_ids'}, 400
+        return super()._action_stop(ids)
 
     def _action_start(self):
         """start an instance of the given job on the given agent"""
@@ -605,7 +597,7 @@ class JobInstancesView(BaseJobInstanceView):
                 interval=self.request.JSON.get('interval'))
 
     def _action_kill(self):
-        """stop all the scenario instances, job instances and watchs"""
+        """stop all the scenario instances and job instances"""
         return self.conductor_execute(
                 command='kill_all',
                 date=self.request.JSON.get('date'))
@@ -635,10 +627,11 @@ class JobInstanceView(BaseJobInstanceView):
             return {'msg': 'POST data malformed: unknown action '
                     '\'{}\' for this route'.format(action)}, 400
 
-        id = int(id)
-        if action == 'stop':
-            return function([id])
-        return function(id)
+        return function(int(id))
+
+    def _action_stop(self, id):
+        """stop the given job instance"""
+        return super()._action_stop([id])
 
     def _action_restart(self, id):
         """restart the given job instance"""
@@ -652,11 +645,6 @@ class JobInstanceView(BaseJobInstanceView):
                 instance_id=id, arguments=instance_args,
                 date=self.request.JSON.get('date'),
                 interval=self.request.JSON.get('interval'))
-
-    def _action_watch(self, id):
-        """start a status watch for the given job instance"""
-
-        return self._job_instance_status(id, self.request.JSON)
 
 
 class ScenariosView(GenericView):

@@ -236,11 +236,6 @@ class JobInstanceCommandResult(models.Model):
             models.SET_NULL,
             null=True, blank=True,
             related_name='+')
-    status_watch = models.ForeignKey(
-            CommandResult,
-            models.SET_NULL,
-            null=True, blank=True,
-            related_name='+')
 
     @property
     def json(self):
@@ -248,5 +243,4 @@ class JobInstanceCommandResult(models.Model):
                 'start': nullable_json(self.status_start),
                 'stop': nullable_json(self.status_stop),
                 'restart': nullable_json(self.status_restart),
-                'watch': nullable_json(self.status_watch),
         }

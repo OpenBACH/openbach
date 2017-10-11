@@ -349,18 +349,6 @@ class JobInstance(models.Model):
         }
 
 
-class Watch(models.Model):
-    """Data associated to a Watch of a Job instance"""
-
-    job_instance = models.OneToOneField(
-            JobInstance, models.CASCADE,
-            related_name='watch')
-    interval = models.IntegerField(null=True, blank=True)
-
-    def __str__(self):
-        return 'Watch of {}'.format(self.job_instance)
-
-
 class RequiredJobArgument(Argument):
     """Data associated to an Argument that is required for a Job"""
 

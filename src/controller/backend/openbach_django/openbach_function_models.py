@@ -482,17 +482,6 @@ class RestartJobInstance(OpenbachFunction):
         return {}
 
 
-class WatchJobInstance(OpenbachFunction):
-    instance_id = OpenbachFunctionArgument(type=int)
-    date = OpenbachFunctionArgument(type=str)
-    interval = OpenbachFunctionArgument(type=int)
-    stop = OpenbachFunctionArgument(type=str)
-
-    @property
-    def _json(self):
-        return {}
-
-
 class StatusJobInstance(OpenbachFunction):
     instance_id = OpenbachFunctionArgument(type=int)
     verbosity = OpenbachFunctionArgument(type=int)

@@ -81,10 +81,6 @@
   file: path=/var/openbach_stats/openbach_agent state=directory mode=0755 owner=openbach group=openbach
   become: yes
 
-- name: Create OpenBACH's pid folder
-  file: path=/var/run/openbach state=directory mode=0755 owner=openbach group=openbach
-  become: yes
-
 - name: Create Service Files
   copy: src={{ item }}.service dest=/etc/systemd/system/ mode=0644
   with_items:

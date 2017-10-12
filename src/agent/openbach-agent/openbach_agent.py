@@ -37,6 +37,7 @@ __credits__ = '''Contributors:
 
 
 import os
+import sys
 import time
 import shlex
 import struct
@@ -652,14 +653,14 @@ class RequestHandler(socketserver.BaseRequestHandler):
             syslog.syslog(syslog.LOG_INFO, message)
             action_name, *arguments = shlex.split(message)
             action = ''.join(map(str.title, action_name.split('_')))
-            handler = globals()[action](*arguments)
+            handler = getattr(sys.modules[__name__], action)(*arguments)
         except TruncatedMessageException as e:
             self.send_response(str(e), syslog.LOG_WARNING)
         except struct.error as e:
             self.send_response(
                     'Error converting the message length to '
                     'an integer: {}'.format(e), syslog.LOG_CRIT)
-        except KeyError:
+        except AttributeError:
             self.send_response(
                     'Unknown action: {}'.format(action_name),
                     syslog.LOG_CRIT)

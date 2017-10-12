@@ -47,6 +47,7 @@ __credits__ = '''Contributors:
 
 import os
 import re
+import sys
 import json
 import time
 import queue
@@ -54,6 +55,7 @@ import shutil
 import signal
 import syslog
 import tarfile
+import inspect
 import threading
 import itertools
 import traceback
@@ -115,6 +117,20 @@ _SEVERITY_MAPPING = {
     3: 6,   # Informational
     4: 7,   # Debug
 }
+
+
+def class_from_name(name):
+    """Return the class of this module whose name is given"""
+    candidate = getattr(sys.modules[__name__], name)
+    if not inspect.isclass(candidate):
+        raise AttributeError(
+                'module \'{}\' has no class \'{}\''
+                .format(__name__, name))
+    if candidate.__module__ != __name__:
+        raise AttributeError(
+                'module \'{}\' has not defined class \'{}\''
+                .format(__name__, name))
+    return candidate
 
 
 def convert_severity(severity):
@@ -2041,8 +2057,8 @@ class OpenbachFunctionThread(threading.Thread):
         openbach_function = openbach_function_instance.openbach_function
         action_name = openbach_function.get_content_model().__class__.__name__
         try:
-            self.action = globals()[action_name]
-        except KeyError:
+            self.action = class_from_name(action_name)
+        except AttributeError:
             raise errors.ConductorError(
                     'An OpenbachFunction is not implemented',
                     openbach_function_name=openbach_function.name)
@@ -2743,8 +2759,8 @@ class BackendHandler(socketserver.BaseRequestHandler):
         print('\n#', '-' * 76, '#')
         print('Executing the action', action_name, 'with parameters', request)
         try:
-            action = globals()[action_name]
-        except KeyError:
+            action = class_from_name(action_name)
+        except AttributeError:
             raise errors.ConductorError(
                     'A Function is not implemented',
                     function_name=action_name)

@@ -37,7 +37,6 @@ __credits__ = '''Contributors:
 
 
 import os
-import socket
 import tempfile
 import traceback
 from contextlib import suppress
@@ -115,16 +114,12 @@ class GenericView(base.View):
                 if hasattr(self, verb)
         )
 
-    @staticmethod
-    def conductor_execute(**command):
+    def conductor_execute(self, **command):
         """Send a command to openbach_conductor"""
-
-        conductor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conductor.connect(('localhost', 1113))
-        recv = send_fifo(command, conductor)
-        result = json.loads(recv)
+        command['_username'] = self.request.user.get_username()
+        response = send_fifo(command)
+        result = json.loads(response)
         returncode = result.pop('returncode')
-        conductor.close()
         return result['response'], returncode
 
     def _debug(self):
@@ -932,7 +927,10 @@ def push_file(request):
             f.write(chunk)
 
     try:
-        return GenericView.conductor_execute(
+        # Mock using a class-based view to contact the conductor
+        view = GenericView()
+        view.request = request
+        return view.conductor_execute(
                 command='push_file', address=address,
                 local_path=path, remote_path=remote_path)
     finally:

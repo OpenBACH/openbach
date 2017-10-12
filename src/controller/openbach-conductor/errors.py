@@ -70,6 +70,11 @@ class ConductorError(Exception):
         return self
 
 
+class ForbiddenError(ConductorError):
+    """Error dedicated to actions requiring privileges that the user doesn't have"""
+    ERROR_CODE = 403
+
+
 class NotFoundError(ConductorError):
     """Error dedicated to objects not found in the database"""
     ERROR_CODE = 404

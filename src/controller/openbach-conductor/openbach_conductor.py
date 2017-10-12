@@ -60,6 +60,7 @@ import threading
 import itertools
 import traceback
 import socketserver
+from functools import wraps
 from datetime import datetime
 from contextlib import suppress
 from collections import defaultdict
@@ -199,6 +200,42 @@ def extract_and_check_name_from_json(json_data, existing_name=None, *, kind):
     return name
 
 
+def require_connected_user(*, admin=False):
+    """Decorator factory aimed at restricting actions based on connected users"""
+    def decorator(method):
+        """Decorate a method to check the privileges of the
+        connected user before executing it.
+        """
+        if admin:
+            @wraps(method)
+            def wrapper(self):
+                """Method wrapper that check if the connected
+                user is registered and has admin privileges.
+                """
+                if not self.connected_user.is_staff:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: an admin account '
+                            'is necessary to perform this action')
+                if not self.connected_user.is_active:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: your user account '
+                            'has not been activated yet. Please contact '
+                            'your administrator.')
+                return method(self)
+        else:
+            @wraps(method)
+            def wrapper(self):
+                """Method wrapper that check if the connected user is registered"""
+                if not self.connected_user.is_active:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: your user account '
+                            'has not been activated yet. Please contact '
+                            'your administrator.')
+                return method(self)
+        return wrapper
+    return decorator
+
+
 def signal_term_handler(signal, frame):
     """Gracefully terminate the Conductor by setting the state of
     all started Scenarios to 'Stopped'.
@@ -246,23 +283,13 @@ class ConductorAction:
         """Override this in subclasses to implement the desired action"""
         raise NotImplementedError
 
-    def _check_user(self, *, admin=False):
-        if self.openbach_function_instance is not None:
-            # Do not check anything when running inside a
-            # scenario. Consider that the scenario launch
-            # performed all necessary checks because the
-            # user will always be anonymous in such case.
+    def _assert_user_is(self, identity):
+        if identity.is_anonymous() or self.connected_user.is_staff:
             return
 
-        if admin and not self.connected_user.is_staff:
+        if self.connected_user != identity:
             raise errors.ForbiddenError(
-                    'Unsufficient privileges: an admin account '
-                    'is necessary to perform this action')
-        if not self.connected_user.is_active:
-            raise errors.ForbiddenError(
-                    'Unsufficient privileges: your user account '
-                    'has not been activated yet. Please contact '
-                    'your administrator.')
+                    'Forbidden: this resource belong to another user')
 
 
 class OpenbachFunctionMixin:
@@ -377,9 +404,8 @@ class AddCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_add')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         collector, created = Collector.objects.get_or_create(address=self.address)
         collector.update(
                 self.logs_port,
@@ -445,9 +471,8 @@ class ModifyCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_modify')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         collector = self.get_collector_or_not_found_error()
         updated = collector.update(
                 self.logs_port,
@@ -477,9 +502,8 @@ class DeleteCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_del')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         collector = self.get_collector_or_not_found_error()
         other_agents = collector.agents.exclude(address=self.address)
         if other_agents:
@@ -577,9 +601,8 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_install')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         collector_info = InfosCollector(self.collector_ip)
         collector = collector_info.get_collector_or_not_found_error()
         agent, created = Agent.objects.get_or_create(
@@ -632,9 +655,8 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_uninstall')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         agent = self.get_agent_or_not_found_error()
         installed_jobs = [
                 {'name': installed.job.name, 'path': installed.job.path}
@@ -688,9 +710,8 @@ class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     def __init__(self, address):
         super().__init__(address=address)
 
+    @require_connected_user()
     def _create_command_result(self):
-        self._check_user()
-
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_retrieve_status_agent')
 
@@ -704,9 +725,8 @@ class RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
     def __init__(self, addresses):
         super().__init__(addresses=addresses)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         for address in self.addresses:
             RetrieveStatusAgent(address).action()
         return {}, 202
@@ -753,9 +773,8 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_assign')
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         agent = self.get_agent_or_not_found_error()
         collector_infos = InfosCollector(self.collector_ip)
         collector = collector_infos.get_collector_or_not_found_error()
@@ -788,9 +807,8 @@ class AddJob(JobAction):
     def __init__(self, name, path):
         super().__init__(name=name, path=path)
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         config_prefix = os.path.join(self.path, 'files', self.name)
         config_file = '{}.yml'.format(config_prefix)
         config_help = '{}.help'.format(config_prefix)
@@ -932,9 +950,8 @@ class AddTarJob(JobAction):
     def __init__(self, name, path):
         super().__init__(name=name, path=path)
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         path = '/opt/openbach/controller/src/jobs/private_jobs/{}'.format(self.name)
         try:
             with tarfile.open(self.path) as tar_file:
@@ -953,9 +970,8 @@ class DeleteJob(JobAction):
     def __init__(self, name):
         super().__init__(name=name)
 
+    @require_connected_user(admin=True)
     def _action(self):
-        self._check_user(admin=True)
-
         job = self.get_job_or_not_found_error()
         path = job.path
         job.delete()
@@ -1070,9 +1086,8 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                 job_name=self.name)
         return self.set_running(command_result, 'status_install')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
         job = InfosJob(self.name).get_job_or_not_found_error()
 
@@ -1112,9 +1127,8 @@ class InstallJobs(InstalledJobAction):
         super().__init__(addresses=addresses, names=names,
                          severity=severity, local_severity=local_severity)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         for name, address in itertools.product(self.names, self.addresses):
             InstallJob(address, name, self.severity, self.local_severity).action()
         return {}, 202
@@ -1132,9 +1146,8 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
                 job_name=self.name)
         return self.set_running(command_result, 'status_uninstall')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         installed_job = self.get_installed_job_or_not_found_error()
         agent = installed_job.agent
         job = installed_job.job
@@ -1153,9 +1166,8 @@ class UninstallJobs(InstalledJobAction):
     def __init__(self, addresses, names):
         super().__init__(addresses=addresses, names=names)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         for name, address in itertools.product(self.names, self.addresses):
             UninstallJob(address, name).action()
         return {}, 202
@@ -1258,9 +1270,8 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
                 agent_ip=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_log_severity')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         installed_job = self.get_installed_job_or_not_found_error()
         local_severity = self.local_severity
         if self.local_severity is None:
@@ -1319,9 +1330,8 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
                 agent_ip=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_stat_policy')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         installed_job = self.get_installed_job_or_not_found_error()
         storage = self.storage
         broadcast = self.broadcast
@@ -1441,11 +1451,11 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         StatusManager().add(scenario.id, self.instance_id)
         return super().openbach_function(openbach_function_instance)
 
+    @require_connected_user()
     def action(self):
         """Override the base threaded action handler to build the JobInstance
         first and store its ID in this object instance before launching it.
         """
-        self._check_user()
         self._build_job_instance()
         super().action()
         return {'job_instance_id': self.instance_id}, 202
@@ -1538,9 +1548,8 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_stop')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         job_instance = self.get_job_instance_or_not_found_error()
         if job_instance.is_stopped:
             raise errors.ConductorWarning(
@@ -1599,9 +1608,8 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
                     warnings=issues)
         return []
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         for instance_id in self.instance_ids:
             StopJobInstance(instance_id, self.date).action()
         return {}, 202
@@ -1618,9 +1626,8 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_restart')
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         job_instance = self.get_job_instance_or_not_found_error()
         with db.transaction.atomic():
             try:
@@ -1767,9 +1774,8 @@ class CreateScenario(ScenarioAction):
         name = extract_and_check_name_from_json(json_data, kind='Scenario')
         super().__init__(json_data=json_data, name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         self._register_scenario()
         scenario = self.get_scenario_or_not_found_error()
         return scenario.json, 200
@@ -1781,9 +1787,8 @@ class DeleteScenario(ScenarioAction):
     def __init__(self, name, project=None):
         super().__init__(name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         scenario = self.get_scenario_or_not_found_error()
         scenario.delete()
         return None, 204
@@ -1795,9 +1800,8 @@ class ModifyScenario(ScenarioAction):
     def __init__(self, json_data, name, project=None):
         super().__init__(json_data=json_data, name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         extract_and_check_name_from_json(self.json_data, self.name, kind='Scenario')
         with db.transaction.atomic():
             self._register_scenario()
@@ -2314,9 +2318,8 @@ class CreateProject(ProjectAction):
         name = extract_and_check_name_from_json(json_data, kind='Project')
         super().__init__(name=name, json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         self._register_project()
         project = self.get_project_or_not_found_error()
         return project.json, 200
@@ -2328,9 +2331,8 @@ class DeleteProject(ProjectAction):
     def __init__(self, name):
         super().__init__(name=name)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         project = self.get_project_or_not_found_error()
         project.delete()
         return None, 204
@@ -2342,9 +2344,8 @@ class ModifyProject(ProjectAction):
     def __init__(self, name, json_data):
         super().__init__(name=name, json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
         with db.transaction.atomic():
             self._register_project()
@@ -2432,9 +2433,8 @@ class AddEntity(EntityAction):
                 name=name, project=project,
                 json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
         return entity.json, 200
@@ -2448,9 +2448,8 @@ class ModifyEntity(EntityAction):
                 name=name, project=project,
                 json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         extract_and_check_name_from_json(self.json_data, self.name, kind='Entity')
         with db.transaction.atomic():
             self._register_entity()
@@ -2464,9 +2463,8 @@ class DeleteEntity(EntityAction):
     def __init__(self, name, project):
         super().__init__(name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         entity = self.get_entity_or_not_found_error()
         entity.delete()
         return None, 204
@@ -2576,9 +2574,8 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
                 address=self.address)
         return command_result
 
+    @require_connected_user()
     def _action(self):
-        self._check_user()
-
         agent = InfosAgent(self.address).get_agent_or_not_found_error()
         start_playbook(
                 'push_file',

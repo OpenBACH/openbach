@@ -2687,7 +2687,7 @@ def status_manager(job_instance_id, scenario_instance_id):
             ScenarioInstance.objects.filter(openbach_function_instance__in=ofis))):
         # Update the status of the Scenario Instance if it is finished
         if ThreadManager().is_scenario_stopped(scenario_instance.id):
-            scenario_instance.stop('Finished OK')
+            scenario_instance.stop(stop_status='Finished OK')
 
 
 class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

@@ -410,7 +410,7 @@ class JobsView(BaseJobView):
         """
         data = {'command': 'list_jobs', 'string_to_search': string_to_search}
         if ratio is not None:
-            data['ratio'] = ratio
+            data['ratio'] = float(ratio)
         return self.conductor_execute(**data)
 
     def _get_installed_jobs(self, address, update):

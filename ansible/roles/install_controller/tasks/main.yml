@@ -91,7 +91,7 @@
   remote_user: openbach
 
 - name: Install the Backend
-  synchronize: src=../src/controller/backend/ dest=/opt/openbach/controller/backend/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/controller/backend/ dest=/opt/openbach/controller/backend/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
   remote_user: openbach
   notify:
     - start backend
@@ -122,7 +122,7 @@
   notify: start backend
 
 - name: Install the Conductor
-  synchronize: src=../src/controller/openbach-conductor/ dest=/opt/openbach/controller/conductor/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/controller/openbach-conductor/ dest=/opt/openbach/controller/conductor/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
   remote_user: openbach
   notify: start conductor
 
@@ -132,11 +132,11 @@
   notify: start conductor
 
 - name: Copy the sources of the Agent
-  synchronize: src=../src/agent/ dest=/opt/openbach/controller/src/agent/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/agent/ dest=/opt/openbach/controller/src/agent/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
   remote_user: openbach
 
 - name: Copy the installation Playbooks
-  synchronize: src=../ansible/roles/ dest=/opt/openbach/controller/ansible/roles/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../ansible/roles/ dest=/opt/openbach/controller/ansible/roles/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
   remote_user: openbach
 
 - name: Place a Link to /opt/openbach/pip_mirror so that Playbooks can Find it
@@ -144,7 +144,7 @@
   remote_user: openbach
 
 - name: Copy the sources of the Jobs
-  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
   remote_user: openbach
 
 - name: Copy the version file on the Controller

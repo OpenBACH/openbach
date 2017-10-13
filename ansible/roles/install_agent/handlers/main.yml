@@ -22,8 +22,11 @@
   notify: remove collect agent build files
 
 - name: remove collect agent build files
-  file: path=/opt/openbach/agent/collect_agent/client_api/build/ state=absent
+  make:
+    chdir: /opt/openbach/agent/collect_agent/client_api/
+    target: clean
   become: yes
+  notify: restart openbach agent
 
 - name: restart openbach agent
   systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes

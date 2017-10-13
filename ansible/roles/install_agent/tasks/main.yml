@@ -119,7 +119,7 @@
     - restart openbach agent
 
 - name: Install Collect Agent
-  synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes rsync_opts=--exclude=*__pycache__/*
+  synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
   remote_user: openbach
   notify: build collect agent library
 

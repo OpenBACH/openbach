@@ -44,6 +44,7 @@ __credits__ = '''Contributors:
 
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 from .scenario_models import Scenario
 from .utils import nullable_json
@@ -160,6 +161,7 @@ class Project(models.Model):
 
     name = models.CharField(max_length=500, primary_key=True)
     description = models.TextField(null=True, blank=True)
+    owners = models.ManyToManyField(User, related_name='private_projects')
 
     class MalformedError(Exception):
         def __init__(self, section, error):
@@ -179,6 +181,7 @@ class Project(models.Model):
         return {
                 'name': self.name,
                 'description': self.description,
+                'public': self.owner is None,
                 'entity': [entity.json for entity
                            in self.entities.order_by('name')],
                 'scenario': [scenario.json for scenario

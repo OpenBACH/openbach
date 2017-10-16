@@ -181,7 +181,7 @@ class Project(models.Model):
         return {
                 'name': self.name,
                 'description': self.description,
-                'public': self.owner is None,
+                'owners': [user.get_username() for user in self.owners.all()],
                 'entity': [entity.json for entity
                            in self.entities.order_by('name')],
                 'scenario': [scenario.json for scenario
@@ -191,6 +191,13 @@ class Project(models.Model):
         }
 
     def load_from_json(self, json_data):
+        owners = json_data.get('owners', [])
+        if not isinstance(owners, list):
+            raise Project.MalformedError(
+                    'owners', 'Entry \'owners\' has '
+                    'the wrong kind of value (expected '
+                    '{} got {})'.format(list, type(owners)))
+
         # Cleanup in case of modifications
         self.networks.all().delete()
         self.scenarios.all().delete()

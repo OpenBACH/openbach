@@ -283,13 +283,21 @@ class ConductorAction:
         """Override this in subclasses to implement the desired action"""
         raise NotImplementedError
 
-    def _assert_user_is(self, identity):
-        if identity.is_anonymous() or self.connected_user.is_staff:
+    def _assert_user_in(self, identity):
+        if self.connected_user.is_staff:
+            # Admin can do anything
             return
 
-        if self.connected_user != identity:
-            raise errors.ForbiddenError(
-                    'Forbidden: this resource belong to another user')
+        if self.connected_user in identity:
+            # Users having ownership of the resource can use it
+            return
+
+        if not identity or identity == [None]:
+            # Resource owned by nobody is public
+            return
+
+        raise errors.ForbiddenError(
+                'Forbidden: this resource belong to another user')
 
 
 class OpenbachFunctionMixin:
@@ -2309,6 +2317,9 @@ class ProjectAction(ConductorAction):
                     project_data=self.json_data)
         else:
             project.save()
+            owners_names = self.json_data.get('owners', [])
+            owners = User.objects.filter(username__in=owners_names)
+            project.owners.set(owners)
 
 
 class CreateProject(ProjectAction):
@@ -2334,6 +2345,7 @@ class DeleteProject(ProjectAction):
     @require_connected_user()
     def _action(self):
         project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners)
         project.delete()
         return None, 204
 
@@ -2347,6 +2359,10 @@ class ModifyProject(ProjectAction):
     @require_connected_user()
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners)
+        del project
+
         with db.transaction.atomic():
             self._register_project()
         project = self.get_project_or_not_found_error()

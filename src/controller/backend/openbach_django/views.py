@@ -373,11 +373,6 @@ class BaseJobView(GenericView):
                 command='uninstall_jobs',
                 names=names, addresses=addresses)
 
-    def _action_retrieve_status(self, addresses):
-        """Retrieve the list of installed jobs on an Agent (or multiple Agents)"""
-        return self.conductor_execute(
-                command='retrieve_status_jobs', addresses=addresses)
-
 
 class JobsView(BaseJobView):
     """Manage actions for jobs without an ID"""
@@ -435,8 +430,7 @@ class JobsView(BaseJobView):
         else:
             # Execute (un)installation of several jobs
             try:
-                if action != 'retrieve_status':
-                    names = request.JSON['names']
+                names = request.JSON['names']
                 addresses = request.JSON['addresses']
             except KeyError as e:
                 return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
@@ -449,9 +443,6 @@ class JobsView(BaseJobView):
 
             if not isinstance(addresses, list):
                 addresses = [addresses]
-            if action == 'retrieve_status':
-                return function(addresses)
-
             if not isinstance(names, list):
                 names = [names]
             return function(names, addresses)

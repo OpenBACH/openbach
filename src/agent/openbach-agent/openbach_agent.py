@@ -45,7 +45,6 @@ import signal
 import threading
 import socketserver
 from datetime import datetime
-from functools import partial
 from subprocess import DEVNULL
 from contextlib import suppress, contextmanager
 
@@ -55,28 +54,20 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.triggers.interval import IntervalTrigger
 
-import collect_agent
-
 try:
     # Try importing unix stuff
     import syslog
-    import resource
+    import resource  # TODO: remove it so we no longer need to run the agent as root
     resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
     OS_TYPE = 'linux'
     JOBS_FOLDER = '/opt/openbach/agent/jobs/'
     INSTANCES_FOLDER = '/opt/openbach/agent/job_instances/'
-    COLLECT_AGENT_REGISTER_COLLECT = partial(
-        collect_agent.register_collect,
-        '/opt/openbach/agent/openbach_agent_filter.conf')
 except ImportError:
     # If we failed assure we’re on windows
     import syslog_viveris as syslog
     OS_TYPE = 'windows'
     JOBS_FOLDER = r'C:\openbach\jobs'
     INSTANCES_FOLDER = r'C:\openbach\instances'
-    COLLECT_AGENT_REGISTER_COLLECT = partial(
-        collect_agent.register_collect,
-        r'C:\openbach\openbach_agent_filter.conf')
 
 
 def signal_term_handler(signal, frame):
@@ -460,7 +451,8 @@ class StatusJobsAgent(AgentAction):
         super().__init__()
 
     def _action(self):
-        JobManager().scheduler.add_job(ls_jobs, 'date', id='ls_jobs')
+        jobs = JobManager().job_names
+        return ' '.join(map(shlex.quote, jobs))
 
 
 class RestartAgent(AgentAction):
@@ -605,23 +597,6 @@ def stop_job_already_running(job_name, job_instance_id, instance_infos):
         proc.wait(timeout=2)
     except psutil.TimeoutExpired:
         proc.kill()
-
-
-def ls_jobs():
-    """Send to the Collector the lists of Jobs installed on the Agent"""
-    timestamp = round(time.time() * 1000)
-    # Get the Installed Jobs
-    jobs = JobManager().job_names
-    count = len(jobs)
-    job_names = {'job{}'.format(i): job for i, job in enumerate(jobs, 1)}
-    # Connection to collect agent
-    success = COLLECT_AGENT_REGISTER_COLLECT()
-    if not success:
-        syslog.syslog(syslog.LOG_ERR, 'Unable the connect to rstats')
-        return
-    # Send the stat
-    statistics = {'_type': 'job_list', 'nb': count, **job_names}
-    collect_agent.send_stat(timestamp, **statistics)
 
 
 class AgentServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

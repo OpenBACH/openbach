@@ -772,42 +772,6 @@ class RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
         return {}, 202
 
 
-# TODO: delete~?
-class RetrieveStatusJob(ThreadedAction, AgentAction):
-    """Action responsible for asking an Agent to send the
-    list of its Installed Jobs to its Collector.
-    """
-
-    def __init__(self, address):
-        super().__init__(address=address)
-
-    def _create_command_result(self):
-        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
-        return self.set_running(command_result, 'status_retrieve_status_jobs')
-
-    def _action(self):
-        self._check_user_can_use_agent()
-        agent = self.get_agent_or_not_found_error()
-        OpenBachBaton(agent.address).list_jobs()
-
-
-# TODO: delete~?
-class RetrieveStatusJobs(OpenbachFunctionMixin, ConductorAction):
-    """Action responsible for asking several Agent to send the
-    list of their Installed Jobs to their Collector.
-    """
-
-    def __init__(self, addresses):
-        super().__init__(addresses=addresses)
-
-    def _action(self):
-        for address in self.addresses:
-            status = RetrieveStatusJob(address)
-            self.share_user(status)
-            status.action()
-        return {}, 202
-
-
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for assigning a Collector to an Agent"""
 
@@ -1266,65 +1230,49 @@ class ListInstalledJobs(InstalledJobAction):
     """Action responsible for information retrieval about
     all Installed Job on an Agent.
     """
-    UPDATE_JOB_URL = (
-            'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
-            'db={agent.collector.stats_database_name}&'
-            'epoch={agent.collector.stats_database_precision}&'
-            'q=SELECT+*+FROM+"openbach_agent"+'
-            'WHERE+"@agent_name"+=+\'{agent.name}\'+'
-            'AND+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1')
 
     def __init__(self, address, update=False):
         super().__init__(address=address, update=update)
 
     def _action(self):
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
         update_errors = []
 
-        # TODO better update
         if self.update:
-            url = self.UPDATE_JOB_URL.format(agent=agent)
-            result = requests.get(url).json()
             try:
-                serie = result['results'][0]['series'][0]
-                columns = serie['columns']
-                values = serie['values'][0]
-            except LookupError:
-                raise errors.ConductorError(
-                        'Cannot retrieve the jobs status in the Collector',
-                        collector_response=result)
+                jobs = set(OpenBachBaton(self.address).list_jobs())
+            except errors.ConductorError as error:
+                update_errors.append(error.json)
+            else:
+                date = timezone.now()
+                for job in agent.installed_jobs.all():
+                    name = job.job.name
+                    if name not in jobs:
+                        job.delete()  # Not installed anymore
+                    else:
+                        job.update_status = date
+                        job.save()
+                        jobs.remove(name)
 
-            jobs = {
-                    value for column, value in zip(columns, values)
-                    if column not in ('time', 'nb', '_type')
-            }
-            tz = timezone.get_current_timezone()
-            date_value = values[columns.index('time')]
-            date = datetime.fromtimestamp(date_value / 1000, tz)
-            for job in agent.installed_jobs.all():
-                name = job.job.name
-                if name not in jobs:
-                    job.delete()  # Not installed anymore
-                else:
-                    job.update_status = date
-                    job.save()
-                    jobs.remove(name)
-
-            # Store remaining installed jobs in the database
-            for job_name in jobs:
-                try:
-                    job = Job.objects.get(name=job_name)
-                except Job.DoesNotExist:
-                    update_errors.append({
-                        'message': 'A Job on the Agent is not found in the database',
-                        'job_name': job_name,
-                    })
-                else:
-                    InstalledJob.objects.create(
-                            agent=agent, job=job,
-                            update_status=date,
-                            severity=4,
-                            local_severity=4)
+                # Store remaining installed jobs in the database
+                for job_name in jobs:
+                    try:
+                        job = Job.objects.get(name=job_name)
+                    except Job.DoesNotExist:
+                        update_errors.append({
+                            'message': 'A Job on the Agent '
+                            'is not found in the database',
+                            'job_name': job_name,
+                        })
+                    else:
+                        InstalledJob.objects.create(
+                                agent=agent, job=job,
+                                update_status=date,
+                                severity=4,
+                                local_severity=4)
 
         infos = [job.json for job in agent.installed_jobs.all()]
         result = {
@@ -1776,12 +1724,9 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             address = job_instance.job.agent.address
             job_name = job_instance.job.job.name
             try:
-                baton = OpenBachBaton(address)
-                response = baton.status_job_instance(job_name, self.instance_id)
+                job_status = OpenBachBaton(address).status_job_instance(job_name, self.instance_id)
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
-            else:
-                job_status = response[3:]
             finally:
                 job_instance.update_status = timezone.now()
                 job_instance.status = job_status

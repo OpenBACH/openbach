@@ -137,6 +137,14 @@ class Agent(models.Model):
         return '{0.name} ({0.address})'.format(self)
 
     @property
+    def has_entity(self):
+        try:
+            self.entity
+        except Entity.DoesNotExist:
+            return False
+        return True
+
+    @property
     def json(self):
         try:
             entity = self.entity

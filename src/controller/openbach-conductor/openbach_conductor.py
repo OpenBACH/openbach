@@ -214,12 +214,14 @@ def require_connected_user(*, admin=False):
                 if not self.connected_user.is_staff:
                     raise errors.ForbiddenError(
                             'Unsufficient privileges: an admin account '
-                            'is necessary to perform this action')
+                            'is necessary to perform this action',
+                            self.connected_user)
                 if not self.connected_user.is_active:
                     raise errors.ForbiddenError(
                             'Unsufficient privileges: your user account '
                             'has not been activated yet. Please contact '
-                            'your administrator.')
+                            'your administrator.',
+                            self.connected_user)
                 return method(self)
         else:
             @wraps(method)
@@ -229,7 +231,8 @@ def require_connected_user(*, admin=False):
                     raise errors.ForbiddenError(
                             'Unsufficient privileges: your user account '
                             'has not been activated yet. Please contact '
-                            'your administrator.')
+                            'your administrator.',
+                            self.connected_user)
                 return method(self)
         return wrapper
     return decorator
@@ -303,7 +306,8 @@ class ConductorAction:
             return
 
         raise errors.ForbiddenError(
-                'Forbidden: this resource belong to another user')
+                'Forbidden: this resource belong to another user',
+                self.connected_user)
 
 
 class OpenbachFunctionMixin:
@@ -1099,6 +1103,7 @@ class InstalledJobAction(ConductorAction):
             raise errors.ForbiddenError(
                     'Only administrators can (un)install '
                     'administrative jobs on agents.',
+                    self.connected_user,
                     agent_address=agent.address,
                     job_name=job.name)
 

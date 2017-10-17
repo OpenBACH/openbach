@@ -74,6 +74,12 @@ class ForbiddenError(ConductorError):
     """Error dedicated to actions requiring privileges that the user doesn't have"""
     ERROR_CODE = 403
 
+    def __init__(self, reason, originated_by, **kwargs):
+        author = None
+        if originated_by.is_authenticated():
+            author = originated_by.get_username()
+        super().__init__(reason, originated_by=author, **kwargs)
+
 
 class NotFoundError(ConductorError):
     """Error dedicated to objects not found in the database"""

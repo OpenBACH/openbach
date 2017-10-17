@@ -66,7 +66,6 @@ from contextlib import suppress
 from collections import defaultdict
 
 import yaml
-import requests
 from fuzzywuzzy import fuzz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
@@ -2672,6 +2671,107 @@ class StateJobInstance(ConductorAction):
     def _action(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return command_result.json, 200
+
+
+#########
+# Users #
+#########
+
+class UpdateUsers(ConductorAction):
+    """Action that update permissions of users in the database"""
+
+    def __init__(self, users_permissions=None):
+        if users_permissions is None:
+            users_permissions = []
+        super().__init__(users_permissions=users_permissions)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        if not isinstance(self.user_permissions, list):
+            raise errors.BadRequestError(
+                    'The new permissions of users should be a list of objects')
+
+        issues = list(self._apply_permissions())
+        if issues:
+            raise errors.ConductorWarning(
+                    'Some users in the permissions list could not be updated',
+                    errors=issues)
+
+        return None, 204
+
+    def _apply_permissions(self):
+        for permissions in self.users_permissions:
+            try:
+                username = permissions['login']
+            except KeyError:
+                yield {
+                    'permissions': permissions,
+                    'error': 'Username not found',
+                }
+                continue
+
+            try:
+                active = permissions['active']
+                staff = permissions['admin']
+            except KeyError as e:
+                yield {
+                    'permissions': permissions,
+                    'error': 'permission \'{}\' not found'.format(e),
+                }
+                continue
+
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                yield {
+                    'permissions': permissions,
+                    'error': 'User not found in the database',
+                }
+            else:
+                user.is_active = bool(staff or active)
+                user.is_staff = bool(staff)
+                user.save()
+
+
+class DeleteUsers(ConductorAction):
+    """Action that removes users from the database"""
+
+    def __init__(self, usernames=None):
+        if usernames is None:
+            usernames = []
+        super().__init__(usernames=usernames)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        if not isinstance(self.usernames, list):
+            raise errors.BadRequestError(
+                    'The users to delete should be a list of usernames')
+        User.objects.filter(username__in=self.usernames).delete()
+        return None, 204
+
+
+class ListUsers(ConductorAction):
+    """Action that list the registered users in the database"""
+
+    @require_connected_user()
+    def _action(self):
+        return list(self._users_to_json()), 200
+
+    def _users_to_json(self):
+        users = User.objects.all()
+        if not self.connected_user.is_staff:
+            users = users.filter(is_active=True)
+
+        for user in users:
+            yield {
+                'username': user.get_username(),
+                'name': user.get_full_name(),
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_user': user.is_active,
+                'is_admin': user.is_staff,
+                'email': user.email,
+            }
 
 
 ################

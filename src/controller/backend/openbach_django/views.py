@@ -901,6 +901,26 @@ class LoginView(GenericView):
         return None, 204
 
 
+class UsersView(GenericView):
+    """Manage actions relative to user in a generic sense"""
+
+    def get(self, request):
+        """Return the list of registered users"""
+        return self.conductor_execute(command='list_users')
+
+    def put(self, request):
+        """Modify permissions of users"""
+        permissions = request.JSON.get('permissions', [])
+        return self.conductor_execute(
+                command='update_users',
+                users_permissions=permissions)
+
+    def delete(self, request):
+        """Delete users"""
+        users = request.JSON.get('usernames', [])
+        return self.conductor_execute(command='delete_users', usernames=users)
+
+
 def push_file(request):
     try:
         uploaded_file = request.FILES['file']

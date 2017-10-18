@@ -883,6 +883,8 @@ class LoginView(GenericView):
         except KeyError as e:
             return {'msg': 'Missing profile field \'{}\''.format(e)}, 400
 
+        password = request.JSON.get('password')
+
         if user.get_username() != username:
             return {'msg': 'Error: the provided username and the '
                     'username of the current user does not match'}, 400
@@ -890,10 +892,15 @@ class LoginView(GenericView):
         user.email = request.JSON.get('email', '')
         user.first_name = request.JSON.get('first_name', '')
         user.last_name = request.JSON.get('last_name', '')
-        if 'password' in request.JSON:
-            user.set_password(request.JSON['password'])
+        if password is not None:
+            user.set_password(password)
         user.save()
-        return None, 204
+
+        if password is not None:
+            user = authenticate(username=username, password=password)
+            login(request, user)
+
+        return self._user_to_json(user), 200
 
     def delete(self, request):
         """Disconnect connected user"""

@@ -2692,7 +2692,7 @@ class UpdateUsers(ConductorAction):
 
     @require_connected_user(admin=True)
     def _action(self):
-        if not isinstance(self.user_permissions, list):
+        if not isinstance(self.users_permissions, list):
             raise errors.BadRequestError(
                     'The new permissions of users should be a list of objects')
 

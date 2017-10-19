@@ -32,26 +32,24 @@
 
 ---
 
-  - name: Install Squid
-    apt: pkg=squid state=present
-    become: yes
-  
-  - name: Create cache dir
-    file: path=/etc/squid/cache/ state=directory owner=proxy group=proxy
-    become: yes 
-  
-  - name: Create cache files
-    shell: squid -z
-    become: yes
-  
-  - name: Create the squid Job Repository
-    file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
-    become: yes
-  
-  - name: Install the squid Job
-    copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
-    with_items:
-      - { file: 'squid.py', mode: '0755' }
-      - { file: 'squid_rstats_filter.conf', mode: '0644' }
-      - { file: 'squid.conf', mode: '0644' }
-    become: yes
+- name: Install Squid
+  apt: pkg=squid state=present
+  become: yes
+
+- name: Create cache dir
+  file: path=/etc/squid/cache/ state=directory owner=proxy group=proxy
+  become: yes 
+
+- name: Create cache files
+  shell: squid -z
+  become: yes
+
+- name: Create the squid Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
+
+- name: Install the squid Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'squid.py', mode: '0755' }
+    - { file: 'squid_rstats_filter.conf', mode: '0644' }
+    - { file: 'squid.conf', mode: '0644' }

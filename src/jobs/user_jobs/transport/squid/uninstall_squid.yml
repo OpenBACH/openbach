@@ -33,6 +33,5 @@
 
 ---
 
-  - name: Remove the squid Job Repository
-    file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent
-    
+- name: Remove the squid Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

@@ -261,12 +261,6 @@ class CollectorView(GenericView):
 class BaseAgentView(GenericView):
     """Abstract base class used to factorize agent creation"""
 
-    def _action_retrieve_status(self, addresses):
-        """Retrieve the status of an Agent"""
-        return self.conductor_execute(
-                command='retrieve_status_agents',
-                addresses=addresses)
-
 
 class AgentsView(BaseAgentView):
     """Manage actions for agents without an ID"""
@@ -280,32 +274,16 @@ class AgentsView(BaseAgentView):
     def post(self, request):
         """create a new agent"""
         try:
-            action = request.JSON['action']
-        except KeyError:
-            # Create a new Agent
-            try:
-                return self.conductor_execute(
-                        command='install_agent',
-                        name=request.JSON['name'],
-                        address=request.JSON['address'],
-                        collector_ip=request.JSON['collector_ip'],
-                        username=request.JSON.get('username'),
-                        password=request.JSON.get('password'),
-                        skip_playbook=request.JSON.get('skip_playbook', False))
-            except KeyError as e:
-                return {'msg': 'Missing parameter {}'.format(e)}, 400
-        else:
-            try:
-                function = getattr(self, '_action_' + action)
-            except KeyError:
-                return {'msg': 'POST data malformed: unknown action '
-                        '\'{}\' for this route'.format(action)}, 400
-            try:
-                addresses = request.JSON['addresses']
-            except KeyError as e:
-                return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-            return function(addresses)
+            return self.conductor_execute(
+                    command='install_agent',
+                    name=request.JSON['name'],
+                    address=request.JSON['address'],
+                    collector_ip=request.JSON['collector_ip'],
+                    username=request.JSON.get('username'),
+                    password=request.JSON.get('password'),
+                    skip_playbook=request.JSON.get('skip_playbook', False))
+        except KeyError as e:
+            return {'msg': 'Missing parameter {}'.format(e)}, 400
 
 
 class AgentView(BaseAgentView):

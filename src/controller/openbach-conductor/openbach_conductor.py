@@ -619,7 +619,6 @@ class AgentAction(ConductorAction):
         self._assert_user_in(owners)
 
 
-
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
 
@@ -721,6 +720,8 @@ class InfosAgent(AgentAction):
         self._check_user_can_use_agent()
 
         if self.update:
+            # Do not perform update blindly as it
+            # may take some time due to ansible playbooks
             self._update_agent()
         agent = self.get_agent_or_not_found_error()
         return agent.json, 200
@@ -741,38 +742,6 @@ class ListAgents(AgentAction):
                 agent_infos = InfosAgent(agent.address, self.update)
                 self.share_user(agent_infos)
                 yield agent_infos._action()[0]
-
-
-# TODO: delete~?
-class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
-    """Action responsible for status retrieval about an Agent"""
-
-    def __init__(self, address):
-        super().__init__(address=address)
-
-    @require_connected_user()
-    def _create_command_result(self):
-        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
-        return self.set_running(command_result, 'status_retrieve_status_agent')
-
-    def _action(self):
-        self._update_agent()
-
-
-# TODO: delete~?
-class RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
-    """Action responsible for status retrieval about several Agents"""
-
-    def __init__(self, addresses):
-        super().__init__(addresses=addresses)
-
-    @require_connected_user()
-    def _action(self):
-        for address in self.addresses:
-            status = RetrieveStatusAgent(address)
-            self.share_user(status)
-            status.action()
-        return {}, 202
 
 
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
@@ -1722,7 +1691,8 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
         owner = job_instance.started_by
-        self._assert_user_in([owner])
+        if not job_instance.is_stopped:
+            self._assert_user_in([owner])
 
         if self.update:
             address = job_instance.job.agent.address
@@ -1924,8 +1894,9 @@ class ScenarioInstanceAction(ConductorAction):
                     'The requested Scenario Instance is not in the database',
                     scenario_instance_id=self.instance_id)
         else:
-            owner = instance.started_by
-            self._assert_user_in([owner])
+            if not instance.is_stopped:
+                owner = instance.started_by
+                self._assert_user_in([owner])
             return instance
 
 
@@ -2127,8 +2098,9 @@ class ListScenarioInstances(ScenarioInstanceAction):
     def _infos_scenario_instances(self, scenario):
         for instance in scenario.instances.order_by('-start_date'):
             with suppress(errors.ForbiddenError):
-                owner = instance.started_by
-                self._assert_user_in([owner])
+                if not instance.is_stopped:
+                    owner = instance.started_by
+                    self._assert_user_in([owner])
                 yield instance.json
 
 

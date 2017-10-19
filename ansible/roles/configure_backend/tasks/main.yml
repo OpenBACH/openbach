@@ -42,6 +42,16 @@
   with_items: "{{ groups.agent | default([]) }}"
   remote_user: openbach
 
+- name: Authentify into the Backend Database
+  uri:
+    url: http://localhost:8000/login/
+    method: POST
+    body_format: json
+    body:
+      login: openbach
+      password: openbach
+  register: backend_login
+
 - name: Add Jobs into the Backend Database
   uri:
     url: http://localhost:8000/job/
@@ -50,6 +60,8 @@
     body:
       name: "{{ item.name }}"
       path: "{{ item.path }}"
+    headers:
+      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
   with_items:
     - {name: empty_elasticsearch_db, path: /opt/openbach/controller/src/jobs/admin_jobs/empty_elasticsearch_db/}
     - {name: empty_influxdb_db, path: /opt/openbach/controller/src/jobs/admin_jobs/empty_influxdb_db/}
@@ -87,6 +99,8 @@
       address: "{{ item }}"
       name: "{{ hostvars[item].openbach_name }}"
       skip_playbook: true
+    headers:
+      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
     status_code: 202
   with_items: "{{ groups.collector | default([]) }}"
 
@@ -108,6 +122,8 @@
       name: "{{ hostvars[item].openbach_name }}"
       collector_ip: "{{ hostvars[item].openbach_collector }}"
       skip_playbook: true
+    headers:
+      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
     status_code: 202
   with_items: "{{ groups.agent | default([]) }}"
 

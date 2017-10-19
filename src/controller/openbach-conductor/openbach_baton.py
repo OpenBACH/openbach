@@ -127,10 +127,11 @@ class OpenBachBaton:
 
     def status_job_instance(self, job_name, job_id):
         message = 'status_job_instance_agent {} {}'.format(shlex.quote(job_name), job_id)
-        return self.communicate(message)
+        return self.communicate(message)[3:]
 
     def list_jobs(self):
-        return self.communicate('status_jobs_agent')
+        response = self.communicate('status_jobs_agent')
+        return shlex.split(response[3:])
 
     def add_job(self, job_name):
         return self.communicate('add_job_agent {}'.format(shlex.quote(job_name)))

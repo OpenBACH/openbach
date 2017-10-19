@@ -131,11 +131,6 @@ class AgentCommandResult(models.Model):
             models.SET_NULL,
             null=True, blank=True,
             related_name='+')
-    status_retrieve_status_agent = models.ForeignKey(
-            CommandResult,
-            models.SET_NULL,
-            null=True, blank=True,
-            related_name='+')
     status_assign = models.ForeignKey(
             CommandResult,
             models.SET_NULL,
@@ -149,12 +144,10 @@ class AgentCommandResult(models.Model):
 
     @property
     def json(self):
-        agent = self.status_retrieve_status_agent
         job = self.status_retrieve_status_jobs
         return {
                 'install': nullable_json(self.status_install),
                 'uninstall': nullable_json(self.status_uninstall),
-                'retrieve_status_agent': nullable_json(agent),
                 'assign_collector': nullable_json(self.status_assign),
                 'retrieve_status_jobs': nullable_json(job),
         }

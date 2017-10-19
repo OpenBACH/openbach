@@ -37,7 +37,6 @@ __credits__ = '''Contributors:
 
 
 import os
-import socket
 import tempfile
 import traceback
 from contextlib import suppress
@@ -115,16 +114,12 @@ class GenericView(base.View):
                 if hasattr(self, verb)
         )
 
-    @staticmethod
-    def conductor_execute(**command):
+    def conductor_execute(self, **command):
         """Send a command to openbach_conductor"""
-
-        conductor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conductor.connect(('localhost', 1113))
-        recv = send_fifo(command, conductor)
-        result = json.loads(recv)
+        command['_username'] = self.request.user.get_username()
+        response = send_fifo(command)
+        result = json.loads(response)
         returncode = result.pop('returncode')
-        conductor.close()
         return result['response'], returncode
 
     def _debug(self):
@@ -266,12 +261,6 @@ class CollectorView(GenericView):
 class BaseAgentView(GenericView):
     """Abstract base class used to factorize agent creation"""
 
-    def _action_retrieve_status(self, addresses):
-        """Retrieve the status of an Agent"""
-        return self.conductor_execute(
-                command='retrieve_status_agents',
-                addresses=addresses)
-
 
 class AgentsView(BaseAgentView):
     """Manage actions for agents without an ID"""
@@ -285,32 +274,16 @@ class AgentsView(BaseAgentView):
     def post(self, request):
         """create a new agent"""
         try:
-            action = request.JSON['action']
-        except KeyError:
-            # Create a new Agent
-            try:
-                return self.conductor_execute(
-                        command='install_agent',
-                        name=request.JSON['name'],
-                        address=request.JSON['address'],
-                        collector_ip=request.JSON['collector_ip'],
-                        username=request.JSON.get('username'),
-                        password=request.JSON.get('password'),
-                        skip_playbook=request.JSON.get('skip_playbook', False))
-            except KeyError as e:
-                return {'msg': 'Missing parameter {}'.format(e)}, 400
-        else:
-            try:
-                function = getattr(self, '_action_' + action)
-            except KeyError:
-                return {'msg': 'POST data malformed: unknown action '
-                        '\'{}\' for this route'.format(action)}, 400
-            try:
-                addresses = request.JSON['addresses']
-            except KeyError as e:
-                return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-
-            return function(addresses)
+            return self.conductor_execute(
+                    command='install_agent',
+                    name=request.JSON['name'],
+                    address=request.JSON['address'],
+                    collector_ip=request.JSON['collector_ip'],
+                    username=request.JSON.get('username'),
+                    password=request.JSON.get('password'),
+                    skip_playbook=request.JSON.get('skip_playbook', False))
+        except KeyError as e:
+            return {'msg': 'Missing parameter {}'.format(e)}, 400
 
 
 class AgentView(BaseAgentView):
@@ -378,11 +351,6 @@ class BaseJobView(GenericView):
                 command='uninstall_jobs',
                 names=names, addresses=addresses)
 
-    def _action_retrieve_status(self, addresses):
-        """Retrieve the list of installed jobs on an Agent (or multiple Agents)"""
-        return self.conductor_execute(
-                command='retrieve_status_jobs', addresses=addresses)
-
 
 class JobsView(BaseJobView):
     """Manage actions for jobs without an ID"""
@@ -440,8 +408,7 @@ class JobsView(BaseJobView):
         else:
             # Execute (un)installation of several jobs
             try:
-                if action != 'retrieve_status':
-                    names = request.JSON['names']
+                names = request.JSON['names']
                 addresses = request.JSON['addresses']
             except KeyError as e:
                 return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
@@ -454,9 +421,6 @@ class JobsView(BaseJobView):
 
             if not isinstance(addresses, list):
                 addresses = [addresses]
-            if action == 'retrieve_status':
-                return function(addresses)
-
             if not isinstance(names, list):
                 names = [names]
             return function(names, addresses)
@@ -897,6 +861,8 @@ class LoginView(GenericView):
         except KeyError as e:
             return {'msg': 'Missing profile field \'{}\''.format(e)}, 400
 
+        password = request.JSON.get('password')
+
         if user.get_username() != username:
             return {'msg': 'Error: the provided username and the '
                     'username of the current user does not match'}, 400
@@ -904,15 +870,40 @@ class LoginView(GenericView):
         user.email = request.JSON.get('email', '')
         user.first_name = request.JSON.get('first_name', '')
         user.last_name = request.JSON.get('last_name', '')
-        if 'password' in request.JSON:
-            user.set_password(request.JSON['password'])
+        if password is not None:
+            user.set_password(password)
         user.save()
-        return None, 204
+
+        if password is not None:
+            user = authenticate(username=username, password=password)
+            login(request, user)
+
+        return self._user_to_json(user), 200
 
     def delete(self, request):
         """Disconnect connected user"""
         logout(request)
         return None, 204
+
+
+class UsersView(GenericView):
+    """Manage actions relative to user in a generic sense"""
+
+    def get(self, request):
+        """Return the list of registered users"""
+        return self.conductor_execute(command='list_users')
+
+    def put(self, request):
+        """Modify permissions of users"""
+        permissions = request.JSON.get('permissions', [])
+        return self.conductor_execute(
+                command='update_users',
+                users_permissions=permissions)
+
+    def delete(self, request):
+        """Delete users"""
+        users = request.JSON.get('usernames', [])
+        return self.conductor_execute(command='delete_users', usernames=users)
 
 
 def push_file(request):
@@ -932,7 +923,10 @@ def push_file(request):
             f.write(chunk)
 
     try:
-        return GenericView.conductor_execute(
+        # Mock using a class-based view to contact the conductor
+        view = GenericView()
+        view.request = request
+        return view.conductor_execute(
                 command='push_file', address=address,
                 local_path=path, remote_path=remote_path)
     finally:

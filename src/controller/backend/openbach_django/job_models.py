@@ -47,6 +47,7 @@ from datetime import datetime
 
 from django.db import models, IntegrityError
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 from .base_models import Argument, ArgumentValue
 
@@ -229,6 +230,10 @@ class JobInstance(models.Model):
     status = models.CharField(max_length=500)
     update_status = models.DateTimeField()
     start_date = models.DateTimeField()
+    started_by = models.ForeignKey(
+            User, models.CASCADE,
+            null=True, blank=True,
+            related_name='private_job_instances')
     stop_date = models.DateTimeField(null=True, blank=True)
     periodic = models.BooleanField()
     is_stopped = models.BooleanField(default=False)

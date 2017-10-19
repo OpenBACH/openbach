@@ -60,12 +60,12 @@ import threading
 import itertools
 import traceback
 import socketserver
+from functools import wraps
 from datetime import datetime
 from contextlib import suppress
 from collections import defaultdict
 
 import yaml
-import requests
 from fuzzywuzzy import fuzz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
@@ -92,6 +92,7 @@ from django import db
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
+from django.contrib.auth.models import User, AnonymousUser
 
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
@@ -198,6 +199,45 @@ def extract_and_check_name_from_json(json_data, existing_name=None, *, kind):
     return name
 
 
+def require_connected_user(*, admin=False):
+    """Decorator factory aimed at restricting actions based on connected users"""
+    def decorator(method):
+        """Decorate a method to check the privileges of the
+        connected user before executing it.
+        """
+        if admin:
+            @wraps(method)
+            def wrapper(self):
+                """Method wrapper that check if the connected
+                user is registered and has admin privileges.
+                """
+                if not self.connected_user.is_staff:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: an admin account '
+                            'is necessary to perform this action',
+                            self.connected_user)
+                if not self.connected_user.is_active:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: your user account '
+                            'has not been activated yet. Please contact '
+                            'your administrator.',
+                            self.connected_user)
+                return method(self)
+        else:
+            @wraps(method)
+            def wrapper(self):
+                """Method wrapper that check if the connected user is registered"""
+                if not self.connected_user.is_active:
+                    raise errors.ForbiddenError(
+                            'Unsufficient privileges: your user account '
+                            'has not been activated yet. Please contact '
+                            'your administrator.',
+                            self.connected_user)
+                return method(self)
+        return wrapper
+    return decorator
+
+
 def signal_term_handler(signal, frame):
     """Gracefully terminate the Conductor by setting the state of
     all started Scenarios to 'Stopped'.
@@ -233,6 +273,7 @@ class ConductorAction:
 
     def __init__(self, **kwargs):
         self.openbach_function_instance = None
+        self.connected_user = AnonymousUser()
         for name, value in kwargs.items():
             setattr(self, name, value)
 
@@ -243,6 +284,30 @@ class ConductorAction:
     def _action(self):
         """Override this in subclasses to implement the desired action"""
         raise NotImplementedError
+
+    def configure_user(self, username):
+        with suppress(User.DoesNotExist):
+            self.connected_user = User.objects.get(username=username)
+
+    def share_user(self, other):
+        other.connected_user = self.connected_user
+
+    def _assert_user_in(self, identity):
+        if self.connected_user.is_staff:
+            # Admin can do anything
+            return
+
+        if not identity or identity == [None]:
+            # Resource owned by nobody is public
+            return
+
+        if self.connected_user in identity:
+            # Users having ownership of the resource can use it
+            return
+
+        raise errors.ForbiddenError(
+                'Forbidden: this resource belong to another user',
+                self.connected_user)
 
 
 class OpenbachFunctionMixin:
@@ -357,6 +422,7 @@ class AddCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_add')
 
+    @require_connected_user(admin=True)
     def _action(self):
         collector, created = Collector.objects.get_or_create(address=self.address)
         collector.update(
@@ -387,12 +453,14 @@ class AddCollector(ThreadedAction, CollectorAction):
         agent = InstallAgent(
                 self.address, self.name,
                 self.address, skip_playbook=True)
+        self.share_user(agent)
         with suppress(errors.ConductorWarning):
             agent._threaded_action(agent._action)
 
         for job_name in get_default_jobs('default_collector_jobs'):
             with suppress(errors.ConductorError):
                 job = InstallJob(self.address, job_name, skip_playbook=True)
+                self.share_user(job)
                 job._threaded_action(job._action)
 
         if not created:
@@ -423,6 +491,7 @@ class ModifyCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_modify')
 
+    @require_connected_user(admin=True)
     def _action(self):
         collector = self.get_collector_or_not_found_error()
         updated = collector.update(
@@ -453,6 +522,7 @@ class DeleteCollector(ThreadedAction, CollectorAction):
         command_result, _ = CollectorCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_del')
 
+    @require_connected_user(admin=True)
     def _action(self):
         collector = self.get_collector_or_not_found_error()
         other_agents = collector.agents.exclude(address=self.address)
@@ -482,6 +552,7 @@ class InfosCollector(CollectorAction):
     def __init__(self, address):
         super().__init__(address=address)
 
+    @require_connected_user(admin=True)
     def _action(self):
         collector = self.get_collector_or_not_found_error()
         return collector.json, 200
@@ -493,6 +564,7 @@ class ListCollectors(CollectorAction):
     def __init__(self):
         super().__init__()
 
+    @require_connected_user(admin=True)
     def _action(self):
         infos = [c.json for c in Collector.objects.all()]
         return infos, 200
@@ -536,6 +608,16 @@ class AgentAction(ConductorAction):
             agent.set_status('Available')
         agent.save()
 
+    def _check_user_can_use_agent(self):
+        agent = self.get_agent_or_not_found_error()
+        try:
+            entity = agent.entity
+        except Entity.DoesNotExist:
+            owners = None
+        else:
+            owners = entity.project.owners.all()
+        self._assert_user_in(owners)
+
 
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
@@ -551,6 +633,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_install')
 
+    @require_connected_user(admin=True)
     def _action(self):
         collector_info = InfosCollector(self.collector_ip)
         collector = collector_info.get_collector_or_not_found_error()
@@ -586,6 +669,7 @@ class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         for job_name in get_default_jobs('default_jobs'):
             with suppress(errors.ConductorError):
                 job = InstallJob(self.address, job_name, skip_playbook=True)
+                self.share_user(job)
                 job._threaded_action(job._action)
 
         if not created:
@@ -604,6 +688,7 @@ class UninstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_uninstall')
 
+    @require_connected_user(admin=True)
     def _action(self):
         agent = self.get_agent_or_not_found_error()
         installed_jobs = [
@@ -632,7 +717,11 @@ class InfosAgent(AgentAction):
         super().__init__(address=address, update=update)
 
     def _action(self):
+        self._check_user_can_use_agent()
+
         if self.update:
+            # Do not perform update blindly as it
+            # may take some time due to ansible playbooks
             self._update_agent()
         agent = self.get_agent_or_not_found_error()
         return agent.json, 200
@@ -645,68 +734,14 @@ class ListAgents(AgentAction):
         super().__init__(update=update)
 
     def _action(self):
-        infos = [
-                InfosAgent(agent.address, self.update)._action()[0]
-                for agent in Agent.objects.all()
-        ]
-        return infos, 200
+        return list(self._infos_agents()), 200
 
-
-class RetrieveStatusAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
-    """Action responsible for status retrieval about an Agent"""
-
-    def __init__(self, address):
-        super().__init__(address=address)
-
-    def _create_command_result(self):
-        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
-        return self.set_running(command_result, 'status_retrieve_status_agent')
-
-    def _action(self):
-        self._update_agent()
-
-
-class RetrieveStatusAgents(OpenbachFunctionMixin, ConductorAction):
-    """Action responsible for status retrieval about several Agents"""
-
-    def __init__(self, addresses):
-        super().__init__(addresses=addresses)
-
-    def _action(self):
-        for address in self.addresses:
-            RetrieveStatusAgent(address).action()
-        return {}, 202
-
-
-class RetrieveStatusJob(ThreadedAction, AgentAction):
-    """Action responsible for asking an Agent to send the
-    list of its Installed Jobs to its Collector.
-    """
-
-    def __init__(self, address):
-        super().__init__(address=address)
-
-    def _create_command_result(self):
-        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
-        return self.set_running(command_result, 'status_retrieve_status_jobs')
-
-    def _action(self):
-        agent = self.get_agent_or_not_found_error()
-        OpenBachBaton(agent.address).list_jobs()
-
-
-class RetrieveStatusJobs(OpenbachFunctionMixin, ConductorAction):
-    """Action responsible for asking several Agent to send the
-    list of their Installed Jobs to their Collector.
-    """
-
-    def __init__(self, addresses):
-        super().__init__(addresses=addresses)
-
-    def _action(self):
-        for address in self.addresses:
-            RetrieveStatusJob(address).action()
-        return {}, 202
+    def _infos_agents(self):
+        for agent in Agent.objects.all():
+            with suppress(errors.ForbiddenError):
+                agent_infos = InfosAgent(agent.address, self.update)
+                self.share_user(agent_infos)
+                yield agent_infos._action()[0]
 
 
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
@@ -719,10 +754,10 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
         return self.set_running(command_result, 'status_assign')
 
+    @require_connected_user(admin=True)
     def _action(self):
         agent = self.get_agent_or_not_found_error()
-        collector_infos = InfosCollector(self.collector_ip)
-        collector = collector_infos.get_collector_or_not_found_error()
+        collector = InfosCollector(self.collector_ip).get_collector_or_not_found_error()
         start_playbook('assign_collector', self.address, collector.json)
         agent.collector = collector
         agent.save()
@@ -752,6 +787,7 @@ class AddJob(JobAction):
     def __init__(self, name, path):
         super().__init__(name=name, path=path)
 
+    @require_connected_user(admin=True)
     def _action(self):
         config_prefix = os.path.join(self.path, 'files', self.name)
         config_file = '{}.yml'.format(config_prefix)
@@ -894,6 +930,7 @@ class AddTarJob(JobAction):
     def __init__(self, name, path):
         super().__init__(name=name, path=path)
 
+    @require_connected_user(admin=True)
     def _action(self):
         path = '/opt/openbach/controller/src/jobs/private_jobs/{}'.format(self.name)
         try:
@@ -904,6 +941,7 @@ class AddTarJob(JobAction):
                     'Failed to uncompress the provided tar file',
                     error_message=str(err))
         add_job_action = AddJob(self.name, path)
+        self.share_user(add_job_action)
         return add_job_action.action()
 
 
@@ -913,6 +951,7 @@ class DeleteJob(JobAction):
     def __init__(self, name):
         super().__init__(name=name)
 
+    @require_connected_user(admin=True)
     def _action(self):
         job = self.get_job_or_not_found_error()
         path = job.path
@@ -1006,13 +1045,36 @@ class InstalledJobAction(ConductorAction):
 
     def get_installed_job_or_not_found_error(self):
         job = InfosJob(self.name).get_job_or_not_found_error()
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
         try:
             return InstalledJob.objects.get(agent=agent, job=job)
         except InstalledJob.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Installed Job is not in the database',
                     agent_address=self.address, job_name=self.name)
+
+    def _check_user_can_manage_job(self, agent, job):
+        if self.connected_user.is_staff:
+            return
+
+        if not agent.has_entity:
+            raise errors.UnprocessableError(
+                    'Cannot (un)install jobs on agents '
+                    'not associated to a project.',
+                    agent_address=agent.address,
+                    job_name=job.name)
+
+        admin_job = Keyword.objects.get_or_create(name='admin')
+        if admin_job in job.keywords.all():
+            raise errors.ForbiddenError(
+                    'Only administrators can (un)install '
+                    'administrative jobs on agents.',
+                    self.connected_user,
+                    agent_address=agent.address,
+                    job_name=job.name)
 
 
 class InstallJob(ThreadedAction, InstalledJobAction):
@@ -1028,9 +1090,14 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                 job_name=self.name)
         return self.set_running(command_result, 'status_install')
 
+    @require_connected_user()
     def _action(self):
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
         job = InfosJob(self.name).get_job_or_not_found_error()
+        self._check_user_can_manage_job(agent, job)
 
         if not self.skip_playbook:
             # Physically install the job on the agent
@@ -1052,6 +1119,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
             severity_setter = SetLogSeverityJob(
                     self.address, self.name,
                     self.severity, self.local_severity)
+            self.share_user(severity_setter)
             severity_setter._threaded_action(severity_setter._action)
 
         if not created:
@@ -1068,9 +1136,12 @@ class InstallJobs(InstalledJobAction):
         super().__init__(addresses=addresses, names=names,
                          severity=severity, local_severity=local_severity)
 
+    @require_connected_user()
     def _action(self):
         for name, address in itertools.product(self.names, self.addresses):
-            InstallJob(address, name, self.severity, self.local_severity).action()
+            installer = InstallJob(address, name, self.severity, self.local_severity)
+            self.share_user(installer)
+            installer.action()
         return {}, 202
 
 
@@ -1086,10 +1157,13 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
                 job_name=self.name)
         return self.set_running(command_result, 'status_uninstall')
 
+    @require_connected_user()
     def _action(self):
         installed_job = self.get_installed_job_or_not_found_error()
         agent = installed_job.agent
         job = installed_job.job
+        self._check_user_can_manage_job(agent, job)
+
         installed_job.delete()
         OpenBachBaton(agent.address).remove_job(job.name)
         start_playbook(
@@ -1105,9 +1179,12 @@ class UninstallJobs(InstalledJobAction):
     def __init__(self, addresses, names):
         super().__init__(addresses=addresses, names=names)
 
+    @require_connected_user()
     def _action(self):
         for name, address in itertools.product(self.names, self.addresses):
-            UninstallJob(address, name).action()
+            uninstaller = UninstallJob(address, name)
+            self.share_user(uninstaller)
+            uninstaller.action()
         return {}, 202
 
 
@@ -1126,65 +1203,49 @@ class ListInstalledJobs(InstalledJobAction):
     """Action responsible for information retrieval about
     all Installed Job on an Agent.
     """
-    UPDATE_JOB_URL = (
-            'http://{agent.collector.address}:{agent.collector.stats_query_port}/query?'
-            'db={agent.collector.stats_database_name}&'
-            'epoch={agent.collector.stats_database_precision}&'
-            'q=SELECT+*+FROM+"openbach_agent"+'
-            'WHERE+"@agent_name"+=+\'{agent.name}\'+'
-            'AND+_type+=\'job_list\'+GROUP+BY+*+ORDER+BY+DESC+LIMIT+1')
 
     def __init__(self, address, update=False):
         super().__init__(address=address, update=update)
 
     def _action(self):
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
         update_errors = []
 
-        # TODO better update
         if self.update:
-            url = self.UPDATE_JOB_URL.format(agent=agent)
-            result = requests.get(url).json()
             try:
-                serie = result['results'][0]['series'][0]
-                columns = serie['columns']
-                values = serie['values'][0]
-            except LookupError:
-                raise errors.ConductorError(
-                        'Cannot retrieve the jobs status in the Collector',
-                        collector_response=result)
+                jobs = set(OpenBachBaton(self.address).list_jobs())
+            except errors.ConductorError as error:
+                update_errors.append(error.json)
+            else:
+                date = timezone.now()
+                for job in agent.installed_jobs.all():
+                    name = job.job.name
+                    if name not in jobs:
+                        job.delete()  # Not installed anymore
+                    else:
+                        job.update_status = date
+                        job.save()
+                        jobs.remove(name)
 
-            jobs = {
-                    value for column, value in zip(columns, values)
-                    if column not in ('time', 'nb', '_type')
-            }
-            tz = timezone.get_current_timezone()
-            date_value = values[columns.index('time')]
-            date = datetime.fromtimestamp(date_value / 1000, tz)
-            for job in agent.installed_jobs.all():
-                name = job.job.name
-                if name not in jobs:
-                    job.delete()  # Not installed anymore
-                else:
-                    job.update_status = date
-                    job.save()
-                    jobs.remove(name)
-
-            # Store remaining installed jobs in the database
-            for job_name in jobs:
-                try:
-                    job = Job.objects.get(name=job_name)
-                except Job.DoesNotExist:
-                    update_errors.append({
-                        'message': 'A Job on the Agent is not found in the database',
-                        'job_name': job_name,
-                    })
-                else:
-                    InstalledJob.objects.create(
-                            agent=agent, job=job,
-                            update_status=date,
-                            severity=4,
-                            local_severity=4)
+                # Store remaining installed jobs in the database
+                for job_name in jobs:
+                    try:
+                        job = Job.objects.get(name=job_name)
+                    except Job.DoesNotExist:
+                        update_errors.append({
+                            'message': 'A Job on the Agent '
+                            'is not found in the database',
+                            'job_name': job_name,
+                        })
+                    else:
+                        InstalledJob.objects.create(
+                                agent=agent, job=job,
+                                update_status=date,
+                                severity=4,
+                                local_severity=4)
 
         infos = [job.json for job in agent.installed_jobs.all()]
         result = {
@@ -1208,6 +1269,7 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
                 agent_ip=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_log_severity')
 
+    @require_connected_user()
     def _action(self):
         installed_job = self.get_installed_job_or_not_found_error()
         local_severity = self.local_severity
@@ -1222,6 +1284,7 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
     def _physical_set_severity(self, severity, local_severity):
         job_name = 'rsyslog_job'
         rsyslog = InfosInstalledJob(self.address, job_name)
+        self.share_user(rsyslog)
         rsyslog_installed = rsyslog.get_installed_job_or_not_found_error()
 
         # Configure the playbook
@@ -1249,6 +1312,7 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
                 severity=syslogseverity,
                 local_severity=syslogseverity_local)
         rsyslog_instance = StartJobInstance(self.address, job_name, arguments, self.date)
+        self.share_user(rsyslog_instance)
         rsyslog_instance.openbach_function_instance = self.openbach_function_instance
         rsyslog_instance._build_job_instance()
         rsyslog_instance._threaded_action(rsyslog_instance._action)
@@ -1267,6 +1331,7 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
                 agent_ip=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_stat_policy')
 
+    @require_connected_user()
     def _action(self):
         installed_job = self.get_installed_job_or_not_found_error()
         storage = self.storage
@@ -1297,11 +1362,12 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
                     statistic_instance.storage = storage
                 statistic_instance.save()
 
-        self._physical_set_policy(storage, broadcast, installed_job)
+        self._physical_set_policy(installed_job)
 
-    def _physical_set_policy(self, storage, broadcast, installed_job):
+    def _physical_set_policy(self, installed_job):
         job_name = 'rstats_job'
         rstats = InfosInstalledJob(self.address, 'rstats_job')
+        self.share_user(rstats)
         rstats_installed = rstats.get_installed_job_or_not_found_error()
         # Create the new stats policy file
         with open('/tmp/openbach_rstats_filter', 'w') as rstats_filter:
@@ -1329,6 +1395,7 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
                 '{1}_rstats_filter.conf.locked'
                 .format(self.name, transfer_id))
         rstats_instance = StartJobInstance(self.address, job_name, arguments, self.date)
+        self.share_user(rstats_instance)
         rstats_instance.openbach_function_instance = self.openbach_function_instance
         rstats_instance._build_job_instance()
         rstats_instance._threaded_action(rstats_instance._action)
@@ -1384,9 +1451,10 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
                 scenario.id,
                 openbach_function_instance.id,
                 waiters)
-        StatusManager().add(scenario.id, self.instance_id)
+        StatusManager().add(scenario.id, self.instance_id, self.connected_user.get_username())
         return super().openbach_function(openbach_function_instance)
 
+    @require_connected_user()
     def action(self):
         """Override the base threaded action handler to build the JobInstance
         first and store its ID in this object instance before launching it.
@@ -1404,6 +1472,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
             date = self.date
 
         installed_infos = InfosInstalledJob(self.address, self.name)
+        self.share_user(installed_infos)
         installed_job = installed_infos.get_installed_job_or_not_found_error()
 
         now = timezone.now()
@@ -1425,6 +1494,8 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
                     job_name=self.name, agent_address=self.address,
                     arguments=self.arguments, error_message=str(err))
         else:
+            if self.connected_user.is_active:
+                job_instance.started_by = self.connected_user
             job_instance.save()
         self.instance_id = job_instance.id
 
@@ -1483,8 +1554,16 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_stop')
 
+    @require_connected_user()
+    def action(self):
+        """Override the base threaded action handler to decorate it"""
+        return super().action()
+
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
+        owner = job_instance.started_by
+        self._assert_user_in([owner])
+
         if job_instance.is_stopped:
             raise errors.ConductorWarning(
                     'The required JobInstance is already stopped',
@@ -1526,6 +1605,7 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
             )
             try:
                 stop_job = StopJobInstance(date=self.date, openbach_function_id=actual_id)
+                self.share_user(stop_job)
                 stop_job.openbach_function(openbach_function_instance)
             except errors.ConductorWarning as e:
                 issues.append(e.json)
@@ -1542,9 +1622,12 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
                     warnings=issues)
         return []
 
+    @require_connected_user()
     def _action(self):
         for instance_id in self.instance_ids:
-            StopJobInstance(instance_id, self.date).action()
+            stop_job = StopJobInstance(instance_id, self.date)
+            self.share_user(stop_job)
+            stop_job.action()
         return {}, 202
 
 
@@ -1559,8 +1642,16 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
         return self.set_running(command_result, 'status_restart')
 
+    @require_connected_user()
+    def action(self):
+        """Override the base threaded action handler to decorate it"""
+        return super().action()
+
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
+        owner = job_instance.started_by
+        self._assert_user_in([owner])
+
         with db.transaction.atomic():
             try:
                 job_instance.configure(self.arguments, self.date, self.interval)
@@ -1599,17 +1690,17 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
 
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
+        owner = job_instance.started_by
+        if not job_instance.is_stopped:
+            self._assert_user_in([owner])
 
         if self.update:
             address = job_instance.job.agent.address
             job_name = job_instance.job.job.name
             try:
-                baton = OpenBachBaton(address)
-                response = baton.status_job_instance(job_name, self.instance_id)
+                job_status = OpenBachBaton(address).status_job_instance(job_name, self.instance_id)
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
-            else:
-                job_status = response[3:]
             finally:
                 job_instance.update_status = timezone.now()
                 job_instance.status = job_status
@@ -1625,7 +1716,11 @@ class ListJobInstance(JobInstanceAction):
         super().__init__(address=address, update=update)
 
     def _action(self):
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
+
         jobs = [
                 self._status_instances(installed_job)
                 for installed_job in agent.installed_jobs.all()
@@ -1636,14 +1731,17 @@ class ListJobInstance(JobInstanceAction):
         }, 200
 
     def _status_instances(self, installed_job):
-        status_instances = [
-                StatusJobInstance(job_instance.id, self.update).action()[0]
-                for job_instance in installed_job.instances.filter(is_stopped=False)
-        ]
         return {
                 'job_name': installed_job.job.name,
-                'instances': status_instances,
+                'instances': list(self._status_instances_helper(installed_job)),
         }
+
+    def _status_instances_helper(self, installed_job):
+        for job_instance in installed_job.instances.filter(is_stopped=False):
+            with suppress(errors.ConductorError):
+                status = StatusJobInstance(job_instance.id, self.update)
+                self.share_user(status)
+                yield status.action()[0]
 
 
 class ListJobInstances(OpenbachFunctionMixin, ConductorAction):
@@ -1653,11 +1751,13 @@ class ListJobInstances(OpenbachFunctionMixin, ConductorAction):
         super().__init__(addresses=addresses, update=update)
 
     def _action(self):
-        instances = [
-                ListJobInstance(address, self.update).action()[0]
-                for address in self.addresses
-        ]
-        return {'instances': instances}, 202
+        return {'instances': list(self._status_instances)}, 202
+
+    def _status_instances(self):
+        for address in self.addresses:
+            list_job = ListJobInstance(address, self.update)
+            self.share_user(list_job)
+            yield list_job.action()[0]
 
 
 ############
@@ -1668,7 +1768,7 @@ class ScenarioAction(ConductorAction):
     """Base class that defines helper methods to deal with Scenarios"""
 
     def get_scenario_or_not_found_error(self):
-        project = InfosProject(self.project).get_project_or_not_found_error()
+        project = self._get_project_if_own()
 
         try:
             return Scenario.objects.get(name=self.name, project=project)
@@ -1680,7 +1780,8 @@ class ScenarioAction(ConductorAction):
 
     def _register_scenario(self):
         description = self.json_data.get('description')
-        project = InfosProject(self.project).get_project_or_not_found_error()
+        project = self._get_project_if_own()
+
         scenario, _ = Scenario.objects.get_or_create(
                 name=self.name, project=project,
                 defaults={'description': description})
@@ -1698,6 +1799,13 @@ class ScenarioAction(ConductorAction):
         else:
             scenario.save()
 
+    def _get_project_if_own(self):
+        if self.project is None:
+            return
+
+        project = InfosProject(self.project).get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+
 
 class CreateScenario(ScenarioAction):
     """Action responsible for creating a new Scenario"""
@@ -1706,6 +1814,7 @@ class CreateScenario(ScenarioAction):
         name = extract_and_check_name_from_json(json_data, kind='Scenario')
         super().__init__(json_data=json_data, name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
         self._register_scenario()
         scenario = self.get_scenario_or_not_found_error()
@@ -1718,6 +1827,7 @@ class DeleteScenario(ScenarioAction):
     def __init__(self, name, project=None):
         super().__init__(name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
         scenario = self.get_scenario_or_not_found_error()
         scenario.delete()
@@ -1730,6 +1840,7 @@ class ModifyScenario(ScenarioAction):
     def __init__(self, json_data, name, project=None):
         super().__init__(json_data=json_data, name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Scenario')
         with db.transaction.atomic():
@@ -1756,7 +1867,7 @@ class ListScenarios(ScenarioAction):
         super().__init__(project=project)
 
     def _action(self):
-        project = InfosProject(self.project).get_project_or_not_found_error()
+        project = self._get_project_if_own()
         scenarios = Scenario.objects.filter(project=project)
         return [scenario.json for scenario in scenarios], 200
 
@@ -1777,11 +1888,16 @@ class ScenarioInstanceAction(ConductorAction):
                     'scenario instance id for the required scenario',
                     scenario_name=self.name, project_name=self.project)
         try:
-            return ScenarioInstance.objects.get(id=scenario_instance_id)
+            instance = ScenarioInstance.objects.get(id=scenario_instance_id)
         except ScenarioInstance.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Scenario Instance is not in the database',
                     scenario_instance_id=self.instance_id)
+        else:
+            if not instance.is_stopped:
+                owner = instance.started_by
+                self._assert_user_in([owner])
+            return instance
 
 
 class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
@@ -1809,11 +1925,15 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         return [ThreadManager().get_status_thread(scenario_id)]
 
     def _action(self):
-        scenario = InfosScenario(self.name, self.project).get_scenario_or_not_found_error()
+        scenario_infos = InfosScenario(self.name, self.project)
+        self.share_user(scenario_infos)
+        scenario = scenario_infos.get_scenario_or_not_found_error()
+
         scenario_instance = ScenarioInstance.objects.create(
                 scenario=scenario,
                 status='Scheduling',
                 start_date=timezone.now(),
+                started_by=self.connected_user,
                 openbach_function_instance=self.openbach_function_instance)
         self.instance_id = scenario_instance.id
 
@@ -1844,7 +1964,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
             except ValidationError as e:
                 raise errors.BadRequestError(
                         'Arguments of an OpenbachFunction have '
-                        'the wrong type of arguments.',
+                        'the wrong type of values.',
                         openbach_function_name=openbach_function.name,
                         error_message=str(e))
 
@@ -1892,7 +2012,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
             ThreadManager().add_and_launch(thread, self.instance_id, thread.instance_id)
 
         # Start the scenario's status thread
-        thread = WaitScenarioToFinish(self.instance_id, threads)
+        thread = WaitScenarioToFinish(self.instance_id, threads, self.connected_user)
         ThreadManager().add_and_launch(thread, self.instance_id, 0)
         return {'scenario_instance_id': self.instance_id}, 200
 
@@ -1960,21 +2080,28 @@ class ListScenarioInstances(ScenarioInstanceAction):
         super().__init__(name=name, project=project)
 
     def _action(self):
+        scenario_info = InfosScenario(self.name, self.project)
+        self.share_user(scenario_info)
+
         if self.name is not None:
-            scenario_info = InfosScenario(self.name, self.project)
             scenario = scenario_info.get_scenario_or_not_found_error()
-            instances = [
-                    instance.json for instance in
-                    scenario.instances.order_by('-start_date')
-            ]
-            return instances, 200
-        project = InfosProject(self.project).get_project_or_not_found_error()
+            return list(self._infos_scenario_instances(scenario)), 200
+
+        project = scenario_info._get_project_if_own()
         scenarios = Scenario.objects.prefetch_related('instances').filter(project=project)
         instances = [
-                instance.json for scenario in scenarios
-                for instance in scenario.instances.order_by('-start_date')
+                instance for scenario in scenarios
+                for instance in self._infos_scenario_instances(scenario)
         ]
         return instances, 200
+
+    def _infos_scenario_instances(self, scenario):
+        for instance in scenario.instances.order_by('-start_date'):
+            with suppress(errors.ForbiddenError):
+                if not instance.is_stopped:
+                    owner = instance.started_by
+                    self._assert_user_in([owner])
+                yield instance.json
 
 
 ############################
@@ -2012,13 +2139,15 @@ def create_thread(openbach_function, functions_table):
 
 
 class WaitScenarioToFinish(threading.Thread):
-    def __init__(self, instance_id, openbach_function_threads):
+    def __init__(self, instance_id, openbach_function_threads, user):
         super().__init__()
         self.instance_id = instance_id
         self.threads = openbach_function_threads
+        self.connected_user = user
 
     def run(self):
         scenario_fetcher = InfosScenarioInstance(self.instance_id)
+        scenario_fetcher.connected_user = self.connected_user
         try:
             scenario = scenario_fetcher.get_scenario_instance_or_not_found_error()
         except errors.ConductorError:
@@ -2030,6 +2159,8 @@ class WaitScenarioToFinish(threading.Thread):
             for thread in self.threads:
                 thread.join()
 
+        # Refresh infos from database
+        scenario = scenario_fetcher.get_scenario_instance_or_not_found_error()
         if scenario.is_stopped:
             return
 
@@ -2106,11 +2237,17 @@ class OpenbachFunctionThread(threading.Thread):
             pass
         except errors.ConductorError as error:
             syslog.syslog(syslog.LOG_ERR, '{}'.format(error.json))
-            scenario_id = self.openbach_function.scenario_instance.id
-            StopScenarioInstance(scenario_id).action()
-            self.openbach_function.scenario_instance.stop(stop_status='Finished KO')
-            self.openbach_function.set_status('Error: {}'.format(error))
-            return
+            self._stop_scenario(error)
+            raise
+        except Exception as error:
+            log_message = {
+                    'message': 'Unexpected exception appeared',
+                    'error': str(error),
+                    'traceback': traceback.format_exc(),
+            }
+            syslog.syslog(syslog.LOG_ERR, '{}'.format(log_message))
+            self._stop_scenario(error)
+            raise
 
         if self._stopped.is_set():
             self.openbach_function.set_status('Stopped')
@@ -2126,11 +2263,21 @@ class OpenbachFunctionThread(threading.Thread):
     def _run_openbach_function(self):
         self.openbach_function.start()
         arguments = self.openbach_function.arguments
-        # try:
+        owner = self.openbach_function.scenario_instance.started_by
         action = self.action(**arguments)
-        # except TypeError:
-        #     ??? TODO
+        if owner is not None:
+            action.connected_user = owner
         return action.openbach_function(self.openbach_function)
+
+    def _stop_scenario(self, error):
+        scenario_id = self.openbach_function.scenario_instance.id
+        owner = self.openbach_function.scenario_instance.started_by
+        stop_scenario = StopScenarioInstance(scenario_id)
+        if owner is not None:
+            stop_scenario.connected_user = owner
+        stop_scenario.action()
+        self.openbach_function.scenario_instance.stop(stop_status='Finished KO')
+        self.openbach_function.set_status('Error: {}'.format(error))
 
     def stop(self):
         self._stopped.set()
@@ -2140,6 +2287,7 @@ class StartJobInstanceThread(OpenbachFunctionThread):
     def _run_openbach_function(self):
         self.openbach_function.start()
         arguments = self.openbach_function.arguments
+        owner = self.openbach_function.scenario_instance.started_by
         entity_name = arguments.pop('entity_name')
         project = self.openbach_function.scenario_instance.scenario.project
         try:
@@ -2155,6 +2303,8 @@ class StartJobInstanceThread(OpenbachFunctionThread):
                     entity_name=entity_name, project_name=project.name)
 
         action = StartJobInstance(address=entity.agent.address, **arguments)
+        if owner is not None:
+            action.connected_user = owner
         return action.openbach_function(
                 self.openbach_function,
                 self.wait_for_finished_queues)
@@ -2238,6 +2388,9 @@ class ProjectAction(ConductorAction):
                     project_data=self.json_data)
         else:
             project.save()
+            owners_names = self.json_data.get('owners', [])
+            owners = User.objects.filter(username__in=owners_names)
+            project.owners.set(owners)
 
 
 class CreateProject(ProjectAction):
@@ -2247,6 +2400,7 @@ class CreateProject(ProjectAction):
         name = extract_and_check_name_from_json(json_data, kind='Project')
         super().__init__(name=name, json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
         self._register_project()
         project = self.get_project_or_not_found_error()
@@ -2259,8 +2413,10 @@ class DeleteProject(ProjectAction):
     def __init__(self, name):
         super().__init__(name=name)
 
+    @require_connected_user()
     def _action(self):
         project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
         project.delete()
         return None, 204
 
@@ -2271,8 +2427,13 @@ class ModifyProject(ProjectAction):
     def __init__(self, name, json_data):
         super().__init__(name=name, json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Project')
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        del project
+
         with db.transaction.atomic():
             self._register_project()
         project = self.get_project_or_not_found_error()
@@ -2285,13 +2446,9 @@ class InfosProject(ProjectAction):
     def __init__(self, name):
         super().__init__(name=name)
 
-    def get_project_or_not_found_error(self):
-        if self.name is None:
-            return None
-        return super().get_project_or_not_found_error()
-
     def _action(self):
         project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
         return project.json, 200
 
 
@@ -2302,7 +2459,13 @@ class ListProjects(ProjectAction):
         super().__init__()
 
     def _action(self):
-        return [project.json for project in Project.objects.all()], 200
+        return list(self._infos_projects()), 200
+
+    def _infos_projects(self):
+        for project in Project.objects.all():
+            with suppress(errors.ForbiddenError):
+                self._assert_user_in(project.owners.all())
+                yield project.json
 
 
 ##########
@@ -2323,6 +2486,7 @@ class EntityAction(ConductorAction):
 
     def _register_entity(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
         description = self.json_data.get('description')
         agent = self.json_data.get('agent')
         if agent:
@@ -2359,6 +2523,7 @@ class AddEntity(EntityAction):
                 name=name, project=project,
                 json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
@@ -2373,6 +2538,7 @@ class ModifyEntity(EntityAction):
                 name=name, project=project,
                 json_data=json_data)
 
+    @require_connected_user()
     def _action(self):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Entity')
         with db.transaction.atomic():
@@ -2387,8 +2553,10 @@ class DeleteEntity(EntityAction):
     def __init__(self, name, project):
         super().__init__(name=name, project=project)
 
+    @require_connected_user()
     def _action(self):
         entity = self.get_entity_or_not_found_error()
+        self._assert_user_in(entity.project.owners.all())
         entity.delete()
         return None, 204
 
@@ -2401,6 +2569,7 @@ class InfosEntity(EntityAction):
 
     def _action(self):
         entity = self.get_entity_or_not_found_error()
+        self._assert_user_in(entity.project.owners.all())
         return entity.json, 200
 
 
@@ -2412,6 +2581,7 @@ class ListEntities(EntityAction):
 
     def _action(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
         entities = Entity.objects.filter(project=project)
         return [entity.json for entity in entities], 200
 
@@ -2480,6 +2650,107 @@ class StateJobInstance(ConductorAction):
         return command_result.json, 200
 
 
+#########
+# Users #
+#########
+
+class UpdateUsers(ConductorAction):
+    """Action that update permissions of users in the database"""
+
+    def __init__(self, users_permissions=None):
+        if users_permissions is None:
+            users_permissions = []
+        super().__init__(users_permissions=users_permissions)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        if not isinstance(self.users_permissions, list):
+            raise errors.BadRequestError(
+                    'The new permissions of users should be a list of objects')
+
+        issues = list(self._apply_permissions())
+        if issues:
+            raise errors.ConductorWarning(
+                    'Some users in the permissions list could not be updated',
+                    errors=issues)
+
+        return None, 204
+
+    def _apply_permissions(self):
+        for permissions in self.users_permissions:
+            try:
+                username = permissions['login']
+            except KeyError:
+                yield {
+                    'permissions': permissions,
+                    'error': 'Username not found',
+                }
+                continue
+
+            try:
+                active = permissions['active']
+                staff = permissions['admin']
+            except KeyError as e:
+                yield {
+                    'permissions': permissions,
+                    'error': 'permission \'{}\' not found'.format(e),
+                }
+                continue
+
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                yield {
+                    'permissions': permissions,
+                    'error': 'User not found in the database',
+                }
+            else:
+                user.is_active = bool(staff or active)
+                user.is_staff = bool(staff)
+                user.save()
+
+
+class DeleteUsers(ConductorAction):
+    """Action that removes users from the database"""
+
+    def __init__(self, usernames=None):
+        if usernames is None:
+            usernames = []
+        super().__init__(usernames=usernames)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        if not isinstance(self.usernames, list):
+            raise errors.BadRequestError(
+                    'The users to delete should be a list of usernames')
+        User.objects.filter(username__in=self.usernames).delete()
+        return None, 204
+
+
+class ListUsers(ConductorAction):
+    """Action that list the registered users in the database"""
+
+    @require_connected_user()
+    def _action(self):
+        return list(self._users_to_json()), 200
+
+    def _users_to_json(self):
+        users = User.objects.all()
+        if not self.connected_user.is_staff:
+            users = users.filter(is_active=True)
+
+        for user in users:
+            yield {
+                'username': user.get_username(),
+                'name': user.get_full_name(),
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_user': user.is_active,
+                'is_admin': user.is_staff,
+                'email': user.email,
+            }
+
+
 ################
 # Miscelaneous #
 ################
@@ -2497,8 +2768,12 @@ class PushFile(OpenbachFunctionMixin, ThreadedAction):
                 address=self.address)
         return command_result
 
+    @require_connected_user()
     def _action(self):
-        agent = InfosAgent(self.address).get_agent_or_not_found_error()
+        agent_infos = InfosAgent(self.address)
+        self.share_user(agent_infos)
+        agent_infos._check_user_can_use_agent()
+        agent = agent_infos.get_agent_or_not_found_error()
         start_playbook(
                 'push_file',
                 agent.address,
@@ -2512,12 +2787,17 @@ class KillAll(ConductorAction):
     def __init__(self, date=None):
         super().__init__(date=date)
 
+    @require_connected_user(admin=True)
     def _action(self):
         for scenario in ScenarioInstance.objects.filter(is_stopped=False):
-            StopScenarioInstance(scenario.id).action()
+            stop_scenario = StopScenarioInstance(scenario.id)
+            self.share_user(stop_scenario)
+            stop_scenario.action()
 
         for job in JobInstance.objects.filter(is_stopped=False):
-            StopJobInstance(job.id).action()
+            stop_job = StopJobInstance(job.id)
+            self.share_user(stop_job)
+            stop_job.action()
 
         return None, 204
 
@@ -2529,9 +2809,7 @@ class OrphanedLogs(ConductorAction):
         super().__init__(level=level, delay=delay)
 
     def _action(self):
-        logs = list(self._retrieve_orphans())
-        logs.sort()
-        return logs, 200
+        return list(self._retrieve_orphans()), 200
 
     def _retrieve_orphans(self):
         severity = self.level
@@ -2656,16 +2934,16 @@ class StatusManager:
             for job_id in jobs:
                 self._stop_watch(job_id)
 
-    def add(self, scenario_id, job_id):
+    def add(self, scenario_id, job_id, username):
         with self._mutex:
             self.scenarios.setdefault(scenario_id, set()).add(job_id)
             self.scheduler.add_job(
                     status_manager, 'interval', seconds=2,
-                    args=(job_id, scenario_id),
+                    args=(job_id, scenario_id, username),
                     id='watch_{}'.format(job_id))
 
 
-def status_manager(job_instance_id, scenario_instance_id):
+def status_manager(job_instance_id, scenario_instance_id, username):
     """Check and update the status of a job instance based
     on the informations store in database.
 
@@ -2675,6 +2953,7 @@ def status_manager(job_instance_id, scenario_instance_id):
 
     # Check JobInstance status in database
     job_status_manager = StatusJobInstance(job_instance_id, update=True)
+    job_status_manager.configure_user(username)
     job_status_manager.action()
     job_instance = job_status_manager.get_job_instance_or_not_found_error()
     if job_instance.status in ('Scheduled', 'Running'):
@@ -2685,7 +2964,9 @@ def status_manager(job_instance_id, scenario_instance_id):
     job_instance.save()
     StatusManager().remove(scenario_instance_id, job_instance_id)
     if job_instance.status.startswith('Error'):
-        StopScenarioInstance(scenario_instance_id).action()
+        stop_scenario = StopScenarioInstance(scenario_instance_id)
+        job_status_manager.share_user(stop_scenario)
+        stop_scenario.action()
     si_id = WaitingQueueManager().remove_job(job_instance_id)
     assert scenario_instance_id == si_id
     scenario_instance = ScenarioInstance.objects.get(id=si_id)
@@ -2755,16 +3036,20 @@ class BackendHandler(socketserver.BaseRequestHandler):
     def execute_request(self, request):
         """Analyze the data received to execute the right action"""
         request_name = request.pop('command')
-        action_name = ''.join(map(str.title, request_name.split('_')))
+        user_name = request.pop('_username')
+        command_name = ''.join(map(str.title, request_name.split('_')))
         print('\n#', '-' * 76, '#')
-        print('Executing the action', action_name, 'with parameters', request)
+        print('Executing the command', command_name, 'with parameters', request)
         try:
-            action = class_from_name(action_name)
+            command_cls = class_from_name(command_name)
         except AttributeError:
             raise errors.ConductorError(
                     'A Function is not implemented',
-                    function_name=action_name)
-        return action(**request).action()
+                    function_name=command_name)
+
+        command = command_cls(**request)
+        command.configure_user(user_name)
+        return command.action()
 
 
 if __name__ == '__main__':

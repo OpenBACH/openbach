@@ -45,6 +45,7 @@ __credits__ = '''Contributors:
 from django.db import models, IntegrityError
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 
 from .base_models import Argument, ArgumentValue, OpenbachFunctionArgument
 from . import openbach_function_models
@@ -432,6 +433,10 @@ class ScenarioInstance(models.Model):
             related_name='instances')
     status = models.CharField(max_length=500, null=True, blank=True)
     start_date = models.DateTimeField(null=True, blank=True)
+    started_by = models.ForeignKey(
+            User, models.CASCADE,
+            null=True, blank=True,
+            related_name='private_scenario_instances')
     stop_date = models.DateTimeField(null=True, blank=True)
     is_stopped = models.BooleanField(default=False)
     openbach_function_instance = models.OneToOneField(

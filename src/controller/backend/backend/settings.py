@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'openbach_django',
+    'openbach_django.apps.OpenBachConfig',
 ]
 
 MIDDLEWARE_CLASSES = [

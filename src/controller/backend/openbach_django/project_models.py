@@ -44,6 +44,7 @@ __credits__ = '''Contributors:
 
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 from .scenario_models import Scenario
 from .utils import nullable_json
@@ -136,6 +137,14 @@ class Agent(models.Model):
         return '{0.name} ({0.address})'.format(self)
 
     @property
+    def has_entity(self):
+        try:
+            self.entity
+        except Entity.DoesNotExist:
+            return False
+        return True
+
+    @property
     def json(self):
         try:
             entity = self.entity
@@ -160,6 +169,7 @@ class Project(models.Model):
 
     name = models.CharField(max_length=500, primary_key=True)
     description = models.TextField(null=True, blank=True)
+    owners = models.ManyToManyField(User, related_name='private_projects')
 
     class MalformedError(Exception):
         def __init__(self, section, error):
@@ -179,6 +189,7 @@ class Project(models.Model):
         return {
                 'name': self.name,
                 'description': self.description,
+                'owners': [user.get_username() for user in self.owners.all()],
                 'entity': [entity.json for entity
                            in self.entities.order_by('name')],
                 'scenario': [scenario.json for scenario
@@ -188,6 +199,13 @@ class Project(models.Model):
         }
 
     def load_from_json(self, json_data):
+        owners = json_data.get('owners', [])
+        if not isinstance(owners, list):
+            raise Project.MalformedError(
+                    'owners', 'Entry \'owners\' has '
+                    'the wrong kind of value (expected '
+                    '{} got {})'.format(list, type(owners)))
+
         # Cleanup in case of modifications
         self.networks.all().delete()
         self.scenarios.all().delete()

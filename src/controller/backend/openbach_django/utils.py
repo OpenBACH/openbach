@@ -40,6 +40,7 @@ import os
 import enum
 import json
 import shlex
+import socket
 import syslog
 import tempfile
 import ipaddress
@@ -59,21 +60,27 @@ class BadRequest(Exception):
         syslog.syslog(severity, self.reason)
 
 
-def send_fifo(msg, socket):
-    """ Function that sends a message through a socket, and gets a fifo name in
-    return (the response will be in that fifo) """
-    with tempfile.NamedTemporaryFile('w') as f:
-        fifoname = f.name
-    try:
-        os.mkfifo(fifoname)
-    except OSError as e:
-        raise BadRequest('Impossible to create the Fifo', 400, {'error': e})
-    os.chmod(fifoname, 0o666)
-    response = {'fifoname': fifoname}
-    socket.send(json.dumps(response).encode())
-    with open(fifoname, 'w') as fifo:
-        fifo.write(json.dumps(msg))
-    response = socket.recv(4096).decode()
+def send_fifo(message, local_port=1113):
+    """Communicate a message on the given port of the local
+    machine through a socket and a FIFO file.
+
+    Opens a FIFO and write the message to it, then send to
+    the other end the path to that FIFO. Wait for the other
+    end to write back a result and return it to the caller.
+    """
+    with socket.create_connection(('localhost', local_port)) as conductor:
+        with tempfile.NamedTemporaryFile('w') as f:
+            fifoname = f.name
+        try:
+            os.mkfifo(fifoname)
+        except OSError as e:
+            raise BadRequest('Can not create FIFO file', 400, {'error': e})
+        os.chmod(fifoname, 0o666)
+        conductor.send(json.dumps({'fifoname': fifoname}).encode())
+        with open(fifoname, 'w') as fifo:
+            fifo.write(json.dumps(message))
+        conductor.recv(16)  # Any response indicates end of processing
+
     with open(fifoname, 'r') as fifo:
         msg = fifo.read()
     os.remove(fifoname)

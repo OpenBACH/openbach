@@ -42,6 +42,7 @@ import os
 import atexit
 import tempfile
 import multiprocessing
+from contextlib import suppress
 
 from ansible.executor.playbook_executor import PlaybookExecutor
 from ansible.inventory import Inventory
@@ -98,6 +99,12 @@ class PlayResult(CallbackBase):
 
     def v2_runner_item_on_failed(self, result):
         self._store_failure(result)
+
+
+class SetupResult(PlayResult):
+    def v2_runner_on_ok(self, result):
+        with suppress(AttributeError, KeyError):
+            self.ansible_facts = result._result['ansible_facts']
 
 
 class Options:
@@ -301,6 +308,20 @@ class PlaybookBuilder():
         self.add_variables(local_path=local_path, remote_path=remote_path)
         self.launch_playbook('push_file')
 
+    @classmethod
+    def gather_facts(cls, address):
+        self = cls(address)
+        playbook = '/opt/openbach/controller/ansible/check_connection.yml'
+        playbook_results = SetupResult()
+        tasks = PlaybookExecutor(
+                playbooks=[playbook], inventory=self.inventory,
+                variable_manager=self.variables, loader=self.loader,
+                options=self.options, passwords=self.passwords)
+        tasks._tqm._callback_plugins.append(playbook_results)
+        tasks.run()
+        playbook_results.raise_for_error()
+        return playbook_results.ansible_facts
+
 
 def _run_playbook(queue):
     running_playbooks = set()
@@ -357,14 +378,14 @@ def _clean_finished_playbooks(playbooks):
 
 def _execute_playbook(method, pipe, args, kwargs):
     try:
-        method(*args, **kwargs)
+        result = method(*args, **kwargs)
     except errors.ConductorError as e:
         _terminate_playbook(pipe, e.json)
     except Exception as e:
         error = errors.ConductorError(str(e))
         _terminate_playbook(pipe, error.json)
     else:
-        _terminate_playbook(pipe)
+        _terminate_playbook(pipe, result)
 
 
 def _terminate_playbook(pipe, error=None):
@@ -376,8 +397,9 @@ def start_playbook(name, *args, **kwargs):
     parent_conn, child_conn = multiprocessing.Pipe()
     _COMMUNICATOR.put((child_conn, name, args, kwargs))
     result = parent_conn.recv()
-    if result is not None:
+    if result is not None and 'ansible_python' not in result:
         raise errors.ConductorError.copy_from(result)
+    return result
 
 
 def setup_playbook_manager():

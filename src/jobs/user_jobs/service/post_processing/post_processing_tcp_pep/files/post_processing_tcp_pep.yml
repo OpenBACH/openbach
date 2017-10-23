@@ -8,10 +8,11 @@ general:
   keywords:        [post, processing, tcp, pep]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/post_processing_tcp_pep/post_processing_tcp_pep.py'
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/post_processing_tcp_pep/post_processing_tcp_pep.py'
     command_stop:
 
 arguments:

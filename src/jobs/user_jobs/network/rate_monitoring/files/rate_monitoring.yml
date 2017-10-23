@@ -7,10 +7,12 @@ general:
   job_version:     0.1
   keywords:        [rate, monitoring, iptables]
   persistent:      True
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/rate_monitoring/rate_monitoring.py'
+
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/rate_monitoring/rate_monitoring.py'
     command_stop:
 
 arguments:

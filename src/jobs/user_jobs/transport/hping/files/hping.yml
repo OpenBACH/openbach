@@ -8,10 +8,11 @@ general:
   keywords:        [hping, rate, rtt, round, syn, ack, round, trip, time]
   persistent:      true
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/hping/hping.py'
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/hping/hping.py'
     command_stop:
 
 arguments:

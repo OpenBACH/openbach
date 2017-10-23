@@ -8,11 +8,12 @@ general:
   keywords:        [pep, tcp]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/pep/set_pep.py'
-    command_stop:  '/bin/bash /opt/openbach/agent/jobs/pep/unset_pep.sh'
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/pep/set_pep.py'
+    command_stop: '/bin/bash /opt/openbach/agent/jobs/pep/unset_pep.sh'
 
 arguments:
   required:

@@ -21,12 +21,6 @@ platform_configuration:
     command: '/usr/bin/env python3 /opt/openbach/agent/jobs/fping/fping.py'
     command_stop:
 
-#os:
-#  linux:
-#    requirements:  'Ubuntu 14.04/16.04'
-#    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/fping/fping.py'
-#    command_stop:
-
 arguments:
   required:
     - name:        destination_ip

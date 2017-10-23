@@ -51,6 +51,8 @@
       login: openbach
       password: openbach
   register: backend_login
+  
+- debug: var=backend_login
 
 - name: Add Jobs into the Backend Database
   uri:

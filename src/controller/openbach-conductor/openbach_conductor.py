@@ -858,7 +858,7 @@ class AddJob(JobAction):
         family_list={}
 
         # Associate OSes
-        os_commands = content.get('platform_configuration', [])
+        os_commands = content['platform_configuration']
         for os_description in os_commands:
             os_family = os_description['ansible_os_family']
             os_distribution = os_description['ansible_distribution']

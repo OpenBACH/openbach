@@ -79,10 +79,6 @@ class Job(models.Model):
 
     @property
     def json(self):
-        os = {}
-        for system in self.os.all():
-            os.update(system.json)
-
         return {
                 'general': {
                     'name': self.name,
@@ -91,7 +87,7 @@ class Job(models.Model):
                     'keywords': [keyword.name for keyword in self.keywords.all()],
                     'persistent': self.persistent,
                 },
-                'os': os,
+                'os': [system.json for system in self.os.all()],
                 'arguments': {
                     'required': [arg.json for arg in self.required_arguments.order_by('rank')],
                     'optional': [arg.json for arg in self.optional_arguments.all()],
@@ -104,11 +100,9 @@ class OsCommand(models.Model):
     """Data relative to how a job should be launched/cleaned-up on a given OS"""
 
     job = models.ForeignKey(Job, models.CASCADE, related_name='os')
-#    name = models.CharField(max_length=500)
     family = models.CharField(max_length=500)
     distribution = models.CharField(max_length=500)
     version = models.CharField(max_length=500)
-    requirements = models.CharField(max_length=500)
     command = models.CharField(max_length=1000)
     command_stop = models.CharField(max_length=1000, null=True, blank=True)
 
@@ -121,13 +115,11 @@ class OsCommand(models.Model):
     @property
     def json(self):
         return {
-                self.name: {
-                    'family': self.family,
-                    'distribution': self.distribution,
-                    'version': self.version,
-                    'command': self.command,
-                    'command_stop': self.command_stop,
-                },
+                'family': self.family,
+                'distribution': self.distribution,
+                'version': self.version,
+                'command': self.command,
+                'command_stop': self.command_stop,
         }
 
 

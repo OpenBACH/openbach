@@ -9,10 +9,11 @@ general:
   keywords:        [http2, server]
   persistent:      True
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_server/http2_server.py'
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_server/http2_server.py'
     command_stop:
 
 arguments:

@@ -8,11 +8,12 @@ general:
   keywords:        [squid, proxy, server, caching]
   persistent:      true
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/squid/squid.py'
-    command_stop:  '/usr/bin/env python3 /opt/openbach/agent/jobs/squid/squid_stop.py'
+platform_configuration:
+  - ansible_os_family: 'Debian'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/squid/squid.py'
+    command_stop: '/usr/bin/env python3 /opt/openbach/agent/jobs/squid/squid_stop.py'
 
 arguments:
   required:

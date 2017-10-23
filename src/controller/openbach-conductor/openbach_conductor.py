@@ -1805,6 +1805,7 @@ class ScenarioAction(ConductorAction):
 
         project = InfosProject(self.project).get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
+        return project
 
 
 class CreateScenario(ScenarioAction):

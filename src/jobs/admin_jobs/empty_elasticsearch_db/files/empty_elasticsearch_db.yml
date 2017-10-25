@@ -9,10 +9,11 @@ general:
   keywords:        [database, db, empty, elasticsearch, collector]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/empty_elasticsearch_db/empty_elasticsearch_db.py'
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/empty_elasticsearch_db/empty_elasticsearch_db.py'
     command_stop:
 
 arguments:

@@ -854,26 +854,32 @@ class AddJob(JobAction):
         job.persistent = general_section['persistent']
         job.has_uncertain_required_arg = False
         job.save()
+   
+        system_list={}
 
         # Associate OSes
-        os_commands = content['os']
-        for os_name, os_description in os_commands.items():
-            requirements = os_description.get('requirements', '')
+        os_commands = content['platform_configuration']
+        for os_description in os_commands:
+            os_system = os_description['ansible_system']
+            os_distribution = os_description['ansible_distribution']
+            os_distribution_version = os_description['ansible_distribution_version']
             command = os_description['command']
             command_stop = os_description.get('command_stop')
+            system_list.setdefault(os_system,{}).setdefault(os_distribution,[]).append(os_distribution_version)
             os_command, _ = OsCommand.objects.get_or_create(
-                    job=job, name=os_name,
+                    job=job, family=os_system, distribution=os_distribution,
+                    version=os_distribution_version,
                     defaults={
-                        'requirements': requirements,
                         'command': command,
                         'command_stop': command_stop,
                     })
-            os_command.requirements = requirements
             os_command.command = command
             os_command.command_stop = command_stop
             os_command.save()
         # Remove OSes associated to the previous version of the job
-        job.os.exclude(name__in=os_commands).delete()
+        for system, system_info in system_list.items():
+            for distribution, versions in system_info.items():
+                job.os.filter(family=os_system, distribution=os_distribution).exclude(version__in=versions).delete()
 
         # Associate "new" keywords
         keywords = general_section['keywords']
@@ -1100,6 +1106,19 @@ class InstallJob(ThreadedAction, InstalledJobAction):
         self._check_user_can_manage_job(agent, job)
 
         if not self.skip_playbook:
+            # check os configuration arguments
+            ansible_fact = start_playbook('gather_facts',agent.address)
+            try:
+                job.os.get(
+                        family=ansible_fact['ansible_system'],
+                        distribution=ansible_fact['ansible_distribution'],
+                        version=ansible_fact['ansible_distribution_version'])
+            except OsCommand.DoesNotExist:
+                raise errors.UnprocessableError(
+                        'Cannot install a job on an '
+                        'agent: Unsupported Os',
+                        agent_address=self.address,
+                        job_name=self.name)
             # Physically install the job on the agent
             start_playbook(
                     'install_job',

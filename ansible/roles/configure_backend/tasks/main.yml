@@ -51,7 +51,7 @@
       login: openbach
       password: openbach
   register: backend_login
-
+  
 - name: Add Jobs into the Backend Database
   uri:
     url: http://localhost:8000/job/
@@ -89,7 +89,8 @@
     - {name: mptcp, path: /opt/openbach/controller/src/jobs/user_jobs/transport/mptcp/}
     - {name: netcat, path: /opt/openbach/controller/src/jobs/user_jobs/transport/netcat/}
     - {name: postprocess_stats, path: /opt/openbach/controller/src/jobs/user_jobs/postprocessing/postprocess_stats/}
-
+    - {name: squid, path: /opt/openbach/controller/src/jobs/user_jobs/transport/squid/}
+    
 - name: Add Collectors into the Backend Database
   uri:
     url: http://localhost:8000/collector/

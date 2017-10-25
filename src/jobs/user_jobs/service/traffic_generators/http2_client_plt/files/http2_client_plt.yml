@@ -8,10 +8,11 @@ general:
   keywords:        [http2, client, traffic, generator, monitor, delay, PLT, download]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_client_plt/http2_client_plt.py'
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_client_plt/http2_client_plt.py'
     command_stop:
 
 arguments:

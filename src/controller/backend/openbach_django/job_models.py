@@ -79,10 +79,6 @@ class Job(models.Model):
 
     @property
     def json(self):
-        os = {}
-        for system in self.os.all():
-            os.update(system.json)
-
         return {
                 'general': {
                     'name': self.name,
@@ -91,7 +87,7 @@ class Job(models.Model):
                     'keywords': [keyword.name for keyword in self.keywords.all()],
                     'persistent': self.persistent,
                 },
-                'os': os,
+                'platform_configuration': [system.json for system in self.os.all()],
                 'arguments': {
                     'required': [arg.json for arg in self.required_arguments.order_by('rank')],
                     'optional': [arg.json for arg in self.optional_arguments.all()],
@@ -104,25 +100,26 @@ class OsCommand(models.Model):
     """Data relative to how a job should be launched/cleaned-up on a given OS"""
 
     job = models.ForeignKey(Job, models.CASCADE, related_name='os')
-    name = models.CharField(max_length=500)
-    requirements = models.CharField(max_length=500)
+    family = models.CharField(max_length=500)
+    distribution = models.CharField(max_length=500)
+    version = models.CharField(max_length=500)
     command = models.CharField(max_length=1000)
     command_stop = models.CharField(max_length=1000, null=True, blank=True)
 
     class Meta:
-        unique_together = ('name', 'job')
+        unique_together = ('family', 'distribution', 'version', 'job')
 
     def __str__(self):
-        return '{} commands for Job {}'.format(self.name, self.job)
+        return '{} {} {} commands for Job {}'.format(self.family, self.distribution, self.version, self.job)
 
     @property
     def json(self):
         return {
-                self.name: {
-                    'requirements': self.requirements,
-                    'command': self.command,
-                    'command_stop': self.command_stop,
-                },
+                'ansible_system': self.family,
+                'ansible_distribution': self.distribution,
+                'ansible_distribution_version': self.version,
+                'command': self.command,
+                'command_stop': self.command_stop,
         }
 
 

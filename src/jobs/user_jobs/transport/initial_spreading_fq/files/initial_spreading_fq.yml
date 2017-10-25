@@ -8,10 +8,11 @@ general:
   keywords:        [initial, spreading, fq, pacing]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/initial_spreading_fq/initial_spreading_fq.py'
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/initial_spreading_fq/initial_spreading_fq.py'
     command_stop:
 
 arguments:

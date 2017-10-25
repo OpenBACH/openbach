@@ -59,12 +59,12 @@ def signal_term_handler(stop_event, signal, frame):
     exit(0)
 
 
-def worker_loop(q, server_address, page, stop_event):
+def worker_loop(q, server_address, page, measure, stop_event):
     try:
         while not stop_event.is_set():
             try:
                 q.get(timeout=1)
-                get_url(server_address, port, page)
+                get_url(server_address, port, page, measure)
             except Empty:
                 collect_agent.send_log(
                         syslog.LOG_DEBUG,
@@ -75,7 +75,7 @@ def worker_loop(q, server_address, page, stop_event):
                 'ERROR on worker do get_url: {}'.format(ex))
 
 
-def get_url(server_address, port, page):
+def get_url(server_address, port, page, measure):
     try:
         start_time = time.perf_counter()
         if not page:
@@ -103,6 +103,8 @@ def get_url(server_address, port, page):
                 for u in images + scripts + css + icons
                 if u.startswith(base_url))
 
+        if not measure:
+            return
         conntime = round(time.perf_counter() - start_time, 3)
         collect_agent.send_log(
                 syslog.LOG_NOTICE,
@@ -121,7 +123,7 @@ def get_url(server_address, port, page):
                 'ERROR getting url (the server might not be running)')
 
 
-def main(server_address, port, mode, lambd, sim_t, n_req, page):
+def main(server_address, port, mode, lambd, sim_t, n_req, page, measure):
     # Connect to the collect-agent service
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/http_client_plt/'
@@ -137,7 +139,7 @@ def main(server_address, port, mode, lambd, sim_t, n_req, page):
     # mode with inter-arrivals (following an exponential law)
     if mode == 1:
         q = Queue()
-        arguments = (q, server_address, page, stop_event)
+        arguments = (q, server_address, page, measure, stop_event)
         thread_pool = [
                 Thread(target=worker_loop, args=arguments)
                 for _ in range(150)
@@ -174,7 +176,7 @@ def main(server_address, port, mode, lambd, sim_t, n_req, page):
         for _ in range(n_req):
             if round(time.perf_counter() - init_time, 3) > sim_t:
                 break
-            get_url(server_address, port, page)
+            get_url(server_address, port, page, measure)
     else:
         collect_agent.send_log(
                 syslog.LOG_ERR,
@@ -209,6 +211,9 @@ if __name__ == '__main__':
     parser.add_argument(
             '-p', '--page', type=int, default=1,
             help='Page number')
+    parser.add_argument(
+            '-t', '--measure-time', action='store_true', 
+            help='Measure page loading time')
 
     # get args
     args = parser.parse_args()
@@ -219,5 +224,6 @@ if __name__ == '__main__':
     sim_t = args.sim_t
     n_req = args.n_req
     page = args.page
+    measure = args.measure_time
 
-    main(server_address, port, mode, lambd, sim_t, n_req, page)
+    main(server_address, port, mode, lambd, sim_t, n_req, page, measure)

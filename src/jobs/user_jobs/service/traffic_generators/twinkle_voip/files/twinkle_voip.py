@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-# 
+# -*- coding: utf-8 -*-
+
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -24,13 +25,13 @@
 #   
 #   You should have received a copy of the GNU General Public License along with
 #   this program. If not, see http://www.gnu.org/licenses/.
-#   
-#   
-#   
-#   @file     twinkle_voip.py
-#   @brief    Twinkle VoIP job
-#   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 
+""" Sources of the job twinkle_voip """
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
+'''
 
 import subprocess
 import argparse

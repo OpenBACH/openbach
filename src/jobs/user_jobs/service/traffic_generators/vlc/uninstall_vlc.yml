@@ -33,18 +33,9 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+- name: Uninstall package vlc
+  apt: name=vlc state=absent
+  become: yes
 
-  tasks:
-  - name: Uninstall Job
-    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
-    become: yes
-    
-  - name: Inform Agent that vlc is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
-    become: yes
-
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Uninstall Job
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: skype_call.yml
-  
-  tasks:
-  - name: Delete skype_call repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
-    become: yes
-
-  - name: Delete skype_call configuration file
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-    
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Delete skype_call repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

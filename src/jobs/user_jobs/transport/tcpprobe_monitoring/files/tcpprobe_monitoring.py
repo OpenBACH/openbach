@@ -75,7 +75,7 @@ def watch(fn):
 def main(path, port, interval):
     # Monitoring setup
     cmd = (
-            'insmod /opt/openbach-jobs/tcpprobe_monitoring/'
+            'insmod /opt/openbach/agent/jobs/tcpprobe_monitoring/'
             'tcp_probe_new_fix/tcp_probe_new_fix.ko port={} '
             'full=1 > /dev/null 2>&1'.format(port)
     )

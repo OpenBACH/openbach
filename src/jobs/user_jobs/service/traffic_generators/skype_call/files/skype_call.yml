@@ -12,7 +12,7 @@ platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command:       'python /opt/openbach-jobs/skype_call/skype_call.py'
+    command: '/usr/bin/env python2 /opt/openbach/agent/jobs/skype_call/skype_call.py'
     command_stop:
 
 arguments:

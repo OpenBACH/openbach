@@ -33,18 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-
-  tasks:
-  - name: Uninstall sysctl Job
-    file: path=/opt/openbach-jobs/sysctl state=absent
-    become: yes
-    
-  - name: Informs Agent that sysctl is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_name }}.yml state=absent
-    become: yes
-    
-  - include: '{{ path_src }}/del_job.yml'
-  
+- name: Uninstall sysctl Job
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

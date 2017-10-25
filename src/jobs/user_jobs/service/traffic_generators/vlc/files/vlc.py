@@ -1,5 +1,6 @@
-#!/usr/bin/python3
-# 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -24,12 +25,13 @@
 #   
 #   You should have received a copy of the GNU General Public License along with
 #   this program. If not, see http://www.gnu.org/licenses/.
-#   
-#   
-#   
-#   @file     vlc.py
-#   @brief    vlc job
-#   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
+
+""" Sources of the Job vlc """
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
+'''
 
 DEFAULT_VIDEO='/opt/openbach/agent/jobs/vlc/bigbuckbunny.mp4'
 DEFAULT_PORT=6000

@@ -12,7 +12,7 @@ platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command:       'python /opt/openbach-jobs/receive_skype/receive_skype.py'
+    command: '/usr/bin/env python2 /opt/openbach/agent/jobs/receive_skype/receive_skype.py'
     command_stop:
 
 arguments:

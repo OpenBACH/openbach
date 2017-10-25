@@ -33,21 +33,12 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+- name: Create the sysctl Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
-  tasks:
-  - name: Install sysctl Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/sysctl/ mode={{ item.mode }}
-    with_items:
-      - { file: 'sysctl.py', mode: '0755' }
-      - { file: 'sysctl.help', mode: '0644' }
-      - { file: 'sysctl_rstats_filter.conf', mode: '0644' }
-    become: yes
-
-  - name: Informs Agent that sysctl Job is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
+- name: Install sysctl Job
+  copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'sysctl.py', mode: '0755' }
+    - { file: 'sysctl.help', mode: '0644' }
+    - { file: 'sysctl_rstats_filter.conf', mode: '0644' }

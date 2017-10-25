@@ -33,6 +33,9 @@
 
 ---
 
+- name: Create the sysctl Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
+
 - name: Install sysctl Job
   copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:

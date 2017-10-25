@@ -87,7 +87,7 @@ class Job(models.Model):
                     'keywords': [keyword.name for keyword in self.keywords.all()],
                     'persistent': self.persistent,
                 },
-                'os': [system.json for system in self.os.all()],
+                'platform_configuration': [system.json for system in self.os.all()],
                 'arguments': {
                     'required': [arg.json for arg in self.required_arguments.order_by('rank')],
                     'optional': [arg.json for arg in self.optional_arguments.all()],
@@ -115,9 +115,9 @@ class OsCommand(models.Model):
     @property
     def json(self):
         return {
-                'family': self.family,
-                'distribution': self.distribution,
-                'version': self.version,
+                'ansible_system': self.family,
+                'ansible_distribution': self.distribution,
+                'ansible_distribution_version': self.version,
                 'command': self.command,
                 'command_stop': self.command_stop,
         }

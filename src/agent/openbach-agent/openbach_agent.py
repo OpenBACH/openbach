@@ -43,6 +43,7 @@ import shlex
 import struct
 import signal
 import threading
+import platform
 import socketserver
 from datetime import datetime
 from subprocess import DEVNULL
@@ -229,8 +230,18 @@ class JobConfiguration:
                     'KO Conf file {} does not exist'.format(filename))
         # Register the configuration
         try:
-            self.command = content['os'][OS_TYPE]['command']
-            self.command_stop = content['os'][OS_TYPE]['command_stop']
+            for system in content['platform_configuration']:
+                if platform.system() != system['ansible_system']:
+                    continue
+                name, version, _ = platform.dist()
+                if name == system['ansible_distribution'] and version == system['ansible_distribution_version']:
+                    self.command = system['command']
+                    self.command_stop = system['command_stop']
+                    break
+            else:
+                raise BadRequest(
+                        'KO Conf file {} does not contain a '
+                        'os for {}'.format(filename, platform.system()))
             self.required = []
             args = content['arguments']['required']
             if isinstance(args, list):
@@ -246,10 +257,11 @@ class JobConfiguration:
                             self.required.append(arg['name'])
             self.optional = isinstance(content['arguments']['optional'], list)
             self.persistent = content['general']['persistent']
-        except KeyError:
+        except KeyError as error:
             raise BadRequest(
                     'KO Conf file {} does not contain a '
-                    'section for job {}'.format(filename, job_name))
+                    'section \'{}\' for job {}'
+                    .format(filename, error, job_name))
 
 
 class AgentAction:

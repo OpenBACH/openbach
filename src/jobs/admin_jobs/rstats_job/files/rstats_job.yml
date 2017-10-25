@@ -11,7 +11,7 @@ general:
   persistent:      False
 
 platform_configuration:
-  - ansible_os_family: 'Debian'
+  - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
     command: '/usr/bin/env python3 /opt/openbach/agent/jobs/rstats_job/rstats_job.py'

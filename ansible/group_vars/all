@@ -1,0 +1,12 @@
+---
+
+logstash_logs_port: 10514
+logstash_stats_port: 2222
+elasticsearch_port: 9200
+elasticsearch_cluster_name: openbach
+influxdb_port: 8086
+influxdb_database_name: openbach
+influxdb_database_precision: ms
+auditorium_broadcast_port: 2223
+broadcast_mode: udp
+is_run_from_conductor: false

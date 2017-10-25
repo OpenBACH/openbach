@@ -13,16 +13,16 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/rstats_job/rstats_job.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/rstats_job/rstats_job.py'
     command_stop:
 
 arguments:
   required:
-    - name:        job_instance_id
+    - name:        transfered_file_id
       type:        'int'
       count:       1
       description: >
-          The id of the Job Instance
+          Unique ID used to transfer the required files
     - name:        job_name
       type:        'str'
       count:       1

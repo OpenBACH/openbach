@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,28 +32,12 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: post_processing_tcp_pep.yml
-  
-  tasks:
-  - name: Create Tcp Pep repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
-    become: yes
+- name: Create the Tcp Pep Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
-  - name: Install Tcp Pep
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/{{  job_name }}/ mode=0644
-    with_items:
-      - "{{ job_name }}.py"
-      - "{{ job_name }}.help"
-      - "{{ job_name }}_rstats_filter.conf"
-    become: yes
-    
-  - name: Install Tcp pep configuration file
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install the Tcp Pep Job
+  copy: src={{ item }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode=0644
+  with_items:
+    - "{{ job_name }}.py"
+    - "{{ job_name }}.help"
+    - "{{ job_name }}_rstats_filter.conf"

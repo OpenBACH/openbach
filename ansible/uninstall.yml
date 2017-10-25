@@ -1,0 +1,96 @@
+---
+
+- hosts: localhost
+  gather_facts: no
+  pre_tasks:
+    - name: Create temporary SSH key
+      shell: ssh-keygen -b 4096 -t rsa -f /tmp/openbach_install_rsa -q -N ""
+      args:
+        creates: /tmp/openbach_install_rsa
+      when: ansible_ssh_private_key_file is not defined
+
+    - name: Add Default Collector if Needed
+      add_host: name={{ item }} groups=collector openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+      when: ('collector' not in groups) or not groups.collector
+
+    - name: Add Default Auditorium if Needed
+      add_host: name={{ item }} groups=auditorium openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+      when: ('auditorium' not in groups) or not groups.auditorium
+
+    - name: Add Default Agent on Collectors
+      add_host: name={{ item }} groups=agent openbach_collector={{ item }}
+      with_items: "{{ groups.collector | default([]) }}"
+
+    - name: Add Default Agent on Controllers
+      add_host: name={{ item }} groups=agent openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+
+
+- name: Pre-configure Agents and Auditoriums
+  hosts:
+    - agent
+    - auditorium
+  gather_facts: no
+  pre_tasks:
+    - name: Configure Controller Machine
+      set_fact: openbach_controller={{ openbach_controller | default(('controller' in group_names and inventory_hostname) or ('controller' in groups and groups.controller and groups.controller[0]) or '127.0.0.1') }}
+
+    - name: Configure Collector Machine
+      set_fact: openbach_collector={{ openbach_collector | default(('collector' in group_names and inventory_hostname) or ('collector' in groups and groups.collector and groups.collector[0]) or '127.0.0.1') }}
+
+    - name: Use the temporary SSH key as the Default for this Installation
+      set_fact: ansible_ssh_private_key_file=/tmp/openbach_install_rsa
+      when: ansible_ssh_private_key_file is not defined
+
+
+- name: Uninstall Controllers
+  hosts: controller
+  roles:
+    - uninstall_controller
+
+
+- name: Uninstall Collectors
+  hosts: collector
+  roles:
+    - uninstall_collector
+
+
+- name: Uninstall Auditoriums
+  hosts: auditorium
+  roles:
+    - uninstall_auditorium
+
+
+- name: Uninstall Agents
+  hosts: agent
+  roles:
+    - uninstall_job
+    - uninstall_agent
+
+
+- name: Cleanup Accounts
+  hosts:
+    - agent
+    - auditorium
+  gather_facts: no
+  post_tasks:
+    - name: Remove the Controller Public Key from the openbach User Authorized Keys
+      authorized_key: user=openbach state=absent key={{ lookup('file', '/home/openbach/.ssh/id_rsa.pub') }}
+      when: is_run_from_conductor
+
+    - name: Remove the openbach User
+      user: user=openbach state=absent remove=yes
+      become: yes
+      when: not is_run_from_conductor
+
+
+- hosts: localhost
+  gather_facts: no
+  post_tasks:
+    - name: Remove the Controllers SSH Keys from the Local Machine
+      file: path=/tmp/{{ item }} state=absent
+      with_items:
+        - openbach_install_rsa
+        - openbach_install_rsa.pub

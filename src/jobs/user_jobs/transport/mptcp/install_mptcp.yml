@@ -1,4 +1,3 @@
-#
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #
 #
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #
@@ -33,68 +32,38 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
+- name: Add mptcp Apt Repository
+  apt_repository: repo="deb https://dl.bintray.com/cpaasch/deb jessie main" state=present update_cache=yes
+  ignore_errors: yes
+  become: yes
 
-  tasks:
-  - name: Install mptcp
-    apt: name=iputils-ping state=present
-    become: yes
+- name: Install Packages Dependencies
+  apt: name={{ item }} state=present force=yes
+  with_items:
+    - iputils-ping
+    - linux-mptcp
+    - bison
+    - pkg-config
+    - flex
+    - libdb-dev
+  become: yes
 
-  - name: add mptcp repository
-    apt_repository: repo="deb https://dl.bintray.com/cpaasch/deb jessie main" state=present update_cache="yes"
-    ignore_errors: yes
-    become: yes
+- name: Download iproute-mptcp extension
+  git: repo=https://github.com/multipath-tcp/iproute-mptcp dest=/tmp/iproute-mptcp
 
-  - name: Install mptcp
-    apt: name=linux-mptcp state=present force=yes
-    become: yes
+- name: Compile iproute-mptcp extension
+  shell: make chdir=/tmp/iproute-mptcp/
 
-  - name: Install bison
-    apt: name=bison state=present
-    become: yes
+- name: Install iproute-mptcp extension
+  shell: make install chdir=/tmp/iproute-mptcp/
+  become: yes
 
-  - name: Install pkg-config
-    apt: name=pkg-config state=present
-    become: yes
+- name: Create the Mptcp Job Repository
+  file: path=/opt/openbach/agent/jobs/mptcp state=directory
 
-  - name: Install flex
-    apt: name=flex state=present
-    become: yes
-
-  - name: Install libdb
-    apt: name=libdb-dev state=present
-    become: yes
-
-  - name: Download iproute-mptcp extension
-    git: repo=https://github.com/multipath-tcp/iproute-mptcp dest=/tmp/iproute-mptcp
-
-  - name: Compile iproute-mptcp extension
-    shell: make chdir=/tmp/iproute-mptcp/
-
-  - name: Install iproute-mptcp extension
-    shell: make install chdir=/tmp/iproute-mptcp/
-    become: yes
-
-  - name: Create mptcp repository
-    file: path=/opt/openbach-jobs/mptcp state=directory mode=0755
-    become: yes
-
-  - name: Create mptcp stats repository
-    file: path=/var/openbach_stats/mptcp state=directory mode=0755
-    become: yes
-
-  - name: Install mptcp Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/mptcp/ mode={{ item.mode }}
-    with_items:
-      - { file: 'mptcp.py', mode: '0755' }
-      - { file: 'mptcp.help', mode: '0644' }
-      - { file: 'mptcp_rstats_filter.conf', mode: '0644' }
-    become: yes
-
-  - name: Informs Agent that mptcp Job is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
+- name: Install the mptcp Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/mptcp/ mode={{ item.mode }}
+  with_items:
+    - { file: 'mptcp.py', mode: '0755' }
+    - { file: 'mptcp.help', mode: '0644' }
+    - { file: 'mptcp_rstats_filter.conf', mode: '0644' }

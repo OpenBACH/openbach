@@ -12,7 +12,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/empty_influxdb_db/empty_influxdb_db.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/empty_influxdb_db/empty_influxdb_db.py'
     command_stop:
 
 arguments:

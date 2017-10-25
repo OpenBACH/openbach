@@ -27,12 +27,15 @@
    You should have received a copy of the GNU General Public License along with
    this program. If not, see http://www.gnu.org/licenses/.
    
-   
-   
-   @file     pep.py
-   @brief    Sources of the Job Pep (start)
-   @author   Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 """
+
+"""Sources of the Job pep"""
+
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
+'''
 
 
 import argparse
@@ -77,12 +80,12 @@ def set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=False):
 
 def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,
          gcc_interval, log_file, pending_time, mark, table_num):
-    conffile = "/opt/openbach-jobs/pep/pep_rstat_filter.conf"
+    conffile = "/opt/openbach/agent/jobs/pep/pep_rstat_filter.conf"
     success = collect_agent.register_collect(conffile)
     if not success:
-        collect_agent.send_log(syslog.LOG_ERR, "ERROR connecting to collect"
-                               " agent")
-        quit()
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
         
     if stop:
         # unset routing configuration

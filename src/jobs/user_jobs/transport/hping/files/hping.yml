@@ -11,7 +11,7 @@ general:
 os:
   linux:
     requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/hping/hping.py'
+    command:       '/usr/bin/env python3 /opt/openbach/agent/jobs/hping/hping.py'
     command_stop:
 
 arguments:

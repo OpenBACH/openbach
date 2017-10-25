@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,36 +32,16 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: netcat.yml
+- name: Install package netcat
+  apt: name=netcat state=present
+  become: yes
 
-  tasks:
-  - name: Install package netcat
-    apt: name=netcat state=present
-    become: yes
-    
-  - name: Create netcat repository
-    file: path=/opt/openbach-jobs/netcat state=directory mode=0755
-    become: yes
-  
-  - name: Create netcat stats repository
-    file: path=/var/openbach_stats/netcat state=directory mode=0755
-    become: yes
-  
-  - name: Install netcat
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/netcat/ mode={{ item.mode }}
-    with_items:
-      - { file: 'netcat.help', mode: '0644' }
-      - { file: 'netcat.py', mode: '0755' }
-      - { file: 'netcat_rstats_filter.conf', mode: '0644' }
-    become: yes
+- name: Create the netcat Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
-  - name: Inform Agent that netcat is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-  
+- name: Install the netcat Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'netcat.help', mode: '0644' }
+    - { file: 'netcat.py', mode: '0755' }
+    - { file: 'netcat_rstats_filter.conf', mode: '0644' }

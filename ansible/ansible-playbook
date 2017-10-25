@@ -1,0 +1,19 @@
+#!/bin/bash
+
+PWD=`pwd`
+SCRIPT_DIR=$(dirname -- "$0")
+ACTIVATE_VENV=.ansible_venv/bin/activate
+
+if [ ! -f "${SCRIPT_DIR}/.ansible_venv/bin/ansible-playbook" ]
+then
+  cd -P -- "${SCRIPT_DIR}"
+  python3 -m venv .ansible_venv
+  source "${ACTIVATE_VENV}"
+  pip install ansible==2.3.2.0 > /dev/null
+  deactivate
+  cd -P -- "${PWD}"
+fi
+
+source "${SCRIPT_DIR}/${ACTIVATE_VENV}"
+ansible-playbook $*
+deactivate

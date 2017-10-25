@@ -1,0 +1,4 @@
+---
+
+- name: Remove the Ifconfig Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

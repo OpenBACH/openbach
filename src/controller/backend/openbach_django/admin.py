@@ -1,3 +1,41 @@
+#!/usr/bin/env python
+
+# OpenBACH is a generic testbed able to control/configure multiple
+# network/physical entities (under test) and collect data from them. It is
+# composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+# Agents (one for each network entity that wants to be tested).
+#
+#
+# Copyright © 2016 CNES
+#
+#
+# This file is part of the OpenBACH testbed.
+#
+#
+# OpenBACH is a free software : you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see http://www.gnu.org/licenses/.
+
+
+"""Configuration of Django's admin interface"""
+
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
+
+
 from django.contrib import admin
 
 from .models import *
@@ -11,47 +49,43 @@ class AdminAgent(admin.ModelAdmin):
 
 admin.site.register(Collector)
 admin.site.register(Agent, AdminAgent)
-admin.site.register(Job_Keyword)
+admin.site.register(Keyword)
 admin.site.register(Job)
 admin.site.register(Statistic)
-admin.site.register(Required_Job_Argument)
-admin.site.register(Optional_Job_Argument)
-admin.site.register(Installed_Job)
-admin.site.register(Statistic_Instance)
-admin.site.register(Job_Instance, AdminInstances)
-admin.site.register(Required_Job_Argument_Instance)
-admin.site.register(Optional_Job_Argument_Instance)
-admin.site.register(Job_Argument_Value)
-admin.site.register(Watch)
-admin.site.register(Openbach_Function)
-admin.site.register(Openbach_Function_Argument)
+admin.site.register(RequiredJobArgument)
+admin.site.register(OptionalJobArgument)
+admin.site.register(InstalledJob)
+admin.site.register(StatisticInstance)
+admin.site.register(JobInstance, AdminInstances)
+admin.site.register(RequiredJobArgumentValue)
+admin.site.register(OptionalJobArgumentValue)
 admin.site.register(Scenario)
-admin.site.register(Scenario_Argument)
-admin.site.register(Scenario_Instance, AdminInstances)
-admin.site.register(Scenario_Argument_Instance)
-admin.site.register(Operand_Database)
-admin.site.register(Operand_Value)
-admin.site.register(Operand_Statistic)
-admin.site.register(Condition_Or)
-admin.site.register(Condition_And)
-admin.site.register(Condition_Not)
-admin.site.register(Condition_Xor)
-admin.site.register(Condition_Equal)
-admin.site.register(Condition_Unequal)
-admin.site.register(Condition_Below_Or_Equal)
-admin.site.register(Condition_Below)
-admin.site.register(Condition_Upper_Or_Equal)
-admin.site.register(Condition_Upper)
-admin.site.register(Openbach_Function_Instance)
-admin.site.register(Wait_For_Launched)
-admin.site.register(Wait_For_Finished)
-admin.site.register(Openbach_Function_Argument_Instance)
-admin.site.register(Command_Result)
-admin.site.register(Agent_Command_Result)
-admin.site.register(Collector_Command_Result)
-admin.site.register(File_Command_Result)
-admin.site.register(Installed_Job_Command_Result)
-admin.site.register(Job_Instance_Command_Result)
+admin.site.register(ScenarioArgument)
+admin.site.register(ScenarioInstance, AdminInstances)
+admin.site.register(ScenarioArgumentValue)
+admin.site.register(OperandDatabase)
+admin.site.register(OperandValue)
+admin.site.register(OperandStatistic)
+admin.site.register(ConditionOr)
+admin.site.register(ConditionAnd)
+admin.site.register(ConditionNot)
+admin.site.register(ConditionXor)
+admin.site.register(ConditionEqual)
+admin.site.register(ConditionUnequal)
+admin.site.register(ConditionLowerOrEqual)
+admin.site.register(ConditionLower)
+admin.site.register(ConditionGreaterOrEqual)
+admin.site.register(ConditionGreater)
+admin.site.register(OpenbachFunction)
+admin.site.register(OpenbachFunctionInstance)
+admin.site.register(WaitForLaunched)
+admin.site.register(WaitForFinished)
+admin.site.register(CommandResult)
+admin.site.register(AgentCommandResult)
+admin.site.register(CollectorCommandResult)
+admin.site.register(FileCommandResult)
+admin.site.register(InstalledJobCommandResult)
+admin.site.register(JobInstanceCommandResult)
 admin.site.register(Project)
 admin.site.register(Network)
 admin.site.register(Entity)

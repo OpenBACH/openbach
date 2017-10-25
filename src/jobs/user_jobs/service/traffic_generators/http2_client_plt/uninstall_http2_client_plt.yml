@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: http2_client_plt.yml
-  
-  tasks:
-  - name: Delete HTTP2 Client repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=absent
-    become: yes
-
-  - name: Delete HTTP2 Client configuration file
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-    
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the HTTP2 Client Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

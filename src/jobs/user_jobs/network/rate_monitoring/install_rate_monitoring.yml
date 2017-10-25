@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,48 +32,19 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: rate_monitoring.yml
+- name: Install Python Dependencies
+  pip: name={{ item.name }} executable=pip3 version={{ item.version }}
+  with_items:
+    - {name: python-iptables, version: 0.12.0}
+    - {name: apscheduler, version: 3.2.0}
+  become: yes
+  
+- name: Create the Rate Monitoring Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
-  tasks:
-  - name: Install python-pip
-    apt: pkg=python-pip state=present
-    become: yes
-    
-  - name: Install python-iptables
-    pip: name=python-iptables state=present
-    become: yes
-    
-  - name: Install python-apscheduler
-    pip: name=apscheduler state=present
-    become: yes
-
-  - name: Upgrade setuptools
-    pip: name=setuptools extra_args='--upgrade'
-    become: yes
-
-  - name: Create Rate Monitoring repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
-    become: yes
-
-  - name: Create Rate Monitoring stats repository
-    file: path=/var/openbach_stats/{{ job_name }} state=directory mode=0755
-    become: yes
-
-  - name: Install Rate Monitoring
-    copy: src=files/{{ item }} dest=/opt/openbach-jobs/{{ job_name }}/ mode=0644
-    become: yes
-    with_items:
-      - rate_monitoring.py
-      - rate_monitoring_rstats_filter.conf
-      - rate_monitoring.help
-      
-  - name: Inform Agent that Rate Monitoring is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Install the Rate Monitoring Job
+  copy: src={{ item }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode=0644
+  with_items:
+    - rate_monitoring.py
+    - rate_monitoring_rstats_filter.conf
+    - rate_monitoring.help

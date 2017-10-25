@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: tcpprobe_monitoring.yml
-
-  tasks:
-  - name: Uninstall Tcpprobe Monitoring
-    file: path=/opt/openbach-jobs/tcpprobe_monitoring state=absent
-    become: yes
-
-  - name: Inform Agent that Tcpprobe Monitoring is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the Tcpprobe Monitoring Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

@@ -33,36 +33,16 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: socat.yml
+- name: Install package socat
+  apt: name=socat state=present
+  become: yes
 
-  tasks:
-  - name: Install package socat
-    apt: name=socat state=present
-    become: yes
-    
-  - name: Create socat repository
-    file: path=/opt/openbach-jobs/socat state=directory mode=0755
-    become: yes
-  
-  - name: Create socat stats repository
-    file: path=/var/openbach_stats/socat state=directory mode=0755
-    become: yes
-  
-  - name: Install socat
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/socat/ mode={{ item.mode }}
-    with_items:
-      - { file: 'socat.help', mode: '0644' }
-      - { file: 'socat.py', mode: '0755' }
-      - { file: 'socat_rstats_filter.conf', mode: '0644' }
-    become: yes
+- name: Create the Socat Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
-  - name: Inform Agent that socat is installed
-    copy: src=files/{{ job_name }}.yml dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-  
+- name: Install socat
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'socat.py', mode: '0755' }
+    - { file: 'socat.help', mode: '0644' }
+    - { file: 'socat_rstats_filter.conf', mode: '0644' }

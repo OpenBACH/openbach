@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,45 +32,22 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: tcpprobe_monitoring.yml
+- name: Create the Tcpprobe Monitoring Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 
-  tasks:
-  - name: Create Tcpprobe Monitoring repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
-    become: yes
+- name: Install the Tcpprobe Monitoring Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'tcpprobe_monitoring.py', mode: '0755' } 
+    - { file: 'tcpprobe_monitoring_rstats_filter.conf', mode: '0644' }
+    - { file: 'tcpprobe_monitoring.help', mode: '0644' }
 
-  - name: Create Tcpprobe Monitoring stats repository
-    file: path=/var/openbach_stats/{{ job_name }} state=directory mode=0755
-    become: yes
+- name: Upload tcpprobe_new_fix module sources
+  synchronize: src=../src/jobs/user_jobs/transport/tcpprobe_monitoring/files/tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
 
-  - name: Install Tcpprobe Monitoring
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/{{ job_name }}/ mode={{ item.mode }}
-    become: yes
-    
-    with_items:
-      - { 'file': 'tcpprobe_monitoring.py', 'mode': '0755' } 
-      - { 'file': 'tcpprobe_monitoring_rstats_filter.conf', 'mode': '0644' }
-      - { 'file': 'tcpprobe_monitoring.help', 'mode': '0644' }
-      
-  - name: Send tcpprobe_new_fix module sources
-    unarchive: src=files/tcp_probe_new_fix.tar.gz dest=/opt/openbach-jobs/{{ job_name }}/ 
-    become: yes
-  
-  - name: Modify tcp_probe module if Ubuntu 14.04
-    replace: dest=/opt/openbach-jobs/{{ job_name }}/tcp_probe_new_fix/tcp_probe_new_fix.c regexp='^(.*)srtt_us(.*)$' replace='\1srtt\2'
-    when: ansible_distribution_version == "14.04"
-     
-  - name: Build tcpprobe_new_fix module 
-    make: chdir=/opt/openbach-jobs/{{ job_name }}/tcp_probe_new_fix/
-    become: yes
-
-  - name: Inform Agent that Tcpprobe Monitoring is installed
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-
-  - include: '{{ path_src }}/add_job.yml'
-
+- name: Modify tcp_probe module
+  replace: dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/tcp_probe_new_fix.c regexp='^(.*)srtt_us(.*)$' replace='\1srtt\2'
+  when: ansible_distribution_version == "14.04"
+   
+- name: Build tcpprobe_new_fix module 
+  make: chdir=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/

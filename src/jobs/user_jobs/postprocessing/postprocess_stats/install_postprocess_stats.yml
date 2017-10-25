@@ -1,4 +1,3 @@
-# 
 #   OpenBACH is a generic testbed able to control/configure multiple
 #   network/physical entities (under test) and collect data from them. It is
 #   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
@@ -11,8 +10,8 @@
 #   This file is part of the OpenBACH testbed.
 #   
 #   
-#   OpenBACH is a free software : you can redistribute it and/or modify it under the
-#   terms of the GNU General Public License as published by the Free Software
+#   OpenBACH is a free software : you can redistribute it and/or modify it under
+#   the terms of the GNU General Public License as published by the Free Software
 #   Foundation, either version 3 of the License, or (at your option) any later
 #   version.
 #   
@@ -33,52 +32,24 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: postprocess_stats.yml
-  
-  tasks:
-  - name: Install python-pip
-    apt: pkg=python-pip state=present
-    become: yes
-    
-  - name: Install module matplotlib
-    pip: name=matplotlib state=present executable=pip3
-    become: yes
-    
-  - name: Install module numpy
-    pip: name=numpy state=present executable=pip3
-    become: yes
-    
-  - name: Install module scipy
-    pip: name=scipy state=present executable=pip3
-    become: yes
+- name: Install Python Dependencies
+  pip: name={{ item }} executable=pip3
+  with_items:
+    - matplotlib
+    - numpy
+    - scipy
+  become: yes
 
-  - name: Install module tkinter
-    apt: pkg=python3-tk update_cache=false
-    become: yes
-        
-  - name: Create Job repository
-    file: path=/opt/openbach-jobs/{{ job_name }} state=directory mode=0755
-    become: yes
- 
-  - name: Create Job stats repository
-    file: path=/var/openbach_stats/{{ job_name }} state=directory mode=0755
-    become: yes
- 
-  - name: Install Job
-    copy: src=files/{{ item.file }} dest=/opt/openbach-jobs/{{ job_name }}/ mode={{ item.mode }}
-    with_items:
-      - { file: 'postprocess_stats.help', mode: '0644' }
-      - { file: 'postprocess_stats.py', mode: '0755' }
-      - { file: 'postprocess_stats_rstats_filter.conf', mode: '0644' }
-    become: yes
-    
-  - name: Install Job configuration file
-    copy: src=files/{{ job_conf }} dest=/opt/openbach-agent/jobs/ mode=0644
-    become: yes
-    
-  - include: '{{ path_src }}/add_job.yml'
+- name: Install module tkinter
+  apt: pkg=python3-tk update_cache=false
+  become: yes
+      
+- name: Create the PostProcess_Stats Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 
+- name: Install the PostProcess_Stats Job
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  with_items:
+    - { file: 'postprocess_stats.help', mode: '0644' }
+    - { file: 'postprocess_stats.py', mode: '0755' }
+    - { file: 'postprocess_stats_rstats_filter.conf', mode: '0644' }

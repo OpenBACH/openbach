@@ -1,0 +1,17 @@
+---
+
+- name: restart postgresql
+  systemd: name=postgresql state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
+- name: restart rsyslog
+  systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
+- name: start backend
+  systemd: name=openbach_backend state=restarted enabled=yes daemon_reload=yes
+  become: yes
+
+- name: start conductor
+  systemd: name=openbach_conductor state=restarted enabled=yes daemon_reload=yes
+  become: yes

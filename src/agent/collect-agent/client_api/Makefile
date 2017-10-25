@@ -20,8 +20,7 @@ install: all
 	cp src/collectagent.h ${DESTINATION}/include/
 
 clean:
-	@rm -f build/*.o
-	@rm -f build/*.so
+	@rm -rf build/
 
 uninstall:
 	@rm -f ${DESTINATION}/lib/libcollectagent.so

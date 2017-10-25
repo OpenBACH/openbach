@@ -1,0 +1,67 @@
+---
+
+- name: Upload binary files
+  copy: src={{ item }} dest=/tmp/
+  with_items:
+    - grafana.deb
+
+- name: Install apt Packages
+  apt: pkg={{ item }}
+  with_items:
+    - libfontconfig
+    - nginx-extras
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+  notify: restart nginx
+
+- name: Install .deb Packages
+  apt: deb=/tmp/{{ item }}.deb force=yes
+  with_items:
+    - grafana
+  become: yes
+  notify: restart grafana
+
+- name: Configure Grafana
+  copy: src=grafana.ini dest=/etc/grafana mode=0640
+  become: yes
+  notify: restart grafana
+
+- name: Install Kibana from sources
+  unarchive: src={{ kibana_filename}}.tar.gz dest=/opt/
+  args:
+    creates: /opt/{{ kibana_filename }}/package.json
+  become: yes
+  notify: restart kibana
+
+- name: Configure Kibana
+  template: src=kibana.yml.j2 dest=/opt/{{ kibana_filename }}/config/kibana.yml
+  vars:
+    collector_ip: "{{ openbach_collector }}"
+  become: yes
+  notify: restart kibana
+
+- name: Create Kibana's Service File
+  template: src=kibana.service.j2 dest=/etc/systemd/system/kibana.service mode=0644
+  become: yes
+  notify: restart kibana
+
+- name: Configure Nginx
+  template: src=default.j2 dest=/etc/nginx/sites-available/default
+  vars:
+    controller_ip: "{{ openbach_controller }}"
+    auditorium_ip: "{{ inventory_hostname }}"
+    collector_ip: "{{ openbach_collector }}"
+  become: yes
+  notify: restart nginx
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/auditorium/frontend state=directory
+  remote_user: openbach
+
+- name: Upload Auditorium Frontend
+  synchronize: src=frontend/ dest=/opt/openbach/auditorium/frontend/ recursive=yes delete=yes
+  remote_user: openbach
+
+- name: Copy the version file on the Auditorium
+  copy: src=../version dest=/opt/openbach/auditorium/version
+  remote_user: openbach

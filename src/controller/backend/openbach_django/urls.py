@@ -1,38 +1,39 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
 
-"""
-   OpenBACH is a generic testbed able to control/configure multiple
-   network/physical entities (under test) and collect data from them. It is
-   composed of an Auditorium (HMIs), a Controller, a Collector and multiple
-   Agents (one for each network entity that wants to be tested).
-
-
-   Copyright © 2016 CNES
-
-
-   This file is part of the OpenBACH testbed.
-
-
-   OpenBACH is a free software : you can redistribute it and/or modify it under the
-   terms of the GNU General Public License as published by the Free Software
-   Foundation, either version 3 of the License, or (at your option) any later
-   version.
-
-   This program is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
-   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-   details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program. If not, see http://www.gnu.org/licenses/.
+# OpenBACH is a generic testbed able to control/configure multiple
+# network/physical entities (under test) and collect data from them. It is
+# composed of an Auditorium (HMIs), a Controller, a Collector and multiple
+# Agents (one for each network entity that wants to be tested).
+#
+#
+# Copyright © 2016 CNES
+#
+#
+# This file is part of the OpenBACH testbed.
+#
+#
+# OpenBACH is a free software : you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see http://www.gnu.org/licenses/.
 
 
+"""The URLs available for the user (through the frontend)"""
 
-   @file     urls.py
-   @brief    The URL available for the user (throw the frontend)
-   @author   Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
-"""
+
+__author__ = 'Viveris Technologies'
+__credits__ = '''Contributors:
+ * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+'''
 
 
 from django.conf.urls import url
@@ -41,6 +42,10 @@ from . import views
 
 app_name = 'openbach_django'
 urlpatterns = [
+    url(r'^login/?$', views.LoginView.as_view(), name='login_view'),
+    url(r'^login/users/?$', views.UsersView.as_view(), name='users_view'),
+    url(r'^logs/?$', views.LogsView.as_view(), name='logs_view'),
+
     url(r'^collector/(?P<address>[^/]+)/state/?$',
         views.StateView.as_view(state_type='collector'),
         name='state_collector'),
@@ -94,10 +99,12 @@ urlpatterns = [
     url(r'^project/(?P<project_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
         name='project_scenario_instance_view'),
-    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/?$',
+    url(r'^project/(?P<project_name>[^/]+)/scenario/'
+        '(?P<scenario_name>[^/]+)/scenario_instance/?$',
         views.ScenarioInstancesView.as_view(),
-        name='project_scenario_instance_view2'),
-    url(r'^project/(?P<project_name>[^/]+)/scenario/(?P<scenario_name>[^/]+)/scenario_instance/(?P<id>[^/]+)/?$',
-        views.ScenarioInstanceView.as_view(),
-        name='project_scenario_instance_view3'),
+        name='project_scenario_instance_view_filtered'),
+    url(r'^project/(?P<project_name>[^/]+)/entity/?$',
+        views.EntitiesView.as_view(), name='entities_view'),
+    url(r'^project/(?P<project_name>[^/]+)/entity/(?P<entity_name>[^/]+)/?$',
+        views.EntityView.as_view(), name='entity_view'),
 ]

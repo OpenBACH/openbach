@@ -1,0 +1,12 @@
+[Unit]
+Description=Startup script for OpenBACH Backend
+Requires=network.target
+
+[Service]
+User=openbach
+Type=simple
+WorkingDirectory=/opt/openbach/controller/backend/
+ExecStart=/usr/local/bin/uwsgi --http :8000 --module backend.wsgi --static-map /static=/opt/openbach/controller/backend/static_root
+
+[Install]
+WantedBy=multi-user.target

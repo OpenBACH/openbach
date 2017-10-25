@@ -22,6 +22,11 @@ arguments:
       count:       1
       description: >
           The IP address of the server
+    - name:        port 
+      type:        'int'
+      count:       1
+      description: >
+          The port number of the server
   optional:
     - name:        mode
       type:        'int'

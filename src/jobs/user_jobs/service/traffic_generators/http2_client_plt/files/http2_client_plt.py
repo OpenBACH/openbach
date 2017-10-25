@@ -98,7 +98,7 @@ def get_url(server_address, page):
                 'ERROR sending stat: {}'.format(ex))
 
 
-def main(server_address, mode, lambd, sim_t, n_req, page):
+def main(server_address, port, mode, lambd, sim_t, n_req, page):
     # Connexion au service de collecte de l'agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/http2_client_plt/'
@@ -108,6 +108,7 @@ def main(server_address, mode, lambd, sim_t, n_req, page):
         collect_agent.send_log(syslog.LOG_ERR, message)
         exit(message)
 
+    server_address = "{}:{}".format(server_address, port)
     stop_event = Event()
     signal.signal(signal.SIGTERM, partial(signal_term_handler, stop_event))
 
@@ -163,7 +164,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description=__doc__,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('server-address', help='The IP address of the server')
+    parser.add_argument(
+            'server_address', type=str,
+            help='The server IP address')
+    parser.add_argument(
+            'port', type=int,
+            help='The port number of the server')
     parser.add_argument(
             '-m', '--mode', type=int, default=0,
             help='Two modes of performing requests (mode=0 for '
@@ -185,10 +191,11 @@ if __name__ == '__main__':
     # get args
     args = parser.parse_args()
     server_address = args.server_address
+    port = args.port
     mode = args.mode
     lambd = args.lambd
     sim_t = args.sim_t
     n_req = args.n_req
     page = args.page
 
-    main(server_address, mode, lambd, sim_t, n_req, page)
+    main(server_address, port, mode, lambd, sim_t, n_req, page)

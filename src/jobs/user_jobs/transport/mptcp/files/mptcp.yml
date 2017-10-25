@@ -18,36 +18,21 @@ platform_configuration:
 
 arguments:
   required:
-    - name:        iface_link1
-      type:        'str'
-      count:       1
-      description: >
-          The interface name of link1
-    - name:        iface_link2
-      type:        'str'
-      count:       1
-      description: >
-          The interface of link2
-
   optional:
-    - name:        enable
-      type:        'int'
+    - name:        ifaces
+      type:        'str'
       count:       1
-      flag:        '-c'
+      flag:        '-i'
       description: >
-          Enable (1) or disable(0) mptcp and routing. Default=1
-    - name:        iface_on1
+          Interfaces available for MPTCP, separated by comma.
+          By default, all interfaces are enabled.
+    - name:        enable
       type:        'None'
       count:       0
-      flag:        '-o'
+      flag:        '-e'
       description: >
-          Enable MP-TCP on interface 1.
-    - name:        iface_on2
-      type:        'None'
-      count:       0
-      flag:        '-O'
-      description: >
-          Enable MP-TCP on interface 2.
+          Enable or disable MPTCP.
+
     - name:        checksum
       type:        'int'
       count:       1

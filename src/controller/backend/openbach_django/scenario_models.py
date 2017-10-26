@@ -468,7 +468,7 @@ class ScenarioInstance(models.Model):
 
     @property
     def json(self):
-        owner_id = None
+        owner_id = self.id
         ofi = self.openbach_function_instance
         while ofi is not None:
             scenario = ofi.scenario_instance

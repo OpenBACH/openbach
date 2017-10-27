@@ -1948,9 +1948,10 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         scenario_infos = InfosScenario(self.name, self.project)
         self.share_user(scenario_infos)
         scenario = scenario_infos.get_scenario_or_not_found_error()
+        scenario = scenario.versions.last()
 
         scenario_instance = ScenarioInstance.objects.create(
-                scenario=scenario,
+                scenario_version=scenario,
                 status='Scheduling',
                 start_date=timezone.now(),
                 started_by=self.connected_user,
@@ -1960,7 +1961,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         # Populate values for ScenarioArguments
         for argument, value in self.arguments.items():
             try:
-                argument_instance = ScenarioArgument.objects.get(name=argument, scenario=scenario)
+                argument_instance = ScenarioArgument.objects.get(name=argument, scenario_version=scenario)
             except ScenarioArgument.DoesNotExist:
                 raise errors.BadRequestError(
                         'A value was provided for an Argument that '

@@ -85,7 +85,7 @@
   with_items:
     - backend/static
     - conductor
-    - jobs/private_jobs
+    - src/jobs/private_jobs
     - src/agent
     - ansible/roles
   remote_user: openbach

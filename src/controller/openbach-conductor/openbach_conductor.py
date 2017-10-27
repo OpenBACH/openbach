@@ -2108,7 +2108,7 @@ class ListScenarioInstances(ScenarioInstanceAction):
             return list(self._infos_scenario_instances(scenario)), 200
 
         project = scenario_info._get_project_if_own()
-        scenarios = Scenario.objects.prefetch_related('instances').filter(project=project)
+        scenarios = Scenario.objects.prefetch_related('versions__instances').filter(project=project)
         instances = [
                 instance for scenario in scenarios
                 for instance in self._infos_scenario_instances(scenario)
@@ -2116,12 +2116,13 @@ class ListScenarioInstances(ScenarioInstanceAction):
         return instances, 200
 
     def _infos_scenario_instances(self, scenario):
-        for instance in scenario.instances.order_by('-start_date'):
-            with suppress(errors.ForbiddenError):
-                if not instance.is_stopped:
-                    owner = instance.started_by
-                    self._assert_user_in([owner])
-                yield instance.json
+        for version in scenario.versions.order_by('-id'):
+            for instance in version.instances.order_by('-start_date'):
+                with suppress(errors.ForbiddenError):
+                    if not instance.is_stopped:
+                        owner = instance.started_by
+                        self._assert_user_in([owner])
+                    yield instance.json
 
 
 ############################

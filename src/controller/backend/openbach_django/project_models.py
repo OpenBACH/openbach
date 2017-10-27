@@ -208,8 +208,6 @@ class Project(models.Model):
 
         # Cleanup in case of modifications
         self.networks.all().delete()
-        self.scenarios.all().delete()
-
         networks = json_data.get('network', [])
         if not isinstance(networks, list):
             raise Project.MalformedError(
@@ -298,9 +296,11 @@ class Project(models.Model):
                         'data should contain the name of the '
                         'scenario to create.')
             description = scenario.get('description')
-            scenario_instance = Scenario.objects.create(
+            scenario_instance = Scenario.objects.get_or_create(
                     name=name, project=self,
-                    description=description)
+                    defaults={'description': description})
+            scenario_instance.description = description
+            scenario_instance.save()
             try:
                 scenario_instance.load_from_json(scenario)
             except Scenario.MalformedError as e:

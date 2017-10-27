@@ -2056,10 +2056,14 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
             for openbach_function in scenario_instance.openbach_functions_instances.all():
                 with suppress(JobInstance.DoesNotExist):
                     job_instance = openbach_function.started_job
-                    StopJobInstance(job_instance.id).action()
+                    stopper = StopJobInstance(job_instance.id)
+                    self.share_user(stopper)
+                    stopper.action()
                 with suppress(ScenarioInstance.DoesNotExist):
                     subscenario_instance = openbach_function.started_scenario
-                    StopScenarioInstance(subscenario_instance.id).action()
+                    stopper = StopScenarioInstance(subscenario_instance.id)
+                    self.share_user(stopper)
+                    stopper.action()
         return None, 204
 
 

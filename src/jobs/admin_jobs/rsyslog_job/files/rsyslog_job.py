@@ -45,11 +45,11 @@ from os import rename, remove
 
 
 def main(file_id, job_name, disable_code):
-    pattern = '/etc/rsyslog.d/{}{}{{}}.conf{{}}'.format(job_name, file_id)
+    pattern = '/etc/rsyslog.d/{}{{}}{{}}.conf{{}}'.format(job_name)
 
     for local_part in ('', '_local'):
-        from_playbook = pattern.format(local_part, '.locked')
-        final_dest = pattern.format(local_part, '')
+        from_playbook = pattern.format(file_id, local_part, '.locked')
+        final_dest = pattern.format('', local_part, '')
         rename(from_playbook, final_dest)
 
     if disable_code & 0x01:

@@ -244,7 +244,7 @@ class Argument(models.Model):
         abstract = True
 
     def check_count(self, count):
-        if self.type == ValuesType.NONE_TYPE or self.count == '*':
+        if self.type == ValuesType.NONE_TYPE.value or self.count == '*':
             return True
         if self.count == '+':
             return count > 0

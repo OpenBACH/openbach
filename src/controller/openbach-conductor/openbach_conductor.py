@@ -1535,7 +1535,6 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
             raise
 
         job_instance.set_status('Running')
-        job_instance.save()
 
 
 class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
@@ -1697,8 +1696,6 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
             job_instance.delete()
             raise
         job_instance.set_status('Running')
-        job_instance.is_stopped = False
-        job_instance.save()
 
 
 class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
@@ -1721,9 +1718,7 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
             finally:
-                job_instance.update_status = timezone.now()
-                job_instance.status = job_status
-                job_instance.save()
+                job_instance.set_status(job_status)
 
         return job_instance.json, 200
 
@@ -1993,6 +1988,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         functions_table = {}
         openbach_functions_instances = scenario_instance.openbach_functions_instances.all()
         for openbach_function in openbach_functions_instances:
+            openbach_function.set_status('Scheduled')
             functions_table[openbach_function.id] = {
                     'queue': queue.Queue(),
                     'is_waited_for_launch': set(get_waited(

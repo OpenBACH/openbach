@@ -410,16 +410,7 @@ class StartJobInstance(OpenbachFunction):
         arguments = {}
         for argument in self.arguments.all():
             value = argument.get_value(parameters) if parameters is not None else argument.value
-            try:
-                old_value = arguments[argument.name]
-            except KeyError:
-                arguments[argument.name] = value
-            else:
-                if isinstance(old_value, list):
-                    old_value.append(value)
-                else:
-                    arguments[argument.name] = [old_value, value]
-
+            arguments.setdefault(argument.name, []).append(value)
         return arguments
 
     @property

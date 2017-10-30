@@ -52,8 +52,8 @@ from . import openbach_function_models
 from .job_models import Job, RequiredJobArgument, OptionalJobArgument
 from .condition_models import Condition
 from .openbach_function_models import (
-        OpenbachFunctionInstance, StartJobInstance,
-        StartJobInstanceArgument,
+        OpenbachFunction, OpenbachFunctionInstance,
+        StartJobInstance, StartJobInstanceArgument,
         WaitForLaunched, WaitForFinished
 )
 
@@ -266,7 +266,7 @@ class Scenario(models.Model):
             function_name, = possible_function_name
             openbach_function_name = ''.join(map(str.title, function_name.split('_')))
             try:
-                OpenbachFunction = getattr(openbach_function_models, openbach_function_name)
+                OpenbachFunctionFactory = getattr(openbach_function_models, openbach_function_name)
             except AttributeError:
                 raise Scenario.MalformedError(
                         'openbach_functions.{}.{}'.format(index, function_name),
@@ -296,7 +296,7 @@ class Scenario(models.Model):
                             value=value, expected_type=expected_type)
 
             try:
-                openbach_function = OpenbachFunction.objects.create(
+                openbach_function = OpenbachFunctionFactory.objects.create(
                         function_id=id_,
                         label=label,
                         scenario_version=scenario,
@@ -329,11 +329,18 @@ class Scenario(models.Model):
                                     .format(index, function_name, job_name, name),
                                     override_error='The configured job does '
                                     'not accept the given argument')
+                    argument_type = job_argument.type
                     if not isinstance(value, str) or not OpenbachFunctionArgument.has_placeholders(value):
-                        check_and_get_value(value, job_argument.type)
-                    StartJobInstanceArgument.objects.create(
-                            name=name, value=str(value),
-                            start_job_instance=openbach_function)
+                        check_and_get_value(value, argument_type)
+                    if argument_type == 'None':
+                        if value:
+                            StartJobInstanceArgument.objects.create(
+                                    name=name, value='True',
+                                    start_job_instance=openbach_function)
+                    else:
+                        StartJobInstanceArgument.objects.create(
+                                name=name, value=str(value),
+                                start_job_instance=openbach_function)
 
         # Extract Waits
         # Start again the looping to be sure all referenced

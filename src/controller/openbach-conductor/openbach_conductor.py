@@ -42,6 +42,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -60,10 +61,11 @@ import threading
 import itertools
 import traceback
 import socketserver
-from functools import wraps
+from functools import wraps, partial
 from datetime import datetime
 from contextlib import suppress
 from collections import defaultdict
+from multiprocessing import Pool
 
 import yaml
 from fuzzywuzzy import fuzz
@@ -112,6 +114,7 @@ syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
 DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defaults/main.yml'
+TOPOLOGY_WORKERS = 10
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -2418,6 +2421,34 @@ class ProjectAction(ConductorAction):
             owners = User.objects.filter(username__in=owners_names)
             project.owners.set(owners)
 
+    def _build_topology(self):
+        project = self.get_project_or_not_found_error()
+        gather_facts = partial(start_playbook, 'gather_facts')
+        # get ip address of entities with agents
+        addrs = [e.agent.address for e in 
+                project.entities.exclude(agent__isnull=True)]
+        # gather facts for all ips
+        with Pool(TOPOLOGY_WORKERS) as pool:
+            all_facts = pool.map(gather_facts, addrs)
+            all_facts = dict(zip(addrs, all_facts))
+        # iterate over all interfaces for all agents
+        netdict = {}
+        for agent, facts in all_facts.items():
+            for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
+                infor_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                # format network name
+                net = "{}/{}".format(
+                        info_ipv4['network'],
+                        sum([bin(int(x)).count("1") for x in 
+                            info_ipv4['netmask'].split('.')]))
+                netdict.setdefault(agent, []).append(net)
+        # now create networks
+        for agent, networks in netdict:
+            network_objs = [project.networks.get_or_create(name=n, project=project) 
+                             for n in networks] 
+            # set networks for entitites
+            entity = project.entities.get(agent__address=agent)
+            entity.networks.set(network_objs)
 
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""
@@ -2429,6 +2460,7 @@ class CreateProject(ProjectAction):
     @require_connected_user()
     def _action(self):
         self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2462,6 +2494,7 @@ class ModifyProject(ProjectAction):
 
         with db.transaction.atomic():
             self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2475,6 +2508,19 @@ class InfosProject(ProjectAction):
     def _action(self):
         project = self.get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
+        return project.json, 200
+
+
+class RefreshTopologyProject(ProjectAction):
+    """Action responsible for refreshing an existing Project's network topology"""
+
+    def __init__(self, name):
+        super().__init__(name=name)
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        self._build_topology()
         return project.json, 200
 
 

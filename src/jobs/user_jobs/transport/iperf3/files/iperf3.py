@@ -111,7 +111,9 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
         try:
             int(out_s[0])
         except ValueError:
-            continue
+            # save SUM all the same
+            if not out_s[0] == "SUM":
+                continue
 
         # filter unnecessary messages
         if out_s[1] == "local":
@@ -128,9 +130,13 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
         try:
             flow_no = flows[out_s[0]]
         except KeyError:
-            flows[out_s[0]] = n_flows
-            flow_no = n_flows
-            n_flows += 1
+            if out_s[0] == "SUM":
+                flows[out_s[0]] = "sum"
+                flow_no = "sum"
+            else:
+                flows[out_s[0]] = n_flows
+                flow_no = n_flows
+                n_flows += 1
 
         # remove stats covering the whole duration
         try:

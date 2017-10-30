@@ -82,27 +82,27 @@ arguments:
           For a client, the number of parallel flows (default: 1).
 
 statistics:
-    - name: "sent_data[*flow_number*]"
+    - name: "sent_data_*flow_number*"
       description: >
           The amount of data sent in this period, in Bytes
       frequency: 'every *interval* seconds'
-    - name: "throughput[*flow_number*]"
+    - name: "throughput_*flow_number*"
       description: >
           The throughput in this period, in bits/sec
       frequency: 'every *interval* seconds'
-    - name: "jiggle[*flow_number*]"
+    - name: "jiggle_*flow_number*"
       description: >
           The jiggle between packets in this period, in seconds
       frequency: 'every *interval* seconds'
-    - name: "sent_pkts[*flow_number*]"
+    - name: "sent_pkts_*flow_number*"
       description: >
           The number of sent packets
       frequency: 'every *interval* seconds'
-    - name: "lost_pkts[*flow_number*]"
+    - name: "lost_pkts_*flow_number*"
       description: >
           The number of lost packets
       frequency: 'every *interval* seconds'
-    - name: "plr[*flow_number*]"
+    - name: "plr_*flow_number*"
       description: >
           The packet loss rate for this period, in %
       frequency: 'every *interval* seconds'

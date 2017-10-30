@@ -44,6 +44,7 @@ import re
 
 import collect_agent
 
+
 def multiplier(unit, base):
     if unit == base:
         return 1
@@ -55,8 +56,8 @@ def multiplier(unit, base):
         return (1.0/1000)
     return 1
 
-def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
 
+def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
     # Connect to collect_agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/iperf3/'
@@ -64,30 +65,31 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
     if not success:
         message = 'ERROR connecting to collect-agent'
         collect_agent.send_log(syslog.LOG_ERR, message)
-        exit(message)
+        sys.exit(message)
 
-    cmd = 'iperf3 {}'.format(mode)
+    cmd = ['iperf3']
+    cmd += mode
     if interval:
-        cmd = '{} -i {}'.format(cmd, interval)
+        cmd += ['-i', str(interval)]
     if length:
-        cmd = '{} -l {}'.format(cmd, length)
+        cmd += ['-l', str(length)]
     if port:
-        cmd = '{} -p {}'.format(cmd, port)
+        cmd += ['-p', str(port)]
     if udp:
-        cmd = '{} -u'.format(cmd)
-    if mode.startswith('-c') and udp and bandwidth is not None:
-        cmd = '{} -b {}'.format(cmd, bandwidth)
-    if mode.startswith('-c') and duration is not None:
-        cmd = '{} -t {}'.format(cmd, duration)
-    if mode.startswith('-c') and num_flows is not None:
-        cmd = '{} -P {}'.format(cmd, num_flows)
+        cmd += ['-u']
+    if mode[0] == '-c' and udp and bandwidth is not None:
+        cmd += ['-b', str(bandwidth)]
+    if mode[0] == '-c' and duration is not None:
+        cmd += ['-t', str(duration)]
+    if mode[0] == '-c' and num_flows is not None:
+        cmd += ['-P', str(num_flows)]
     # If client, launch and exit
-    if mode.startswith('-c'):
-        p = subprocess.run(cmd, shell=True)
+    if mode[0] == '-c':
+        p = subprocess.run(cmd)
         sys.exit(p.returncode)
         
     # If server, read output, and send stats
-    p = subprocess.Popen('stdbuf -oL {}'.format(cmd), shell=True, stdout=subprocess.PIPE)
+    p = subprocess.Popen(['stdbuf', '-oL'] + cmd, stdout=subprocess.PIPE)
 
     flows = {}
     n_flows = 0
@@ -95,9 +97,9 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
     while True:
         # read output
         out = p.stdout.readline().decode()
-        if out == '' and p.poll() is not None:
-            break
         if not out:
+            if p.poll is not None:
+                break
             continue
 
         timestamp = int(time.time() * 1000)
@@ -219,8 +221,8 @@ if __name__ == "__main__":
     server = args.server
     client = args.client
     exit = args.exit
-    mode = '-s -1' if server and exit else \
-           '-s' if server else '-c {}'.format(client)
+    mode = ['-s','-1'] if server and exit else \
+           ['-s'] if server else ['-c', client]
     interval = args.interval
     length = args.length
     port = args.port

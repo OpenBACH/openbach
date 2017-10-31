@@ -190,12 +190,22 @@ class Project(models.Model):
                 'name': self.name,
                 'description': self.description,
                 'owners': [user.get_username() for user in self.owners.all()],
-                'entity': [entity.json for entity
-                           in self.entities.order_by('name')],
-                'scenario': [scenario.json for scenario
-                             in self.scenarios.order_by('name')],
-                'network': [network.json for network
-                            in self.networks.order_by('name')],
+                'entity': [
+                    entity.json for entity
+                    in self.entities.order_by('name')
+                ],
+                'scenario': [
+                    scenario.json for scenario
+                    in self.scenarios.order_by('name')
+                ],
+                'network': [
+                    network.name for network
+                    in self.networks.order_by('name')
+                ],
+                'hidden_network': [
+                    network.name for network
+                    in self.hidden_networks.order_by('name')
+                ],
         }
 
     def load_from_json(self, json_data):
@@ -255,7 +265,7 @@ class Project(models.Model):
                     description=description)
         # Creation of hidden networks
         for hidden_network_name in hidden_networks:
-            hidden_network = HiddenNetwork.objects.create(
+            HiddenNetwork.objects.get_or_create(
                     name=hidden_network_name, project=self)
 
         scenarios = json_data.get('scenario', [])
@@ -299,10 +309,6 @@ class Network(models.Model):
     def __str__(self):
         return '{} for Project {}'.format(self.name, self.project)
 
-    @property
-    def json(self):
-        return self.name
-
 
 class HiddenNetwork(models.Model):
     """Data associated to a Network"""
@@ -318,10 +324,6 @@ class HiddenNetwork(models.Model):
 
     def __str__(self):
         return '{} for Project {}'.format(self.name, self.project)
-
-    @property
-    def json(self):
-        return self.name
 
 
 class Entity(models.Model):
@@ -352,5 +354,5 @@ class Entity(models.Model):
                 'name': self.name,
                 'description': self.description,
                 'agent': nullable_json(self.agent),
-                'networks': [network.json for network in self.networks.all()]
+                'networks': [network.name for network in self.networks.all()]
         }

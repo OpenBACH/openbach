@@ -253,24 +253,12 @@ class Project(models.Model):
             entity = Entity.objects.create(
                     name=entity_name, project=self,
                     description=description)
-            entity_networks = entity_json.get('networks', [])
-            if not isinstance(entity_networks, list):
-                raise Project.MalformedError(
-                        'entity.{}.networks'.format(entity.name),
-                        'Entry has the wrong kind of value (expected '
-                        '{} got {})'.format(list, type(entity_networks)))
-            entity.networks = self.networks.filter(name__in=entity_networks)
         # Creation of hidden networks
         for hidden_network_name in hidden_networks:
             hidden_network = HiddenNetwork.objects.create(
                     name=hidden_network_name, project=self)
 
         scenarios = json_data.get('scenario', [])
-        if not isinstance(networks, list):
-            raise Project.MalformedError(
-                    'scenario', 'Entry \'scenario\' has '
-                    'the wrong kind of value (expected '
-                    '{} got {})'.format(list, type(scenarios)))
         for index, scenario in enumerate(scenarios):
             if not isinstance(scenario, dict):
                 raise Project.MalformedError(
@@ -285,7 +273,7 @@ class Project(models.Model):
                         'data should contain the name of the '
                         'scenario to create.')
             description = scenario.get('description')
-            scenario_instance = Scenario.objects.get_or_create(
+            scenario_instance, _ = Scenario.objects.get_or_create(
                     name=name, project=self,
                     defaults={'description': description})
             scenario_instance.description = description

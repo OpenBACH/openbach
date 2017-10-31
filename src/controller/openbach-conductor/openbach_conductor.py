@@ -2447,7 +2447,7 @@ class ProjectAction(ConductorAction):
                 ))
                 netdict.setdefault(agent, []).append(str(net))
         # Get hidden networks
-        hidden_networks = {h.name for n in project.hidden_networks.all()}
+        hidden_networks = {h.name for h in project.hidden_networks.all()}
         # Create network objects
         for agent_ip, networks in netdict.items():
             network_objs = [

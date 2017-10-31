@@ -2428,7 +2428,7 @@ class ProjectAction(ConductorAction):
         project.networks.all().delete()
         # Get IP address of entities with agents
         addresses = [
-                e.agent.address for e in 
+                entity.agent.address for entity in 
                 project.entities.exclude(agent__isnull=True)
         ]
         # Gather facts for all IPs
@@ -2447,12 +2447,15 @@ class ProjectAction(ConductorAction):
                 ))
                 netdict.setdefault(agent, []).append(str(net))
         # Get hidden networks
-        hidden_networks = {h.name for h in project.hidden_networks.all()}
+        hidden_networks = {
+                hidden_network.name for hidden_network in 
+                project.hidden_networks.all()
+        }
         # Create network objects
         for agent_ip, networks in netdict.items():
             network_objs = [
                     Network.objects.get_or_create(name=n, project=project)[0]
-                    for n in networks if n not in hidden_networks
+                    for network in networks if network not in hidden_networks
             ] 
             # Set networks for entitites
             entity = project.entities.get(agent__address=agent_ip)

@@ -2583,26 +2583,11 @@ class EntityAction(ConductorAction):
         if agent:
             address = agent.get('address')
             agent = InfosAgent(address).get_agent_or_not_found_error()
-        networks = self.json_data.get('networks', [])
-        if not isinstance(networks, list):
-            raise errors.BadRequestError(
-                    'The networks of an entity should be a list of network names')
 
         entity, _ = Entity.objects.get_or_create(name=self.name, project=project)
         entity.description = description
         entity.agent = agent
         entity.save()
-
-        entity.networks.clear()
-        for network in networks:
-            try:
-                entity_network = Network.objects.get(name=network, project=project)
-            except Network.DoesNotExist:
-                raise errors.NotFoundError(
-                        'The requested Network is not in the database',
-                        project_name=self.project, network_name=network)
-            else:
-                entity.networks.add(entity_network)
 
 
 class AddEntity(EntityAction):

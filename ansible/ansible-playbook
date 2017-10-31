@@ -9,7 +9,7 @@ then
   cd -P -- "${SCRIPT_DIR}"
   python3 -m venv .ansible_venv
   source "${ACTIVATE_VENV}"
-  pip install ansible==2.3.2.0 > /dev/null
+  pip install ansible==2.4.1.0 > /dev/null
   deactivate
   cd -P -- "${PWD}"
 fi

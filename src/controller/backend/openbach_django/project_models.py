@@ -199,11 +199,11 @@ class Project(models.Model):
                     in self.scenarios.order_by('name')
                 ],
                 'network': [
-                    network.name for network
+                    network.json for network
                     in self.networks.order_by('name')
                 ],
                 'hidden_network': [
-                    network.name for network
+                    hidden_network.name for hidden_network
                     in self.hidden_networks.order_by('name')
                 ],
         }
@@ -298,17 +298,24 @@ class Network(models.Model):
     """Data associated to a Network"""
 
     name = models.CharField(max_length=500)
+    address = models.CharField(max_length=500)
     project = models.ForeignKey(
             Project,
             models.CASCADE,
             related_name='networks')
 
     class Meta:
-        unique_together = (('name', 'project'))
+        unique_together = (('address', 'project'))
 
     def __str__(self):
         return '{} for Project {}'.format(self.name, self.project)
 
+    @property
+    def json(self):
+        return {
+                'name': self.name,
+                'address': self.address,
+        }
 
 class HiddenNetwork(models.Model):
     """Data associated to a Network"""
@@ -354,5 +361,5 @@ class Entity(models.Model):
                 'name': self.name,
                 'description': self.description,
                 'agent': nullable_json(self.agent),
-                'networks': [network.name for network in self.networks.all()]
+                'networks': [network.json for network in self.networks.all()]
         }

@@ -725,6 +725,10 @@ class ProjectView(GenericView):
     
     def post(self, request, project_name):
         """refresh a project's network topology"""
+        if request.JSON:
+            return self.conductor_execute(
+                    command='modify_networks', name=project_name,
+                    json_data=request.JSON.get('networks', []))
         return self.conductor_execute(
                 command='refresh_topology_project', name=project_name)
 

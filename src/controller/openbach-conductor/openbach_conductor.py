@@ -61,6 +61,7 @@ import threading
 import itertools
 import traceback
 import socketserver
+from  ipaddress import IPv4Network
 from functools import wraps, partial
 from datetime import datetime
 from contextlib import suppress
@@ -99,7 +100,7 @@ from django.contrib.auth.models import User, AnonymousUser
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
-        Statistic, OsCommand, Entity, Network,
+        Statistic, OsCommand, Entity, Network, HiddenNetwork,
         RequiredJobArgument, OptionalJobArgument,
         InstalledJob, InstalledJobCommandResult,
         JobInstance, JobInstanceCommandResult,
@@ -2423,31 +2424,38 @@ class ProjectAction(ConductorAction):
 
     def _build_topology(self):
         project = self.get_project_or_not_found_error()
-        gather_facts = partial(start_playbook, 'gather_facts')
-        # get ip address of entities with agents
-        addrs = [e.agent.address for e in 
-                project.entities.exclude(agent__isnull=True)]
-        # gather facts for all ips
-        with Pool(TOPOLOGY_WORKERS) as pool:
-            all_facts = pool.map(gather_facts, addrs)
-            all_facts = dict(zip(addrs, all_facts))
-        # iterate over all interfaces for all agents
+        # Cleanup old networks
+        project.networks.all().delete()
+        # Get IP address of entities with agents
+        addresses = [
+                e.agent.address for e in 
+                project.entities.exclude(agent__isnull=True)
+        ]
+        # Gather facts for all IPs
+        all_facts = {
+                address: start_playbook('gather_facts', address)
+                for address in addresses
+        }
+        # Iterate over all interfaces for every agent
         netdict = {}
         for agent, facts in all_facts.items():
             for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
-                infor_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
-                # format network name
-                net = "{}/{}".format(
+                info_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                net = IPv4Network("{}/{}".format(
                         info_ipv4['network'],
-                        sum([bin(int(x)).count("1") for x in 
-                            info_ipv4['netmask'].split('.')]))
-                netdict.setdefault(agent, []).append(net)
-        # now create networks
-        for agent, networks in netdict:
-            network_objs = [project.networks.get_or_create(name=n, project=project) 
-                             for n in networks] 
-            # set networks for entitites
-            entity = project.entities.get(agent__address=agent)
+                        info_ipv4['netmask']
+                ))
+                netdict.setdefault(agent, []).append(str(net))
+        # Get hidden networks
+        hidden_networks = {h.name for n in project.hidden_networks.all()}
+        # Create network objects
+        for agent_ip, networks in netdict.items():
+            network_objs = [
+                    Network.objects.get_or_create(name=n, project=project)[0]
+                    for n in networks if n not in hidden_networks
+            ] 
+            # Set networks for entitites
+            entity = project.entities.get(agent__address=agent_ip)
             entity.networks.set(network_objs)
 
 class CreateProject(ProjectAction):
@@ -2599,6 +2607,7 @@ class AddEntity(EntityAction):
     def _action(self):
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
+        InfosProject(self.project)._build_topology()
         return entity.json, 200
 
 
@@ -2616,6 +2625,7 @@ class ModifyEntity(EntityAction):
         with db.transaction.atomic():
             self._register_entity()
         entity = self.get_entity_or_not_found_error()
+        InfosProject(self.project)._build_topology()
         return entity.json, 200
 
 
@@ -2630,6 +2640,7 @@ class DeleteEntity(EntityAction):
         entity = self.get_entity_or_not_found_error()
         self._assert_user_in(entity.project.owners.all())
         entity.delete()
+        InfosProject(self.project)._build_topology()
         return None, 204
 
 

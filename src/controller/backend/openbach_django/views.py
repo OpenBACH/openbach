@@ -722,6 +722,11 @@ class ProjectView(GenericView):
         """remove a project from the database"""
         return self.conductor_execute(
                 command='delete_project', name=project_name)
+    
+    def post(self, request, project_name):
+        """refresh a project's network topology"""
+        return self.conductor_execute(
+                command='refresh_topology_project', name=project_name)
 
 
 class EntitiesView(GenericView):

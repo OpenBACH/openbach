@@ -42,6 +42,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -60,10 +61,12 @@ import threading
 import itertools
 import traceback
 import socketserver
-from functools import wraps
+from  ipaddress import IPv4Network
+from functools import wraps, partial
 from datetime import datetime
 from contextlib import suppress
 from collections import defaultdict
+from multiprocessing import Pool
 
 import yaml
 from fuzzywuzzy import fuzz
@@ -97,7 +100,7 @@ from django.contrib.auth.models import User, AnonymousUser
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
-        Statistic, OsCommand, Entity, Network,
+        Statistic, OsCommand, Entity, Network, HiddenNetwork,
         RequiredJobArgument, OptionalJobArgument,
         InstalledJob, InstalledJobCommandResult,
         JobInstance, JobInstanceCommandResult,
@@ -112,6 +115,7 @@ syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
 DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defaults/main.yml'
+TOPOLOGY_WORKERS = 10
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -2424,6 +2428,44 @@ class ProjectAction(ConductorAction):
             owners = User.objects.filter(username__in=owners_names)
             project.owners.set(owners)
 
+    def _build_topology(self):
+        project = self.get_project_or_not_found_error()
+        # Cleanup old networks
+        project.networks.all().delete()
+        # Get IP address of entities with agents
+        addresses = [
+                entity.agent.address for entity in 
+                project.entities.exclude(agent__isnull=True)
+        ]
+        # Gather facts for all IPs
+        all_facts = {
+                address: start_playbook('gather_facts', address)
+                for address in addresses
+        }
+        # Iterate over all interfaces for every agent
+        netdict = {}
+        for agent, facts in all_facts.items():
+            for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
+                info_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                net = IPv4Network("{}/{}".format(
+                        info_ipv4['network'],
+                        info_ipv4['netmask']
+                ))
+                netdict.setdefault(agent, []).append(str(net))
+        # Get hidden networks
+        hidden_networks = {
+                hidden_network.name for hidden_network in 
+                project.hidden_networks.all()
+        }
+        # Create network objects
+        for agent_ip, networks in netdict.items():
+            network_objs = [
+                    Network.objects.get_or_create(name=n, project=project)[0]
+                    for network in networks if network not in hidden_networks
+            ] 
+            # Set networks for entitites
+            entity = project.entities.get(agent__address=agent_ip)
+            entity.networks.set(network_objs)
 
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""
@@ -2435,6 +2477,7 @@ class CreateProject(ProjectAction):
     @require_connected_user()
     def _action(self):
         self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2468,6 +2511,7 @@ class ModifyProject(ProjectAction):
 
         with db.transaction.atomic():
             self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2481,6 +2525,19 @@ class InfosProject(ProjectAction):
     def _action(self):
         project = self.get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
+        return project.json, 200
+
+
+class RefreshTopologyProject(ProjectAction):
+    """Action responsible for refreshing an existing Project's network topology"""
+
+    def __init__(self, name):
+        super().__init__(name=name)
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        self._build_topology()
         return project.json, 200
 
 
@@ -2559,6 +2616,7 @@ class AddEntity(EntityAction):
     def _action(self):
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
+        InfosProject(self.project)._build_topology()
         return entity.json, 200
 
 
@@ -2576,6 +2634,7 @@ class ModifyEntity(EntityAction):
         with db.transaction.atomic():
             self._register_entity()
         entity = self.get_entity_or_not_found_error()
+        InfosProject(self.project)._build_topology()
         return entity.json, 200
 
 
@@ -2590,6 +2649,7 @@ class DeleteEntity(EntityAction):
         entity = self.get_entity_or_not_found_error()
         self._assert_user_in(entity.project.owners.all())
         entity.delete()
+        InfosProject(self.project)._build_topology()
         return None, 204
 
 

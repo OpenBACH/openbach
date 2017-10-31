@@ -61,12 +61,11 @@ import threading
 import itertools
 import traceback
 import socketserver
-from  ipaddress import IPv4Network
-from functools import wraps, partial
+from functools import wraps
 from datetime import datetime
 from contextlib import suppress
+from ipaddress import IPv4Network
 from collections import defaultdict
-from multiprocessing import Pool
 
 import yaml
 from fuzzywuzzy import fuzz
@@ -2430,42 +2429,45 @@ class ProjectAction(ConductorAction):
 
     def _build_topology(self):
         project = self.get_project_or_not_found_error()
+
         # Cleanup old networks
         project.networks.all().delete()
-        # Get IP address of entities with agents
+
+        # Gather facts for all Agents
         addresses = [
-                entity.agent.address for entity in 
+                entity.agent.address for entity in
                 project.entities.exclude(agent__isnull=True)
         ]
-        # Gather facts for all IPs
         all_facts = {
                 address: start_playbook('gather_facts', address)
                 for address in addresses
         }
+
         # Iterate over all interfaces for every agent
-        netdict = {}
+        topology = {}
         for agent, facts in all_facts.items():
             for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
-                info_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                infos_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
                 net = IPv4Network("{}/{}".format(
-                        info_ipv4['network'],
-                        info_ipv4['netmask']
+                        infos_ipv4['network'],
+                        infos_ipv4['netmask'],
                 ))
-                netdict.setdefault(agent, []).append(str(net))
-        # Get hidden networks
+                topology.setdefault(agent, []).append(str(net))
+
+        # Get hidden networks to filter them out
         hidden_networks = {
-                hidden_network.name for hidden_network in 
+                hidden_network.name for hidden_network in
                 project.hidden_networks.all()
         }
-        # Create network objects
-        for agent_ip, networks in netdict.items():
-            network_objs = [
-                    Network.objects.get_or_create(name=n, project=project)[0]
-                    for network in networks if network not in hidden_networks
-            ] 
-            # Set networks for entitites
+        # Associate Networks to Entities
+        for agent_ip, network_names in topology.items():
+            networks = [
+                    Network.objects.get_or_create(name=network, project=project)[0]
+                    for network in network_names if network not in hidden_networks
+            ]
             entity = project.entities.get(agent__address=agent_ip)
-            entity.networks.set(network_objs)
+            entity.networks.set(networks)
+
 
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""

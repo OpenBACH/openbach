@@ -6,7 +6,7 @@ general:
       This Job enables you to create a stack with specific propreties.
 
   job_version:     0.1
-  keywords:        [stack_create]
+  keywords:        [stack_create, admin]
   persistent:      false
 
 platform_configuration:

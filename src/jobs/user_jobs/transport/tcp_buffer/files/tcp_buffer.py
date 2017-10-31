@@ -33,16 +33,32 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
+import syslog
 import argparse
 import subprocess
-
+import collect_agent
 
 def main(name, min_size, size, max_size):
-    cmd = 'sysctl net.ipv4.tcp_{}=\'{} {} {}\''.format(name, min_size, size, max_size)
-    subprocess.run(cmd, shell=True)
+    # Connect to collect agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/tcp_buffer/'
+            'tcp_buffer_rstats_filter.conf'
+    )
+    if not success:
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job tcp_buffer")
+
+    cmd = ['sysctl', 'net.ipv4.tcp_{}=\'{} {} {}\''.format(name, min_size, size, max_size)]
+    rc = subprocess.call(cmd)
+    if rc:
+        message = "WARNING \'{}\' exited with non-zero code".format(
+                ' '.join(cmd))
 
 
 if __name__ == "__main__":

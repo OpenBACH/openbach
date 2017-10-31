@@ -33,9 +33,10 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * David PRADAS <david.pradas@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
 import time
 import shlex
 import syslog
@@ -65,7 +66,10 @@ def main(destination_ip, count, interval, destport):
             '/opt/openbach/agent/jobs/hping/'
             'hping_rstats_filter.conf')
     if not success:
-        return
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job hping')
 
     # persitent jobs that only finishes when it is stopped by OpenBACH
     while True:
@@ -77,7 +81,7 @@ def main(destination_ip, count, interval, destport):
             message = 'ERROR: {}'.format(ex)
             collect_agent.send_stat(timestamp, status=message)
             collect_agent.send_log(syslog.LOG_ERR, message)
-            return
+            sys.exit(message)
         collect_agent.send_stat(timestamp, rtt=rtt_data)
 
 

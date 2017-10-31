@@ -31,28 +31,35 @@
 __author__ = 'Thales Alenia Space'
 __credits__ = '''Contributors:
  * Romain Barbau <romain.barbau@free.fr>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-import argparse
-import time
-import collect_agent
-import time
 import os
+import sys
+import syslog
+import time
+import argparse
+import collect_agent
 
 
 
 def main(url):
+    # Connect to collect-agent
 	conffile = "/opt/openbach/agent/jobs/Launch_WebPage/Launch_WebPage_rstats_filter.conf"
 	success = collect_agent.register_collect(conffile)
-
 	if not success:
-		return
-	#Get the DISPLAY parameter on the agent.
+		message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job Launch_webpage')
+
+	# Get the DISPLAY parameter on the agent.
 	displayParameter = str(os.system("echo $DISPLAY"))
-	#Launch the browser with the specified url.
+	# Launch the browser with the specified url.
 	os.system("export DISPLAY=:"+displayParameter+" ; firefox " + url)
 
-	#Send a statistic to know when we actually launch the browser.
+	# Send a statistic to know when we actually launch the browser.
 	statistics = {'Launch': 1}
 	collect_agent.send_stat(int(round(time.time() * 1000)), **statistics)
 		

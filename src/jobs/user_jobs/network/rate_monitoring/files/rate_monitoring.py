@@ -33,6 +33,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -86,17 +87,19 @@ def main(interval, chain_name, jump, source, destination,
             '/opt/openbach/agent/jobs/rate_monitoring/'
             'rate_monitoring_rstats_filter.conf')
     if not success:
-        return
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job rate_monitoring')
 
     table = iptc.Table(iptc.Table.FILTER)
     chains = [chain for chain in table.chains if chain.name == chain_name]
     try:
         chain, = chains
     except ValueError:
-        collect_agent.send_log(
-                syslog.LOG_ERR,
-                'ERROR: {} does not exist in FILTER table'.format(chain_name))
-        exit(1)
+        message = 'ERROR: {} does not exist in FILTER table'.format(chain_name)
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        exit(message)
 
     # Creation of the Rule
     rule = iptc.Rule(chain=chain)
@@ -125,6 +128,8 @@ def main(interval, chain_name, jump, source, destination,
     # Add the Target
     rule.create_target('' if jump is None else jump)
     chain.insert_rule(rule)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Added iptables rule for monitoring")
 
     # Save the first stats for computing the rate
     mutex = threading.Lock()

@@ -33,8 +33,10 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Oumaima ZERROUQ <oumaima.zerrouq@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
+import sys
 import syslog
 import argparse
 import ipaddress
@@ -48,9 +50,11 @@ def main(net_name, address, password, RCfile):
             '/opt/openbach/agent/jobs/net_create/'
             'net_create_rstats_filter.conf')
     if not success:
-        return
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
-    collect_agent.send_log(syslog.LOG_DEBUG, 'Stating net_create')
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job net_create')
 
     # Define variable net for pool address allocation
     net = address.rsplit('.', 1)
@@ -93,7 +97,9 @@ resources:
                         .format(password, net_name, RCfile), shell=True,
                         executable='/bin/bash')
     except Exception as ex:
-        collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
+        message = 'ERROR: {}'.format(ex)
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
 
 if __name__ == '__main__':

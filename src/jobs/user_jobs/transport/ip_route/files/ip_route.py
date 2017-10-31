@@ -33,8 +33,10 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Oumaima ZERROUQ <oumaima.zerrouq@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
+import sys
 import syslog
 import argparse
 import ipaddress
@@ -49,9 +51,11 @@ def main(destination_ip, subnet_mask, gateway_ip,
             '/opt/openbach/agent/jobs/ip_route/'
             'ip_route_rstats_filter.conf')
     if not success:
-        return
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
-    collect_agent.send_log(syslog.LOG_ERR, 'Starting ip_route')
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job ip_route')
 
     # Adding a new variable 'action' for the addition/deletion of a route
     action_message = 'added' if action == 1 else 'deleted'
@@ -69,11 +73,13 @@ def main(destination_ip, subnet_mask, gateway_ip,
     try:
         subprocess.check_call(command)
     except Exception as ex:
-        collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
+        message = 'ERROR: {}'.format(ex)
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
     else:
         collect_agent.send_log(
                 syslog.LOG_DEBUG,
-                'New {}route {}'.format(default_message, action_message))
+                'New {} route {}'.format(default_message, action_message))
 
 
 if __name__ == '__main__':

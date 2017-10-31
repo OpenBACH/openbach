@@ -33,8 +33,10 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Oumaima ZERROUQ <oumaima.zerrouq@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
+import sys
 import syslog
 import argparse
 import subprocess
@@ -47,9 +49,11 @@ def main(stack_name, flavor, image_id, network, password, RCfile):
             '/opt/openbach/agent/jobs/stack_create/'
             'stack_create_rstats_filter.conf')
     if not success:
-        return
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
-    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting stack_create')
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job stack_create')
 
     # Create var nets for adding networks
     text = '- network: {}'.format
@@ -78,7 +82,9 @@ resources:
                         shell=True, executable='/bin/bash')
         collect_agent.send_log(syslog.LOG_DEBUG, 'New stack added')
     except Exception as ex:
-        collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
+        message = 'ERROR: {}'.format(ex)
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
 
 if __name__ == '__main__':

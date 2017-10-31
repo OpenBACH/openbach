@@ -33,20 +33,39 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
+import syslog
 import argparse
 import subprocess
+import collect_agent
 
 
 def main(size, disable_pacing):
-    cmd = 'sysctl net.ipv4.tcp_smart_iw={}'.format(size)
-    subprocess.run(cmd, shell=True)
+    # Connect to collect agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/smart_iw/'
+            'smart_iw_rstats_filter.conf')
+    if not success:
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job smart_iw")
+
+    cmd = ['sysctl', 'net.ipv4.tcp_smart_iw={}'.format(size)]
+    rc = subprocess.call(cmd)
+    if rc:
+        message = "WARNING \'{}\' exited with non-zero code".format(
+                ' '.join(cmd))
 
     pacing = 1 if disable_pacing else 0
-    cmd = 'sysctl net.ipv4.tcp_disable_pacing={}'.format(pacing)
-    subprocess.run(cmd, shell=True)
+    cmd = ['sysctl', 'net.ipv4.tcp_disable_pacing={}'.format(pacing)]
+    rc = subprocess.call(cmd)
+    if rc:
+        message = "WARNING \'{}\' exited with non-zero code".format(
+                ' '.join(cmd))
 
 
 if __name__ == "__main__":

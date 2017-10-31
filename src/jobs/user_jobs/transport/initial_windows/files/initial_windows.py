@@ -33,20 +33,37 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
+import syslog
 import argparse
 import subprocess
 
+import collect_agent
 
 def main(network, gw, interface, initcwnd, initrwnd):
+    # Connect to collect agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/initial_windows/'
+            'initial_windows_rstats_filter.conf')
+    if not success:
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job initial_windows")
+
     cmd = [
             'ip', 'route', 'change', network,
             'via', gw, 'dev', interface,
             'initcwnd', str(initcwnd), 'initrwnd', str(initrwnd),
     ]
-    subprocess.run(cmd)
+    p = subprocess.run(cmd)
+    if p.returncode:
+        message = 'WARNING: \'{}\' exited with non-zero code'.format(
+                ' '.join(cmd))
 
 
 if __name__ == "__main__":

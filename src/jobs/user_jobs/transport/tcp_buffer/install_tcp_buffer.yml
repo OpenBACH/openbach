@@ -40,3 +40,4 @@
   with_items:
     - { file: 'tcp_buffer.py', mode: '0755' }
     - { file: 'tcp_buffer.help', mode: '0644' }
+    - { file: 'tcp_buffer_rstats_filter.conf', mode: '0644' }

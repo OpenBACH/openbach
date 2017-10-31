@@ -34,6 +34,7 @@ __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * David PRADAS <david.pradas@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 import os
@@ -73,6 +74,32 @@ def watch(fn):
 
 
 def main(path, port, interval):
+    # Connect to the Agent collecting service
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/tcpprobe_monitoring/'
+            'tcpprobe_monitoring_rstats_filter.conf')
+    if not success:
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job'
+            ' tcpprobe_monitoring')
+
+    # Build stat names
+    stats_list = [
+            'cwnd_monitoring',
+            'ssthresh_monitoring',
+            'sndwnd_monitoring',
+            'rtt_monitoring',
+            'rcvwnd_monitoring',
+    ]
+
+    collect_agent.send_log(
+            syslog.LOG_DEBUG,
+            'DEBUG: the following stats have been '
+            'built --> {}'.format(stats_list))
+
     # Monitoring setup
     cmd = (
             'insmod /opt/openbach/agent/jobs/tcpprobe_monitoring/'
@@ -91,26 +118,7 @@ def main(path, port, interval):
     cmd += ' /var/run/tcpprobe_monitoring.pid'
     os.system(cmd)
 
-    # Build stat names
-    stats_list = [
-            'cwnd_monitoring',
-            'ssthresh_monitoring',
-            'sndwnd_monitoring',
-            'rtt_monitoring',
-            'rcvwnd_monitoring',
-    ]
-
-    collect_agent.send_log(
-            syslog.LOG_DEBUG,
-            'DEBUG: the following stats have been '
-            'built --> {}'.format(stats_list))
-
-    # Connect to the Agent collecting service
-    success = collect_agent.register_collect(
-            '/opt/openbach/agent/jobs/tcpprobe_monitoring/'
-            'tcpprobe_monitoring_rstats_filter.conf')
-    if not success:
-        return
+    collect_agent.send_log(syslog.LOG_DEBUG, "Finished setting up probe")
 
     for i, row in enumerate(watch(path)):
         if i % interval == 0:
@@ -130,10 +138,9 @@ def main(path, port, interval):
                             rtt_monitoring=data[9],
                             rcvwnd_monitoring=data[10],)
                 except Exception as connection_err:
-                    collect_agent.send_log(
-                            syslog.LOG_ERR,
-                            'ERROR: {}'.format(connection_err))
-                    return
+                    message = 'ERROR: {}'.format(connection_err)
+                    collect_agent.send_log( syslog.LOG_ERR, message)
+                    exit(message)
 
 
 if __name__ == '__main__':

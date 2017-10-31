@@ -33,15 +33,30 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
 import os
+import sys
+import syslog
 import argparse
 import subprocess
+import collect_agent
 
 
 def main(port):
+    # Connect to collect-agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/http2_server/'
+            'http2_server_rstats_filter.conf')
+    if not success:
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job http2_server")
+
     # need to change dir in order to access all the content/files of server
     os.chdir('/opt/openbach/agent/jobs/http2_server/')
     subprocess.call(['nghttpd', str(port), '--no-tls'])

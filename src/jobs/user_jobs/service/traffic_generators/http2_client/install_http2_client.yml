@@ -96,3 +96,4 @@
   with_items:
     - { name: 'http2_client.py', mode: '0755' }
     - { name: 'http2_client.help', mode: '0644' }
+    - { name: 'http2_client_rstats_filter.conf', mode: '0644' }

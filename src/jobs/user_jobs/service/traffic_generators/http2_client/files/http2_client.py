@@ -33,10 +33,12 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
 import sys
+import syslog
 import time
 import signal
 import random
@@ -45,6 +47,7 @@ from subprocess import call
 from functools import partial
 from Queue import Queue, Empty
 from threading import Thread, Event
+import collect_agent
 
 
 def signal_term_handler(stop_event, signal, frame):
@@ -74,6 +77,16 @@ def get_url(server_address, page):
 
 
 def main(server_address, lambd, sim_t, n_req, page):
+    # Connect to collect agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/http2_client/'
+            'http2_client_rstats_filter.conf')
+    if not success:
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job http2_client')
+
     q = Queue()
     stop_event = Event()
 

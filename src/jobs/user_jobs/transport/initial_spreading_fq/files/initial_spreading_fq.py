@@ -33,24 +33,49 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
+import syslog
 import argparse
 import subprocess
-
+import collect_agent
 
 def main(rate, interfaces, disable_pacing):
-    cmd = 'sysctl net.ipv4.tcp_initial_spreading_rate_min={}'.format(rate)
-    subprocess.run(cmd, shell=True)
+    # Connect to collect_agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/initial_spreading_fq/'
+            'initial_spreading_fq_rstats_filter.conf')
+    if not success:
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job '
+            'initial_spreading_fq')
 
+    # Set spreading rate
+    cmd = ['sysctl', 'net.ipv4.tcp_initial_spreading_rate_min={}'.format(rate)]
+    p = subprocess.run(cmd)
+    if p.returncode:
+        message = 'WARNING: \'{}\' returned non-zero code'.format(' '.join(cmd))
+        collect_agent.send_log(syslog.LOG_WARNING, message)
+
+    # Add FQ tc on interfaces
     for interface in interfaces:
-        cmd = 'tc qdisc add dev {} root fq'.format(interface)
-        subprocess.run(cmd, shell=True)
+        cmd = ['tc', 'qdisc', 'add', 'dev', interface, 'root', 'fq']
+        p = subprocess.run(cmd)
+        if p.returncode:
+            message = 'WARNING: \'{}\' returned non-zero code'.format(' '.join(cmd))
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
+    # Enable or disable pacing
     pacing = 1 if disable_pacing else 0
-    cmd = 'sysctl net.ipv4.tcp_disable_pacing={}'.format(pacing)
-    subprocess.run(cmd, shell=True)
+    cmd = ['sysctl', 'net.ipv4.tcp_disable_pacing={}'.format(pacing)]
+    p = subprocess.run(cmd)
+    if p.returncode:
+        message = 'WARNING: \'{}\' returned non-zero code'.format(' '.join(cmd))
+        collect_agent.send_log(syslog.LOG_WARNING, message)
 
 
 if __name__ == '__main__':
@@ -63,7 +88,8 @@ if __name__ == '__main__':
             help='Tcp initial spreading minimal rate')
     parser.add_argument(
             'interfaces', type=str, nargs='+',
-            help='The interfaces where the initial spreading fq is set')
+            help='The interfaces, separated by spaces, where'
+            ' the initial spreading fq is set')
     parser.add_argument(
             '-d', '--disable-pacing', action='store_true',
             help='Disable pacing')

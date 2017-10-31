@@ -76,41 +76,42 @@ def main(server, dest, port, fn, measure_t, create_f):
         message = 'ERROR connecting to collect-agent'
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
-    
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job socat")
+
     # Verify arguments
     if server:
         if not port:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing port"
-                                   " parameter")
-            quit(1)
+            message = "ERROR missing port parameter"
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
         if not fn:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing file"
-                                   " parameter")
-            quit(1)
+            message = "ERROR missing file parameter"
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
     else:
         if not dest:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing dest"
-                                   " parameter")
-            quit(1)
+            message = "ERROR missing dest parameter"
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
         if not port:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR missing port"
-                                   " parameter")
-            quit(1)
+            message = "ERROR missing port parameter"
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
 
     # Create file if necessary
     if server and create_f:
         # get file size from name
         size = get_file_size(fn)
         if not size:
-            collect_agent.send_log(syslog.LOG_ERR, "ERROR wrong file"
-                                   " name")
-            quit(1)
+            message = "ERROR wrong file name"
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
         cmd = ['dd', 'if=/dev/zero', 'of={}'.format(TMP_FILENAME),
                'bs=1', 'count={}'.format(size)]
         p = subprocess.run(cmd)
         if p.returncode != 0:
-            collect_agent.send_log(syslog.LOG_WARNING, "Wrong return code"
-                                   " when creating file")
+            message = "WARNING wrong return code when creating file"
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
     if server:
         cmd = ['socat', 'TCP-LISTEN:{},reuseaddr,fork,crlf'.format(port),
@@ -126,9 +127,9 @@ def main(server, dest, port, fn, measure_t, create_f):
                           stdin=subprocess.PIPE,
                           stderr=subprocess.PIPE)
     except Exception as ex:
-        collect_agent.send_log(
-                syslog.LOG_ERR,
-                'ERROR executing socat: {}'.format(ex))
+        message = "ERROR executing socat: {}".format(ex)
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(mesage)
     
     # Check if file is correct
     all_ok = True

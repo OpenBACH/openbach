@@ -61,7 +61,7 @@ def sysctl_command(command, debug_log):
         collect_agent.send_log(syslog.LOG_DEBUG, debug_log)
     except Exception as ex:
         collect_agent.send_log(
-                syslog.LOG_ERR,
+                syslog.LOG_WARNING,
                 'ERROR modifying sysctl {}'.format(ex))
 
 
@@ -71,6 +71,8 @@ def main(ifaces, enable, checksum, syn_retries, path_manager, scheduler):
             'mptcp_rstats_filter.conf')
     if not success:
         exit_with_message('Error connecting to collect_agent')
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job mptcp")
 
     # Check if valid scheduler and path_manager values
     if path_manager and (path_manager not in PATH_MANAGERS):

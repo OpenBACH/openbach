@@ -40,3 +40,4 @@
   with_items:
     - { file: 'smart_iw.py', mode: '0755' }
     - { file: 'smart_iw.help', mode: '0644' }
+    - { file: 'smart_iw_rstats_filter.conf', mode: '0644' }

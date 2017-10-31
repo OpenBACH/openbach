@@ -34,9 +34,10 @@ __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * David PRADAS <david.pradas@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
 import time
 import syslog
 import argparse
@@ -55,6 +56,7 @@ def handle_exception(exception, timestamp):
     message = 'ERROR: {}'.format(exception)
     collect_agent.send_stat(timestamp, status=message)
     collect_agent.send_log(syslog.LOG_ERR, message)
+    return message
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl):
@@ -69,7 +71,11 @@ def main(destination_ip, count, interval, interface, packetsize, ttl):
             '/opt/openbach/agent/jobs/fping/'
             'fping_rstats_filter.conf')
     if not success:
-        return
+        message = "ERROR connecting to collect-agent"
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job fping')
 
     # persitent jobs that only finishes when it is stopped by OpenBACH
     while True:
@@ -79,14 +85,14 @@ def main(destination_ip, count, interval, interface, packetsize, ttl):
         except subprocess.CalledProcessError as ex:
             if ex.returncode in (-15, -9):
                 continue
-            handle_exception(ex, timestamp)
-            return
+            message = handle_exception(ex, timestamp)
+            sys.exit(message)
         try:
             output = output.strip().decode()
             rtt_data = output.split(':')[-1].split('=')[-1].split('/')[1]
         except IndexError as ex:
-            handle_exception(ex, timestamp)
-            return
+            message = handle_exception(ex, timestamp)
+            sys.exit(message)
         collect_agent.send_stat(timestamp, rtt=rtt_data)
 
 

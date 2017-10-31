@@ -95,6 +95,7 @@
   copy: src={{ item.name }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { name: 'http2_server.help', mode: '0644' }
+    - { name: 'http2_server_rstats_filter.conf', mode: '0644' }
     - { name: 'http2_server.py', mode: '0755' }
   
 - name: Install HTTP2 Server

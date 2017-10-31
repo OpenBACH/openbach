@@ -33,28 +33,44 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
-
+import sys
+import syslog
 import argparse
 import subprocess
 
+import collect_agent
 
 def main(mode, interval, length, port, udp, bandwidth, time):
-    cmd = 'iperf {}'.format(mode)
+    # Connect to collect agent
+    success = collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/iperf/'
+            'iperf_rstats_filter.conf')
+    if not success:
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job iperf')
+
+    cmd = ['iperf'] + mode
     if interval:
-        cmd = '{} -i {}'.format(cmd, interval)
+        cmd += ['-i', str(interval)]
     if length:
-        cmd = '{} -l {}'.format(cmd, length)
+        cmd += ['-l', str(length)]
     if port:
-        cmd = '{} -p {}'.format(cmd, port)
+        cmd += ['-p', str(port)]
     if udp:
-        cmd = '{} -u'.format(cmd)
-    if mode.startswith('-c') and udp and bandwidth is not None:
-        cmd = '{} -b {}'.format(cmd, bandwidth)
-    if mode.startswith('-c') and time is not None:
-        cmd = '{} -t {}'.format(cmd, time)
-    subprocess.run(cmd, shell=True)
+        cmd += ['-u']
+    if mode[0] == '-c' and udp and bandwidth is not None:
+        cmd += ['-b', str(bandwidth)]
+    if mode[0] == '-c' and time is not None:
+        cmd += ['-t', str(time)]
+    p = subprocess.run(cmd)
+    if p.returncode:
+        message = 'WARNING: \'{}\' exited with non-zero code'.format(
+                ' '.join(cmd))
 
 
 if __name__ == "__main__":
@@ -96,7 +112,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     server = args.server
     client = args.client
-    mode = '-s' if server else '-c {}'.format(client)
+    mode = ['-s'] if server else ['-c', str(client)]
     interval = args.interval
     length = args.length
     port = args.port

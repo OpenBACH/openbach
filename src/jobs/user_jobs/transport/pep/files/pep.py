@@ -39,41 +39,69 @@ import argparse
 import subprocess
 import syslog
 import collect_agent
-
+import sys
 
 def set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=False):
     # Set (or unset) routing configuration for PEPSal
-    cmd = 'ip rule {} fwmark {} lookup {}'.format('del' if unset else 'add',
-                                                   mark, table_num)
-    p = subprocess.Popen(cmd, shell=True)
-    p.wait()
+    cmd = [
+            'ip', 'rule', 'del' if unset else 'add',
+            'fwmark', str(mark), 'lookup', str(table_num)
+    ]
+    rc = subprocess.call(cmd)
+    if rc:
+        message = "WARNING \'{}\' exited with non-zero code".format(
+                ' '.join(cmd))
+        collect_agent.send_log(syslog.LOG_WARNING, message)
 
-    cmd = 'ip route {} local 0.0.0.0/0 dev lo table {}'.format('del' if unset
-                                                                else 'add',
-                                                               table_num)
-    p = subprocess.Popen(cmd, shell=True)
-    p.wait()
+    cmd = [
+            'ip', 'route', 'del' if unset else 'add',
+            'local', '0.0.0.0/0', 'dev', 'lo', 'table',
+            str(table_num)
+    ]
+    rc = subprocess.call(cmd)
+    if rc:
+        message = "WARNING \'{}\' exited with non-zero code".format(
+                ' '.join(cmd))
+        collect_agent.send_log(syslog.LOG_WARNING, message)
 
     for iface in ifaces:
-        cmd = 'iptables {} PREROUTING -t mangle -p tcp -i {}'
-        cmd += ' -j TPROXY --on-port {} --tproxy-mark {}'
-        cmd = cmd.format('-D' if unset else '-A', iface, port, mark)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
+        cmd = [
+                'iptables', '-D' if unset else '-A',
+                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
+                '-i', str(iface), '-j', 'TPROXY', '--on-port',
+                str(port), '--tproxy-mark', str(mark)
+        ]
+        rc = subprocess.call(cmd)
+        if rc:
+            message = "WARNING \'{}\' exited with non-zero code".format(
+                    ' '.join(cmd))
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
     for ip in src_ip:
-        cmd = 'iptables {} PREROUTING -t mangle -p tcp -s {}'
-        cmd += ' -j TPROXY --on-port {} --tproxy-mark {}'
-        cmd = cmd.format('-D' if unset else '-A', ip, port, mark)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
+        cmd = [
+                'iptables', '-D' if unset else '-A',
+                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
+                '-s', str(ip), '-j', 'TPROXY', '--on-port',
+                str(port), '--tproxy-mark', str(mark)
+        ]
+        rc = subprocess.call(cmd)
+        if rc:
+            message = "WARNING \'{}\' exited with non-zero code".format(
+                    ' '.join(cmd))
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
     for ip in dst_ip:
-        cmd = 'iptables {} PREROUTING -t mangle -p tcp -d {}'
-        cmd += ' -j TPROXY --on-port {} --tproxy-mark {}'
-        cmd = cmd.format('-D' if unset else '-A', ip, port, mark)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
+        cmd = [
+                'iptables', '-D' if unset else '-A',
+                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
+                '-d', str(ip), '-j', 'TPROXY', '--on-port',
+                str(port), '--tproxy-mark', str(mark)
+        ]
+        rc = subprocess.call(cmd)
+        if rc:
+            message = "WARNING \'{}\' exited with non-zero code".format(
+                    ' '.join(cmd))
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
 def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,
          gcc_interval, log_file, pending_time, mark, table_num):
@@ -83,7 +111,9 @@ def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,
         message = 'ERROR connecting to collect-agent'
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
-        
+    
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job pep')
+
     if stop:
         # unset routing configuration
         set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=True)
@@ -102,13 +132,17 @@ def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,
                 
 
         # lauch pepsal
-        cmd = 'pepsal {} -p {} -a {} -c {} -g {} -l {} -t {}'.format(fopen, port,
-                                                                     addr, maxconns,
-                                                                    gcc_interval,
-                                                                     log_file,
-                                                                     pending_time)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
+        cmd = [
+                'pepsal', str(fopen), '-p', str(port),
+                '-a', str(addr), '-c', str(maxconns),
+                '-g', str(gcc_interval), '-l', str(log_file),
+                '-t', str(pending_time)
+        ]
+        rc = subprocess.call(cmd)
+        if rc:
+            message = "WARNING \'{}\' exited with non-zero code".format(
+                    ' '.join(cmd))
+            collect_agent.send_log(syslog.LOG_WARNING, message)
 
 if __name__ == "__main__":
     # Define Usage

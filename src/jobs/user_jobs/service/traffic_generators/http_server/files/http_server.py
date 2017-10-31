@@ -33,6 +33,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * David PRADAS <david.pradas@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -42,6 +43,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import argparse
 import os
+import sys
 import syslog
 import collect_agent
 
@@ -83,7 +85,8 @@ def main(port):
     if not success:
         message = 'ERROR connecting to collect-agent'
         collect_agent.send_log(syslog.LOG_ERR, message)
-        exit(message)
+        sys.exit(message)
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job http_server")
 
     httpd = PoolHTTPServer(('', port), RandomHTTPRequestHandler)
     httpd.serve_forever()

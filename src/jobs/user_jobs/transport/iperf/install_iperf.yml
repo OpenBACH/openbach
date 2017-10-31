@@ -43,4 +43,5 @@
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'iperf.help', mode: '0644' }
+    - { file: 'iperf_rstats_filter.conf', mode: '0644' }
     - { file: 'iperf.py', mode: '0755' }

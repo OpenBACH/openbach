@@ -40,3 +40,4 @@
   with_items:
     - { file: 'initial_windows.py', mode: '0755' }
     - { file: 'initial_windows.help', mode: '0644' }
+    - { file: 'initial_windows_rstats_filter.conf', mode: '0644' }

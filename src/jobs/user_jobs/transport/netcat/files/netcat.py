@@ -35,6 +35,7 @@ __credits__ = '''Contributors:
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
 '''
 
+import sys
 import time
 import syslog
 import argparse
@@ -52,7 +53,9 @@ def main(mode, port, persist, measure_t, filename, n_times):
     if not success:
         message = 'ERROR connecting to collect-agent'
         collect_agent.send_log(syslog.LOG_ERR, message)
-        exit(message)
+        sys.exit(message)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job netcat")
 
     cmd = ['nc', mode, str(port)]
     if persist:

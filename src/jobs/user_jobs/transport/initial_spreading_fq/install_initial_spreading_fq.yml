@@ -40,3 +40,4 @@
   with_items:
     - { file: 'initial_spreading_fq.py', mode: '0755' }
     - { file: 'initial_spreading_fq.help', mode: '0644' }
+    - { file: 'initial_spreading_fq_rstats_filter.conf', mode: '0644' }

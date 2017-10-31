@@ -6,7 +6,7 @@ general:
       This Job enables you to create a network with specific propreties.
 
   job_version:     0.1
-  keywords:        [net_create]
+  keywords:        [net_create, admin]
   persistent:      false
 
 platform_configuration:

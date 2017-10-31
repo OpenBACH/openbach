@@ -33,8 +33,10 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Oumaima ZERROUQ <oumaima.zerrouq@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
+import sys
 import syslog
 import argparse
 import ipaddress
@@ -48,9 +50,11 @@ def main(interface_name, ip_address, action):
             '/opt/openbach/agent/jobs/ifconfig/'
             'ifconfig_rstats_filter.conf')     
     if not success:
-        return
+        message = 'ERROR connecting to collect-agent'
+        collect_agent.send_log(syslog.LOG_ERR, message)
+        sys.exit(message)
 
-    collect_agent.send_log(syslog.LOG_ERR, 'Starting ifconfig job')
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting ifconfig job')
 
     if action == 1:
         # Add an ip add
@@ -58,7 +62,9 @@ def main(interface_name, ip_address, action):
             subprocess.check_call(['ifconfig', interface_name, ip_address])
             collect_agent.send_log(syslog.LOG_DEBUG, 'New ip address added')
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
+            message = 'ERROR {}'.format(ex)
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
 
         with open('/etc/network/interfaces') as interfaces:
             content = interfaces.readlines()
@@ -96,7 +102,9 @@ def main(interface_name, ip_address, action):
             subprocess.check_call(['ifconfig', interface_name, '0'])
             collect_agent.send_log(syslog.LOG_DEBUG, 'ip address deleted')
         except Exception as ex:
-            collect_agent.send_log(syslog.LOG_ERR, 'ERROR {}'.format(ex))
+            message = 'ERROR {}'.format(ex)
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
 
 
 if __name__ == '__main__':

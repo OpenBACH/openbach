@@ -2251,7 +2251,13 @@ class OpenbachFunctionThread(threading.Thread):
                     # and the path is not taken
                     return
                 self.waited_ids.remove(id_)
+                if self._stopped.is_set():
+                    self.openbach_function.set_status('Stopped')
+                    return
         time.sleep(self.openbach_function.openbach_function.wait_time)
+        if self._stopped.is_set():
+            self.openbach_function.set_status('Stopped')
+            return
         try:
             threads = self._run_openbach_function()
         except errors.ConductorWarning as error:
@@ -2289,7 +2295,8 @@ class OpenbachFunctionThread(threading.Thread):
         action = self.action(**arguments)
         if owner is not None:
             action.connected_user = owner
-        return action.openbach_function(self.openbach_function)
+        if not self._stopped.is_set():
+            return action.openbach_function(self.openbach_function)
 
     def _stop_scenario(self, error):
         scenario_id = self.openbach_function.scenario_instance.id
@@ -2327,9 +2334,10 @@ class StartJobInstanceThread(OpenbachFunctionThread):
         action = StartJobInstance(address=entity.agent.address, **arguments)
         if owner is not None:
             action.connected_user = owner
-        return action.openbach_function(
-                self.openbach_function,
-                self.wait_for_finished_queues)
+        if not self._stopped.is_set():
+            return action.openbach_function(
+                    self.openbach_function,
+                    self.wait_for_finished_queues)
 
 
 class IfThread(OpenbachFunctionThread):
@@ -2355,7 +2363,7 @@ class WhileThread(OpenbachFunctionThread):
         condition = arguments['condition']
         on_true_ids = arguments['on_true']
         on_true = [self._table[id]['queue'] for id in on_true_ids]
-        while condition.get_value(scenario.id, scenario.parameters):
+        while condition.get_value(scenario.id, scenario.parameters) and not self._stopped.is_set():
             for waiting_queue in on_true:
                 waiting_queue.put(instance_id)
             for thread in ThreadManager().get_threads(scenario.id, on_true_ids):
@@ -2372,6 +2380,8 @@ class WhileThread(OpenbachFunctionThread):
                 }
                 new_thread = create_thread(thread.openbach_function, table)
                 ThreadManager().add_and_launch(new_thread, scenario.id, new_thread.instance_id)
+        if self._stopped.is_set():
+            return
         for waiting_queue in on_true:
             waiting_queue.put(None)
         for id in arguments['on_false']:
@@ -2989,6 +2999,8 @@ def status_manager(job_instance_id, scenario_instance_id, username):
         stop_scenario = StopScenarioInstance(scenario_instance_id)
         job_status_manager.share_user(stop_scenario)
         stop_scenario.action()
+        scenario = stop_scenario.get_scenario_instance_or_not_found_error()
+        scenario.stop(stop_status='Finished KO')
     si_id = WaitingQueueManager().remove_job(job_instance_id)
     assert scenario_instance_id == si_id
     scenario_instance = ScenarioInstance.objects.get(id=si_id)

@@ -2430,9 +2430,6 @@ class ProjectAction(ConductorAction):
     def _build_topology(self):
         project = self.get_project_or_not_found_error()
 
-        # Cleanup old networks
-        project.networks.all().delete()
-
         # Gather facts for all Agents
         addresses = [
                 entity.agent.address for entity in
@@ -2461,11 +2458,14 @@ class ProjectAction(ConductorAction):
         }
         # Associate Networks to Entities
         for agent_ip, network_names in topology.items():
-            networks = [
-                    Network.objects.get_or_create(name=network, project=project)[0]
-                    for network in network_names if network not in hidden_networks
-            ]
             entity = project.entities.get(agent__address=agent_ip)
+            networks = [
+                    Network.objects.get_or_create(
+                        address=network, project=project,
+                        defaults={'name': network})[0]
+                    for network in network_names
+                    if network not in hidden_networks
+            ]
             entity.networks.set(networks)
 
 
@@ -2557,6 +2557,24 @@ class ListProjects(ProjectAction):
             with suppress(errors.ForbiddenError):
                 self._assert_user_in(project.owners.all())
                 yield project.json
+
+
+class ModifyNetworks(ProjectAction):
+    """Action responsible for modifying an existing Entity"""
+
+    def __init__(self, name, json_data):
+        super().__init__(name=name, json_data=json_data)
+
+    @require_connected_user()
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        for network in self.json_data:
+            with suppress(KeyError, Network.DoesNotExist):
+                network_obj = Network.objects.get(address=network['address'], project=project)
+                network_obj.name = network['name']
+                network_obj.save()
+        return project.json, 200
 
 
 ##########

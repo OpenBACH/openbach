@@ -33,6 +33,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -725,6 +726,10 @@ class ProjectView(GenericView):
     
     def post(self, request, project_name):
         """refresh a project's network topology"""
+        if request.JSON:
+            return self.conductor_execute(
+                    command='modify_networks', name=project_name,
+                    json_data=request.JSON.get('networks', []))
         return self.conductor_execute(
                 command='refresh_topology_project', name=project_name)
 

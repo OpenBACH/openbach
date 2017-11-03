@@ -33,6 +33,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * David PRADAS <david.pradas@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -43,7 +44,7 @@ import syslog
 import argparse
 from sys import exit
 from functools import partial
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from urllib.parse import urljoin
 from threading import Thread, Event
 
@@ -173,10 +174,14 @@ def main(server_address, port, mode, lambd, sim_t, n_req, page, measure):
     # previous one has already been received
     elif mode == 0:
         init_time = time.perf_counter()
-        for _ in range(n_req):
-            if round(time.perf_counter() - init_time, 3) > sim_t:
-                break
-            get_url(server_address, port, page, measure)
+        if not n_req:
+            while True:
+                if round(time.perf_counter() - init_time) > sim_t:
+                    break
+                get_url(server_address, port, page, measure)
+        else:
+            for _ in range(n_req):
+                get_url(server_address, page)
     else:
         collect_agent.send_log(
                 syslog.LOG_ERR,

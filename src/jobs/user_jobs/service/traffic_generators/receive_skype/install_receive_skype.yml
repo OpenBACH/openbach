@@ -48,7 +48,7 @@
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
  
 - name: Install receive_skype
-  copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'receive_skype.help', mode: '0644' }
     - { file: 'receive_skype.py', mode: '0755' }

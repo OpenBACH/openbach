@@ -65,6 +65,7 @@ def monitor(chain, mutex, previous):
     rule = chain.rules[0]
 
     # Get the stats
+    now = int(time.time() * 1000)
     timestamp = int(time.perf_counter() * 1000)
     bytes_count = rule.get_counters()[1]
 
@@ -77,7 +78,7 @@ def monitor(chain, mutex, previous):
     rate = (bytes_count - previous_bytes_count) * 8 / diff_timestamp
 
     # Send the stat to the Collector
-    collect_agent.send_stat(timestamp, rate=rate)
+    collect_agent.send_stat(now, rate=rate)
 
 
 def main(interval, chain_name, jump, source, destination,

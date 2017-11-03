@@ -45,7 +45,7 @@ import random
 import argparse
 from subprocess import call
 from functools import partial
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from threading import Thread, Event
 import collect_agent
 

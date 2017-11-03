@@ -42,7 +42,7 @@ import time
 import syslog
 import argparse
 import subprocess
-
+from statistics import mean
 import collect_agent
 
 
@@ -59,9 +59,12 @@ def handle_exception(exception, timestamp):
     return message
 
 
-def main(destination_ip, count, interval, interface, packetsize, ttl):
+def main(destination_ip, count, interval, interface, packetsize, ttl, n_mean):
     cmd = ['fping', destination_ip]
-    cmd.extend(command_line_flag_for_argument(count, '-c'))
+    if count == 0:
+        cmd += ['-l']
+    else:
+        cmd += ['-c', str(count)]
     cmd.extend(command_line_flag_for_argument(interval, '-i'))
     cmd.extend(command_line_flag_for_argument(interface, '-I'))
     cmd.extend(command_line_flag_for_argument(packetsize, '-s'))
@@ -77,23 +80,30 @@ def main(destination_ip, count, interval, interface, packetsize, ttl):
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job fping')
 
-    # persitent jobs that only finishes when it is stopped by OpenBACH
+    measurements = []
+
+    # launch command
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     while True:
         timestamp = int(time.time() * 1000)
+
+        # read output
+        output = p.stdout.readline().decode()
+        if not output:
+            if p.poll is not None:
+                break
+            continue
+
         try:
-            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as ex:
-            if ex.returncode in (-15, -9):
-                continue
+            rtt_data = float(output.split()[5])
+        except (IndexError, ValueError) as ex:
             message = handle_exception(ex, timestamp)
             sys.exit(message)
-        try:
-            output = output.strip().decode()
-            rtt_data = output.split(':')[-1].split('=')[-1].split('/')[1]
-        except IndexError as ex:
-            message = handle_exception(ex, timestamp)
-            sys.exit(message)
-        collect_agent.send_stat(timestamp, rtt=rtt_data)
+
+        measurements.append(rtt_data)
+        if len(measurements) == n_mean:
+            collect_agent.send_stat(timestamp, rtt=mean(measurements))
+            measurements = []
 
 
 if __name__ == "__main__":
@@ -102,11 +112,12 @@ if __name__ == "__main__":
             description=__doc__,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('destination_ip', help='')
-    parser.add_argument('-c', '--count', type=int, default=3, help='')
+    parser.add_argument('-c', '--count', type=int, default=0, help='')
     parser.add_argument('-i', '--interval', type=int, help='')
     parser.add_argument('-I', '--interface', type=str, help='')
     parser.add_argument('-s', '--packetsize', type=int, help='')
     parser.add_argument('-t', '--ttl', type=int, help='')
+    parser.add_argument('-m', '--mean', type=int, default=1, help='')
 
     # get args
     args = parser.parse_args()
@@ -116,5 +127,6 @@ if __name__ == "__main__":
     interface = args.interface
     packetsize = args.packetsize
     ttl = args.ttl
+    n_mean = args.mean
 
-    main(destination_ip, count, interval, interface, packetsize, ttl)
+    main(destination_ip, count, interval, interface, packetsize, ttl, n_mean)

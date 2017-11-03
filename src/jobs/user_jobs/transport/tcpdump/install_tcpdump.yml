@@ -41,7 +41,7 @@
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
   
 - name: Install tcpdump
-  copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'tcpdump.help', mode: '0644' }
     - { file: 'tcpdump.py', mode: '0755' }

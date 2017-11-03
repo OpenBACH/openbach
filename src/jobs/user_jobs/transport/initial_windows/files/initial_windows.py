@@ -55,11 +55,15 @@ def main(network, gw, interface, initcwnd, initrwnd):
 
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job initial_windows")
 
-    cmd = [
-            'ip', 'route', 'change', network,
-            'via', gw, 'dev', interface,
-            'initcwnd', str(initcwnd), 'initrwnd', str(initrwnd),
-    ]
+    cmd = ['ip', 'route', 'change', network]
+
+    if gw is not None:
+        cmd += ['via', str(gw)]
+    cmd += ['dev', str(interface)]
+    if initcwnd is not None:
+        cmd += ['initcwnd', str(initcwnd)]
+    if initrwnd is not None:
+        cmd += ['initrwnd', str(initrwnd)]
     p = subprocess.run(cmd)
     if p.returncode:
         message = 'WARNING: \'{}\' exited with non-zero code'.format(
@@ -72,10 +76,16 @@ if __name__ == "__main__":
             description=__doc__,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('network', type=str, help='The destination network')
-    parser.add_argument('gw', type=str, help='The next hop of the route')
     parser.add_argument('interface', help='Interface where to set the initial windows')
-    parser.add_argument('initcwnd', type=int, help='Initial congestion window')
-    parser.add_argument('initrwnd', type=int, help='Initial congestion receipt window')
+    parser.add_argument('-g', '--gw', type=str, help='The next hop of the route')
+    parser.add_argument(
+            '-i', '--initcwnd', type=int,
+            help='Initial congestion window'
+    )
+    parser.add_argument(
+            '-r', '--initrwnd', type=int, 
+            help='Initial congestion receipt window'
+    )
 
     # get args
     args = parser.parse_args()

@@ -28,13 +28,19 @@ arguments:
       count:       1
       flag:        '-i'
       description: >
-          Wait interval seconds between sending each packet.
+          Interval, in seconds, between each packet sent (default=1).
     - name:        count
       type:        'int'
       count:       1
       flag:        '-c'
       description: >
-          The job sends an RTT measure every 'count' packets. (default=3)
+          Number of packets to send (default=unlimited).
+    - name:        mean
+      type:        'int'
+      count:       1
+      flag:        '-m'
+      description: >
+          Show the mean RTT of every N packets (default=1).
     - name:        destport
       type:        'int'
       count:       1
@@ -46,4 +52,4 @@ statistics:
     - name:        rtt
       description: >
             The Round trip time of tcp connection (SYN)
-      frequency:   'every *count x interval* seconds (i.e. every *count* packets)'
+      frequency:   'every *mean * interval* seconds'

@@ -59,7 +59,7 @@ def main(interface_name, ip_address, action):
     if action == 1:
         # Add an ip add
         try:
-            subprocess.check_call(['ifconfig', interface_name, ip_address])
+            subprocess.check_call(['ifconfig', interface_name, str(ip_address)])
             collect_agent.send_log(syslog.LOG_DEBUG, 'New ip address added')
         except Exception as ex:
             message = 'ERROR {}'.format(ex)

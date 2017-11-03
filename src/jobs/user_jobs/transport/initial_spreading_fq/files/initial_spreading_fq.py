@@ -55,10 +55,11 @@ def main(rate, interfaces, disable_pacing):
             'initial_spreading_fq')
 
     # Set spreading rate
-    cmd = ['sysctl', 'net.ipv4.tcp_initial_spreading_rate_min={}'.format(rate)]
+    cmd = ['sysctl',  'net.ipv4.tcp_initial_spreading_rate_min={}'.format(rate)]
     p = subprocess.run(cmd)
     if p.returncode:
-        message = 'WARNING: \'{}\' returned non-zero code'.format(' '.join(cmd))
+        message = 'WARNING: \'{}\' returned non-zero code'.format(
+                ' '.join(cmd))
         collect_agent.send_log(syslog.LOG_WARNING, message)
 
     # Add FQ tc on interfaces
@@ -74,7 +75,8 @@ def main(rate, interfaces, disable_pacing):
     cmd = ['sysctl', 'net.ipv4.tcp_disable_pacing={}'.format(pacing)]
     p = subprocess.run(cmd)
     if p.returncode:
-        message = 'WARNING: \'{}\' returned non-zero code'.format(' '.join(cmd))
+        message = 'WARNING: \'{}\' returned non-zero code'.format(
+                ' '.join(cmd))
         collect_agent.send_log(syslog.LOG_WARNING, message)
 
 

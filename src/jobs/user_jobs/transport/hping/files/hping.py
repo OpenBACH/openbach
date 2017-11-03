@@ -41,26 +41,21 @@ import time
 import shlex
 import syslog
 import argparse
-from subprocess import run, PIPE, STDOUT
+from subprocess import Popen, PIPE, STDOUT
+from statistics import mean
 
 import collect_agent
 
 
-def get_simple_cmd_output(cmd, stderr=STDOUT):
-    """Execute a simple external command and get its output"""
-    args = shlex.split(cmd)
-    result = run(args, stdout=PIPE, stderr=stderr)
-    return result.stdout
-
-
-def main(destination_ip, count, interval, destport):
-    cmd = 'hping3 {} -S'.format(destination_ip)
+def main(destination_ip, count, interval, n_mean, destport):
+    cmd = ['stdbuf', '-oL']
+    cmd += ['hping3', str(destination_ip), '-S']
     if destport:
-        cmd = '{} -p {}'.format(cmd, destport)
+        cmd += ['-p', str(destport)]
     if count:
-        cmd = '{} -c {}'.format(cmd, count)
+        cmd += ['-c', str(count)]
     if interval:
-        cmd = '{} -i {}'.format(cmd, interval)
+        cmd += ['-i', str(interval)]
 
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/hping/'
@@ -71,18 +66,40 @@ def main(destination_ip, count, interval, destport):
         sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job hping')
 
-    # persitent jobs that only finishes when it is stopped by OpenBACH
+    measurements = []
+
+    # launch command
+    p = Popen(cmd, stdout=PIPE, stderr=STDOUT)
     while True:
         timestamp = int(time.time() * 1000)
+        rtt_data = None
+
+        # read output
+        output = p.stdout.readline().decode()
+        if not output:
+            if p.poll is not None:
+                break
+            continue
+
         try:
-            output = get_simple_cmd_output(cmd).strip().decode()
-            rtt_data = output.split('\n')[2].split('=')[1].split('/')[1]
+            for col in reversed(output.split()):
+                if not col.startswith('rtt='):
+                    continue
+                rtt_data = float(col.split('=')[1])
+                break
         except Exception as ex:
             message = 'ERROR: {}'.format(ex)
             collect_agent.send_stat(timestamp, status=message)
             collect_agent.send_log(syslog.LOG_ERR, message)
             sys.exit(message)
-        collect_agent.send_stat(timestamp, rtt=rtt_data)
+
+        if rtt_data is None:
+            continue
+
+        measurements.append(rtt_data)
+        if len(measurements) == n_mean:
+            collect_agent.send_stat(timestamp, rtt=mean(measurements))
+            measurements = []
 
 
 if __name__ == "__main__":
@@ -94,8 +111,9 @@ if __name__ == "__main__":
     parser.add_argument(
             '-p', '--destport', type=int, default=443,
             help='destination port for TCP ping')
-    parser.add_argument('-c', '--count', type=int, default=3, help='')
+    parser.add_argument('-c', '--count', type=int, help='')
     parser.add_argument('-i', '--interval', type=int, help='')
+    parser.add_argument('-m', '--mean', type=int, help='', default=1)
 
     # get args
     args = parser.parse_args()
@@ -103,5 +121,6 @@ if __name__ == "__main__":
     destination_ip = args.destination_ip
     count = args.count
     interval = args.interval
+    n_mean = args.mean
 
-    main(destination_ip, count, interval, destport)
+    main(destination_ip, count, interval, n_mean, destport)

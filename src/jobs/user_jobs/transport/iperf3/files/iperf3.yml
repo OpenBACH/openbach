@@ -55,11 +55,11 @@ arguments:
       description: >
           Use UDP rather than TCP
     - name:        bandwidth
-      type:        'float'
+      type:        'str'
       count:       1
       flag:        '-b'
       description: >
-          Set target bandwidth to n bits/sec (default 1 Mbit/sec). This setting
+          Set target bandwidth to n [M/K]bits/sec (default 1 Mbit/sec). This setting
           requires UDP (-u) and client mode.
     - name:        time
       type:        'float'

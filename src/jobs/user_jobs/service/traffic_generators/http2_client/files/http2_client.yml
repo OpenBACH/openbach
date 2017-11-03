@@ -19,10 +19,10 @@ platform_configuration:
 arguments:
   required:
     - name:        server_address
-      type:        'ip'
+      type:        'str'
       count:       1
       description: >
-          The IP address of the server 
+          IPAddress:port of the server 
   optional:
     - name:        lambd
       type:        'float'

@@ -100,8 +100,8 @@ if __name__ == "__main__":
             '-u', '--udp', action='store_true',
             help='Use UDP rather than TCP')
     parser.add_argument(
-            '-b', '--bandwidth', type=float,
-            help='Set target bandwidth to n bits/sec (default '
+            '-b', '--bandwidth', type=str,
+            help='Set target bandwidth to n [M/K]bits/sec (default '
             '1Mbit/sec). This setting requires UDP (-u).')
     parser.add_argument(
             '-t', '--time', type=float,

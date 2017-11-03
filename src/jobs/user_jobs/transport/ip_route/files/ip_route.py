@@ -62,20 +62,34 @@ def main(destination_ip, subnet_mask, gateway_ip,
     default_message = 'default ' if default_gateway == 1 else ''
     command = [
             'route', 'add' if action == 1 else 'del',
-            'default', 'gw', destination_ip, default_gw_name,
+            'default', 'gw', str(destination_ip), default_gw_name,
     ] if default_gateway == 1 else [
             'route', 'add' if action == 1 else 'del',
-            '-net', destination_ip,
-            'netmask', subnet_mask,
-            'gw', gateway_ip,
+            '-net', str(destination_ip),
+            'netmask', str(subnet_mask),
+            'gw', str(gateway_ip),
     ]
 
     try:
-        subprocess.check_call(command)
-    except Exception as ex:
+        p = subprocess.run(command, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as ex:
         message = 'ERROR: {}'.format(ex)
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
+    if p.returncode:
+        if any([
+                err in p.stderr.decode()
+                for err in {'File exists', 'No such process'}
+                ]):
+            message = 'WARNING: {} exited with non-zero return value ({}): {}'.format(
+                command, p.returncode, p.stderr.decode())
+            collect_agent.send_log(syslog.LOG_WARNING, message)
+            sys.exit(0)
+        else:
+            message = 'ERROR: {} exited with non-zero return value ({})'.format(
+                command, p.returncode)
+            collect_agent.send_log(syslog.LOG_ERR, message)
+            sys.exit(message)
     else:
         collect_agent.send_log(
                 syslog.LOG_DEBUG,
@@ -96,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument(
             '-g', '--gateway_ip', type=ipaddress.ip_address,
             help='')
-    parser.add_argument('-a', '--action', type=int, help='')
+    parser.add_argument('-a', '--action', type=int, help='', default=1)
     parser.add_argument('-d', '--default_gateway', type=int, help='')
     parser.add_argument('-b', '--default_gw_name', type=str, help='')
 

@@ -49,9 +49,13 @@ def main(param, value):
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
 
-    try: 
-        cmd = ['sysctl', '{}={}'.format(param, value)]
-        p = subprocess.run(cmd)
+    shell = False
+    cmd = ['sysctl', '{}={}'.format(param, value)]
+    if len(value.split()) > 1:
+        cmd = ' '.join(cmd)
+        shell = True
+    try:
+        p = subprocess.run(cmd, shell=shell)
     except Exception as ex:
         collect_agent.send_log(syslog.LOG_ERR,
                                "ERROR modifying sysctl {}:{}".format(param, ex))

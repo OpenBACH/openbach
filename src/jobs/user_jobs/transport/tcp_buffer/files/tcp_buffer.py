@@ -54,11 +54,10 @@ def main(name, min_size, size, max_size):
         sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job tcp_buffer")
 
-    cmd = ['sysctl', 'net.ipv4.tcp_{}=\'{} {} {}\''.format(name, min_size, size, max_size)]
-    rc = subprocess.call(cmd)
+    cmd = "sysctl net.ipv4.tcp_{}=\'{} {} {}\'".format(name, min_size, size, max_size)
+    rc = subprocess.call(cmd, shell=True)
     if rc:
-        message = "WARNING \'{}\' exited with non-zero code".format(
-                ' '.join(cmd))
+        message = "WARNING \'{}\' exited with non-zero code".format(cmd)
 
 
 if __name__ == "__main__":

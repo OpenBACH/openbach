@@ -53,20 +53,20 @@
   become: yes
 
 - name: Install twinkle conf files
-  copy: src=files/{{ item.file }} dest=/root/.twinkle/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/root/.twinkle/ mode={{ item.mode }}
   with_items:
     - { file: 'twinkle.sys', mode: '0644' }
     - { file: 'openbach.cfg', mode: '0664' }
   become: yes
   
 - name: Install alsa conf file
-  copy: src=files/{{ item.file }} dest=/root/{{ item.dest }} mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/root/{{ item.dest }} mode={{ item.mode }}
   with_items:
     - { file: 'asoundrc', dest: '.asoundrc', mode: '0644' }
   become: yes
   
 - name: Install twinkle_voip
-  copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/twinkle_voip/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/twinkle_voip/ mode={{ item.mode }}
   with_items:
     - { file: 'twinkle_voip.help', mode: '0644' }
     - { file: 'twinkle_voip.py', mode: '0755' }

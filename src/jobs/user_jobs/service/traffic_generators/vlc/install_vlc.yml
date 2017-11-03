@@ -38,7 +38,7 @@
   become: yes
 
 - name: Allow root to run vlc
-  replace: path=/usr/bin/vlc regexp=geteuid replace=getppid
+  replace: destfile=/usr/bin/vlc regexp=geteuid replace=getppid
   become: yes
    
 - name: Create vlc repository
@@ -48,7 +48,7 @@
   get_url: url=http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4 dest=/opt/openbach/agent/jobs/{{ job_name }}/bigbuckbunny.mp4
 
 - name: Install vlc
-  copy: src=files/{{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
+  copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
   with_items:
     - { file: 'vlc.help', mode: '0644' }
     - { file: 'vlc.py', mode: '0755' }

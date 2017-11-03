@@ -70,26 +70,38 @@
     - {name: send_logs, path: /opt/openbach/controller/src/jobs/admin_jobs/send_logs/}
     - {name: send_stats, path: /opt/openbach/controller/src/jobs/admin_jobs/send_stats/}
     - {name: synchronization, path: /opt/openbach/controller/src/jobs/admin_jobs/synchronization/}
-    - {name: rate_monitoring, path: /opt/openbach/controller/src/jobs/user_jobs/network/rate_monitoring/}
-    - {name: post_processing_tcp_pep, path: /opt/openbach/controller/src/jobs/user_jobs/service/post_processing/post_processing_tcp_pep/}
-    - {name: http2_client, path: /opt/openbach/controller/src/jobs/user_jobs/service/traffic_generators/http2_client/}
-    - {name: http2_server, path: /opt/openbach/controller/src/jobs/user_jobs/service/traffic_generators/http2_server/}
-    - {name: http2_client_plt, path: /opt/openbach/controller/src/jobs/user_jobs/service/traffic_generators/http2_client_plt/}
-    - {name: http_client_plt, path: /opt/openbach/controller/src/jobs/user_jobs/service/traffic_generators/http_client_plt/}
-    - {name: http_server, path: /opt/openbach/controller/src/jobs/user_jobs/service/traffic_generators/http_server/}
-    - {name: fping, path: /opt/openbach/controller/src/jobs/user_jobs/transport/fping/}
-    - {name: hping, path: /opt/openbach/controller/src/jobs/user_jobs/transport/hping/}
-    - {name: initial_spreading_fq, path: /opt/openbach/controller/src/jobs/user_jobs/transport/initial_spreading_fq/}
-    - {name: initial_windows, path: /opt/openbach/controller/src/jobs/user_jobs/transport/initial_windows/}
-    - {name: iperf, path: /opt/openbach/controller/src/jobs/user_jobs/transport/iperf/}
-    - {name: pep, path: /opt/openbach/controller/src/jobs/user_jobs/transport/pep/}
-    - {name: smart_iw, path: /opt/openbach/controller/src/jobs/user_jobs/transport/smart_iw/}
-    - {name: tcp_buffer, path: /opt/openbach/controller/src/jobs/user_jobs/transport/tcp_buffer/}
-    - {name: tcpprobe_monitoring, path: /opt/openbach/controller/src/jobs/user_jobs/transport/tcpprobe_monitoring/}
-    - {name: mptcp, path: /opt/openbach/controller/src/jobs/user_jobs/transport/mptcp/}
-    - {name: netcat, path: /opt/openbach/controller/src/jobs/user_jobs/transport/netcat/}
-    - {name: postprocess_stats, path: /opt/openbach/controller/src/jobs/user_jobs/postprocessing/postprocess_stats/}
-    - {name: squid, path: /opt/openbach/controller/src/jobs/user_jobs/transport/squid/}
+    - {name: rate_monitoring, path: /opt/openbach/controller/src/jobs/user_jobs/metrology/core/rate_monitoring/}
+    - {name: post_processing_tcp_pep, path: /opt/openbach/controller/src/jobs/user_jobs/postprocessing/stable/post_processing_tcp_pep/}
+    - {name: http2_client, path: /opt/openbach/controller/src/jobs/user_jobs/service/core/http2_client/}
+    - {name: http2_server, path: /opt/openbach/controller/src/jobs/user_jobs/service/core/http2_server/}
+    - {name: http2_client_plt, path: /opt/openbach/controller/src/jobs/user_jobs/service/core/http2_client_plt/}
+    - {name: http_client_plt, path: /opt/openbach/controller/src/jobs/user_jobs/service/core/http_client_plt/}
+    - {name: http_server, path: /opt/openbach/controller/src/jobs/user_jobs/service/core/http_server/}
+    - {name: fping, path: /opt/openbach/controller/src/jobs/user_jobs/metrology/core/fping/}
+    - {name: hping, path: /opt/openbach/controller/src/jobs/user_jobs/metrology/core/hping/}
+    - {name: initial_spreading_fq, path: /opt/openbach/controller/src/jobs/user_jobs/transport/experimental/initial_spreading_fq/}
+    - {name: initial_windows, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/initial_windows/}
+    - {name: iperf, path: /opt/openbach/controller/src/jobs/user_jobs/transport/core/iperf/}
+    - {name: pep, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/pep/}
+    - {name: smart_iw, path: /opt/openbach/controller/src/jobs/user_jobs/transport/experimental/smart_iw/}
+    - {name: tcp_buffer, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/tcp_buffer/}
+    - {name: tcpprobe_monitoring, path: /opt/openbach/controller/src/jobs/user_jobs/transport/core/tcpprobe_monitoring/}
+    - {name: mptcp, path: /opt/openbach/controller/src/jobs/user_jobs/transport/experimental/mptcp/}
+    - {name: netcat, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/netcat/}
+    - {name: postprocess_stats, path: /opt/openbach/controller/src/jobs/user_jobs/postprocessing/stable/postprocess_stats/}
+    - {name: squid, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/squid/}
+    - {name: socat, path: /opt/openbach/controller/src/jobs/user_jobs/transport/core/socat/}
+    - {name: ifconfig, path: /opt/openbach/controller/src/jobs/user_jobs/network/core/ifconfig/}
+    - {name: ip_route, path: /opt/openbach/controller/src/jobs/user_jobs/network/core/ip_route/}
+    - {name: iperf3, path: /opt/openbach/controller/src/jobs/user_jobs/metrology/core/iperf3/}
+    - {name: net_create, path: /opt/openbach/controller/src/jobs/user_jobs/admin/stable/net_create/}
+    - {name: stack_create, path: /opt/openbach/controller/src/jobs/user_jobs/admin/stable/stack_create/}
+    - {name: sysctl, path: /opt/openbach/controller/src/jobs/user_jobs/admin/stable/sysctl/}
+    - {name: tcpdump, path: /opt/openbach/controller/src/jobs/user_jobs/metrology/core/tcpdump/}
+    - {name: vlc, path: /opt/openbach/controller/src/jobs/user_jobs/service/stable/vlc/}
+    - {name: twinkle_voip, path: /opt/openbach/controller/src/jobs/user_jobs/service/stable/twinkle_voip/}
+    - {name: receive_skype, path: /opt/openbach/controller/src/jobs/user_jobs/service/experimental/receive_skype/}
+    - {name: skype_call, path: /opt/openbach/controller/src/jobs/user_jobs/service/experimental/skype_call/}
     
 - name: Add Collectors into the Backend Database
   uri:

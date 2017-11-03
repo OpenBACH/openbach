@@ -6,11 +6,18 @@ default_jobs:
   - {name: synchronization, path: ../src/jobs/admin_jobs/synchronization}
   - {name: empty_influxdb_db, path: ../src/jobs/admin_jobs/empty_influxdb_db}
   - {name: empty_elasticsearch_db, path: ../src/jobs/admin_jobs/empty_elasticsearch_db}
-  - {name: rate_monitoring, path: ../src/jobs/user_jobs/network/rate_monitoring}
-  - {name: tcpprobe_monitoring, path: ../src/jobs/user_jobs/transport/tcpprobe_monitoring}
-  - {name: iperf, path: ../src/jobs/user_jobs/transport/iperf}
-  - {name: fping, path: ../src/jobs/user_jobs/transport/fping}
-  - {name: hping, path: ../src/jobs/user_jobs/transport/hping}
+  - {name: rate_monitoring, path: ../src/jobs/user_jobs/metrology/core/rate_monitoring}
+  - {name: tcpprobe_monitoring, path: ../src/jobs/user_jobs/transport/core/tcpprobe_monitoring}
+  - {name: iperf, path: ../src/jobs/user_jobs/transport/core/iperf}
+  - {name: fping, path: ../src/jobs/user_jobs/metrology/core/fping}
+  - {name: hping, path: ../src/jobs/user_jobs/metrology/core/hping}
+  - {name: iperf3, path: ../src/jobs/user_jobs/metrology/core/iperf3}
+  - {name: socat, path: ../src/jobs/user_jobs/transport/core/socat}
+  - {name: http_server, path: ../src/jobs/user_jobs/service/core/http_server}
+  - {name: http_client_plt, path: ../src/jobs/user_jobs/service/core/http_client_plt}
+  - {name: http2_server, path: ../src/jobs/user_jobs/service/core/http2_server}
+  - {name: http2_client, path: ../src/jobs/user_jobs/service/core/http2_client}
+  - {name: http2_client_plt, path: ../src/jobs/user_jobs/service/core/http2_client_plt}
 
 default_collector_jobs:
   - {name: empty_influxdb_db, path: ../src/jobs/admin_jobs/empty_influxdb_db/}

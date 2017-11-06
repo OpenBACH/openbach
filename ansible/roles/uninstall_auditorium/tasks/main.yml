@@ -8,14 +8,6 @@
     - grafana-server
   become: yes
 
-- name: Remove Kibana Service File
-  file: path=/etc/systemd/system/kibana.service state=absent
-  become: yes
-
-- name: Remove Kibana Sources
-  file: path=/opt/{{ kibana_filename }} state=absent
-  become: yes
-
 - name: Remove Grafana Config File
   file: path=/etc/grafana/grafana.ini state=absent
   become: yes
@@ -24,6 +16,7 @@
   apt: name={{ item }} state=absent
   with_items:
     - grafana
+    - kibana
   become: yes
 
 - name: Remove Nginx Site

@@ -1,15 +1,21 @@
 #!/bin/bash
 
-PWD=`pwd`
+PWD=$(pwd)
 SCRIPT_DIR=$(dirname -- "$0")
 ACTIVATE_VENV=.ansible_venv/bin/activate
 
 if [ ! -f "${SCRIPT_DIR}/.ansible_venv/bin/ansible-playbook" ]
 then
+  python3 -c "import ensurepip" 2> /dev/null
+  if [ $? -ne 0 ]
+  then
+    echo "You are missing some dependencies to install ansible locally. Asking APT to install them for you..."
+    sudo apt-get install python3-venv
+  fi
   cd -P -- "${SCRIPT_DIR}"
   python3 -m venv .ansible_venv
   source "${ACTIVATE_VENV}"
-  pip install ansible==2.3.2.0 > /dev/null
+  pip install ansible==2.4.1.0 > /dev/null 2>&1
   deactivate
   cd -P -- "${PWD}"
 fi

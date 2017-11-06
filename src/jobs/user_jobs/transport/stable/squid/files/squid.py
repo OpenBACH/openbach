@@ -45,6 +45,7 @@ import shutil
 import enum
 import os.path
 import socket
+import iptc
 
 CURRENT_DIRECTORY=os.path.abspath(os.path.dirname(__file__))
 
@@ -93,10 +94,32 @@ def main(trans_proxy, source_addr, input_iface, non_transp_proxy, path_conf_file
         # Copy squid conf file
         shutil.copy(srcfile, dstdir)
  
-        # set iptable rule with arguments 
-        cmd = "iptables -t nat -A PREROUTING -i {} -s {}/24 -p tcp --dport 80 -j REDIRECT --to-port {} ".format(input_iface, source_addr, trans_proxy)
-        p = subprocess.Popen(cmd, shell=True)
-        p.wait()
+        # set iptable rule with arguments
+        table = iptc.Table(iptc.Table.NAT)
+        target_chain = None
+        for chain in table.chains:
+            if chain.name == "PREROUTING":
+                target_chain = chain
+                break
+        if target_chain is None:
+            message = "ERROR could not find chain PREROUTING of NAT table"
+            collect_agent.send_log(syslog.LOG_ERROR, message)
+            sys.exit(message)
+
+        rule = iptc.Rule()
+        rule.in_interface = str(input_iface)
+        rule.src = "{}/24".format(source_addr)
+        rule.protocol = "tcp"
+        match = rule.create_match("tcp")
+        match.dport = "80"
+        rule.create_target("REDIRECT")
+        rule.target.set_parameter("to_ports", str(trans_proxy))
+        try:
+            target_chain.append_rule(rule)
+        except iptc.ip4tc.IPTCError as ex:
+            message = "ERROR \'{}\'".format(ex)
+            collect_agent.send_log(syslog.LOG_ERROR, message)
+            sys.exit(message)
 
         configure_platform(trans_proxy, non_transp_proxy)
 

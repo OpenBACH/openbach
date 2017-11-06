@@ -43,4 +43,4 @@
     - { file: 'http_server_rstats_filter.conf', mode: '0644' }
   
 - name: Download the HTTP Server sources
-  synchronize: src=../src/jobs/user_jobs/service/traffic_generators/http_server/files/www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no
+  synchronize: src=../src/jobs/user_jobs/service/core/http_server/files/www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no

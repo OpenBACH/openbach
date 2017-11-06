@@ -44,6 +44,10 @@
   shell: squid -z
   become: yes
 
+- name: Install python dependencies
+  pip: name=python-iptables executable=pip3 version=0.12.0
+  become: yes
+
 - name: Create the squid Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory
 

@@ -40,6 +40,7 @@ import subprocess
 import syslog
 import collect_agent
 import sys
+import iptc
 
 def set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=False):
     # Set (or unset) routing configuration for PEPSal
@@ -64,43 +65,64 @@ def set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=False):
                 ' '.join(cmd))
         collect_agent.send_log(syslog.LOG_WARNING, message)
 
+    # Get PREROUTING chain of mangle table
+    table = iptc.Table(iptc.Table.MANGLE)
+    target_chain = None
+    for chain in table.chains:
+        if chain.name == "PREROUTING":
+            target_chain = chain
+            break
+    if target_chain is None:
+        message = "ERROR could not find chain PREROUTING of MANGLE table"
+        collect_agent.send_log(syslog.LOG_ERROR, message)
+        sys.exit(message)
+ 
     for iface in ifaces:
-        cmd = [
-                'iptables', '-D' if unset else '-A',
-                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
-                '-i', str(iface), '-j', 'TPROXY', '--on-port',
-                str(port), '--tproxy-mark', str(mark)
-        ]
-        rc = subprocess.call(cmd)
-        if rc:
-            message = "WARNING \'{}\' exited with non-zero code".format(
-                    ' '.join(cmd))
+        rule = iptc.Rule()
+        rule.protocol = "tcp"
+        rule.in_interface = str(iface)
+        rule.create_target("TPROXY")
+        rule.target.set_parameter("on_port", str(port))
+        rule.target.set_parameter("tproxy_mark", str(mark))
+        try:
+            if not unset:
+                target_chain.append_rule(rule)
+            else:
+                target_chain.delete_rule(rule)
+        except iptc.ip4tc.IPTCError as ex:
+            message = "WARNING \'{}\'".format(ex)
             collect_agent.send_log(syslog.LOG_WARNING, message)
 
     for ip in src_ip:
-        cmd = [
-                'iptables', '-D' if unset else '-A',
-                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
-                '-s', str(ip), '-j', 'TPROXY', '--on-port',
-                str(port), '--tproxy-mark', str(mark)
-        ]
-        rc = subprocess.call(cmd)
-        if rc:
-            message = "WARNING \'{}\' exited with non-zero code".format(
-                    ' '.join(cmd))
+        rule = iptc.Rule()
+        rule.protocol = "tcp"
+        rule.src = str(ip)
+        rule.create_target("TPROXY")
+        rule.target.set_parameter("on_port", str(port))
+        rule.target.set_parameter("tproxy_mark", str(mark))
+        try:
+            if not unset:
+                target_chain.append_rule(rule)
+            else:
+                target_chain.delete_rule(rule)
+        except iptc.ip4tc.IPTCError as ex:
+            message = "WARNING \'{}\'".format(ex)
             collect_agent.send_log(syslog.LOG_WARNING, message)
 
     for ip in dst_ip:
-        cmd = [
-                'iptables', '-D' if unset else '-A',
-                'PREROUTING', '-t', 'mangle', '-p', 'tcp',
-                '-d', str(ip), '-j', 'TPROXY', '--on-port',
-                str(port), '--tproxy-mark', str(mark)
-        ]
-        rc = subprocess.call(cmd)
-        if rc:
-            message = "WARNING \'{}\' exited with non-zero code".format(
-                    ' '.join(cmd))
+        rule = iptc.Rule()
+        rule.protocol = "tcp"
+        rule.dst = str(ip)
+        rule.create_target("TPROXY")
+        rule.target.set_parameter("on_port", str(port))
+        rule.target.set_parameter("tproxy_mark", str(mark))
+        try:
+            if not unset:
+                target_chain.append_rule(rule)
+            else:
+                target_chain.delete_rule(rule)
+        except iptc.ip4tc.IPTCError as ex:
+            message = "WARNING \'{}\'".format(ex)
             collect_agent.send_log(syslog.LOG_WARNING, message)
 
 def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,

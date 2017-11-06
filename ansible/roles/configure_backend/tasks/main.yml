@@ -86,7 +86,7 @@
     - {name: smart_iw, path: /opt/openbach/controller/src/jobs/user_jobs/transport/experimental/smart_iw/}
     - {name: tcp_buffer, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/tcp_buffer/}
     - {name: tcpprobe_monitoring, path: /opt/openbach/controller/src/jobs/user_jobs/transport/core/tcpprobe_monitoring/}
-    - {name: mptcp, path: /opt/openbach/controller/src/jobs/user_jobs/transport/experimental/mptcp/}
+    - {name: mptcp, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/mptcp/}
     - {name: netcat, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/netcat/}
     - {name: postprocess_stats, path: /opt/openbach/controller/src/jobs/user_jobs/postprocessing/stable/postprocess_stats/}
     - {name: squid, path: /opt/openbach/controller/src/jobs/user_jobs/transport/stable/squid/}

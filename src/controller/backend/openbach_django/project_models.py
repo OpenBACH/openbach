@@ -187,26 +187,29 @@ class Project(models.Model):
 
     @property
     def json(self):
+        hidden_networks = {
+                hidden_network.name
+                for hidden_network in self.hidden_networks.all()
+        }
+
         return {
                 'name': self.name,
                 'description': self.description,
                 'owners': [user.get_username() for user in self.owners.all()],
                 'entity': [
-                    entity.json for entity
-                    in self.entities.order_by('name')
+                    entity.json
+                    for entity in self.entities.order_by('name')
                 ],
                 'scenario': [
-                    scenario.json for scenario
-                    in self.scenarios.order_by('name')
+                    scenario.json
+                    for scenario in self.scenarios.order_by('name')
                 ],
                 'network': [
-                    network.json for network
-                    in self.networks.order_by('name')
+                    network.json
+                    for network in self.networks.order_by('name')
+                    if network.address not in hidden_networks
                 ],
-                'hidden_network': [
-                    hidden_network.name for hidden_network
-                    in self.hidden_networks.order_by('name')
-                ],
+                'hidden_network': sorted(hidden_networks),
         }
 
     def load_from_json(self, json_data):

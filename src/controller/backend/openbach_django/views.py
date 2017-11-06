@@ -814,7 +814,15 @@ class LoginView(GenericView):
         """Return profile of connected user, or None if anonymous user"""
         user = request.user
         if not user.is_authenticated():
-            return {}, 200
+            return {
+                    'username': None,
+                    'name': None,
+                    'first_name': None,
+                    'last_name': None,
+                    'is_user': False,
+                    'is_admin': False,
+                    'email': None,
+            }, 200
 
         return self._user_to_json(user), 200
 

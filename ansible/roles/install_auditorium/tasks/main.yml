@@ -4,7 +4,8 @@
   copy: src={{ item }} dest=/tmp/
   with_items:
     - grafana.deb
-
+    - kibana.deb
+    
 - name: Install apt Packages
   apt: pkg={{ item }}
   with_items:
@@ -18,30 +19,26 @@
   apt: deb=/tmp/{{ item }}.deb force=yes
   with_items:
     - grafana
+    - kibana
   become: yes
-  notify: restart grafana
-
+  notify: 
+    - restart grafana  
+    - restart kibana
+  
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana mode=0640
   become: yes
   notify: restart grafana
 
-- name: Install Kibana from sources
-  unarchive: src={{ kibana_filename}}.tar.gz dest=/opt/
-  args:
-    creates: /opt/{{ kibana_filename }}/package.json
-  become: yes
-  notify: restart kibana
-
 - name: Configure Kibana
-  template: src=kibana.yml.j2 dest=/opt/{{ kibana_filename }}/config/kibana.yml
+  template: src=kibana.yml.j2 dest=/etc/kibana/kibana.yml
   vars:
     collector_ip: "{{ openbach_collector }}"
   become: yes
   notify: restart kibana
 
-- name: Create Kibana's Service File
-  template: src=kibana.service.j2 dest=/etc/systemd/system/kibana.service mode=0644
+- name: Configure Kibana environement variables 
+  lineinfile: path=/etc/default/kibana line="NODE_OPTIONS=--max-old-space-size=100"
   become: yes
   notify: restart kibana
 

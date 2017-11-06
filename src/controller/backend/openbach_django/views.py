@@ -33,6 +33,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -722,6 +723,15 @@ class ProjectView(GenericView):
         """remove a project from the database"""
         return self.conductor_execute(
                 command='delete_project', name=project_name)
+    
+    def post(self, request, project_name):
+        """refresh a project's network topology"""
+        if request.JSON:
+            return self.conductor_execute(
+                    command='modify_networks', name=project_name,
+                    json_data=request.JSON.get('networks', []))
+        return self.conductor_execute(
+                command='refresh_topology_project', name=project_name)
 
 
 class EntitiesView(GenericView):
@@ -804,7 +814,15 @@ class LoginView(GenericView):
         """Return profile of connected user, or None if anonymous user"""
         user = request.user
         if not user.is_authenticated():
-            return {}, 200
+            return {
+                    'username': None,
+                    'name': None,
+                    'first_name': None,
+                    'last_name': None,
+                    'is_user': False,
+                    'is_admin': False,
+                    'email': None,
+            }, 200
 
         return self._user_to_json(user), 200
 

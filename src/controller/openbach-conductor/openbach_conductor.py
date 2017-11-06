@@ -42,6 +42,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -63,6 +64,7 @@ import socketserver
 from functools import wraps
 from datetime import datetime
 from contextlib import suppress
+from ipaddress import IPv4Network
 from collections import defaultdict
 
 import yaml
@@ -97,7 +99,7 @@ from django.contrib.auth.models import User, AnonymousUser
 from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
-        Statistic, OsCommand, Entity, Network,
+        Statistic, OsCommand, Entity, Network, HiddenNetwork,
         RequiredJobArgument, OptionalJobArgument,
         InstalledJob, InstalledJobCommandResult,
         JobInstance, JobInstanceCommandResult,
@@ -112,6 +114,7 @@ syslog.openlog('openbach_conductor', syslog.LOG_PID, syslog.LOG_USER)
 
 
 DEFAULT_JOBS = '/opt/openbach/controller/ansible/roles/install_job/defaults/main.yml'
+TOPOLOGY_WORKERS = 10
 _SEVERITY_MAPPING = {
     1: 3,   # Error
     2: 4,   # Warning
@@ -1535,7 +1538,6 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
             raise
 
         job_instance.set_status('Running')
-        job_instance.save()
 
 
 class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
@@ -1697,8 +1699,6 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
             job_instance.delete()
             raise
         job_instance.set_status('Running')
-        job_instance.is_stopped = False
-        job_instance.save()
 
 
 class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
@@ -1721,9 +1721,7 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
             finally:
-                job_instance.update_status = timezone.now()
-                job_instance.status = job_status
-                job_instance.save()
+                job_instance.set_status(job_status)
 
         return job_instance.json, 200
 
@@ -1948,9 +1946,10 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         scenario_infos = InfosScenario(self.name, self.project)
         self.share_user(scenario_infos)
         scenario = scenario_infos.get_scenario_or_not_found_error()
+        scenario = scenario.versions.last()
 
         scenario_instance = ScenarioInstance.objects.create(
-                scenario=scenario,
+                scenario_version=scenario,
                 status='Scheduling',
                 start_date=timezone.now(),
                 started_by=self.connected_user,
@@ -1960,7 +1959,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         # Populate values for ScenarioArguments
         for argument, value in self.arguments.items():
             try:
-                argument_instance = ScenarioArgument.objects.get(name=argument, scenario=scenario)
+                argument_instance = ScenarioArgument.objects.get(name=argument, scenario_version=scenario)
             except ScenarioArgument.DoesNotExist:
                 raise errors.BadRequestError(
                         'A value was provided for an Argument that '
@@ -1992,6 +1991,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         functions_table = {}
         openbach_functions_instances = scenario_instance.openbach_functions_instances.all()
         for openbach_function in openbach_functions_instances:
+            openbach_function.set_status('Scheduled')
             functions_table[openbach_function.id] = {
                     'queue': queue.Queue(),
                     'is_waited_for_launch': set(get_waited(
@@ -2055,10 +2055,14 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
             for openbach_function in scenario_instance.openbach_functions_instances.all():
                 with suppress(JobInstance.DoesNotExist):
                     job_instance = openbach_function.started_job
-                    StopJobInstance(job_instance.id).action()
+                    stopper = StopJobInstance(job_instance.id)
+                    self.share_user(stopper)
+                    stopper.action()
                 with suppress(ScenarioInstance.DoesNotExist):
                     subscenario_instance = openbach_function.started_scenario
-                    StopScenarioInstance(subscenario_instance.id).action()
+                    stopper = StopScenarioInstance(subscenario_instance.id)
+                    self.share_user(stopper)
+                    stopper.action()
         return None, 204
 
 
@@ -2108,7 +2112,7 @@ class ListScenarioInstances(ScenarioInstanceAction):
             return list(self._infos_scenario_instances(scenario)), 200
 
         project = scenario_info._get_project_if_own()
-        scenarios = Scenario.objects.prefetch_related('instances').filter(project=project)
+        scenarios = Scenario.objects.prefetch_related('versions__instances').filter(project=project)
         instances = [
                 instance for scenario in scenarios
                 for instance in self._infos_scenario_instances(scenario)
@@ -2116,12 +2120,13 @@ class ListScenarioInstances(ScenarioInstanceAction):
         return instances, 200
 
     def _infos_scenario_instances(self, scenario):
-        for instance in scenario.instances.order_by('-start_date'):
-            with suppress(errors.ForbiddenError):
-                if not instance.is_stopped:
-                    owner = instance.started_by
-                    self._assert_user_in([owner])
-                yield instance.json
+        for version in scenario.versions.order_by('-id'):
+            for instance in version.instances.order_by('-start_date'):
+                with suppress(errors.ForbiddenError):
+                    if not instance.is_stopped:
+                        owner = instance.started_by
+                        self._assert_user_in([owner])
+                    yield instance.json
 
 
 ############################
@@ -2249,7 +2254,13 @@ class OpenbachFunctionThread(threading.Thread):
                     # and the path is not taken
                     return
                 self.waited_ids.remove(id_)
+                if self._stopped.is_set():
+                    self.openbach_function.set_status('Stopped')
+                    return
         time.sleep(self.openbach_function.openbach_function.wait_time)
+        if self._stopped.is_set():
+            self.openbach_function.set_status('Stopped')
+            return
         try:
             threads = self._run_openbach_function()
         except errors.ConductorWarning as error:
@@ -2287,7 +2298,8 @@ class OpenbachFunctionThread(threading.Thread):
         action = self.action(**arguments)
         if owner is not None:
             action.connected_user = owner
-        return action.openbach_function(self.openbach_function)
+        if not self._stopped.is_set():
+            return action.openbach_function(self.openbach_function)
 
     def _stop_scenario(self, error):
         scenario_id = self.openbach_function.scenario_instance.id
@@ -2325,9 +2337,10 @@ class StartJobInstanceThread(OpenbachFunctionThread):
         action = StartJobInstance(address=entity.agent.address, **arguments)
         if owner is not None:
             action.connected_user = owner
-        return action.openbach_function(
-                self.openbach_function,
-                self.wait_for_finished_queues)
+        if not self._stopped.is_set():
+            return action.openbach_function(
+                    self.openbach_function,
+                    self.wait_for_finished_queues)
 
 
 class IfThread(OpenbachFunctionThread):
@@ -2353,7 +2366,7 @@ class WhileThread(OpenbachFunctionThread):
         condition = arguments['condition']
         on_true_ids = arguments['on_true']
         on_true = [self._table[id]['queue'] for id in on_true_ids]
-        while condition.get_value(scenario.id, scenario.parameters):
+        while condition.get_value(scenario.id, scenario.parameters) and not self._stopped.is_set():
             for waiting_queue in on_true:
                 waiting_queue.put(instance_id)
             for thread in ThreadManager().get_threads(scenario.id, on_true_ids):
@@ -2370,6 +2383,8 @@ class WhileThread(OpenbachFunctionThread):
                 }
                 new_thread = create_thread(thread.openbach_function, table)
                 ThreadManager().add_and_launch(new_thread, scenario.id, new_thread.instance_id)
+        if self._stopped.is_set():
+            return
         for waiting_queue in on_true:
             waiting_queue.put(None)
         for id in arguments['on_false']:
@@ -2412,6 +2427,47 @@ class ProjectAction(ConductorAction):
             owners = User.objects.filter(username__in=owners_names)
             project.owners.set(owners)
 
+    def _build_topology(self):
+        project = self.get_project_or_not_found_error()
+
+        # Gather facts for all Agents
+        addresses = [
+                entity.agent.address for entity in
+                project.entities.exclude(agent__isnull=True)
+        ]
+        all_facts = {
+                address: start_playbook('gather_facts', address)
+                for address in addresses
+        }
+
+        # Iterate over all interfaces for every agent
+        topology = {}
+        for agent, facts in all_facts.items():
+            for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
+                infos_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                net = IPv4Network("{}/{}".format(
+                        infos_ipv4['network'],
+                        infos_ipv4['netmask'],
+                ))
+                topology.setdefault(agent, []).append(str(net))
+
+        # Get hidden networks to filter them out
+        hidden_networks = {
+                hidden_network.name for hidden_network in
+                project.hidden_networks.all()
+        }
+        # Associate Networks to Entities
+        for agent_ip, network_names in topology.items():
+            entity = project.entities.get(agent__address=agent_ip)
+            networks = [
+                    Network.objects.get_or_create(
+                        address=network, project=project,
+                        defaults={'name': network})[0]
+                    for network in network_names
+                    if network not in hidden_networks
+            ]
+            entity.networks.set(networks)
+
 
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""
@@ -2423,6 +2479,7 @@ class CreateProject(ProjectAction):
     @require_connected_user()
     def _action(self):
         self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2456,6 +2513,7 @@ class ModifyProject(ProjectAction):
 
         with db.transaction.atomic():
             self._register_project()
+        self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2469,6 +2527,19 @@ class InfosProject(ProjectAction):
     def _action(self):
         project = self.get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
+        return project.json, 200
+
+
+class RefreshTopologyProject(ProjectAction):
+    """Action responsible for refreshing an existing Project's network topology"""
+
+    def __init__(self, name):
+        super().__init__(name=name)
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        self._build_topology()
         return project.json, 200
 
 
@@ -2488,6 +2559,24 @@ class ListProjects(ProjectAction):
                 yield project.json
 
 
+class ModifyNetworks(ProjectAction):
+    """Action responsible for modifying an existing Entity"""
+
+    def __init__(self, name, json_data):
+        super().__init__(name=name, json_data=json_data)
+
+    @require_connected_user()
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        for network in self.json_data:
+            with suppress(KeyError, Network.DoesNotExist):
+                network_obj = Network.objects.get(address=network['address'], project=project)
+                network_obj.name = network['name']
+                network_obj.save()
+        return project.json, 200
+
+
 ##########
 # Entity #
 ##########
@@ -2502,7 +2591,7 @@ class EntityAction(ConductorAction):
         except Entity.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Entity is not in the database',
-                    project_name=self.project, entity_name=self.entity)
+                    project_name=self.project, entity_name=self.name)
 
     def _register_entity(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
@@ -2512,26 +2601,11 @@ class EntityAction(ConductorAction):
         if agent:
             address = agent.get('address')
             agent = InfosAgent(address).get_agent_or_not_found_error()
-        networks = self.json_data.get('networks', [])
-        if not isinstance(networks, list):
-            raise errors.BadRequestError(
-                    'The networks of an entity should be a list of network names')
 
         entity, _ = Entity.objects.get_or_create(name=self.name, project=project)
         entity.description = description
         entity.agent = agent
         entity.save()
-
-        entity.networks.clear()
-        for network in networks:
-            try:
-                entity_network = Network.objects.get(name=network, project=project)
-            except Network.DoesNotExist:
-                raise errors.NotFoundError(
-                        'The requested Network is not in the database',
-                        project_name=self.project, network_name=network)
-            else:
-                entity.networks.add(entity_network)
 
 
 class AddEntity(EntityAction):
@@ -2547,7 +2621,8 @@ class AddEntity(EntityAction):
     def _action(self):
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
-        return entity.json, 200
+        InfosProject(self.project)._build_topology()
+        return entity.project.json, 200
 
 
 class ModifyEntity(EntityAction):
@@ -2564,7 +2639,8 @@ class ModifyEntity(EntityAction):
         with db.transaction.atomic():
             self._register_entity()
         entity = self.get_entity_or_not_found_error()
-        return entity.json, 200
+        InfosProject(self.project)._build_topology()
+        return entity.project.json, 200
 
 
 class DeleteEntity(EntityAction):
@@ -2578,7 +2654,11 @@ class DeleteEntity(EntityAction):
         entity = self.get_entity_or_not_found_error()
         self._assert_user_in(entity.project.owners.all())
         entity.delete()
-        return None, 204
+        project_infos = InfosProject(self.project)
+        self.share_user(project_infos)
+        project_infos._build_topology()
+        project = project_infos.get_project_or_not_found_error()
+        return project.json, 200
 
 
 class InfosEntity(EntityAction):
@@ -2987,6 +3067,8 @@ def status_manager(job_instance_id, scenario_instance_id, username):
         stop_scenario = StopScenarioInstance(scenario_instance_id)
         job_status_manager.share_user(stop_scenario)
         stop_scenario.action()
+        scenario = stop_scenario.get_scenario_instance_or_not_found_error()
+        scenario.stop(stop_status='Finished KO')
     si_id = WaitingQueueManager().remove_job(job_instance_id)
     assert scenario_instance_id == si_id
     scenario_instance = ScenarioInstance.objects.get(id=si_id)

@@ -39,6 +39,7 @@ __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Adrien THIBAUD <adrien.thibaud@toulouse.viveris.com>
  * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
+ * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
 
@@ -186,16 +187,29 @@ class Project(models.Model):
 
     @property
     def json(self):
+        hidden_networks = {
+                hidden_network.name
+                for hidden_network in self.hidden_networks.all()
+        }
+
         return {
                 'name': self.name,
                 'description': self.description,
                 'owners': [user.get_username() for user in self.owners.all()],
-                'entity': [entity.json for entity
-                           in self.entities.order_by('name')],
-                'scenario': [scenario.json for scenario
-                             in self.scenarios.order_by('name')],
-                'network': [network.json for network
-                            in self.networks.order_by('name')],
+                'entity': [
+                    entity.json
+                    for entity in self.entities.order_by('name')
+                ],
+                'scenario': [
+                    scenario.json
+                    for scenario in self.scenarios.order_by('name')
+                ],
+                'network': [
+                    network.json
+                    for network in self.networks.order_by('name')
+                    if network.address not in hidden_networks
+                ],
+                'hidden_network': sorted(hidden_networks),
         }
 
     def load_from_json(self, json_data):
@@ -206,30 +220,19 @@ class Project(models.Model):
                     'the wrong kind of value (expected '
                     '{} got {})'.format(list, type(owners)))
 
-        # Cleanup in case of modifications
-        self.networks.all().delete()
-        self.scenarios.all().delete()
-
-        networks = json_data.get('network', [])
-        if not isinstance(networks, list):
-            raise Project.MalformedError(
-                    'network', 'Entry \'network\' has '
-                    'the wrong kind of value (expected '
-                    '{} got {})'.format(list, type(networks)))
-        for index, network_name in enumerate(networks):
-            if not isinstance(network_name, str):
-                raise Project.MalformedError(
-                        'network.{}'.format(index), 'Entry '
-                        '\'network\' should contain only string '
-                        'values (found {})'.format(type(network_name)))
-            Network.objects.create(name=network_name, project=self)
-
         entities = json_data.get('entity', [])
         if not isinstance(entities, list):
             raise Project.MalformedError(
                     'entity', 'Entry \'entity\' has '
                     'the wrong kind of value (expected '
                     '{} got {})'.format(list, type(entities)))
+
+        hidden_networks = json_data.get('hidden_network', [])
+        if not isinstance(hidden_networks, list):
+            raise Project.MalformedError(
+                    'hidden_network', 'Entry \'hidden_network\''
+                    ' has the wrong kind of value (expected '
+                    '{} got {})'.format(list, type(hidden_networks)))
 
         entity_data = {}
         for index, entity in enumerate(entities):
@@ -249,20 +252,14 @@ class Project(models.Model):
 
         entity_names = set(entity_data)
         existing_entity_names = {entity.name for entity in self.entities.all()}
-        # Cleanup of old, unused entities
+        # Cleanup of old, unused entities and hidden networks
         self.entities.filter(name__in=existing_entity_names - entity_names).delete()
-        # Rebinding of networks for old, reused entities
+        self.hidden_networks.all().delete()
+        # Update reused entities' description
         for entity in self.entities.filter(name__in=existing_entity_names & entity_names):
             entity_json = entity_data[entity.name]
             entity.description = entity_json.get('description')
             entity.save()
-            entity_networks = entity_json.get('networks', [])
-            if not isinstance(entity_networks, list):
-                raise Project.MalformedError(
-                        'entity.{}.networks'.format(entity.name),
-                        'Entry has the wrong kind of value (expected '
-                        '{} got {})'.format(list, type(entity_networks)))
-            entity.networks = self.networks.filter(name__in=entity_networks)
         # Creation of new entities
         for entity_name in entity_names - existing_entity_names:
             entity_json = entity_data[entity_name]
@@ -270,20 +267,12 @@ class Project(models.Model):
             entity = Entity.objects.create(
                     name=entity_name, project=self,
                     description=description)
-            entity_networks = entity_json.get('networks', [])
-            if not isinstance(entity_networks, list):
-                raise Project.MalformedError(
-                        'entity.{}.networks'.format(entity.name),
-                        'Entry has the wrong kind of value (expected '
-                        '{} got {})'.format(list, type(entity_networks)))
-            entity.networks = self.networks.filter(name__in=entity_networks)
+        # Creation of hidden networks
+        for hidden_network_name in hidden_networks:
+            HiddenNetwork.objects.get_or_create(
+                    name=hidden_network_name, project=self)
 
         scenarios = json_data.get('scenario', [])
-        if not isinstance(networks, list):
-            raise Project.MalformedError(
-                    'scenario', 'Entry \'scenario\' has '
-                    'the wrong kind of value (expected '
-                    '{} got {})'.format(list, type(scenarios)))
         for index, scenario in enumerate(scenarios):
             if not isinstance(scenario, dict):
                 raise Project.MalformedError(
@@ -298,9 +287,11 @@ class Project(models.Model):
                         'data should contain the name of the '
                         'scenario to create.')
             description = scenario.get('description')
-            scenario_instance = Scenario.objects.create(
+            scenario_instance, _ = Scenario.objects.get_or_create(
                     name=name, project=self,
-                    description=description)
+                    defaults={'description': description})
+            scenario_instance.description = description
+            scenario_instance.save()
             try:
                 scenario_instance.load_from_json(scenario)
             except Scenario.MalformedError as e:
@@ -311,20 +302,39 @@ class Network(models.Model):
     """Data associated to a Network"""
 
     name = models.CharField(max_length=500)
+    address = models.CharField(max_length=500)
     project = models.ForeignKey(
             Project,
             models.CASCADE,
             related_name='networks')
 
     class Meta:
-        unique_together = (('name', 'project'))
+        unique_together = (('address', 'project'))
 
     def __str__(self):
         return '{} for Project {}'.format(self.name, self.project)
 
     @property
     def json(self):
-        return self.name
+        return {
+                'name': self.name,
+                'address': self.address,
+        }
+
+class HiddenNetwork(models.Model):
+    """Data associated to a Network"""
+
+    name = models.CharField(max_length=500)
+    project = models.ForeignKey(
+            Project,
+            models.CASCADE,
+            related_name='hidden_networks')
+
+    class Meta:
+        unique_together = (('name', 'project'))
+
+    def __str__(self):
+        return '{} for Project {}'.format(self.name, self.project)
 
 
 class Entity(models.Model):

@@ -241,8 +241,16 @@ class JobInstance(models.Model):
             related_name='started_job')
 
     def set_status(self, status):
+        now = timezone.now()
         self.status = status
-        self.update_status = timezone.now()
+        self.update_status = now
+        if status == 'Running':
+            self.is_stopped = False
+        elif status != 'Scheduled':
+            self.is_stopped = True
+            if self.stop_date is None:
+                self.stop_date = now
+        self.save()
 
     @property
     def scenario_id(self):

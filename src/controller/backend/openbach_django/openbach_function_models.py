@@ -57,14 +57,14 @@ class OpenbachFunction(ContentTyped):
 
     function_id = models.IntegerField()
     label = models.CharField(max_length=500, null=True, blank=True)
-    scenario = models.ForeignKey(
-            'Scenario',
+    scenario_version = models.ForeignKey(
+            'ScenarioVersion',
             models.CASCADE,
             related_name='openbach_functions')
     wait_time = models.IntegerField(default=0)
 
     class Meta:
-        unique_together = ('scenario', 'function_id')
+        unique_together = ('scenario_version', 'function_id')
 
     def __str__(self):
         return self.name
@@ -76,6 +76,10 @@ class OpenbachFunction(ContentTyped):
         """
         self.set_content_model()
         super().save(*args, **kwargs)
+
+    @property
+    def scenario(self):
+        return self.scenario_version.scenario
 
     @property
     def name(self):
@@ -415,7 +419,6 @@ class StartJobInstance(OpenbachFunction):
                     old_value.append(value)
                 else:
                     arguments[argument.name] = [old_value, value]
-
         return arguments
 
     @property

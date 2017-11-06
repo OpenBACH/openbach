@@ -52,8 +52,8 @@ from . import openbach_function_models
 from .job_models import Job, RequiredJobArgument, OptionalJobArgument
 from .condition_models import Condition
 from .openbach_function_models import (
-        OpenbachFunctionInstance, StartJobInstance,
-        StartJobInstanceArgument,
+        OpenbachFunction, OpenbachFunctionInstance,
+        StartJobInstance, StartJobInstanceArgument,
         WaitForLaunched, WaitForFinished
 )
 
@@ -163,19 +163,32 @@ class Scenario(models.Model):
         return self.name
 
     @property
-    def is_valid(self):
-        return False
+    def arguments(self):
+        return self.versions.last().arguments
+
+    @property
+    def constants(self):
+        return self.versions.last().constants
+
+    @property
+    def openbach_functions(self):
+        return self.versions.last().openbach_functions
+
+    @property
+    def instances(self):
+        return self.versions.last().instances
 
     @property
     def json(self):
-        functions = [f.json for f in self.openbach_functions.order_by('id')]
+        scenario = self.versions.last()
+        functions = [f.json for f in scenario.openbach_functions.order_by('id')]
         return {
                 'name': self.name,
                 'description': self.description,
                 'arguments': {arg.name: arg.description
-                              for arg in self.arguments.all()},
+                              for arg in scenario.arguments.all()},
                 'constants': {const.name: const.value
-                              for const in self.constants.all()},
+                              for const in scenario.constants.all()},
                 'openbach_functions': functions,
         }
 
@@ -200,10 +213,7 @@ class Scenario(models.Model):
                         data, expected_type)
             return data
 
-        # Cleanup in case of modifications
-        self.arguments.all().delete()
-        self.constants.all().delete()
-        self.openbach_functions.all().delete()
+        scenario = ScenarioVersion.objects.create(scenario=self)
 
         # Extract top-level parameters
         arguments = extract_value('arguments', expected_type=dict, mandatory=False)
@@ -214,11 +224,10 @@ class Scenario(models.Model):
                 raise Scenario.MalformedError(
                         'arguments.{}'.format(name), description, str)
             ScenarioArgument.objects.create(
-                    scenario=self,
-                    name=name,
-                    description=description)
+                    scenario_version=scenario,
+                    name=name, description=description)
         constants = extract_value('constants', expected_type=dict, mandatory=False)
-        existing_names = self.arguments.filter(name__in=list(constants))
+        existing_names = scenario.arguments.filter(name__in=list(constants))
         if existing_names:
             keys = ', '.join('constants.{}'.format(arg.name) for arg in existing_names)
             raise Scenario.MalformedError(
@@ -231,9 +240,8 @@ class Scenario(models.Model):
                 raise Scenario.MalformedError(
                         'constants.{}'.format(name), value, str)
             ScenarioConstant.objects.create(
-                    scenario=self,
-                    name=name,
-                    value=value)
+                    scenario_version=scenario,
+                    name=name, value=value)
 
         # Extract OpenBACH Functions definitions
         openbach_functions = extract_value('openbach_functions', expected_type=list)
@@ -258,7 +266,7 @@ class Scenario(models.Model):
             function_name, = possible_function_name
             openbach_function_name = ''.join(map(str.title, function_name.split('_')))
             try:
-                OpenbachFunction = getattr(openbach_function_models, openbach_function_name)
+                OpenbachFunctionFactory = getattr(openbach_function_models, openbach_function_name)
             except AttributeError:
                 raise Scenario.MalformedError(
                         'openbach_functions.{}.{}'.format(index, function_name),
@@ -288,10 +296,10 @@ class Scenario(models.Model):
                             value=value, expected_type=expected_type)
 
             try:
-                openbach_function = OpenbachFunction.objects.create(
+                openbach_function = OpenbachFunctionFactory.objects.create(
                         function_id=id_,
                         label=label,
-                        scenario=self,
+                        scenario_version=scenario,
                         wait_time=wait_time,
                         **openbach_function_arguments)
             except (ValidationError, IntegrityError, TypeError) as err:
@@ -321,11 +329,18 @@ class Scenario(models.Model):
                                     .format(index, function_name, job_name, name),
                                     override_error='The configured job does '
                                     'not accept the given argument')
+                    argument_type = job_argument.type
                     if not isinstance(value, str) or not OpenbachFunctionArgument.has_placeholders(value):
-                        check_and_get_value(value, job_argument.type)
-                    StartJobInstanceArgument.objects.create(
-                            name=name, value=str(value),
-                            start_job_instance=openbach_function)
+                        check_and_get_value(value, argument_type)
+                    if argument_type == 'None':
+                        if value:
+                            StartJobInstanceArgument.objects.create(
+                                    name=name, value='True',
+                                    start_job_instance=openbach_function)
+                    else:
+                        StartJobInstanceArgument.objects.create(
+                                name=name, value=str(value),
+                                start_job_instance=openbach_function)
 
         # Extract Waits
         # Start again the looping to be sure all referenced
@@ -341,7 +356,7 @@ class Scenario(models.Model):
                             'launched_ids.{}'.format(index, idx),
                             value=launched_id, expected_type=int)
                 try:
-                    waited_function = self.openbach_functions.get(function_id=launched_id)
+                    waited_function = scenario.openbach_functions.get(function_id=launched_id)
                 except OpenbachFunction.DoesNotExist:
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.wait.'
@@ -350,7 +365,7 @@ class Scenario(models.Model):
                             'referenced openbach function does not exist')
                 else:
                     waited_function = waited_function.get_content_model()
-                openbach_function_instance = self.openbach_functions.get(
+                openbach_function_instance = scenario.openbach_functions.get(
                         function_id=function['id']).get_content_model()
                 WaitForLaunched.objects.create(
                         openbach_function_waited=waited_function,
@@ -365,7 +380,7 @@ class Scenario(models.Model):
                             'finished_ids.{}'.format(index, idx),
                             value=launched_id, expected_type=int)
                 try:
-                    waited_function = self.openbach_functions.get(function_id=launched_id)
+                    waited_function = scenario.openbach_functions.get(function_id=launched_id)
                 except OpenbachFunction.DoesNotExist:
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.wait.'
@@ -381,7 +396,7 @@ class Scenario(models.Model):
                             value=launched_id, override_error='The '
                             'referenced openbach function is not a '
                             'start_job_instance.')
-                openbach_function_instance = self.openbach_functions.get(
+                openbach_function_instance = scenario.openbach_functions.get(
                         function_id=function['id']).get_content_model()
                 WaitForFinished.objects.create(
                         openbach_function_waited=waited_function,
@@ -390,14 +405,14 @@ class Scenario(models.Model):
         # Check that all arguments are used
         scenario_arguments = {
                 argument.name: 0
-                for argument in self.arguments.all()
+                for argument in scenario.arguments.all()
         }
         scenario_arguments.update(
                 (constant.name, 0)
-                for constant in self.constants.all()
+                for constant in scenario.constants.all()
         )
 
-        for openbach_function in self.openbach_functions.all():
+        for openbach_function in scenario.openbach_functions.all():
             try:
                 openbach_function.set_arguments_count(scenario_arguments)
             except KeyError as e:
@@ -425,11 +440,22 @@ class Scenario(models.Model):
         super().save(*args, **kwargs)
 
 
-class ScenarioInstance(models.Model):
-    """Data associated to a Scenario instance"""
+class ScenarioVersion(models.Model):
+    """Data associated to a unique version of a Scenario"""
 
     scenario = models.ForeignKey(
             Scenario, models.CASCADE,
+            related_name='versions')
+
+    def __str__(self):
+        return self.scenario.name
+
+
+class ScenarioInstance(models.Model):
+    """Data associated to a Scenario instance"""
+
+    scenario_version = models.ForeignKey(
+            ScenarioVersion, models.CASCADE,
             related_name='instances')
     status = models.CharField(max_length=500, null=True, blank=True)
     start_date = models.DateTimeField(null=True, blank=True)
@@ -443,6 +469,10 @@ class ScenarioInstance(models.Model):
             OpenbachFunctionInstance,
             null=True, blank=True,
             related_name='started_scenario')
+
+    @property
+    def scenario(self):
+        return self.scenario_version.scenario
 
     def __str__(self):
         return 'Scenario Instance {}'.format(self.id)
@@ -512,24 +542,32 @@ class ScenarioInstance(models.Model):
 class ScenarioArgument(Argument):
     """Data associated to an Argument for a Scenario"""
 
-    scenario = models.ForeignKey(
-            Scenario, models.CASCADE,
+    scenario_version = models.ForeignKey(
+            ScenarioVersion, models.CASCADE,
             related_name='arguments')
 
     class Meta:
-        unique_together = (('name', 'scenario'))
+        unique_together = (('name', 'scenario_version'))
+
+    @property
+    def scenario(self):
+        return self.scenario_version.scenario
 
 
 class ScenarioConstant(Argument):
     """Data associated to a Constant for a Scenario"""
 
-    scenario = models.ForeignKey(
-            Scenario, models.CASCADE,
+    scenario_version = models.ForeignKey(
+            ScenarioVersion, models.CASCADE,
             related_name='constants')
     value = models.CharField(max_length=500)
 
     class Meta:
-        unique_together = ('name', 'scenario')
+        unique_together = ('name', 'scenario_version')
+
+    @property
+    def scenario(self):
+        return self.scenario_version.scenario
 
 
 class ScenarioArgumentValue(ArgumentValue):
@@ -553,7 +591,7 @@ class ScenarioArgumentValue(ArgumentValue):
         return self.value
 
     def save(self, *args, **kwargs):
-        if self.argument.scenario != self.scenario_instance.scenario:
+        if self.argument.scenario_version != self.scenario_instance.scenario_version:
             raise IntegrityError(
                     'Trying to save a ScenarioArgumentValue '
                     'with the associated ScenarioInstance and '

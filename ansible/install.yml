@@ -52,12 +52,12 @@
 
     - name: Configure Http Proxy in Environment
       set_fact:
-        openbach_proxy_env: "{{ openbach_proxy_env | combine({'http_proxy': openbach_http_proxy}) }}"
+        openbach_proxy_env: "{{ openbach_proxy_env | combine({'http_proxy': openbach_http_proxy, 'HTTP_PROXY': openbach_http_proxy}) }}"
       when: openbach_http_proxy != ''
 
     - name: Configure Https Proxy in Environment
       set_fact:
-        openbach_proxy_env: "{{ openbach_proxy_env | combine({'https_proxy': openbach_https_proxy}) }}"
+        openbach_proxy_env: "{{ openbach_proxy_env | combine({'https_proxy': openbach_https_proxy, 'HTTPS_PROXY': openbach_https_proxy}) }}"
       when: openbach_https_proxy != ''
 
     - name: Install python-minimal

@@ -2591,7 +2591,7 @@ class EntityAction(ConductorAction):
         except Entity.DoesNotExist:
             raise errors.NotFoundError(
                     'The requested Entity is not in the database',
-                    project_name=self.project, entity_name=self.entity)
+                    project_name=self.project, entity_name=self.name)
 
     def _register_entity(self):
         project = InfosProject(self.project).get_project_or_not_found_error()
@@ -2622,7 +2622,7 @@ class AddEntity(EntityAction):
         self._register_entity()
         entity = self.get_entity_or_not_found_error()
         InfosProject(self.project)._build_topology()
-        return entity.json, 200
+        return entity.project.json, 200
 
 
 class ModifyEntity(EntityAction):
@@ -2640,7 +2640,7 @@ class ModifyEntity(EntityAction):
             self._register_entity()
         entity = self.get_entity_or_not_found_error()
         InfosProject(self.project)._build_topology()
-        return entity.json, 200
+        return entity.project.json, 200
 
 
 class DeleteEntity(EntityAction):
@@ -2654,8 +2654,11 @@ class DeleteEntity(EntityAction):
         entity = self.get_entity_or_not_found_error()
         self._assert_user_in(entity.project.owners.all())
         entity.delete()
-        InfosProject(self.project)._build_topology()
-        return None, 204
+        project_infos = InfosProject(self.project)
+        self.share_user(project_infos)
+        project_infos._build_topology()
+        project = project_infos.get_project_or_not_found_error()
+        return project.json, 200
 
 
 class InfosEntity(EntityAction):

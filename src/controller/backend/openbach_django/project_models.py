@@ -318,6 +318,7 @@ class Network(models.Model):
                 'address': self.address,
         }
 
+
 class HiddenNetwork(models.Model):
     """Data associated to a Network"""
 
@@ -332,6 +333,33 @@ class HiddenNetwork(models.Model):
 
     def __str__(self):
         return '{} for Project {}'.format(self.name, self.project)
+
+
+class PotentialNetwork(models.Model):
+    """Data associated to a PotentialNetwork"""
+
+    old_network = models.ForeignKey(
+            Network,
+            models.CASCADE,
+            related_name='+')
+    new_network = models.ForeignKey(
+            Network,
+            models.CASCADE,
+            related_name='+')
+    project = models.ForeignKey(
+            Project,
+            models.CASCADE,
+            related_name='potential_networks')
+
+    class Meta:
+        unique_together = (('old_network', 'new_network', 'project'))
+
+    def __str__(self):
+        return '{}->{} for Project {}'.format(
+                self.old_network,
+                self.new_network,
+                self.project
+        )
 
 
 class Entity(models.Model):

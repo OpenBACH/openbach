@@ -2874,13 +2874,12 @@ class StatisticsNames(ProjectAction):
     def _action(self):
         project = self.get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
-        collectors = [
-                entity.agent.collector
-                for entity in project.entities
-                              .exclude(agent__isnull=True)
-                              .order_by('agent__collector__address')
-                              .distinct('agent__collector__address')
-        ]
+        queryset = (
+                project.entities
+                .exclude(agent__isnull=True)
+                .order_by('agent__collector__address')
+                .distinct('agent__collector__address'))
+        collectors = [entity.agent.collector for entity in queryset]
 
         stats_names = defaultdict(set)
         for collector in collectors:
@@ -2889,10 +2888,10 @@ class StatisticsNames(ProjectAction):
                     collector.stats_query_port,
                     collector.stats_database_name,
                     collector.stats_database_precision)
-            response = connection.sql_query('SHOW FIELD KEYS').json()
+            response = connection.sql_query('SHOW FIELD KEYS')
             with suppress(LookupError):
                 for result in response['results']:
-                    for serie in response['series']:
+                    for serie in result['series']:
                         job_name = serie['name']
                         stats = (value[0] for value in serie['values'])
                         stats_names[job_name].update(stats)

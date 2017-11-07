@@ -46,6 +46,13 @@ urlpatterns = [
     url(r'^login/users/?$', views.UsersView.as_view(), name='users_view'),
     url(r'^logs/?$', views.LogsView.as_view(), name='logs_view'),
 
+    url(r'^statistic/(?P<job_instance_id>\d+)/?$',
+        views.StatisticView.as_view(),
+        name='job_statistics'),
+    url(r'^statistic/(?P<project>[^/]+)/?$',
+        views.StatisticsView.as_view(),
+        name='project_statistics'),
+
     url(r'^collector/(?P<address>[^/]+)/state/?$',
         views.StateView.as_view(state_type='collector'),
         name='state_collector'),

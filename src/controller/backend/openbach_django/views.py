@@ -794,6 +794,33 @@ class LogsView(GenericView):
                 level=level, delay=delay)
 
 
+class StatisticsView(GenericView):
+    """Manage actions relative to statistics of a project"""
+
+    def get(self, request, project):
+        return self.conductor_execute(
+                command='statistics_names',
+                project=project)
+
+
+class StatisticView(GenericView):
+    """Manage actions relative to statistics of a job instance"""
+
+    def get(self, request, job_instance_id):
+        instance_id = int(job_instance_id)
+        try:
+            statistic_name = request.GET['name']
+        except KeyError:
+            return self.conductor_execute(
+                    command='statistics_origin',
+                    instance_id=instance_id)
+        else:
+            return self.conductor_execute(
+                    command='statistics_values',
+                    instance_id=instance_id,
+                    name=statistic_name)
+
+
 class LoginView(GenericView):
     """Manage actions relative to user authentication"""
 

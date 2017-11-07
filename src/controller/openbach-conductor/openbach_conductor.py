@@ -57,6 +57,7 @@ import signal
 import syslog
 import tarfile
 import inspect
+import operator
 import threading
 import itertools
 import traceback
@@ -76,7 +77,7 @@ import errors
 from openbach_baton import OpenBachBaton
 from playbook_builder import start_playbook, setup_playbook_manager
 from data_access.elasticsearch_tools import ElasticSearchConnection
-from data_access.influxdb_tools import InfluxDBConnection, Operator, ConditionField, select_query
+from data_access.influxdb_tools import InfluxDBConnection
 
 
 # We need to use ansible from Python code so we can easily get failure
@@ -2478,6 +2479,15 @@ class CreateProject(ProjectAction):
 
     @require_connected_user()
     def _action(self):
+        if '/' in self.name:
+            raise errors.BadRequestError(
+                    '\'/\' character forbidden in project name',
+                    project_name=self.name)
+        with suppress(ValueError):
+            integer = int(self.name)
+            raise errors.BadRequestError(
+                    'Project name cannot be digits only',
+                    project_name=integer)
         self._register_project()
         self._build_topology()
         project = self.get_project_or_not_found_error()
@@ -2849,6 +2859,101 @@ class ListUsers(ConductorAction):
                 'is_admin': user.is_staff,
                 'email': user.email,
             }
+
+
+##############
+# Statistics #
+##############
+
+class StatisticsNames(ProjectAction):
+    """Action that retrieve the names of statistics in InfluxDB"""
+
+    def __init__(self, project):
+        super().__init__(name=project)
+
+    def _action(self):
+        project = self.get_project_or_not_found_error()
+        self._assert_user_in(project.owners.all())
+        collectors = [
+                entity.agent.collector
+                for entity in project.entities
+                              .exclude(agent__isnull=True)
+                              .order_by('agent__collector__address')
+                              .distinct('agent__collector__address')
+        ]
+
+        stats_names = defaultdict(set)
+        for collector in collectors:
+            connection = InfluxDBConnection(
+                    collector.address,
+                    collector.stats_query_port,
+                    collector.stats_database_name,
+                    collector.stats_database_precision)
+            response = connection.sql_query('SHOW FIELD KEYS').json()
+            with suppress(LookupError):
+                for result in response['results']:
+                    for serie in response['series']:
+                        job_name = serie['name']
+                        stats = (value[0] for value in serie['values'])
+                        stats_names[job_name].update(stats)
+
+        return {
+                job_name: sorted(names)
+                for job_name, names in stats_names.items()
+        }, 200
+
+
+class StatisticsAction(JobInstanceAction):
+    """Base class that defines helper methods to deal
+    with statistics of a JobInstance.
+    """
+
+    def _build_connection(self):
+        job_instance = self.get_job_instance_or_not_found_error()
+        job_name = job_instance.job.job.name
+        agent = job_instance.job.agent
+        with suppress(Entity.DoesNotExist):
+            project = agent.entity.project
+            self._assert_user_in(project.owners.all())
+
+        return job_name, InfluxDBConnection(
+                agent.collector.address,
+                agent.collector.stats_query_port,
+                agent.collector.stats_database_name,
+                agent.collector.stats_database_precision)
+
+
+class StatisticsOrigin(StatisticsAction):
+    """Action that retrieve the first timestamp
+    associated to a statistic in InfluxDB.
+    """
+
+    def __init__(self, instance_id):
+        super().__init__(instance_id=instance_id)
+
+    def _action(self):
+        job_name, connection = self._build_connection()
+        origin = connection.origin(job=job_name, job_instance=self.instance_id)
+        return origin, 200
+
+
+class StatisticsValues(StatisticsAction):
+    """Action that retrieve values associated to a statistic in InfluxDB"""
+
+    def __init__(self, instance_id, name):
+        super().__init__(instance_id=instance_id, name=name)
+
+    def _action(self):
+        job_name, connection = self._build_connection()
+        scenario, = connection.statistics(
+                fields=[self.name], job=job_name,
+                job_instance=self.instance_id)
+
+        job, = scenario.own_jobs
+        statistics = itertools.chain.from_iterable(
+                statistic.json for statistic
+                in job.statistics_data.values())
+        return sorted(statistics, key=operator.itemgetter('time')), 200
 
 
 ################

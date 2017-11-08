@@ -5,7 +5,7 @@
   when: jobs is not defined
 
 - name: Execute the Job Uninstallation Playbook
-  include_tasks: "{{ job_item.path }}/uninstall_{{ job_item.name }}.yml"
+  include: "{{ job_item.path }}/uninstall_{{ job_item.name }}.yml"
   args:
     job_name: "{{ job_item.name }}"
   remote_user: openbach

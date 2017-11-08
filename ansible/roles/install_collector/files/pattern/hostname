@@ -1,1 +1,1 @@
-HOSTNAME \b\w+(-\w+)*\b
+HOSTNAME [^,]+

@@ -46,13 +46,9 @@ import collect_agent
 
 
 def main(net_name, address, password, RCfile):
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/net_create/'
             'net_create_rstats_filter.conf')
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job net_create')
 

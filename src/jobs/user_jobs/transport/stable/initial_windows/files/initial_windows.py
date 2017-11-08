@@ -45,13 +45,9 @@ import collect_agent
 
 def main(network, gw, interface, initcwnd, initrwnd):
     # Connect to collect agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/initial_windows/'
             'initial_windows_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job initial_windows")
 

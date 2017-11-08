@@ -47,13 +47,9 @@ import collect_agent
 
 def main(port):
     # Connect to collect-agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/http2_server/'
             'http2_server_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job http2_server")
 

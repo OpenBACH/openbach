@@ -45,31 +45,31 @@ import collect_agent
 
 def main(url):
     # Connect to collect-agent
-	conffile = "/opt/openbach/agent/jobs/Launch_WebPage/Launch_WebPage_rstats_filter.conf"
-	success = collect_agent.register_collect(conffile)
-	if not success:
-		message = "ERROR connecting to collect-agent"
+    conffile = "/opt/openbach/agent/jobs/Launch_WebPage/Launch_WebPage_rstats_filter.conf"
+    collect_agent.register_collect(conffile)
+    if not success:
+        message = "ERROR connecting to collect-agent"
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job Launch_webpage')
 
-	# Get the DISPLAY parameter on the agent.
-	displayParameter = str(os.system("echo $DISPLAY"))
-	# Launch the browser with the specified url.
-	os.system("export DISPLAY=:"+displayParameter+" ; firefox " + url)
+    # Get the DISPLAY parameter on the agent.
+    displayParameter = str(os.system("echo $DISPLAY"))
+    # Launch the browser with the specified url.
+    os.system("export DISPLAY=:"+displayParameter+" ; firefox " + url)
 
-	# Send a statistic to know when we actually launch the browser.
-	statistics = {'Launch': 1}
-	collect_agent.send_stat(int(round(time.time() * 1000)), **statistics)
-		
+    # Send a statistic to know when we actually launch the browser.
+    statistics = {'Launch': 1}
+    collect_agent.send_stat(int(round(time.time() * 1000)), **statistics)
+
 
 if __name__ == "__main__":
-	# Define Usage
-	parser = argparse.ArgumentParser(description='', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument('url', metavar='url', type=str, help='', default="https://www.python.org/")
-	# get args
-	args = parser.parse_args()
-	url = args.url
+    # Define Usage
+    parser = argparse.ArgumentParser(description='', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('url', metavar='url', type=str, help='', default="https://www.python.org/")
+    # get args
+    args = parser.parse_args()
+    url = args.url
 
-	main(url)
+    main(url)

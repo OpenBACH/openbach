@@ -128,11 +128,7 @@ def set_conf(ifaces, src_ip, dst_ip, port, mark, table_num, unset=False):
 def main(ifaces, src_ip, dst_ip, stop, port, addr, fopen, maxconns,
          gcc_interval, log_file, pending_time, mark, table_num):
     conffile = "/opt/openbach/agent/jobs/pep/pep_rstat_filter.conf"
-    success = collect_agent.register_collect(conffile)
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
+    collect_agent.register_collect(conffile)
     
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job pep')
 

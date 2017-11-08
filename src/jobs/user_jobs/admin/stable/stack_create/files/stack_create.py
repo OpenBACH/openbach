@@ -45,13 +45,9 @@ import collect_agent
 
 
 def main(stack_name, flavor, image_id, network, password, RCfile):
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/stack_create/'
             'stack_create_rstats_filter.conf')
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job stack_create')
 

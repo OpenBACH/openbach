@@ -45,13 +45,9 @@ import collect_agent
 
 def main(size, disable_pacing):
     # Connect to collect agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/smart_iw/'
             'smart_iw_rstats_filter.conf')
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job smart_iw")
 
     cmd = ['sysctl', 'net.ipv4.tcp_smart_iw={}'.format(size)]

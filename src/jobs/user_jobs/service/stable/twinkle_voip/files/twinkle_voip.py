@@ -218,11 +218,7 @@ def close_twinkle(p):
 def main(server, remote, audio, length, ip, port, nat):
     # Connect to collect agent
     conffile = '/opt/openbach/agent/jobs/twinkle_voip/twinkle_voip_rstats_filter.conf'
-    success = collect_agent.register_collect(conffile)
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
+    collect_agent.register_collect(conffile)
 
     if not server and not remote:
         message = "ERROR must provide a remote address"

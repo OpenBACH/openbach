@@ -44,14 +44,10 @@ import collect_agent
 
 def main(name, min_size, size, max_size):
     # Connect to collect agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/tcp_buffer/'
             'tcp_buffer_rstats_filter.conf'
     )
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job tcp_buffer")
 
     cmd = "sysctl net.ipv4.tcp_{}=\'{} {} {}\'".format(name, min_size, size, max_size)

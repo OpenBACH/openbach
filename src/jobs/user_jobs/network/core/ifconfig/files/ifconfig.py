@@ -46,13 +46,9 @@ import collect_agent
 
 
 def main(interface_name, ip_address, action):
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/ifconfig/'
             'ifconfig_rstats_filter.conf')     
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting ifconfig job')
 

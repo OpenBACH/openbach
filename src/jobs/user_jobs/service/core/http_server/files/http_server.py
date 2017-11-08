@@ -79,13 +79,9 @@ class PoolHTTPServer(ThreadingMixIn, TCPServer):
 
 def main(port):
     # Connect to the agent collect service
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/http_server/'
             'http_server_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job http_server")
 
     httpd = PoolHTTPServer(('', port), RandomHTTPRequestHandler)

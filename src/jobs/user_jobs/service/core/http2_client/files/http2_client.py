@@ -78,13 +78,9 @@ def get_url(server_address, page):
 
 def main(server_address, lambd, sim_t, n_req, page):
     # Connect to collect agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/http2_client/'
             'http2_client_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job http2_client')
 
     q = Queue()

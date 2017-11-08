@@ -44,13 +44,9 @@ import collect_agent
 
 def main(rate, interfaces, disable_pacing):
     # Connect to collect_agent
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/initial_spreading_fq/'
             'initial_spreading_fq_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job '
             'initial_spreading_fq')
 

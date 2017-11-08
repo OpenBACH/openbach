@@ -47,13 +47,9 @@ import collect_agent
 
 def main(destination_ip, subnet_mask, gateway_ip,
          action, default_gateway, default_gw_name):
-    success = collect_agent.register_collect(
+    collect_agent.register_collect(
             '/opt/openbach/agent/jobs/ip_route/'
             'ip_route_rstats_filter.conf')
-    if not success:
-        message = 'ERROR connecting to collect-agent'
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job ip_route')
 

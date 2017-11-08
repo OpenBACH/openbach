@@ -45,11 +45,9 @@ import sys
 def main(iface, out_file, duration):
     # Connect to collect agent
     conffile = '/opt/openbach/agent/jobs/tcpdump/tcpdump.conf'
-    success = collect_agent.register_collect(conffile)
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
+    collect_agent.register_collect(conffile)
+
+    collect_agent.send_log(syslog.LOG_DEBUG, "Starting job tcpdump")
 
     # Launch tcpdump
     cmd = ["tcpdump", "-i", iface]

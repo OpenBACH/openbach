@@ -43,11 +43,7 @@ import sys
 def main(param, value):
     
     conffile = "/opt/openbach/agent/jobs/sysctl/sysctl_rstats_filter.conf"
-    success = collect_agent.register_collect(conffile)
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
+    collect_agent.register_collect(conffile)
 
     shell = False
     cmd = ['sysctl', '{}={}'.format(param, value)]

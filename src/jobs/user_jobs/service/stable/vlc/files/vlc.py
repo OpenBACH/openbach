@@ -48,11 +48,7 @@ import sys
 def main(dst_ip, port, filename, vb, ab, duration):
     # Connect to collect agent
     conffile = '/opt/openbach/agent/jobs/vlc/vlc.conf'
-    success = collect_agent.register_collect(conffile)
-    if not success:
-        message = "ERROR connecting to collect-agent"
-        collect_agent.send_log(syslog.LOG_ERR, message)
-        sys.exit(message)
+    collect_agent.register_collect(conffile)
 
     # Launch VLC
     if vb or ab:

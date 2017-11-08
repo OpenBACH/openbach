@@ -2537,6 +2537,7 @@ class ProjectAction(ConductorAction):
         entity.save()
 
     def _enforce_topology(self, modified_entity=None):
+        issues = []
         project = self.get_project_or_not_found_error()
         entities = project.entities.exclude(agent__isnull=True)
         entities_wo_agents = project.entities.filter(agent__isnull=True)
@@ -2569,18 +2570,22 @@ class ProjectAction(ConductorAction):
             }
             # Check number of interfaces
             if (len(old_networks) > len(new_networks)):
+                address = entity.agent.address
                 self._clean_agent(entity)
-                raise errors.UnprocessableError(
+                issues.append(
                         'Network topology is not compatible '
                         'with the scenario\'s imported topology: '
                         'agent {} doesn\'t have enough interfaces '
-                        '(has {}, needs {})'.format(
-                            entity.agent.address,
-                            len(topology[entity.agent.address]),
-                            len(old_networks)),
-                        project_name=project.name)
-           
-            entity.networks.set(new_networks | set(old_networks))
+                        '(found {}, expected {})'.format(
+                            address, len(topology[address]),
+                            len(old_networks)))
+            else: 
+                entity.networks.set(new_networks | set(old_networks))
+
+        if issues:
+            raise errors.UnprocessableError(
+                    'Errors found in proposed topology',
+                    errors=issues, project_name=project.name)
 
         old_networks = project.networks.filter(address__startswith="imported")
         new_networks = project.networks.exclude(address__startswith="imported")

@@ -1800,22 +1800,21 @@ class ScenarioAction(ConductorAction):
         description = self.json_data.get('description')
         project = self._get_project_if_own()
 
-        scenario, _ = Scenario.objects.get_or_create(
-                name=self.name, project=project,
-                defaults={'description': description})
-        scenario.description = description
-        scenario.save()
         try:
-            scenario.load_from_json(self.json_data)
+            with db.transaction.atomic():
+                scenario, _ = Scenario.objects.get_or_create(
+                        name=self.name, project=project,
+                        defaults={'description': description})
+                scenario.description = description
+                scenario.save()
+                scenario.load_from_json(self.json_data)
+                scenario.save()
         except Scenario.MalformedError as e:
-            scenario.delete()
             raise errors.BadRequestError(
                     'Data of the Scenario are malformed',
                     scenario_name=self.name,
                     error_message=e.error,
                     scenario_data=self.json_data)
-        else:
-            scenario.save()
 
     def _get_project_if_own(self):
         if self.project is None:

@@ -701,7 +701,8 @@ class ProjectsView(GenericView):
     def post(self, request):
         """create a new project"""
         return self.conductor_execute(
-                command='create_project', json_data=request.JSON)
+                command='create_project', json_data=request.JSON,
+                ignore_topology='ignore_topology' in request.GET)
 
 
 class ProjectView(GenericView):

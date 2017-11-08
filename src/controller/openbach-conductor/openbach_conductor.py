@@ -101,7 +101,7 @@ from openbach_django.models import (
         CommandResult, CollectorCommandResult, Collector,
         AgentCommandResult, Agent, Job, Keyword,
         Statistic, OsCommand, Entity, Network, HiddenNetwork,
-        RequiredJobArgument, OptionalJobArgument,
+        PotentialNetwork, RequiredJobArgument, OptionalJobArgument,
         InstalledJob, InstalledJobCommandResult,
         JobInstance, JobInstanceCommandResult,
         StatisticInstance, ScenarioInstance,
@@ -2427,7 +2427,7 @@ class ProjectAction(ConductorAction):
             owners = User.objects.filter(username__in=owners_names)
             project.owners.set(owners)
 
-    def _build_topology(self):
+    def _gather_topology_facts(self):
         project = self.get_project_or_not_found_error()
 
         # Gather facts for all Agents
@@ -2444,12 +2444,21 @@ class ProjectAction(ConductorAction):
         topology = {}
         for agent, facts in all_facts.items():
             for iface in filter('lo'.__ne__, facts['ansible_interfaces']):
-                infos_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                try:
+                    infos_ipv4 = facts['ansible_{}'.format(iface)]['ipv4']
+                except KeyError:
+                    continue
                 net = IPv4Network("{}/{}".format(
                         infos_ipv4['network'],
                         infos_ipv4['netmask'],
                 ))
                 topology.setdefault(agent, []).append(str(net))
+
+        return topology
+
+    def _build_topology(self):
+        project = self.get_project_or_not_found_error()
+        topology = self._gather_topology_facts()
 
         # Get hidden networks to filter them out
         hidden_networks = {
@@ -2468,13 +2477,166 @@ class ProjectAction(ConductorAction):
             ]
             entity.networks.set(networks)
 
+    def _import_topology(self, json_data):
+        project = self.get_project_or_not_found_error()
+
+        # Get hidden networks to filter them out
+        hidden_networks = {
+                hidden_network.name for hidden_network in
+                project.hidden_networks.all()
+        }
+
+        # Create old networks and associate to entities
+        for entity in json_data.get('entity', []):
+            try:
+                entity_obj = project.entities.get(name=entity['name'])
+            except Entity.DoesNotExist as e:
+                project.delete()
+                raise errors.BadRequestError(
+                        'Data of the Project are malformed. '
+                        'Entity \'{}\' does not exist.'.format(entity['name']),
+                        project_name=project.name,
+                        project_data=json_data)
+
+            except KeyError as e:
+                project.delete()
+                raise errors.BadRequestError(
+                        'Data of the Project are malformed. '
+                        'Missing key \'{}\''.format(str(e)),
+                        project_name=project.name,
+                        project_data=json_data)
+            try:
+                networks = [
+                        Network.objects.get_or_create(
+                            address="imported:{}".format(network['address']),
+                            project=project, defaults={'name': network['name']})[0]
+                        for network in entity['networks']
+                        if network['address'] not in hidden_networks
+                ]
+            except KeyError as e:
+                project.delete()
+                raise errors.BadRequestError(
+                        'Data of the Project are malformed. '
+                        'Missing key \'{}\''.format(str(e)),
+                        project_name=project.name,
+                        project_data=json_data)
+            entity_obj.networks.set(networks)
+
+    def _clean_agent(self, entity):
+        if not entity:
+            return
+        # Set old networks as networks
+        old_networks = entity.networks.filter(address__startswith="imported")
+        entity.networks.set(old_networks)
+        # Remove new networks without entities
+        entity.project.networks.exclude(address__startswith="imported").filter(entities__isnull=True).delete()
+        # Remove agent
+        entity.agent = None
+        entity.save()
+
+    def _enforce_topology(self, modified_entity=None):
+        project = self.get_project_or_not_found_error()
+        entities = project.entities.exclude(agent__isnull=True)
+        entities_without_agents = project.entities.filter(agent__isnull=True)
+        topology = self._gather_topology_facts()
+
+        # Get hidden networks to filter them out
+        hidden_networks = {
+                hidden_network.name for hidden_network in
+                project.hidden_networks.all()
+        }
+
+        # Remove new networks from entities without agents
+        for entity in entities_without_agents:
+            old_networks = entity.networks.filter(address__startswith="imported")
+            entity.networks.set(old_networks)
+
+        # Remove any network not connected to any entity
+        project.networks.filter(entities__isnull=True).delete()
+
+        issues = []
+        for entity in entities:
+            # Get old networks
+            old_networks = entity.networks.filter(address__startswith="imported")
+            # Create new networks
+            new_networks = {
+                    Network.objects.get_or_create(
+                        address=network, project=project,
+                        defaults={'name': network})[0]
+                    for network in topology[entity.agent.address]
+                    if network not in hidden_networks
+            }
+            # Check number of interfaces
+            if (len(old_networks) > len(new_networks)):
+                address = entity.agent.address
+                self._clean_agent(entity)
+                issues.append(
+                        'Network topology is not compatible '
+                        'with the scenario\'s imported topology: '
+                        'agent {} doesn\'t have enough interfaces '
+                        '(found {}, expected {})'.format(
+                            address, len(topology[address]),
+                            len(old_networks)))
+            else:
+                entity.networks.set(new_networks | set(old_networks))
+
+        if issues:
+            raise errors.UnprocessableError(
+                    'Errors found in proposed topology',
+                    errors=issues, project_name=project.name)
+
+        old_networks = project.networks.filter(address__startswith="imported")
+        new_networks = project.networks.exclude(address__startswith="imported")
+        # Create all potential networks.
+        for (old_network, new_network) in itertools.product(old_networks, new_networks):
+            PotentialNetwork.objects.get_or_create(
+                    old_network=old_network,
+                    new_network=new_network,
+                    project=project)
+
+        # Remove inconsistencies
+        for potential_network in (project.potential_networks.all()
+                                  .prefetch_related("old_network__entities")
+                                  .prefetch_related("new_network__entities")):
+            if not (set(potential_network.old_network.entities.all()) <=
+                    (set(potential_network.new_network.entities.all()) | set(entities_without_agents))):
+                potential_network.delete()
+
+        if entities_without_agents:
+            return
+
+        # The agent assignment is finished. Check that all is coherent
+        # If an old network has no new network candidate, error
+        for network in old_networks:
+            if not project.potential_networks.filter(old_network=network):
+                self._clean_agent(modified_entity)
+                raise errors.UnprocessableError(
+                        'Network {} wasn\'t found on the '
+                        'topology'.format(network.name),
+                        project_name=project.name)
+
+        # If there are more old networks(duplicates) than candidates, error
+        if project.potential_networks.distinct("new_network").count() < len(old_networks):
+            self._clean_agent(modified_entity)
+            raise errors.UnprocessableError(
+                    'Network topology is not compatible: '
+                    'cannot map available networks into '
+                    'imported networks.',
+                    project_name=project.name)
+
+        # Remove old networks
+        old_networks.delete()
+
 
 class CreateProject(ProjectAction):
     """Action responsible for creating a new Project"""
 
-    def __init__(self, json_data):
+    def __init__(self, json_data, ignore_topology):
         name = extract_and_check_name_from_json(json_data, kind='Project')
-        super().__init__(name=name, json_data=json_data)
+        super().__init__(
+                name=name, json_data=json_data,
+                ignore_topology=ignore_topology
+        )
 
     @require_connected_user()
     def _action(self):
@@ -2488,7 +2650,10 @@ class CreateProject(ProjectAction):
                     'Project name cannot be digits only',
                     project_name=integer)
         self._register_project()
-        self._build_topology()
+        if not self.ignore_topology:
+            self._import_topology(self.json_data)
+        else:
+            self._build_topology()
         project = self.get_project_or_not_found_error()
         return project.json, 200
 
@@ -2548,7 +2713,10 @@ class RefreshTopologyProject(ProjectAction):
     def _action(self):
         project = self.get_project_or_not_found_error()
         self._assert_user_in(project.owners.all())
-        self._build_topology()
+        if project.networks.filter(address__startswith='imported'):
+            self._enforce_topology()
+        else:
+            self._build_topology()
         return project.json, 200
 
 
@@ -2647,8 +2815,15 @@ class ModifyEntity(EntityAction):
         extract_and_check_name_from_json(self.json_data, self.name, kind='Entity')
         with db.transaction.atomic():
             self._register_entity()
+
         entity = self.get_entity_or_not_found_error()
-        InfosProject(self.project)._build_topology()
+        project = InfosProject(self.project)
+
+        if entity.project.networks.filter(address__startswith='imported'):
+            project._enforce_topology(entity)
+        else:
+            project._build_topology()
+
         return entity.project.json, 200
 
 

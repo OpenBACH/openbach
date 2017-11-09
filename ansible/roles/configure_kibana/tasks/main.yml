@@ -1,0 +1,13 @@
+- name: Configure Kibana dashboard
+  uri:
+    url: http://{{ openbach_collector }}:{{ elasticsearch_port }}/.kibana/{{ item.url }}
+    method: PUT
+    body: "{{ lookup('file', item.filename) }}"
+    status_code: 200, 201
+    body_format: json
+  with_items:
+    - { filename: 'vertical_bar.json', url: 'visualization/vertical_bar' }
+    - { filename: 'pie.json', url: 'visualization/pie' } 
+    - { filename: 'index_pattern.json', url: 'index-pattern/default_logstash_index' }
+    - { filename: 'log_search.json', url: 'search/log_search' }
+    - { filename: 'dashboard.json', url: 'dashboard/default_dashboard' }

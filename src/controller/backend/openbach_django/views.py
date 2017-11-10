@@ -953,8 +953,9 @@ class UsersView(GenericView):
 
 
 def push_file(request):
+    do_remove = True
+
     try:
-        uploaded_file = request.FILES['file']
         remote_path = request.POST['path']
         address = request.POST['agent_ip']
     except KeyError as e:
@@ -962,11 +963,26 @@ def push_file(request):
                 status=400,
                 data={'msg': 'POST data malformed: {} missing'.format(e)})
 
-    # Copy file to disk
-    path = '/tmp/{}'.format(uploaded_file.name)
-    with open(path, 'wb') as f:
-        for chunk in uploaded_file.chunks():
-            f.write(chunk)
+    try:
+        uploaded_file = request.FILES['file']
+    except KeyError:
+        try:
+            path = request.POST['local_path']
+        except KeyError:
+            return JsonResponse(
+                    status=400,
+                    data={
+                        'msg': 'POST data malformed: neither '
+                        '\'local_path\' nor a file was sent',
+                    })
+        else:
+            do_remove = False
+    else:
+        # Copy file to disk
+        path = '/tmp/{}'.format(uploaded_file.name)
+        with open(path, 'wb') as f:
+            for chunk in uploaded_file.chunks():
+                f.write(chunk)
 
     try:
         # Mock using a class-based view to contact the conductor
@@ -976,4 +992,5 @@ def push_file(request):
                 command='push_file', address=address,
                 local_path=path, remote_path=remote_path)
     finally:
-        os.remove(path)
+        if do_remove:
+            os.remove(path)

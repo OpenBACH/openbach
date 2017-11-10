@@ -1,3 +1,5 @@
+---
+
 - name: Configure Kibana dashboard
   uri:
     url: http://{{ openbach_collector }}:{{ elasticsearch_port }}/.kibana/{{ item.url }}

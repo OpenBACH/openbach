@@ -1921,10 +1921,10 @@ class ScenarioInstanceAction(ConductorAction):
 class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
     """Action responsible of launching new Scenario Instances"""
 
-    def __init__(self, name, project=None, arguments=None, date=None):
+    def __init__(self, scenario_name, project=None, arguments=None, date=None):
         if arguments is None:
             arguments = {}
-        super().__init__(name=name, project=project, arguments=arguments, date=date)
+        super().__init__(name=scenario_name, project=project, arguments=arguments, date=date)
 
     def openbach_function(self, openbach_function_instance):
         launching_project = openbach_function_instance.scenario_instance.scenario.project

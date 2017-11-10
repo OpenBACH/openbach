@@ -91,18 +91,29 @@
   remote_user: openbach
 
 - name: Install the Backend
-  synchronize: src=../src/controller/backend/ dest=/opt/openbach/controller/backend/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
+  synchronize: src=../src/controller/backend/openbach_django/ dest=/opt/openbach/controller/backend/openbach_django/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
+  remote_user: openbach
+  notify:
+    - start backend
+    - start conductor
+
+- name: Configure the Backend
+  synchronize: src=../src/controller/backend/backend/ dest=/opt/openbach/controller/backend/backend/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
   remote_user: openbach
   notify:
     - start backend
     - start conductor
 
 - name: Set up local settings
-  template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py
+  template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py mode=0400
   remote_user: openbach
   notify:
     - start backend
     - start conductor
+
+- name: Copy Django's manager file
+  copy: src=../src/controller/backend/openbach-backend.py dest=/opt/openbach/controller/backend/openbach-backend.py mode=0500
+  remote_user: openbach
 
 - name: Initialize the Backend's Database
   shell: /opt/openbach/controller/backend/openbach-backend.py migrate --no-input
@@ -113,7 +124,7 @@
   remote_user: openbach
 
 - name: Collect Django's static files
-  shell: yes yes | /opt/openbach/controller/backend/openbach-backend.py collectstatic
+  shell: /opt/openbach/controller/backend/openbach-backend.py collectstatic --no-input
   remote_user: openbach
 
 - name: Create the Backend service

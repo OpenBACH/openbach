@@ -169,8 +169,7 @@ def get_default_jobs(section):
     with suppress(IOError, KeyError, yaml.YAMLError):
         with open(DEFAULT_JOBS) as stream:
             content = yaml.load(stream)
-        for job in content[section]:
-            yield job['name']
+        yield from content[section]
 
 
 def extract_and_check_name_from_json(json_data, existing_name=None, *, kind):

@@ -155,7 +155,10 @@
   remote_user: openbach
 
 - name: Copy the sources of the Jobs
-  synchronize: src=../src/jobs/ dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
+  synchronize: src={{ item }} dest=/opt/openbach/controller/src/jobs/ recursive=yes delete=no rsync_opts=--exclude=__pycache__
+  with_items:
+    - ../src/jobs/
+    - "{{ openbach_jobs_folders | default([]) }}"
   remote_user: openbach
 
 - name: Copy the version file on the Controller

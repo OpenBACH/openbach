@@ -113,12 +113,11 @@ def get_jobs_infos(folder):
 
 
 def get_all_jobs_infos(folders, limit, substitute):
-    limit = set(limit)
     for folder in folders:
         for name, path in get_jobs_infos(folder):
             if substitute:
                 path = os.path.join(substitute, path[len(folder):])
-            if not limit or name in limit:
+            if limit is None or name in limit:
                 yield {'name': name, 'path': path}
 
 
@@ -128,7 +127,7 @@ def run_module():
     module_args = dict(
         folders=dict(type='list', required=True),
         substitute=dict(type='str', required=False, default=None),
-        limit=dict(type='list', required=False, default=[]),
+        limit=dict(type='list', required=False, default=None),
     )
 
     # seed the result dict in the object
@@ -157,9 +156,13 @@ def run_module():
         return result
 
     # manipulate or modify the state as needed
+    limit_to = module.params['limit']
+    if limit_to is not None:
+        limit_to = set(limit_to)
+
     jobs = get_all_jobs_infos(
             module.params['folders'],
-            module.params['limit'],
+            limit_to,
             module.params['substitute'])
     result['openbach_jobs'] = list(jobs)
 

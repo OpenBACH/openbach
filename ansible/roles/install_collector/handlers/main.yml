@@ -16,8 +16,22 @@
     - create default influxdb database
 
 - name: wait for influxdb to start
-  wait_for: port={{ influxdb_port }} timeout=10
+  wait_for: port={{ influxdb_port }} timeout=60
 
 - name: create default influxdb database
-  influxdb_database: hostname=localhost database_name={{ influxdb_database_name }} state=present
-  become: yes
+  influxdb_database: 
+    hostname: localhost 
+    database_name: "{{ influxdb_database_name }}"
+    port: "{{ influxdb_port }}"
+    state: present
+  notify: alter default influxdb policy
+
+- name: alter default influxdb policy
+  influxdb_retention_policy:
+    hostname: localhost
+    database_name: "{{ influxdb_database_name }}"
+    port: "{{ influxdb_port }}"
+    policy_name: default
+    duration: 52w
+    replication: 1
+    default: yes

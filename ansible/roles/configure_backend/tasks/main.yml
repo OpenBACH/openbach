@@ -52,9 +52,9 @@
     method: POST
     body_format: json
     body:
-      login: openbach
-      password: openbach
-  register: backend_login
+      login: "{{ openbach_backend_admin_name }}"
+      password: "{{ openbach_backend_admin_password }}"
+  register: openbach_backend_login
   
 - name: Add Jobs into the Backend Database
   uri:
@@ -65,7 +65,7 @@
       name: "{{ item.name }}"
       path: "{{ item.path }}"
     headers:
-      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
+      Cookie: "sessionid={{ openbach_backend_login.cookies.sessionid }}"
   with_items: "{{ openbach_jobs_metadata.openbach_jobs }}"
     
 - name: Add Collectors into the Backend Database
@@ -78,7 +78,7 @@
       name: "{{ hostvars[item].openbach_name }}"
       skip_playbook: true
     headers:
-      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
+      Cookie: "sessionid={{ openbach_backend_login.cookies.sessionid }}"
     status_code: 202
   with_items: "{{ groups.collector | default([]) }}"
 
@@ -101,7 +101,7 @@
       collector_ip: "{{ hostvars[item].openbach_collector }}"
       skip_playbook: true
     headers:
-      Cookie: "sessionid={{ backend_login.cookies.sessionid }}"
+      Cookie: "sessionid={{ openbach_backend_login.cookies.sessionid }}"
     status_code: 202
   with_items: "{{ groups.agent | default([]) }}"
 

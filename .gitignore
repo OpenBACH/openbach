@@ -1,5 +1,5 @@
 __pycache__
-src/jobs.tar.gz
+*.pyc
 *.swp
 *.retry
 ansible/inventory/

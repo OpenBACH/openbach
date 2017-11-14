@@ -3117,10 +3117,14 @@ class StatisticsValues(StatisticsAction):
 
     def _action(self):
         job_name, connection = self._build_connection()
-        scenario, = connection.statistics(
+        scenarios = list(connection.statistics(
                 fields=[self.name], job=job_name,
-                job_instance=self.instance_id)
+                job_instance=self.instance_id))
 
+        if not scenarios:
+            return [], 200
+
+        scenario, = scenarios
         job, = scenario.own_jobs
         statistics = itertools.chain.from_iterable(
                 statistic.json for statistic

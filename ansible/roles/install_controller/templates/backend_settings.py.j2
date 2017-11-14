@@ -33,7 +33,7 @@ __credits__ = '''Contributors:
 '''
 
 
-SECRET_KEY = '{{ key.stdout }}'
+SECRET_KEY = '{{ openbach_local_settings_secret_key }}'
 
 DEBUG = False
 
@@ -42,7 +42,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'openbach_db',
         'USER': 'openbach',
-        'PASSWORD': '{{ password.stdout }}',
+        'PASSWORD': '{{ openbach_local_settings_database_password }}',
         'HOST': 'localhost',
         'PORT': '',
     }

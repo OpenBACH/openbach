@@ -13,7 +13,10 @@
   become: yes
 
 - name: Remove Elasticsearch Data
-  file: path=/var/lib/elasticsearch/openbach state=absent
+  file: path=/var/lib/elasticsearch/{{ item }} state=absent
+  with_items:
+    - openbach
+    - .kibana
   become: yes
   when: openbach_clear_database | default(False)
 

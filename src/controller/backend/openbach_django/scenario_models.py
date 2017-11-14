@@ -307,7 +307,9 @@ class Scenario(models.Model):
                         'openbach_functions.{}.{}'.format(index, function_name),
                         override_error=str(err))
 
+            # Register required and optional arguments for a start_job_instance
             if function_name == 'start_job_instance':
+                # Get the Job
                 job_name = openbach_function.job_name
                 try:
                     job = Job.objects.get(name=job_name)
@@ -315,8 +317,18 @@ class Scenario(models.Model):
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.{}.{}'.format(index, function_name, job_name),
                             override_error='No such job in the database')
-                # Register arguments
+
+                # Check all required arguments are present
                 arguments = function[function_name][job_name]
+                for argument in job.required_arguments.all():
+                    name = argument.name
+                    if name not in arguments:
+                        raise Scenario.MalformedError(
+                                'openbach_functions.{}.{}.{}.{}'
+                                .format(index, function_name, job_name, name),
+                                override_error='Missing required argument')
+
+                # Register arguments
                 for name, value in arguments.items():
                     try:
                         job_argument = job.required_arguments.get(name=name)

@@ -60,7 +60,7 @@ def handle_exception(exception, timestamp):
 
 
 def main(destination_ip, count, interval, interface, packetsize, ttl, n_mean):
-    cmd = ['fping', destination_ip]
+    cmd = ['fping', destination_ip, '-e']
     if count == 0:
         cmd += ['-l']
     else:
@@ -88,7 +88,7 @@ def main(destination_ip, count, interval, interface, packetsize, ttl, n_mean):
         timestamp = int(time.time() * 1000)
 
         # read output
-        output = p.stdout.readline().decode()
+        output = p.stdout.readline().decode().rstrip()
         if not output:
             if p.poll is not None:
                 break

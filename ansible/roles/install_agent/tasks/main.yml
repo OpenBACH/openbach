@@ -49,6 +49,7 @@
     - apscheduler
     - psutil
     - PyYAML
+    - openbach_api
   become: yes
 
 - name: Configure NTP Server
@@ -98,7 +99,6 @@
     - job_instances
     - rstats
     - collect_agent
-    - openbach_api
   remote_user: openbach
 
 - name: Install Rstats
@@ -122,14 +122,6 @@
   synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
   remote_user: openbach
   notify: build collect agent library
-
-- name: Upload OpenBACH API
-  copy: src=openbach_api-{{ openbach_api_version }}-py3-none-any.whl dest=/opt/openbach/agent/openbach_api/
-  remote_user: openbach
-
-- name: Install OpenBACH API
-  pip: executable=pip3 name=/opt/openbach/agent/openbach_api/openbach_api-{{ openbach_api_version }}-py3-none-any.whl
-  become: yes
 
 - name: Install the Agent's Daemon
   copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}

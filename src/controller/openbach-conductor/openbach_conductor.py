@@ -2118,7 +2118,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
         for job_name, stats in generator:
             stats.update(dates)
             try:
-                stats['time'] = datetime.fromtimestamp(date/1000, tz=tz)
+                stats['time'] = datetime.fromtimestamp(stats['time']/1000, tz=tz)
             except KeyError:
                 pass
             csv_writer.writerow(stats)

@@ -2100,13 +2100,15 @@ class ExportScenarioInstance(ScenarioInstanceAction):
     """Action responsible for information retrieval about a ScenarioInstance"""
 
     def __init__(self, instance_id):
+        self.tz = timezone.get_current_timezone()
         super().__init__(instance_id=instance_id)
 
     def _compute_headers(self, start_job_instance, headers, stats_names, **kwargs):
         job_name = start_job_instance.job.job.name
-        headers |= set(stats_names[job_name])
+        with suppress(KeyError):
+            headers |= set(stats_names[job_name])
 
-    def _export_start_job_instance(self, start_job_instance, csv_writer, dates, tz):
+    def _export_start_job_instance(self, start_job_instance, csv_writer, dates):
         agent = start_job_instance.job.agent
         connection = InfluxDBConnection(
                 agent.collector.address,
@@ -2118,13 +2120,20 @@ class ExportScenarioInstance(ScenarioInstanceAction):
         for job_name, stats in generator:
             stats.update(dates)
             try:
-                stats['time'] = datetime.fromtimestamp(stats['time']/1000, tz=tz)
+                stats['time'] = datetime.fromtimestamp(stats['time']/1000, tz=self.tz)
             except KeyError:
                 pass
             csv_writer.writerow(stats)
+        if 'job_name' not in locals():
+            stats = {}
+            stats['@agent_name'] = start_job_instance.job.agent.name
+            stats['@scenario_instance_id'] = start_job_instance.scenario_id
+            stats['@job_instance_id'] = start_job_instance.id
+            stats['@owner_scenario_instance_id'] = start_job_instance.started_by
+            stats.update(dates)
+            csv_writer.writerow(stats)
 
     def _recurse_into_scenario_instance(self, scenario_instance, action, *args):
-        tz = timezone.get_current_timezone()
         for openbach_function in scenario_instance.openbach_functions_instances.all():
             with suppress(JobInstance.DoesNotExist):
                 job_instance = openbach_function.started_job
@@ -2135,7 +2144,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
                         '@scenario_stop_date': scenario_instance.stop_date,
                         '@job_instance_stop_date': job_instance.stop_date,
                 }
-                action(job_instance, *args, dates=dates, tz=tz)
+                action(job_instance, *args, dates=dates)
             with suppress(ScenarioInstance.DoesNotExist):
                 subscenario_instance = openbach_function.started_scenario
                 self._recurse_into_scenario_instance(subscenario_instance, action, *args)
@@ -2156,20 +2165,19 @@ class ExportScenarioInstance(ScenarioInstanceAction):
         self.share_user(get_stats_names)
         stats_names = get_stats_names.action()[0]
 
-        if not stats_names:
-            return scenario_instance.json, 200
-
         headers = {
                 '@agent_name', '@scenario_instance_id', 
                 '@job_instance_id', '@owner_scenario_instance_id',
                 '@scenario_start_date', '@job_instance_start_date',
                 '@scenario_stop_date', '@job_instance_stop_date',
-                '@job_name', 'time'}
+                '@job_name'}
         self._recurse_into_scenario_instance(
                 scenario_instance,
                 self._compute_headers,
                 headers,
                 stats_names)
+        if len(headers) > 9:
+            headers |= {'time'}
 
         csv_path = None
         with tempfile.NamedTemporaryFile(mode='w', newline='', delete=False, suffix='.csv') as csvfile:

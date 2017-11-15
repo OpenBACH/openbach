@@ -15,7 +15,6 @@ extensions:
  * .pyc
  * .pyo
  * .rc
- * .txt
  * .md
 
 Each inventory will define hosts and groups as per ansible semantics. See

@@ -20,6 +20,14 @@
   become: yes
   when: openbach_clear_database | default(False)
 
+- name: Remove Elasticsearch cronjob
+  cron: name=curator minute=0 hour=0 job=/etc/cron.daily/curator_cronjob.py state=absent
+  become: yes
+
+- name: Remove Elasticsearch cronjob script
+  file: path=/etc/cron.daily/curator_cronjob.py state=absent
+  become: yes
+
 - name: Remove Logstash Config Files
   file: path=/etc/logstash/conf.d/{{ item }} state=absent
   with_items:

@@ -94,6 +94,7 @@ urlpatterns = [
         name='scenario_instances_view'),
     url(r'^scenario_instance/(?P<id>[^/]+)/?$',
         views.ScenarioInstanceView.as_view(), name='scenario_instance_view'),
+    url(r'^scenario_instance/(?P<id>[^/]+)/csv/?$', views.download_csv, name='download_csv'),
 
     url(r'^project/?$', views.ProjectsView.as_view(),
         name='projects_view'),

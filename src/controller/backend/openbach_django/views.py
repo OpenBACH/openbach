@@ -50,7 +50,7 @@ except ImportError:
 from django.views.generic import base
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 from django.db.utils import IntegrityError
 
 from .utils import send_fifo, extract_integer
@@ -992,5 +992,26 @@ def push_file(request):
                 command='push_file', address=address,
                 local_path=path, remote_path=remote_path)
     finally:
-        if do_remove:
-            os.remove(path)
+        os.remove(path)
+
+
+def download_csv(request, id):
+    path = None
+    # Mock using a class-based view to contact the conductor
+    view = GenericView()
+    view.request = request
+    path, _ = view.conductor_execute(
+            command='export_scenario_instance', 
+            instance_id=int(id))
+    try:
+        with open(path) as f:
+            response = HttpResponse(f.read(), content_type='application/force_download')
+            response['Content-Disposition'] = 'attachment; filename="scenario{}.csv"'.format(id)
+    except TypeError as e:
+        raise Http404
+    except OSError as e:
+        os.remove(path)
+        raise
+    else:
+        os.remove(path)
+        return response

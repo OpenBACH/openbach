@@ -49,6 +49,7 @@ __credits__ = '''Contributors:
 import os
 import re
 import sys
+import csv
 import json
 import time
 import queue
@@ -58,6 +59,7 @@ import syslog
 import tarfile
 import inspect
 import operator
+import tempfile
 import threading
 import itertools
 import traceback
@@ -2094,6 +2096,101 @@ class InfosScenarioInstance(ScenarioInstanceAction):
         return scenario_instance.json, 200
 
 
+class ExportScenarioInstance(ScenarioInstanceAction):
+    """Action responsible for information retrieval about a ScenarioInstance"""
+
+    def __init__(self, instance_id):
+        self.tz = timezone.get_current_timezone()
+        super().__init__(instance_id=instance_id)
+
+    def _compute_headers(self, start_job_instance, headers, stats_names, **kwargs):
+        job_name = start_job_instance.job.job.name
+        with suppress(KeyError):
+            headers |= set(stats_names[job_name])
+
+    def _export_start_job_instance(self, start_job_instance, csv_writer, dates):
+        agent = start_job_instance.job.agent
+        connection = InfluxDBConnection(
+                agent.collector.address,
+                agent.collector.stats_query_port,
+                agent.collector.stats_database_name,
+                agent.collector.stats_database_precision)
+        generator = connection.raw_statistics(
+                job_instance=start_job_instance.id)
+        for job_name, stats in generator:
+            stats.update(dates)
+            try:
+                stats['time'] = datetime.fromtimestamp(stats['time']/1000, tz=self.tz)
+            except KeyError:
+                pass
+            csv_writer.writerow(stats)
+        if 'job_name' not in locals():
+            stats = {}
+            stats['@agent_name'] = start_job_instance.job.agent.name
+            stats['@scenario_instance_id'] = start_job_instance.scenario_id
+            stats['@job_instance_id'] = start_job_instance.id
+            stats['@owner_scenario_instance_id'] = start_job_instance.started_by
+            stats.update(dates)
+            csv_writer.writerow(stats)
+
+    def _recurse_into_scenario_instance(self, scenario_instance, action, *args):
+        for openbach_function in scenario_instance.openbach_functions_instances.all():
+            with suppress(JobInstance.DoesNotExist):
+                job_instance = openbach_function.started_job
+                dates = {
+                        '@job_name': job_instance.job.job.name,
+                        '@scenario_start_date': scenario_instance.start_date,
+                        '@job_instance_start_date': job_instance.start_date,
+                        '@scenario_stop_date': scenario_instance.stop_date,
+                        '@job_instance_stop_date': job_instance.stop_date,
+                }
+                action(job_instance, *args, dates=dates)
+            with suppress(ScenarioInstance.DoesNotExist):
+                subscenario_instance = openbach_function.started_scenario
+                self._recurse_into_scenario_instance(subscenario_instance, action, *args)
+
+    def _action(self):
+        scenario_instance = self.get_scenario_instance_or_not_found_error()
+        project = scenario_instance.scenario.project
+
+        if project is not None:
+            self._assert_user_in(project.owners.all())
+
+        if not scenario_instance.is_stopped:
+            raise errors.ConflictError(
+                    'Trying to export the statistics of a scenario_instance still running',
+                    scenario_instance_id=self.instance_id)
+
+        get_stats_names = StatisticsNames(project.name if project else None)
+        self.share_user(get_stats_names)
+        stats_names = get_stats_names.action()[0]
+
+        headers = {
+                '@agent_name', '@scenario_instance_id', 
+                '@job_instance_id', '@owner_scenario_instance_id',
+                '@scenario_start_date', '@job_instance_start_date',
+                '@scenario_stop_date', '@job_instance_stop_date',
+                '@job_name'}
+        self._recurse_into_scenario_instance(
+                scenario_instance,
+                self._compute_headers,
+                headers,
+                stats_names)
+        if len(headers) > 9:
+            headers |= {'time'}
+
+        csv_path = None
+        with tempfile.NamedTemporaryFile(mode='w', newline='', delete=False, suffix='.csv') as csvfile:
+            csv_writer = csv.DictWriter(csvfile.file, fieldnames=sorted(headers))
+            csv_writer.writeheader()
+            self._recurse_into_scenario_instance(
+                    scenario_instance,
+                    self._export_start_job_instance,
+                    csv_writer)
+            csv_path = csvfile.name
+        return csv_path, 200
+
+
 class ListScenarioInstances(ScenarioInstanceAction):
     """Action responsible for information retrieval about all
     ScenarioInstances of a given Scenario.
@@ -3046,13 +3143,16 @@ class StatisticsNames(ProjectAction):
 
     def _action(self):
         project = self.get_project_or_not_found_error()
-        self._assert_user_in(project.owners.all())
-        queryset = (
-                project.entities
-                .exclude(agent__isnull=True)
-                .order_by('agent__collector__address')
-                .distinct('agent__collector__address'))
-        collectors = [entity.agent.collector for entity in queryset]
+        if project:
+            self._assert_user_in(project.owners.all())
+            queryset = (
+                    project.entities
+                    .exclude(agent__isnull=True)
+                    .order_by('agent__collector__address')
+                    .distinct('agent__collector__address'))
+            collectors = [entity.agent.collector for entity in queryset]
+        else:
+            collectors = Collector.objects.all()
 
         stats_names = defaultdict(set)
         for collector in collectors:
@@ -3061,13 +3161,8 @@ class StatisticsNames(ProjectAction):
                     collector.stats_query_port,
                     collector.stats_database_name,
                     collector.stats_database_precision)
-            response = connection.sql_query('SHOW FIELD KEYS')
-            with suppress(LookupError):
-                for result in response['results']:
-                    for serie in result['series']:
-                        job_name = serie['name']
-                        stats = (value[0] for value in serie['values'])
-                        stats_names[job_name].update(stats)
+            for job_name, fields in connection.get_field_keys().items():
+                stats_names[job_name].update(fields)
 
         return {
                 job_name: sorted(names)

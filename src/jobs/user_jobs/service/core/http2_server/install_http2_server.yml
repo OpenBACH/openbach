@@ -87,7 +87,11 @@
   shell: ldconfig
   become: yes
   when: nghttp_check_deb.rc == 1
-  
+
+- name: Stop and disable nghttpx service
+  systemd: name=nghttpx state=stopped enabled=no
+  become: yes
+
 - name: Create the HTTP2 Server Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
 

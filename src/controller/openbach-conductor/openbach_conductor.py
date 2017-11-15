@@ -2100,8 +2100,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
     """Action responsible for information retrieval about a ScenarioInstance"""
 
     def __init__(self, instance_id):
-        self.tz = timezone.get_current_timezone()
-        super().__init__(instance_id=instance_id)
+        super().__init__(instance_id=instance_id, tz=timezone.get_current_timezone())
 
     def _compute_headers(self, start_job_instance, headers, stats_names, **kwargs):
         job_name = start_job_instance.job.job.name
@@ -2124,14 +2123,16 @@ class ExportScenarioInstance(ScenarioInstanceAction):
             except KeyError:
                 pass
             csv_writer.writerow(stats)
-        if 'job_name' not in locals():
-            stats = {}
-            stats['@agent_name'] = start_job_instance.job.agent.name
-            stats['@scenario_instance_id'] = start_job_instance.scenario_id
-            stats['@job_instance_id'] = start_job_instance.id
-            stats['@owner_scenario_instance_id'] = start_job_instance.started_by
-            stats.update(dates)
-            csv_writer.writerow(stats)
+
+    def _export_scenario_metadata(self, start_job_instance, csv_writer, dates):
+        stats = {
+                '@agent_name': start_job_instance.job.agent.name,
+                '@scenario_instance_id': start_job_instance.scenario_id,
+                '@job_instance_id': start_job_instance.id,
+                '@owner_scenario_instance_id': start_job_instance.started_by,
+        }
+        stats.update(dates)
+        csv_writer.writerow(stats)
 
     def _recurse_into_scenario_instance(self, scenario_instance, action, *args):
         for openbach_function in scenario_instance.openbach_functions_instances.all():
@@ -2166,18 +2167,26 @@ class ExportScenarioInstance(ScenarioInstanceAction):
         stats_names = get_stats_names.action()[0]
 
         headers = {
-                '@agent_name', '@scenario_instance_id', 
-                '@job_instance_id', '@owner_scenario_instance_id',
-                '@scenario_start_date', '@job_instance_start_date',
-                '@scenario_stop_date', '@job_instance_stop_date',
-                '@job_name'}
+                '@agent_name',
+                '@job_instance_id',
+                '@scenario_instance_id',
+                '@owner_scenario_instance_id',
+                '@job_instance_start_date',
+                '@job_instance_stop_date',
+                '@scenario_start_date',
+                '@scenario_stop_date',
+                '@job_name'
+        }
+
         self._recurse_into_scenario_instance(
                 scenario_instance,
                 self._compute_headers,
                 headers,
                 stats_names)
-        if len(headers) > 9:
-            headers |= {'time'}
+
+        has_jobs_stats = len(headers) > 9
+        if has_jobs_stats:
+            headers.add('time')
 
         csv_path = None
         with tempfile.NamedTemporaryFile(mode='w', newline='', delete=False, suffix='.csv') as csvfile:
@@ -2185,7 +2194,8 @@ class ExportScenarioInstance(ScenarioInstanceAction):
             csv_writer.writeheader()
             self._recurse_into_scenario_instance(
                     scenario_instance,
-                    self._export_start_job_instance,
+                    self._export_start_job_instance if has_jobs_stats
+                    else self._export_scenario_metadata,
                     csv_writer)
             csv_path = csvfile.name
         return csv_path, 200

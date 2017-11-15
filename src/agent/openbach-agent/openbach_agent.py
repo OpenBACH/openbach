@@ -192,6 +192,16 @@ class JobManager:
             if return_code is None or 'pid' in instance:
                 instance.update({'pid': pid, 'return_code': return_code})
 
+    def get_last_instance_id(self):
+        last = 0
+        with self._mutex:
+            for job_name, job in self.jobs.items():
+                try:
+                    biggest = max(map(int, job['instances'].keys()))
+                    last = biggest if (biggest > last) else last
+                except ValueError:
+                    pass
+        return last
 
 class TruncatedMessageException(Exception):
     def __init__(self, expected_length, length):
@@ -418,6 +428,19 @@ class StartJobInstanceAgent(AgentAction):
                             'KO An instance {} with the id {} is already '
                             'scheduled'.format(self.name, self.instance_id))
             manager.add_instance(self.name, self.instance_id, arguments, self.date_type, self.date)
+
+
+class StartJobInstanceAgentId(StartJobInstanceAgent):
+    def __init__(self, name, scenario_id, owner_id, date_type, date_value, *arguments):
+        instance_id = str(JobManager().get_last_instance_id() + 1)
+        super().__init__(
+                name, instance_id, scenario_id, owner_id,
+                date_type, date_value, *arguments)
+
+    def _action(self):
+        super()._action()
+        return self.instance_id
+
 
 
 class RestartJobInstanceAgent(StartJobInstanceAgent):

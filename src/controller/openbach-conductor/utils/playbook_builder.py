@@ -51,7 +51,7 @@ from ansible.plugins.callback import CallbackBase
 from ansible.utils.vars import load_options_vars
 from ansible.vars import VariableManager
 
-import errors
+from . import errors
 
 
 class PlayResult(CallbackBase):

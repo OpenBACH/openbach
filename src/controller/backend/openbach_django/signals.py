@@ -5,10 +5,10 @@ from django.dispatch import receiver
 
 @receiver(pre_delete, sender=User)
 def assign_private_project_to_superuser(sender, instance, **kwargs):
-    super_user = User.objects.filter(is_superuser=True).first()
-    if super_user is None or super_user == instance:
+    super_users = User.objects.filter(is_superuser=True).exclude(id=instance.id)
+    if not super_users:
         return
 
     for project in instance.private_projects.all():
         if project.owners.count() == 1:
-            project.owners.add(super_user)
+            project.owners.add(*super_users)

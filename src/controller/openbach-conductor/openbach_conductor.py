@@ -75,9 +75,9 @@ from fuzzywuzzy import fuzz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
 
-import errors
-from openbach_baton import OpenBachBaton
-from playbook_builder import start_playbook, setup_playbook_manager
+from utils import errors
+from utils.openbach_baton import OpenBachBaton
+from utils.playbook_builder import start_playbook, setup_playbook_manager
 from data_access.elasticsearch_tools import ElasticSearchConnection
 from data_access.influxdb_tools import InfluxDBConnection
 
@@ -1691,10 +1691,12 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
 
         job = job_instance.job.job
         agent = job_instance.job.agent
+        scenario_id = job_instance.scenario_id
+        owner_id = get_master_scenario_id(scenario_id)
         try:
             OpenBachBaton(agent.address).restart_job_instance(
                     job.name, self.instance_id,
-                    job_instance.scenario_id,
+                    scenario_id, owner_id,
                     job_instance.arguments,
                     self.date, self.interval)
         except errors.ConductorError:

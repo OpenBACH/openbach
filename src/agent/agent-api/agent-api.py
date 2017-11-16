@@ -52,9 +52,8 @@ def execute_and_print(function, *args, **kargs):
     else:
         print(response)
 
-def main(baton, scenario_instance_id=None, args=None, interval=None,
-        owner_instance_id=None, job_name=None, job_instance_id=None, date=None,
-        action=None, **kwargs):
+def main(baton, args=None, interval=None, job_name=None,
+        job_instance_id=None, date=None, action=None, **kwargs):
 
     # Format date
     if not date and not interval:
@@ -67,11 +66,10 @@ def main(baton, scenario_instance_id=None, args=None, interval=None,
     if action == 'start_job':
         if job_instance_id > 0:
             execute_and_print(baton.start_job_instance, job_name, job_instance_id,
-                    scenario_instance_id, owner_instance_id, args, date=date,
-                    interval=interval)
+                    0, 0, args, date=date, interval=interval)
         else:
-            message = 'start_job_instance_agent_id {} {} {} {}{} {}'.format(
-                    shlex.quote(job_name), scenario_instance_id, owner_instance_id,
+            message = 'start_job_instance_agent_id {} {}{} {}'.format(
+                    shlex.quote(job_name),
                     '' if date is None else 'date {}'.format(date),
                     '' if interval is None else 'interval {}'.format(interval),
                     args)
@@ -80,8 +78,7 @@ def main(baton, scenario_instance_id=None, args=None, interval=None,
         execute_and_print(baton.stop_job_instance, job_name, job_instance_id, date)
     elif action == 'restart_job':
         execute_and_print(baton.restart_job_instance, job_name, job_instance_id,
-                scenario_instance_id, owner_instance_id, args, date=date,
-                interval=interval)
+                0, 0, args, date=date, interval=interval)
     elif action == 'job_status':
         execute_and_print(baton.status_job_instance, job_name, job_instance_id)
     elif action == 'list_jobs':
@@ -115,10 +112,6 @@ if __name__ == "__main__":
             help="Name of the job to start")
     parser_start_job.add_argument("-i", "--job_instance_id", type=int, default=-1,
             help="The Job Instance ID to use (-1 for first available)")
-    parser_start_job.add_argument("-s", "--scenario_instance_id", type=int, default=0,
-            help="The Scenario Instance ID to use")
-    parser_start_job.add_argument("-o", "--owner_instance_id", type=int, default=0,
-            help="The Owner Instance ID to use")
     group_start_job = parser_start_job.add_mutually_exclusive_group(required=False)
     group_start_job.add_argument("--date", metavar=('DATE', 'TIME'), nargs=2,
             help='Date of the execution')
@@ -144,10 +137,6 @@ if __name__ == "__main__":
             help="Name of the job to restart")
     parser_restart_job.add_argument("job_instance_id", type=int, 
             help="The Job Instance ID to restart")
-    parser_restart_job.add_argument("-s", "--scenario_instance_id", type=int, default=0,
-            help="The Scenario Instance ID to use")
-    parser_restart_job.add_argument("-o", "--owner_instance_id", type=int, default=0,
-            help="The Owner Instance ID to use")
     group_restart_job = parser_restart_job.add_mutually_exclusive_group(required=False)
     group_restart_job.add_argument("--date", metavar=('DATE', 'TIME'), nargs=2,
             help='Date of the execution')

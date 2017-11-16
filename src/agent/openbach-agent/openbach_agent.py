@@ -193,15 +193,9 @@ class JobManager:
                 instance.update({'pid': pid, 'return_code': return_code})
 
     def get_last_instance_id(self):
-        last = 0
         with self._mutex:
-            for job_name, job in self.jobs.items():
-                try:
-                    biggest = max(map(int, job['instances'].keys()))
-                    last = biggest if (biggest > last) else last
-                except ValueError:
-                    pass
-        return last
+            return max(max(map(int, job.get('instances', {})), default=0)
+                    for job in self.jobs.values())
 
 class TruncatedMessageException(Exception):
     def __init__(self, expected_length, length):
@@ -431,11 +425,10 @@ class StartJobInstanceAgent(AgentAction):
 
 
 class StartJobInstanceAgentId(StartJobInstanceAgent):
-    def __init__(self, name, scenario_id, owner_id, date_type, date_value, *arguments):
+    def __init__(self, name, date_type, date_value, *arguments):
         instance_id = str(JobManager().get_last_instance_id() + 1)
         super().__init__(
-                name, instance_id, scenario_id, owner_id,
-                date_type, date_value, *arguments)
+                name, instance_id, '0', '0', date_type, date_value, *arguments)
 
     def _action(self):
         super()._action()

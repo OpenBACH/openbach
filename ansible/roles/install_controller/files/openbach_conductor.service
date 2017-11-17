@@ -3,8 +3,8 @@ Description=Startup script for OpenBACH Conductor
 Requires=network.target
 
 [Service]
-User=openbach
 Type=simple
+User=openbach
 Environment="PYTHONPATH=/opt/openbach/controller/backend/"
 ExecStart=/usr/bin/python3 /opt/openbach/controller/conductor/openbach_conductor.py
 

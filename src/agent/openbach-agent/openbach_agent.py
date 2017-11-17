@@ -58,13 +58,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 try:
     # Try importing unix stuff
     import syslog
-    import resource  # TODO: remove it so we no longer need to run the agent as root
-    resource.setrlimit(resource.RLIMIT_NOFILE, (65536, 65536))
     OS_TYPE = 'linux'
     JOBS_FOLDER = '/opt/openbach/agent/jobs/'
     INSTANCES_FOLDER = '/opt/openbach/agent/job_instances/'
 except ImportError:
-    # If we failed assure we’re on windows
+    # If we failed assume we’re on windows
     import syslog_viveris as syslog
     OS_TYPE = 'windows'
     JOBS_FOLDER = r'C:\openbach\jobs'
@@ -118,22 +116,12 @@ class JobManager:
                 return instance_id in job['instances']
 
     def add_job(self, name):
-        def read_configuration():
-            conf = JobConfiguration(name)
-            return {
-                    'command': conf.command,
-                    'command_stop': conf.command_stop,
-                    'required': conf.required,
-                    'optional': conf.optional,
-                    'persistent': conf.persistent,
-            }
-
         with self._mutex:
             if name in self.jobs:
-                self.jobs[name].update(read_configuration())
+                self.jobs[name].update(read_job_configuration(name))
                 raise BadRequest('OK A job {} is already installed'.format(name))
             conf = {'instances': {}}
-            conf.update(read_configuration())
+            conf.update(read_job_configuration(name))
             self.jobs[name] = conf
 
     def pop_job(self, name):
@@ -219,59 +207,6 @@ class BadRequest(ValueError):
     def __init__(self, reason):
         super().__init__(reason)
         self.reason = reason
-
-
-class JobConfiguration:
-    """ Class that represents the configuration of a Job """
-    def __init__(self, job_name):
-        # Get the configuration filename
-        filename = '{}.yml'.format(job_name)
-        conf_file = os.path.join(JOBS_FOLDER, filename)
-        # Load the configuration in content
-        try:
-            with open(conf_file, 'r') as stream:
-                try:
-                    content = yaml.load(stream)
-                except yaml.YAMLError:
-                    raise BadRequest(
-                            'KO Conf file {} not well formed'.format(filename))
-        except FileNotFoundError:
-            raise BadRequest(
-                    'KO Conf file {} does not exist'.format(filename))
-        # Register the configuration
-        try:
-            for system in content['platform_configuration']:
-                if platform.system() != system['ansible_system']:
-                    continue
-                name, version, _ = platform.dist()
-                if name == system['ansible_distribution'] and version == system['ansible_distribution_version']:
-                    self.command = system['command']
-                    self.command_stop = system['command_stop']
-                    break
-            else:
-                raise BadRequest(
-                        'KO Conf file {} does not contain a '
-                        'os for {}'.format(filename, platform.system()))
-            self.required = []
-            args = content['arguments']['required']
-            if isinstance(args, list):
-                for arg in args:
-                    count = arg['count']
-                    if count == '+':
-                        self.required.append(arg['name'])
-                    else:
-                        if not isinstance(count, int):
-                            counts = count.split('-')
-                            count = int(counts[0])
-                        for i in range(count):
-                            self.required.append(arg['name'])
-            self.optional = isinstance(content['arguments']['optional'], list)
-            self.persistent = content['general']['persistent']
-        except KeyError as error:
-            raise BadRequest(
-                    'KO Conf file {} does not contain a '
-                    'section \'{}\' for job {}'
-                    .format(filename, error, job_name))
 
 
 class AgentAction:
@@ -723,6 +658,90 @@ def list_jobs_in_dir(dirname):
         name, ext = os.path.splitext(filename)
         if ext == '.yml':
             yield name
+
+
+def read_job_configuration(job_name):
+    # Get the configuration filename
+    filename = '{}.yml'.format(job_name)
+    conf_file = os.path.join(JOBS_FOLDER, filename)
+
+    # Load the configuration
+    try:
+        with open(conf_file, 'r') as stream:
+            try:
+                content = yaml.load(stream)
+            except yaml.YAMLError:
+                raise BadRequest(
+                        'KO Conf file {} not well formed'.format(filename))
+    except FileNotFoundError:
+        raise BadRequest(
+                'KO Conf file {} does not exist'.format(filename))
+
+    # Initialize the return value
+    configuration = {
+            'command': None,
+            'command_stop': None,
+            'required': None,
+            'optional': None,
+            'persistent': None,
+    }
+
+    # Register the configuration
+    oses = content.get('platform_configuration')
+    if oses is not None:
+        own_system = platform.system()
+        own_distribution, own_version, _ = platform.dist()
+        for system in oses:
+            try:
+                if own_system != system['ansible_system']:
+                    continue
+                if (own_distribution == system['ansible_distribution'] and
+                        own_version == system['ansible_distribution_version']):
+                    configuration['command'] = system['command']
+                    configuration['command_stop'] = system.get('command_stop')
+                    break
+            except KeyError as error:
+                raise BadRequest(
+                        'KO Conf file {} does not contain an '
+                        'entry \'{}\' for section \'platform_'
+                        'configuration\' for job {}'
+                        .format(filename, error, job_name))
+        else:
+            raise BadRequest(
+                    'KO Conf file {} does not contain a suitable '
+                    'os for {}'.format(filename, platform.system()))
+
+    configuration['required'] = conf_required = []
+    args = content.get('arguments', {})
+    required = args.get('required')
+    if isinstance(required, list):
+        for arg in required:
+            try:
+                count = arg['count']
+                if count == '+':
+                    conf_required.append(arg['name'])
+                else:
+                    if not isinstance(count, int):
+                        counts = count.split('-')
+                        count = int(counts[0])
+                    for i in range(count):
+                        conf_required.append(arg['name'])
+            except KeyError as error:
+                raise BadRequest(
+                        'KO Conf file {} does not contain an '
+                        'entry \'{}\' for section \'arguments '
+                        'required\' for job {}'
+                        .format(filename, error, job_name))
+    configuration['optional'] = isinstance(args.get('optional'), list)
+
+    try:
+        configuration['persistent'] = content['general']['persistent']
+    except KeyError:
+        raise BadRequest(
+                'KO Conf file {} does not contain a '
+                '\'persistent\' entry in section '
+                '\'general\' for job {}'
+                .format(filename, job_name))
 
 
 def populate_installed_jobs():

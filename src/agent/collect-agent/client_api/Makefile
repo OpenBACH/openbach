@@ -2,7 +2,7 @@ BUILD_FLAGS=-pthread -std=c++11 -pedantic -Wall -Wextra -Werror -fPIC $(CXXFLAGS
 ASIO_FLAGS=-DASIO_STANDALONE -I./dependencies/asio-1.10.6/include
 LIBS_FLAGS=-pthread $(LDLIBS)
 
-DESTINATION=$(if ${DESTDIR}, ${DESTDIR}, /usr/)
+PREFIX?=/usr/
 
 all: build/libcollectagent.so
 
@@ -15,13 +15,14 @@ build/libcollectagent.so: ./build/collectagent.o
 	g++ -o $@ $< $(LDFLAGS) -shared ${LIBS_FLAGS}
 
 install: all
-	mkdir -p ${DESTINATION}/{lib,include}/
-	cp build/libcollectagent.so ${DESTINATION}/lib/
-	cp src/collectagent.h ${DESTINATION}/include/
+	mkdir -p ${DESTDIR}${PREFIX}/lib/
+	mkdir -p ${DESTDIR}${PREFIX}/include/
+	cp build/libcollectagent.so ${DESTDIR}${PREFIX}/lib/
+	cp src/collectagent.h ${DESTDIR}${PREFIX}/include/
 
 clean:
 	@rm -rf build/
 
 uninstall:
-	@rm -f ${DESTINATION}/lib/libcollectagent.so
-	@rm -f ${DESTINATION}/include/collectagent.h
+	@rm -f ${DESTDIR}${PREFIX}/lib/libcollectagent.so
+	@rm -f ${DESTDIR}${PREFIX}/include/collectagent.h

@@ -8,15 +8,6 @@
   copy: src=sudoers dest=/etc/sudoers.d/passwordless_openbach mode='0440'
   become: yes
 
-- name: Add OpenBACH repository
-  apt_repository: repo={{ openbach_repository }} state=present update_cache=no
-  become: yes
-
-- name: Update apt cache
-  apt: update_cache=yes
-  become: yes
-  environment: "{{ openbach_proxy_env }}"
-
 - name: Install apt dependencies
   apt: pkg={{ item }} state=installed update_cache=no
   with_items:
@@ -32,10 +23,12 @@
     - restart ntp
     - restart rsyslog
 
-- name: Install collect-agent
-  apt: pkg=collect-agent state=installed update_cache=no allow_unauthenticated=yes
+- name: Install collect-agent Library
+  apt: pkg=collect-agent state=installed allow_unauthenticated=yes
   become: yes
   environment: "{{ openbach_proxy_env }}"
+  notify:
+    - restart openbach agent
 
 - name: Upload pip Mirror
   synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/ recursive=yes delete=yes
@@ -107,6 +100,11 @@
     - rstats
     - collect_agent
   remote_user: openbach
+
+- name: Install collect-agent Script
+  copy: src=../src/agent/collect-agent/collect_agent.py dest=/opt/openbach/agent/collect_agent/ mode=0755
+  remote_user: openbach
+  notify: restart openbach agent
 
 - name: Install Rstats
   copy: src=../src/agent/rstats/{{ item }}.py dest=/opt/openbach/agent/rstats/ mode=0755

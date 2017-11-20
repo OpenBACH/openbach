@@ -1,29 +1,25 @@
 ---
 
-- name: Add OpenBACH repository
-  apt_repository: repo={{ openbach_repository }} state=present update_cache=no
-  become: yes
-
-- name: Install apt Packages
-  apt: pkg={{ item }} allow_unauthenticated=yes
-  with_items:
-    - grafana=3.0.4-1464167696
-    - kibana=5.6.3
-  become: yes
-  environment: "{{ openbach_proxy_env }}"
-  notify: 
-    - restart grafana  
-    - restart kibana
-
-- name: Install apt Packages
+- name: Install apt Dependencies
   apt: pkg={{ item }}
   with_items:
     - libfontconfig
     - nginx-extras
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify: 
+  notify:
     - restart nginx
+
+- name: Install apt Packages
+  apt: pkg={{ item }} force=yes allow_unauthenticated=yes
+  with_items:
+    - grafana={{ grafana_deb_version }}
+    - kibana={{ kibana_deb_version }}
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+  notify: 
+    - restart grafana  
+    - restart kibana
 
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana mode=0640

@@ -8,6 +8,19 @@
   environment: "{{ openbach_proxy_env }}"
   become: yes
 
+- name: Install apt Packages
+  apt: name={{ item }} force=yes allow_unauthenticated=yes
+  with_items:
+    - elasticsearch={{ elasticsearch_deb_version }}
+    - influxdb={{ influxdb_deb_version }}
+    - logstash={{ logstash_deb_version }}
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+  notify:
+    - restart elasticsearch
+    - restart influxdb
+    - restart logstash
+
 - name: Install pip Dependencies
   pip: name={{ item }} executable=pip3 state=present
   with_items:
@@ -20,24 +33,6 @@
   copy: src={{ item }} dest=/tmp/
   with_items:
     - logstash-offline-plugins.zip
-
-- name: Add OpenBACH repository
-  apt_repository:
-    repo: "{{ openbach_repository }}"
-    state: present
-  become: yes
-
-- name: Install .deb Packages
-  apt: name={{ item }} force=yes
-  with_items:
-    - elasticsearch=5.6.3
-    - influxdb=0.13.0-1
-    - logstash=1:5.4.0-1
-  become: yes
-  notify:
-    - restart elasticsearch
-    - restart influxdb
-    - restart logstash
 
 - name: Configure Elasticsearch
   template: src=elasticsearch.yml.j2 dest=/etc/elasticsearch/elasticsearch.yml owner=root group=elasticsearch

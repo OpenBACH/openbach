@@ -116,16 +116,17 @@ class ActionModule(ActionBase):
 
             if create_superuser:
                 display_message(
-                        'A superuser needs to be '
-                        'created for administrative purposes\r\n')
+                        'OpenBACH needs that an administrator is '
+                        'created before further processing\r\n')
             else:
-                display_message('Please log in as an administrator\r\n')
+                display_message('Please log in as an OpenBACH administrator\r\n')
 
             # Ask the user the name of the admin to use
             while True:
                 with terminal_context(stdin) as fd:
                     settings = termios.tcgetattr(fd)
-                    settings[3] = (settings[3] | termios.ECHO) & ~termios.ECHOCTL
+                    no_echo = settings[3]
+                    settings[3] = (no_echo | termios.ECHO) & ~termios.ECHOCTL
                     termios.tcsetattr(fd, termios.TCSADRAIN, settings)
                     username = get_user_input('username: ', stdin)
                     username = to_text(username, errors='surrogate_or_strict')
@@ -133,6 +134,8 @@ class ActionModule(ActionBase):
                     if create_superuser or username in available_admins:
                         break
 
+                    settings[3] = no_echo
+                    termios.tcsetattr(fd, termios.TCSADRAIN, settings)
                     display_message('This user does not exist, create it? [Y/n] \r\n')
                     termios.tcflush(stdin, termios.TCIFLUSH)
                     if stdin.read(1).lower() != b'n':

@@ -31,7 +31,7 @@
     - restart rsyslog
 
 - name: Upload pip Mirror
-  synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/
+  synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/ recursive=yes delete=yes
   remote_user: openbach
 
 - name: Install pip2 Dependencies

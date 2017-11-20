@@ -34,6 +34,9 @@
 
 - name: Create the HTTP Server Job Repository
   file: path=/opt/openbach/agent/jobs/{{ job_name }} state=directory mode=0755
+  
+- name: Download the HTTP Server sources
+  openbach_synchronize: src=www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=yes
 
 - name: Install the HTTP Server Job
   copy: src={{ item.file }} dest=/opt/openbach/agent/jobs/{{ job_name }}/ mode={{ item.mode }}
@@ -41,6 +44,3 @@
     - { file: 'http_server.help', mode: '0644' }
     - { file: 'http_server.py', mode: '0755' }
     - { file: 'http_server_rstats_filter.conf', mode: '0644' }
-  
-- name: Download the HTTP Server sources
-  openbach_synchronize: src=www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no

@@ -43,7 +43,7 @@
     - { file: 'tcpprobe_monitoring.help', mode: '0644' }
 
 - name: Upload tcpprobe_new_fix module sources
-  synchronize: src=../src/jobs/user_jobs/transport/core/tcpprobe_monitoring/files/tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
+  openbach_synchronize: src=tcp_probe_new_fix/ dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/ recursive=yes delete=yes
 
 - name: Modify tcp_probe module
   replace: dest=/opt/openbach/agent/jobs/{{ job_name }}/tcp_probe_new_fix/tcp_probe_new_fix.c regexp='^(.*)srtt_us(.*)$' replace='\1srtt\2'

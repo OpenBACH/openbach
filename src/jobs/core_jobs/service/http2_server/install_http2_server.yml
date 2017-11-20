@@ -103,4 +103,4 @@
     - { name: 'http2_server.py', mode: '0755' }
   
 - name: Install HTTP2 Server
-  synchronize: src=../src/jobs/user_jobs/service/core/http2_server/files/www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no
+  openbach_synchronize: src=www/ dest=/opt/openbach/agent/jobs/{{ job_name }}/ recursive=yes delete=no

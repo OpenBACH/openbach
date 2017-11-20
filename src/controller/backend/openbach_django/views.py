@@ -952,6 +952,20 @@ class UsersView(GenericView):
         return self.conductor_execute(command='delete_users', usernames=users)
 
 
+
+class VersionView(GenericView):
+    """Manage actions relative to the current version of OpenBACH"""
+
+    def get(self, request):
+        """Return the current version"""
+        try:
+            with open('/opt/openbach/controller/version') as version_file:
+                version = version_file.readline()
+        except OSError as e:
+            return {'msg': 'Cannot fetch version: {}'.format(e)}, 500
+        return {'openbach_version': version}, 200
+
+
 def push_file(request):
     do_remove = True
 

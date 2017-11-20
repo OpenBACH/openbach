@@ -8,6 +8,10 @@
   copy: src=sudoers dest=/etc/sudoers.d/passwordless_openbach mode='0440'
   become: yes
 
+- name: Add OpenBACH repository
+  apt_repository: repo={{ openbach_repository }} state=present update_cache=no
+  become: yes
+
 - name: Update apt cache
   apt: update_cache=yes
   become: yes
@@ -21,14 +25,17 @@
     - python3-pip
     - python3-setuptools
     - rsyslog
-    - make
-    - g++
     - rsync
   become: yes
   environment: "{{ openbach_proxy_env }}"
   notify:
     - restart ntp
     - restart rsyslog
+
+- name: Install collect-agent
+  apt: pkg=collect-agent state=installed update_cache=no allow_unauthenticated=yes
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
 
 - name: Upload pip Mirror
   synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/ recursive=yes delete=yes
@@ -117,11 +124,6 @@
   notify:
     - restart rstats
     - restart openbach agent
-
-- name: Install Collect Agent
-  synchronize: src=../src/agent/collect-agent/ dest=/opt/openbach/agent/collect_agent/ recursive=yes delete=yes rsync_opts=--exclude=__pycache__
-  remote_user: openbach
-  notify: build collect agent library
 
 - name: Install the Agent's Daemon
   copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}

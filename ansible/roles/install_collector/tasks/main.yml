@@ -19,17 +19,20 @@
 - name: Upload Binary Files
   copy: src={{ item }} dest=/tmp/
   with_items:
-    - elasticsearch.deb
-    - influxdb.deb
-    - logstash.deb
     - logstash-offline-plugins.zip
 
+- name: Add OpenBACH repository
+  apt_repository:
+    repo: "{{ openbach_repository }}"
+    state: present
+  become: yes
+
 - name: Install .deb Packages
-  apt: deb=/tmp/{{ item }}.deb force=yes
+  apt: name={{ item }} force=yes
   with_items:
-    - elasticsearch
-    - influxdb
-    - logstash
+    - elasticsearch=5.6.3
+    - influxdb=0.13.0-1
+    - logstash=1:5.4.0-1
   become: yes
   notify:
     - restart elasticsearch

@@ -1,11 +1,20 @@
 ---
 
-- name: Upload binary files
-  copy: src={{ item }} dest=/tmp/
+- name: Add OpenBACH repository
+  apt_repository: repo={{ openbach_repository }} state=present update_cache=no
+  become: yes
+
+- name: Install apt Packages
+  apt: pkg={{ item }} allow_unauthenticated=yes
   with_items:
-    - grafana.deb
-    - kibana.deb
-    
+    - grafana=3.0.4-1464167696
+    - kibana=5.6.3
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+  notify: 
+    - restart grafana  
+    - restart kibana
+
 - name: Install apt Packages
   apt: pkg={{ item }}
   with_items:
@@ -13,18 +22,9 @@
     - nginx-extras
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify: restart nginx
-
-- name: Install .deb Packages
-  apt: deb=/tmp/{{ item }}.deb force=yes
-  with_items:
-    - grafana
-    - kibana
-  become: yes
   notify: 
-    - restart grafana  
-    - restart kibana
-  
+    - restart nginx
+
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana mode=0640
   become: yes

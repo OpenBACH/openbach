@@ -12,22 +12,6 @@
   systemd: name=rstats state=restarted enabled=yes daemon_reload=yes
   become: yes
 
-- name: build collect agent library
-  make:
-    chdir: /opt/openbach/agent/collect_agent/client_api/
-    target: install
-    params:
-      DESTDIR: /usr/
-  become: yes
-  notify: remove collect agent build files
-
-- name: remove collect agent build files
-  make:
-    chdir: /opt/openbach/agent/collect_agent/client_api/
-    target: clean
-  become: yes
-  notify: restart openbach agent
-
 - name: restart openbach agent
   systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
   become: yes

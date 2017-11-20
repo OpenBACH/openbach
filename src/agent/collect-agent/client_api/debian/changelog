@@ -1,0 +1,5 @@
+collect-agent (1.0) xenial; urgency=low
+
+  * Initial release
+
+ -- OpenBACH maintainers <admin@openbach.org>  Thu, 16 Nov 2017 16:41:39 +0100

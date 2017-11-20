@@ -53,6 +53,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse, HttpResponse, Http404
 from django.db.utils import IntegrityError
 
+import yaml
+
 from .utils import send_fifo, extract_integer
 
 
@@ -952,7 +954,6 @@ class UsersView(GenericView):
         return self.conductor_execute(command='delete_users', usernames=users)
 
 
-
 class VersionView(GenericView):
     """Manage actions relative to the current version of OpenBACH"""
 
@@ -960,10 +961,10 @@ class VersionView(GenericView):
         """Return the current version"""
         try:
             with open('/opt/openbach/controller/version') as version_file:
-                version = version_file.readline()
+                openbach_infos = yaml.load(version_file)
         except OSError as e:
             return {'msg': 'Cannot fetch version: {}'.format(e)}, 500
-        return {'openbach_version': version}, 200
+        return {'openbach_version': openbach_infos['version']}, 200
 
 
 def push_file(request):

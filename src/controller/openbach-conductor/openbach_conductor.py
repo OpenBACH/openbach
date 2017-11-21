@@ -2372,10 +2372,10 @@ class OpenbachFunctionThread(threading.Thread):
         try:
             threads = self._run_openbach_function()
         except errors.ConductorWarning as error:
-            syslog.syslog(syslog.LOG_WARNING, '{}'.format(error.json))
-            pass
+            syslog.syslog(syslog.LOG_WARNING, str(error.json))
+            threads = []
         except errors.ConductorError as error:
-            syslog.syslog(syslog.LOG_ERR, '{}'.format(error.json))
+            syslog.syslog(syslog.LOG_ERR, str(error.json))
             self._stop_scenario(error)
             raise
         except Exception as error:
@@ -2384,7 +2384,7 @@ class OpenbachFunctionThread(threading.Thread):
                     'error': str(error),
                     'traceback': traceback.format_exc(),
             }
-            syslog.syslog(syslog.LOG_ERR, '{}'.format(log_message))
+            syslog.syslog(syslog.LOG_ERR, str(log_message))
             self._stop_scenario(error)
             raise
 

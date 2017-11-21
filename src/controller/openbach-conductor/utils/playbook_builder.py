@@ -44,12 +44,9 @@ import tempfile
 import multiprocessing
 from contextlib import suppress
 
+from ansible.cli import CLI
 from ansible.executor.playbook_executor import PlaybookExecutor
-from ansible.inventory import Inventory
-from ansible.parsing.dataloader import DataLoader
 from ansible.plugins.callback import CallbackBase
-from ansible.utils.vars import load_options_vars
-from ansible.vars import VariableManager
 
 from . import errors
 
@@ -125,37 +122,62 @@ class PlaybookBuilder():
             print(agent_address, file=inventory)
             self.inventory_filename = inventory.name
 
-        self.variables = VariableManager()
-        self.loader = DataLoader()
         self.passwords = {
                 'conn_pass': password,
                 'become_pass': password,
         }
+
         self.options = Options(  # Fill in required default values
-                connection='smart',
-                forks=5,
-                module_path=None,
-                become=None,
+                ask_pass=False,
+                ask_su_pass=False,
+                ask_sudo_pass=False,
+                ask_vault_pass=False,
+                become=False,
+                become_ask_pass=False,
                 become_method='sudo',
                 become_user='root',
                 check=False,
-                listhosts=False,
-                listtasks=False,
-                listtags=False,
-                syntax=False,
-                tags=[],
+                connection='smart',
+                diff=False,
+                extra_vars=[],
+                flush_cache=None,
+                force_handlers=False,
+                forks=5,
+                inventory=[self.inventory_filename],
+                listhosts=None,
+                listtags=None,
+                listtasks=None,
+                module_path=None,
+                new_vault_id=None,
+                new_vault_password_files=[],
+                private_key_file=None,
+                remote_user='',
+                scp_extra_args='',
+                sftp_extra_args='',
+                skip_tags=[],
+                ssh_common_args='',
+                ssh_extra_args='',
+                start_at_task=None,
+                step=None,
+                su=False,
+                su_user=None,
+                subset=None,
+                sudo=False,
+                sudo_user=None,
+                syntax=None,
+                tags=['all'],
+                timeout=10,
+                vault_ids=[],
+                vault_password_files=[],
+                verbosity=0,
         )
         if username is None:
             self.options.remote_user = 'openbach'
             self.options.private_key_file = '/home/openbach/.ssh/id_rsa'
         else:
             self.options.remote_user = username
-        self.variables.options_vars = load_options_vars(self.options)
-        self.inventory = Inventory(
-                loader=self.loader,
-                variable_manager=self.variables,
-                host_list=self.inventory_filename)
-        self.variables.set_inventory(self.inventory)
+
+        self.loader, self.inventory, self.variables = CLI._play_prereqs(self.options)
 
     def __del__(self):
         """Remove the Inventory file when this object is garbage collected"""

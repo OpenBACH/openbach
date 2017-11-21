@@ -1,4 +1,0 @@
-Example:
-  - Launch an iperf server : -a "mode -s"
-  - Launch an iperf client that will connect with the server in 172.20.0.83 : -a "mode -c 172.20.0.83" 
-

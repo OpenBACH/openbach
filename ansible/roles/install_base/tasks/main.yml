@@ -11,3 +11,8 @@
 - name: Create openbach folder in /opt
   file: path=/opt/openbach owner=openbach group=openbach state=directory
   become: yes
+
+- name: Add OpenBACH repository
+  apt_repository: repo={{ openbach_repository }} state=present update_cache=yes
+  become: yes
+  environment: "{{ openbach_proxy_env }}"

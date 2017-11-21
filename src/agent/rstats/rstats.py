@@ -52,6 +52,7 @@ import configparser
 import socketserver
 from itertools import groupby
 from time import strftime
+from datetime import datetime
 from collections import namedtuple
 try:
     import simplejson as json
@@ -347,6 +348,11 @@ def send_stat(connection_id, timestamp, *statistics):
         connection_id = int(connection_id)
     with _handle_parse_errors('timestamp', 'integer'):
         timestamp = int(timestamp)
+    with _handle_parse_errors('timestamp', 'timestamp in milliseconds'):
+        date = datetime.fromtimestamp(timestamp / 1000)
+        if date.year == 1970:
+            # Most likely a timestamp in seconds, not milliseconds
+            raise ValueError
 
     client_connection = StatsManager()[connection_id]
     suffix = statistics[-1] if len(statistics) % 2 else None

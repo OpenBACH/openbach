@@ -1,4 +1,0 @@
----
-
-- name: Remove the Ip_Route Job Repository
-  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

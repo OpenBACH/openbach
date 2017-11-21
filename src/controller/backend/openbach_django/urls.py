@@ -45,6 +45,7 @@ urlpatterns = [
     url(r'^login/?$', views.LoginView.as_view(), name='login_view'),
     url(r'^login/users/?$', views.UsersView.as_view(), name='users_view'),
     url(r'^logs/?$', views.LogsView.as_view(), name='logs_view'),
+    url(r'^version/?$', views.VersionView.as_view(), name='version_view'),
 
     url(r'^statistic/(?P<job_instance_id>\d+)/?$',
         views.StatisticView.as_view(),

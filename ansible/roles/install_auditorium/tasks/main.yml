@@ -1,30 +1,26 @@
 ---
 
-- name: Upload binary files
-  copy: src={{ item }} dest=/tmp/
-  with_items:
-    - grafana.deb
-    - kibana.deb
-    
-- name: Install apt Packages
+- name: Install apt Dependencies
   apt: pkg={{ item }}
   with_items:
     - libfontconfig
     - nginx-extras
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify: restart nginx
+  notify:
+    - restart nginx
 
-- name: Install .deb Packages
-  apt: deb=/tmp/{{ item }}.deb force=yes
+- name: Install apt Packages
+  apt: pkg={{ item }} force=yes allow_unauthenticated=yes
   with_items:
-    - grafana
-    - kibana
+    - grafana={{ grafana_deb_version }}
+    - kibana={{ kibana_deb_version }}
   become: yes
+  environment: "{{ openbach_proxy_env }}"
   notify: 
     - restart grafana  
     - restart kibana
-  
+
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana mode=0640
   become: yes

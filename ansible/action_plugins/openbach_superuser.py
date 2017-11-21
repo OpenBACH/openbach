@@ -116,16 +116,17 @@ class ActionModule(ActionBase):
 
             if create_superuser:
                 display_message(
-                        'A superuser needs to be '
-                        'created for administrative purposes\r\n')
+                        'OpenBACH needs that an administrator is '
+                        'created before further processing\r\n')
             else:
-                display_message('Please log in as an administrator\r\n')
+                display_message('Please log in as an OpenBACH administrator\r\n')
 
             # Ask the user the name of the admin to use
             while True:
                 with terminal_context(stdin) as fd:
                     settings = termios.tcgetattr(fd)
-                    settings[3] = settings[3] & termios.ECHO
+                    no_echo = settings[3]
+                    settings[3] = (no_echo | termios.ECHO) & ~termios.ECHOCTL
                     termios.tcsetattr(fd, termios.TCSADRAIN, settings)
                     username = get_user_input('username: ', stdin)
                     username = to_text(username, errors='surrogate_or_strict')
@@ -133,6 +134,8 @@ class ActionModule(ActionBase):
                     if create_superuser or username in available_admins:
                         break
 
+                    settings[3] = no_echo
+                    termios.tcsetattr(fd, termios.TCSADRAIN, settings)
                     display_message('This user does not exist, create it? [Y/n] \r\n')
                     termios.tcflush(stdin, termios.TCIFLUSH)
                     if stdin.read(1).lower() != b'n':
@@ -166,12 +169,17 @@ class ActionModule(ActionBase):
                 return result
         else:
             # Checking that the user can connect and is, in fact, an admin
-            is_admin, has_password = self.remote_shell(result, cmd, """\
+            response = self.remote_shell(result, cmd, """\
                     from django.contrib.auth.models import User
                     user = User.objects.filter(username='{}').last()
                     is_admin = user.is_staff if user else False
                     has_password = user.check_password('{}') if user else False
                     print([is_admin, has_password])""".format(username, password))
+
+            if result['rc']:
+                return result
+
+            is_admin, has_password = response
 
             if not is_admin:
                 result['failed'] = True

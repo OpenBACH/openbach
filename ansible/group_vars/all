@@ -10,3 +10,4 @@ influxdb_database_precision: ms
 auditorium_broadcast_port: 2223
 broadcast_mode: udp
 is_run_from_conductor: false
+openbach_repository: deb http://packages.net4sat.org/openbach xenial stable

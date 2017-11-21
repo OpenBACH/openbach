@@ -1,0 +1,19 @@
+This Job generates HTTP1.1 requests to a destination server and computes the page load time.
+
+Required Arguments:
+  server_address : the IP address of the web server
+  port: the port of the web server
+
+Optionnal Arguments:
+  mode: Two methodologies to perform requests (default mode=0 for normal http requests one after another, mode=1 for requests following an exponential law')
+  lambd : Inter-arrival time expressed as an exponential law lambda (default=1.0)
+  sim_t: Simulation time in seconds (default=60)
+  n_req : Number of connections to emulate
+  page : Page number (default=1). Different test pages are available in this jobs (lemonde, wiki, reddit)
+
+Statistics: it provides the statistic *load_time*, which is obtained for each page that has been loaded.
+
+Example:
+  - Monitor HTTP web page requests to server 172.20.0.83 and port 80 : -a "server_address 172.20.0.83" "port 80"
+  - Monitor HTTP web page requests to server 172.20.0.83:80 during 2 minutes using the inter-arrival mode (1) following an exponential law : -a "server_address 172.20.0.83" "port 80" "mode 1" "lambd 2.0" "sim_t 120"
+

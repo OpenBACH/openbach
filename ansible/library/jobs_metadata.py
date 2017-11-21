@@ -114,6 +114,7 @@ def get_jobs_infos(folder):
 
 def get_all_jobs_infos(folders, limit, substitute):
     for folder in folders:
+        folder = os.path.expanduser(folder)
         for name, path in get_jobs_infos(folder):
             if substitute:
                 path = os.path.join(substitute, path[len(folder):])

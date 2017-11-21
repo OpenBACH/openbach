@@ -36,23 +36,14 @@ __credits__ = '''Contributors:
 '''
 
 
-import argparse
 import subprocess
 
 
-def main(ip_address):
-    subprocess.run(['ntpdate', '-u', ip_address])
+def main():
+    subprocess.run(['systemctl', 'stop', 'ntp.service'], check=True)
+    subprocess.run(['ntpd', '-gq'], check=True)
+    subprocess.run(['systemctl', 'restart', 'ntp.service'], check=True)
 
 
-if __name__ == "__main__":
-    # Define Usage
-    parser = argparse.ArgumentParser(
-            description=__doc__,
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-            'address_ip',
-            help='The ip address with whom you want to synchronize')
-
-    # get args
-    args = parser.parse_args()
-    main(args.address_ip)
+if __name__ == '__main__':
+    main()

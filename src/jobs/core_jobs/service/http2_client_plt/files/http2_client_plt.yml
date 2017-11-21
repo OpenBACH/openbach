@@ -4,7 +4,7 @@ general:
   name:            http2_client_plt
   description: >
       This Job generates HTTP2.0 requests to a destination server and computes the page load time.
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [http2, client, traffic, generator, monitor, delay, PLT, download]
   persistent:      False
 

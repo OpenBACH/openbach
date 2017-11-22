@@ -4,7 +4,7 @@ general:
   name:            synchronization
   description: >
       This Job is used to launch the ntpdate command (admin job)
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [synchronization, admin]
   persistent:      False
 

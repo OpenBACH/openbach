@@ -4,7 +4,7 @@ general:
   name:            iperf
   description: >
       This Job launches the iperf tool (client or server mode)
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [iperf]
   persistent:      True
 

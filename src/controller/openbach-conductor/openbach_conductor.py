@@ -69,6 +69,7 @@ from datetime import datetime
 from contextlib import suppress
 from ipaddress import IPv4Network
 from collections import defaultdict
+from distutils.version import StrictVersion
 
 import yaml
 from fuzzywuzzy import fuzz
@@ -932,6 +933,31 @@ class AddJob(JobAction):
                         type=argument['type'], count=str(argument['count']),
                         description=argument.get('description', ''))
 
+        if created:
+            return
+
+        # If the job existed already, update on installed agents if necessary 
+        for installed_job in InstalledJob.objects.filter(job=job):
+            installed_version = StrictVersion(installed_job.job_version)
+            current_version = StrictVersion(job.job_version)
+            # If the job's major version is newer than installed, or older, reinstall
+            if ((installed_version > current_version) or 
+                    (installed_version.version[0] != current_version.version[0])):
+                agent = installed_job.agent
+                start_playbook(
+                        'uninstall_job',
+                        agent.address,
+                        agent.collector.address,
+                        job.name, job.path)
+                start_playbook(
+                        'install_job',
+                        agent.address,
+                        agent.collector.address,
+                        agent.collector.logs_port,
+                        job.name, job.path)
+                installed_job.job_version = job.job_version
+                installed_job.save()
+
 
 class AddTarJob(JobAction):
     """Action responsible to add a Job whose files are sent in
@@ -1124,6 +1150,19 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                         'agent: Unsupported Os',
                         agent_address=self.address,
                         job_name=self.name)
+            # If the job's major version is newer than installed, or older, reinstall
+            with suppress(InstalledJob.DoesNotExist):
+                installed_job = InstalledJob.objects.get(job=job, agent=agent)
+                installed_version = StrictVersion(installed_job.job_version)
+                current_version = StrictVersion(job.job_version)
+                if ((installed_version > current_version) or 
+                        (installed_version.version[0] != current_version.version[0])):
+                    start_playbook(
+                            'uninstall_job',
+                            agent.address,
+                            agent.collector.address,
+                            job.name, job.path)
+
             # Physically install the job on the agent
             start_playbook(
                     'install_job',
@@ -1133,7 +1172,9 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                     job.name, job.path)
         OpenBachBaton(self.address).add_job(self.name)
 
-        installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)
+        installed_job, created = InstalledJob.objects.get_or_create(
+                agent=agent, job=job, defaults={'job_version': job.job_version})
+        installed_job.job_version = job.job_version
         installed_job.severity = self.severity
         installed_job.local_severity = self.local_severity
         installed_job.update_status = timezone.now()

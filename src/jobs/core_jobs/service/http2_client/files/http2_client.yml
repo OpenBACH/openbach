@@ -5,7 +5,7 @@ general:
   description: >
       This Job will try to connect to an HTTP2 server in order to generate
       traffic.
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [http2, client]
   persistent:      False
 

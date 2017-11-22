@@ -5,7 +5,7 @@ general:
   description: >
       This Job assignes an IP address to an agent's interface
 
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [ifconfig]
   persistent:      false
 

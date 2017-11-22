@@ -4,7 +4,7 @@ general:
   name:            rate_monitoring
   description: >
       This Job measures the rate (b/s) using iptables chains.
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [rate, monitoring, iptables]
   persistent:      True
 

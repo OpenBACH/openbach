@@ -5,7 +5,7 @@ general:
   description: >
       This Job is used by OpenBACH to empty the logs database of the
       Collector (Elasticsearch).
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [database, db, empty, elasticsearch, collector]
   persistent:      False
 

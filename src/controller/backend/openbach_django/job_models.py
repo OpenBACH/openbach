@@ -155,6 +155,7 @@ class InstalledJob(models.Model):
     job = models.ForeignKey(
             Job, models.CASCADE,
             related_name='installations')
+    job_version = models.CharField(max_length=500)
     update_status = models.DateTimeField(null=True, blank=True)
     severity = models.IntegerField(default=1)
     local_severity = models.IntegerField(default=1)

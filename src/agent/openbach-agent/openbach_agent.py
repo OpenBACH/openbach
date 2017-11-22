@@ -48,6 +48,7 @@ import socketserver
 from datetime import datetime
 from subprocess import DEVNULL
 from contextlib import suppress, contextmanager
+from distutils.version import StrictVersion
 
 import yaml
 import psutil
@@ -126,15 +127,27 @@ class JobManager:
                     'required': conf.required,
                     'optional': conf.optional,
                     'persistent': conf.persistent,
+                    'job_version': conf.job_version,
             }
 
         with self._mutex:
-            if name in self.jobs:
-                self.jobs[name].update(read_configuration())
-                raise BadRequest('OK A job {} is already installed'.format(name))
-            conf = {'instances': {}}
-            conf.update(read_configuration())
-            self.jobs[name] = conf
+            try:
+                installed_job = self.jobs[name]
+            except KeyError:
+                conf = {'instances': {}}
+                conf.update(read_configuration())
+                self.jobs[name] = conf
+            else:
+                current_job = read_configuration()
+                self.jobs[name].update(current_job)
+                if (StrictVersion(installed_job['job_version']) >=
+                        StrictVersion(current_job['job_version'])):
+                    raise BadRequest(
+                            'OK Job {} is already installed with a newer '
+                            'version (installed:\'{}\', current:{}). '
+                            'Configuration updated.'.format(
+                                name, installed_job['job_version'],
+                                current_job['job_version']))
 
     def pop_job(self, name):
         with self._mutex:
@@ -267,6 +280,7 @@ class JobConfiguration:
                             self.required.append(arg['name'])
             self.optional = isinstance(content['arguments']['optional'], list)
             self.persistent = content['general']['persistent']
+            self.job_version = content['general']['job_version']
         except KeyError as error:
             raise BadRequest(
                     'KO Conf file {} does not contain a '

@@ -75,7 +75,7 @@ from fuzzywuzzy import fuzz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
 
-from utils import errors
+from utils import errors, external_jobs
 from utils.openbach_baton import OpenBachBaton
 from utils.playbook_builder import start_playbook, setup_playbook_manager
 from data_access.elasticsearch_tools import ElasticSearchConnection

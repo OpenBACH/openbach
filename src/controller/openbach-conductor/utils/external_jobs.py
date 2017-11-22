@@ -57,7 +57,7 @@ def _list_jobs_names(files):
 
 
 def _retrieve_file(file_path, dest_file):
-    response = _do_request('/repository/blob/HEAD', filepath=file_path)
+    response = _do_request('/repository/blobs/HEAD', filepath=file_path)
     response.raise_for_status()
 
     dest_folder = os.path.dirname(dest_file)

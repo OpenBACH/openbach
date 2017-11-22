@@ -4,7 +4,7 @@ general:
   name:            hping
   description: >
       This Job executes the hping3 command to send custom TCP/IP (e.g. SYN TCP) packets (like ping does with ICMP) and measures the rtt delay of the stream of packets (with a frequency of count packets).
-  job_version:     '0.1'
+  job_version:     '1.0'
   keywords:        [hping, rate, rtt, round, syn, ack, round, trip, time]
   persistent:      true
 

@@ -5,7 +5,7 @@ general:
   description: >
       Launchs a tcpdump in order to capture traffic in one interface. 
       The captured traffic can be saved to an output file.
-  job_version:     '0.1'
+  job_version:     '1.0'
   keywords:        [tcpdump, capture, network]
   persistent:      False
 

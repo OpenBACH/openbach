@@ -5,7 +5,7 @@ general:
   description: >
       This Job is used by OpenBACH to empty the statistics database of the
       Collector (InfluxDB).
-  job_version:     '0.1'
+  job_version:     '1.0'
   keywords:        [database, db, empty, collector, influxdb]
   persistent:      False
 

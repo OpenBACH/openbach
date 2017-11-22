@@ -318,11 +318,6 @@ class AgentView(BaseAgentView):
 class BaseJobView(GenericView):
     """Abstract base class used to factorize jobs creation"""
 
-    def _add_job(self, job_name, path):
-        """Helper function to factorize out the job creation code"""
-        return self.conductor_execute(
-                command='add_job', name=job_name, path=path)
-
     def _create_job(self, job_name, compressed_sources):
         """Helper function to factorize out the job creation code"""
         with tempfile.NamedTemporaryFile('wb', delete=False) as f:
@@ -361,6 +356,9 @@ class JobsView(BaseJobView):
     def get(self, request):
         """get the list of jobs  """
 
+        if 'external' in request.GET:
+            return self.conductor_execute(command='list_external_jobs')
+
         try:
             string_to_search = request.GET['string_to_search']
         except KeyError:
@@ -398,16 +396,22 @@ class JobsView(BaseJobView):
             # Create a new job
             try:
                 name = request.JSON['name']
-                path = request.JSON['path']
             except KeyError as e:
-                try:
-                    compressed_sources = request.FILES['file']
-                except KeyError as e:
-                    return {'msg': 'POST data malformed: {} missing'.format(e)}, 400
-            else:
-                return self._add_job(name, path)
+                return {'msg': 'POST data malformed: name missing'}, 400
 
-            return self._create_job(name, compressed_sources)
+            with suppress(KeyError):
+                compressed_sources = request.FILES['file']
+                return self._create_job(name, compressed_sources)
+
+            with suppress(KeyError):
+                path = request.JSON['path']
+                return self.conductor_execute(
+                        command='add_job',
+                        name=name, path=path)
+
+            return self.conductor_execute(
+                    command='add_external_job',
+                    name=name)
         else:
             # Execute (un)installation of several jobs
             try:

@@ -956,6 +956,22 @@ class AddTarJob(JobAction):
         return add_job_action.action()
 
 
+class AddExternalJob(JobAction):
+    def __init__(self, name):
+        super().__init__(name=name)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        path = external_jobs.add_job(self.name)
+        if path is None:
+            raise errors.NotFoundError(
+                    'Unable to find the provided external job',
+                    job_name=self.name)
+        add_job_action = AddJob(self.name, path)
+        self.share_user(add_job_action)
+        return add_job_action.action()
+
+
 class DeleteJob(JobAction):
     """Action responsible of removing a Job from the filesystem"""
 
@@ -1010,6 +1026,11 @@ class ListJobs(JobAction):
             if any(fuzz.token_set_ratio(word, self.name) > self.ratio
                    for word in search_fields):
                 yield job
+
+
+class ListExternalJobs(JobAction):
+    def _action(self):
+        return external_jobs.list_jobs_names(), 200
 
 
 class GetKeywordsJob(JobAction):

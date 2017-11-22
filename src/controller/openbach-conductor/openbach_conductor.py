@@ -935,11 +935,12 @@ class AddJob(JobAction):
 
         if created:
             return
+
         # If the job existed already, update on installed agents if necessary 
         for installed_job in InstalledJob.objects.filter(job=job):
             installed_version = StrictVersion(installed_job.job_version)
             current_version = StrictVersion(job.job_version)
-            # If the job is is a major version newer than installed, or older, reinstall
+            # If the job's major version is newer than installed, or older, reinstall
             if ((installed_version > current_version) or 
                     (installed_version.version[0] != current_version.version[0])):
                 agent = installed_job.agent
@@ -1149,7 +1150,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                         'agent: Unsupported Os',
                         agent_address=self.address,
                         job_name=self.name)
-            # If the job is is a major version newer than installed, or older, reinstall
+            # If the job's major version is newer than installed, or older, reinstall
             with suppress(InstalledJob.DoesNotExist):
                 installed_job = InstalledJob.objects.get(job=job, agent=agent)
                 installed_version = StrictVersion(installed_job.job_version)
@@ -1171,7 +1172,8 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                     job.name, job.path)
         OpenBachBaton(self.address).add_job(self.name)
 
-        installed_job, created = InstalledJob.objects.get_or_create(agent=agent, job=job)
+        installed_job, created = InstalledJob.objects.get_or_create(
+                agent=agent, job=job, defaults={'job_version': job.job_version})
         installed_job.job_version = job.job_version
         installed_job.severity = self.severity
         installed_job.local_severity = self.local_severity

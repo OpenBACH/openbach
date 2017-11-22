@@ -170,7 +170,7 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
                     multiplier(out_s[4], "Bytes"))
             statistics["throughput_{}".format(flow_no)] = (float(out_s[5]) * 
                     multiplier(out_s[6], "bits/sec"))
-            statistics["jiggle_{}".format(flow_no)] = (float(out_s[7]) * 
+            statistics["jitter_{}".format(flow_no)] = (float(out_s[7]) * 
                     multiplier(out_s[8], "s"))
             statistics["lost_pkts_{}".format(flow_no)] = int(out_s[9].split('/')[0])
             statistics["sent_pkts_{}".format(flow_no)] = int(out_s[9].split('/')[1])

@@ -18,8 +18,10 @@ def list_jobs_names():
     }
 
     return [
-            ' '.join(map(str.title, name.split('_')))
-            for name in _list_jobs_names(filenames)
+            {
+                'display': ' '.join(map(str.title, name.split('_'))),
+                'name': name,
+            } for name in _list_jobs_names(filenames)
     ]
 
 

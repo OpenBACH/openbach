@@ -85,7 +85,12 @@
   shell: checkinstall -y chdir=/tmp/nghttp2/
   become: yes
   when: nghttp_check_deb.rc == 1
-    
+
+- name: Stop and disable nghttpx service
+  systemd: name=nghttpx state=stopped enabled=no
+  become: yes
+  when: nghttp_check_deb.rc == 1
+
 - name: Refresh dynamic linker
   shell: ldconfig
   become: yes

@@ -743,6 +743,8 @@ def read_job_configuration(job_name):
                 '\'general\' for job {}'
                 .format(filename, job_name))
 
+    return configuration
+
 
 def populate_installed_jobs():
     """Read configuration files of Installed Jobs and

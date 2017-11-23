@@ -90,6 +90,7 @@
   systemd: name=nghttpx state=stopped enabled=no
   become: yes
   when: nghttp_check_deb.rc == 1
+  ignore_errors: yes 
 
 - name: Refresh dynamic linker
   shell: ldconfig

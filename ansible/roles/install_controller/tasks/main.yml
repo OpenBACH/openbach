@@ -26,6 +26,7 @@
     - apscheduler
     - uwsgi
     - fuzzywuzzy
+    - numpy
     - ansible
   become: yes
 

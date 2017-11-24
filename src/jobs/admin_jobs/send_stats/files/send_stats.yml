@@ -5,7 +5,7 @@ general:
   description: >
       This Job will resend the statistics produce by the named Job since the
       date
-  job_version:     '0.1'
+  job_version:     '1.0'
   keywords:        [stats]
   persistent:      False
 

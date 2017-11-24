@@ -822,10 +822,26 @@ class StatisticView(GenericView):
                     command='statistics_origin',
                     instance_id=instance_id)
         else:
-            return self.conductor_execute(
-                    command='statistics_values',
-                    instance_id=instance_id,
-                    name=statistic_name)
+            histogram = request.GET.get('histogram')
+            try:
+                buckets = int(histogram)
+            except (ValueError, TypeError):
+                if 'comparative' in request.GET:
+                    return self.conductor_execute(
+                            command='statistics_comparison',
+                            instance_id=instance_id,
+                            name=statistic_name)
+                else:
+                    return self.conductor_execute(
+                            command='statistics_values',
+                            instance_id=instance_id,
+                            name=statistic_name)
+            else:
+                return self.conductor_execute(
+                        command='statistics_histogram',
+                        instance_id=instance_id,
+                        name=statistic_name,
+                        buckets=buckets)
 
 
 class LoginView(GenericView):

@@ -5,7 +5,8 @@ import requests
 
 PROJECT_ID = 102  # Internal ID of the openbach/openbach-external-jobs
 TOKEN_HEADER = {
-        'PRIVATE-TOKEN': 'ByZwHNWiKC2GifVt3tha',
+        # Access Token of the anonymous user of the net4sat gitlab
+        'PRIVATE-TOKEN': 'UyAzSGgGPJKkc7MvMLo8',
 }
 BASE_URL = 'https://forge.net4sat.org/api/v3/projects/{}'.format(PROJECT_ID)
 

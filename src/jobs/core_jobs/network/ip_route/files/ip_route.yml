@@ -5,7 +5,7 @@ general:
   description: >
       This Job executes the ip route command to identify the path to be taken by the packets of a machine, to reach their destination on another one.
 
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [ip_route]
   persistent:      false
 

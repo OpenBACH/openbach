@@ -4,7 +4,7 @@ general:
   name:            iperf3
   description: >
       This Job launches the iperf3 tool (client or server mode)
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [iperf, iperf3]
   persistent:      True
 
@@ -90,9 +90,9 @@ statistics:
       description: >
           The throughput in this period, in bits/sec
       frequency: 'every *interval* seconds'
-    - name: "jiggle_*flow_number*"
+    - name: "jitter_*flow_number*"
       description: >
-          The jiggle between packets in this period, in seconds
+          The jitter between packets in this period, in seconds
       frequency: 'every *interval* seconds'
     - name: "sent_pkts_*flow_number*"
       description: >

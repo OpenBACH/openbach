@@ -6,7 +6,7 @@ general:
       This Job is used by OpenBACH to modify the stat policy of a Job.
       It moves a configuration file pushed by the Controller in advanced to be
       the configuration file consider by Rstats then reload Rstats.
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [rstats]
   persistent:      False
 

@@ -4,7 +4,7 @@ general:
   name:            http_server
   description: >
       This Job will start an HTTP server in order to generate HTTP1 traffic.
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [http, server]
   persistent:      True
 

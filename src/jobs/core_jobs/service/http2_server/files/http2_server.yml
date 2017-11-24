@@ -5,7 +5,7 @@ general:
   description: >
       This Job will start an HTTP2 server in order to generate traffic.
       It launchs the nghttpd command (without tls).
-  job_version:     0.1
+  job_version:     '0.1'
   keywords:        [http2, server]
   persistent:      True
 

@@ -54,6 +54,7 @@ from .condition_models import Condition
 from .openbach_function_models import (
         OpenbachFunction, OpenbachFunctionInstance,
         StartJobInstance, StartJobInstanceArgument,
+        StartScenarioInstance,
         WaitForLaunched, WaitForFinished
 )
 
@@ -401,13 +402,13 @@ class Scenario(models.Model):
                             'referenced openbach function does not exits')
                 else:
                     waited_function = waited_function.get_content_model()
-                if not isinstance(waited_function, StartJobInstance):
+                if not isinstance(waited_function, (StartJobInstance, StartScenarioInstance)):
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.wait.'
                             'finished_ids.{}'.format(index, idx),
-                            value=launched_id, override_error='The '
-                            'referenced openbach function is not a '
-                            'start_job_instance.')
+                            value=launched_id, override_error='The referenced '
+                            'openbach function is neither a start_job_instance '
+                            'nor a start_scenario_instance.')
                 openbach_function_instance = scenario.openbach_functions.get(
                         function_id=function['id']).get_content_model()
                 WaitForFinished.objects.create(

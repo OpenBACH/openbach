@@ -1538,7 +1538,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
                 openbach_function_instance.id,
                 waiters)
         StatusManager().add(scenario.id, self.instance_id, self.connected_user.get_username())
-        return super().openbach_function(openbach_function_instance)
+        return super().openbach_function(openbach_function_instance, waiters)
 
     @require_connected_user()
     def action(self):
@@ -1633,7 +1633,7 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
                     'not associated to a launched job',
                     openbach_function_id=self.openbach_function_id,
                     openbach_function_name=openbach_function_to_stop.name)
-        return super().openbach_function(openbach_function_instance)
+        return super().openbach_function(openbach_function_instance, waiters)
 
     def _create_command_result(self):
         command_result, _ = JobInstanceCommandResult.objects.get_or_create(job_instance_id=self.instance_id)
@@ -1691,7 +1691,7 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
             try:
                 stop_job = StopJobInstance(date=self.date, openbach_function_id=actual_id)
                 self.share_user(stop_job)
-                stop_job.openbach_function(openbach_function_instance)
+                stop_job.openbach_function(openbach_function_instance, waiters)
             except errors.ConductorWarning as e:
                 issues.append(e.json)
             except errors.ConductorError as e:
@@ -2008,12 +2008,12 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         self._build_scenario_instance()
 
         scenario = openbach_function_instance.scenario_instance
-        WaitingQueueManager().add_job(
+        WaitingQueueManager().add_scenario(
                 self.instance_id,
                 scenario.id,
                 openbach_function_instance.id,
                 waiters)
-        super().openbach_function(openbach_function_instance)
+        super().openbach_function(openbach_function_instance, waiters)
         return [ThreadManager().get_status_thread(self.instance_id)]
 
     def action(self):

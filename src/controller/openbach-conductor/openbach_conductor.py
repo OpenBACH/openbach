@@ -321,7 +321,7 @@ class OpenbachFunctionMixin:
     called as an OpenBACH Function.
     """
 
-    def openbach_function(self, openbach_function_instance):
+    def openbach_function(self, openbach_function_instance, waiters):
         """Public entry point to execute the required OpenBACH Function"""
         self.openbach_function_instance = openbach_function_instance
         if isinstance(self, ThreadedAction):
@@ -1611,7 +1611,7 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
         super().__init__(instance_id=instance_id, date=date,
                          openbach_function_id=openbach_function_id)
 
-    def openbach_function(self, openbach_function_instance):
+    def openbach_function(self, openbach_function_instance, waiters):
         """Retrieve the job instance id launched by the provided
         openbach function id and store it in the instance.
         """
@@ -1677,7 +1677,7 @@ class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
         super().__init__(instance_ids=instance_ids, date=date,
                          openbach_function_ids=openbach_function_ids)
 
-    def openbach_function(self, openbach_function_instance):
+    def openbach_function(self, openbach_function_instance, waiters):
         issues = []
         has_error = False
         scenario = openbach_function_instance.scenario_instance
@@ -1991,7 +1991,7 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
             arguments = {}
         super().__init__(name=scenario_name, project=project, arguments=arguments, date=date)
 
-    def openbach_function(self, openbach_function_instance):
+    def openbach_function(self, openbach_function_instance, waiters):
         launching_project = openbach_function_instance.scenario_instance.scenario.project
         project = None if launching_project is None else launching_project.name
         if project != self.project and self.project is not None:
@@ -2003,54 +2003,29 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
                     used_project_name=project)
         else:
             self.project = project
+
+        self.openbach_function_instance = openbach_function_instance
+        self._build_scenario_instance()
+
+        scenario = openbach_function_instance.scenario_instance
+        WaitingQueueManager().add_job(
+                self.instance_id,
+                scenario.id,
+                openbach_function_instance.id,
+                waiters)
         super().openbach_function(openbach_function_instance)
-        scenario_id = self.openbach_function_instance.started_scenario.id
-        return [ThreadManager().get_status_thread(scenario_id)]
+        return [ThreadManager().get_status_thread(self.instance_id)]
+
+    def action(self):
+        """Override the base threaded action handler to build the ScenarioInstance
+        first and store its ID in this object instance before launching it.
+        """
+        self._build_scenario_instance()
+        super().action()
+        return {'scenario_instance_id': self.instance_id}, 200
 
     def _action(self):
-        scenario_infos = InfosScenario(self.name, self.project)
-        self.share_user(scenario_infos)
-        scenario = scenario_infos.get_scenario_or_not_found_error()
-        scenario = scenario.versions.last()
-
-        scenario_instance = ScenarioInstance.objects.create(
-                scenario_version=scenario,
-                status='Scheduling',
-                start_date=timezone.now(),
-                started_by=self.connected_user,
-                openbach_function_instance=self.openbach_function_instance)
-        self.instance_id = scenario_instance.id
-
-        # Populate values for ScenarioArguments
-        for argument, value in self.arguments.items():
-            try:
-                argument_instance = ScenarioArgument.objects.get(name=argument, scenario_version=scenario)
-            except ScenarioArgument.DoesNotExist:
-                raise errors.BadRequestError(
-                        'A value was provided for an Argument that '
-                        'is not defined for this Scenario.',
-                        scenario_name=self.name,
-                        project_name=self.project,
-                        argument_name=argument)
-            ScenarioArgumentValue.objects.create(
-                    value=value, argument=argument_instance,
-                    scenario_instance=scenario_instance)
-
-        # Create instances for each OpenbachFunction of this Scenario
-        # and check that the values of the arguments fit
-        for openbach_function in scenario.openbach_functions.all():
-            openbach_function_instance = OpenbachFunctionInstance.objects.create(
-                    openbach_function=openbach_function,
-                    scenario_instance=scenario_instance)
-            try:
-                # Validate the values of the arguments
-                openbach_function_instance.arguments
-            except ValidationError as e:
-                raise errors.BadRequestError(
-                        'Arguments of an OpenbachFunction have '
-                        'the wrong type of values.',
-                        openbach_function_name=openbach_function.name,
-                        error_message=str(e))
+        scenario_instance = ScenarioInstance.objects.get(id=self.instance_id)
 
         # Build a table of communication queues and wait IDs
         functions_table = {}
@@ -2099,7 +2074,53 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
         # Start the scenario's status thread
         thread = WaitScenarioToFinish(self.instance_id, threads, self.connected_user)
         ThreadManager().add_and_launch(thread, self.instance_id, 0)
-        return {'scenario_instance_id': self.instance_id}, 200
+
+    def _build_scenario_instance(self):
+        scenario_infos = InfosScenario(self.name, self.project)
+        self.share_user(scenario_infos)
+        scenario = scenario_infos.get_scenario_or_not_found_error()
+        scenario = scenario.versions.last()
+
+        scenario_instance = ScenarioInstance.objects.create(
+                scenario_version=scenario,
+                status='Scheduling',
+                start_date=timezone.now(),
+                started_by=self.connected_user,
+                openbach_function_instance=self.openbach_function_instance)
+        self.instance_id = scenario_instance.id
+
+        # Populate values for ScenarioArguments
+        for argument, value in self.arguments.items():
+            try:
+                argument_instance = ScenarioArgument.objects.get(
+                        name=argument,
+                        scenario_version=scenario)
+            except ScenarioArgument.DoesNotExist:
+                raise errors.BadRequestError(
+                        'A value was provided for an Argument that '
+                        'is not defined for this Scenario.',
+                        scenario_name=self.name,
+                        project_name=self.project,
+                        argument_name=argument)
+            ScenarioArgumentValue.objects.create(
+                    value=value, argument=argument_instance,
+                    scenario_instance=scenario_instance)
+
+        # Create instances for each OpenbachFunction of this Scenario
+        # and check that the values of the arguments fit
+        for openbach_function in scenario.openbach_functions.all():
+            openbach_function_instance = OpenbachFunctionInstance.objects.create(
+                    openbach_function=openbach_function,
+                    scenario_instance=scenario_instance)
+            try:
+                # Validate the values of the arguments
+                openbach_function_instance.arguments
+            except ValidationError as e:
+                raise errors.BadRequestError(
+                        'Arguments of an OpenbachFunction have '
+                        'the wrong type of values.',
+                        openbach_function_name=openbach_function.name,
+                        error_message=str(e))
 
 
 class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
@@ -2128,6 +2149,7 @@ class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
                     stopper = StopScenarioInstance(subscenario_instance.id)
                     self.share_user(stopper)
                     stopper.action()
+            WaitingQueueManager().remove_scenario(self.instance_id)
         return None, 204
 
 
@@ -2329,8 +2351,8 @@ def create_thread(openbach_function, functions_table):
     }
     openbach_function_model = openbach_function.openbach_function.get_content_model()
     openbach_function_name = openbach_function_model.__class__.__name__
-    openbach_function_thread_class = thread_chooser.get(openbach_function_name, OpenbachFunctionThread)
-    return openbach_function_thread_class(openbach_function, functions_table)
+    thread_class = thread_chooser.get(openbach_function_name, OpenbachFunctionThread)
+    return thread_class(openbach_function, functions_table)
 
 
 class WaitScenarioToFinish(threading.Thread):
@@ -2372,6 +2394,7 @@ class WaitScenarioToFinish(threading.Thread):
                     break
         else:  # No break
             scenario.stop(stop_status='Finished OK')
+            WaitingQueueManager().remove_scenario(self.instance_id)
 
 
 class OpenbachFunctionThread(threading.Thread):
@@ -2381,17 +2404,9 @@ class OpenbachFunctionThread(threading.Thread):
         self._stopped = threading.Event()
 
         openbach_function = openbach_function_instance.openbach_function
-        action_name = openbach_function.get_content_model().__class__.__name__
-        try:
-            self.action = class_from_name(action_name)
-        except AttributeError:
-            raise errors.ConductorError(
-                    'An OpenbachFunction is not implemented',
-                    openbach_function_name=openbach_function.name)
-        if not hasattr(self.action, 'openbach_function'):
-            raise errors.ConductorError(
-                    'An Action is not available as OpenbachFunction',
-                    action_name=openbach_function.name)
+        self._set_action(
+                openbach_function.get_content_model().__class__.__name__,
+                openbach_function.name)
         self.instance_id = openbach_function_instance.id
         self.openbach_function = openbach_function_instance
         own_table = table[self.instance_id]
@@ -2409,6 +2424,18 @@ class OpenbachFunctionThread(threading.Thread):
                 table[id]['queue'] for id, data in table.items()
                 if self.instance_id in data['is_waited_for_finish']
         ]
+
+    def _set_action(self, action_name, verbose_name):
+        try:
+            self.action = class_from_name(action_name)
+        except AttributeError:
+            raise errors.ConductorError(
+                    'An OpenbachFunction is not implemented',
+                    openbach_function_name=verbose_name)
+        if not hasattr(self.action, 'openbach_function'):
+            raise errors.ConductorError(
+                    'An Action is not available as OpenbachFunction',
+                    action_name=verbose_name)
 
     def run(self):
         while self.waited_ids:
@@ -2465,11 +2492,17 @@ class OpenbachFunctionThread(threading.Thread):
         self.openbach_function.start()
         arguments = self.openbach_function.arguments
         owner = self.openbach_function.scenario_instance.started_by
+        self._check_arguments(arguments)
         action = self.action(**arguments)
         if owner is not None:
             action.connected_user = owner
         if not self._stopped.is_set():
-            return action.openbach_function(self.openbach_function)
+            return action.openbach_function(
+                    self.openbach_function,
+                    self.wait_for_finished_queues)
+
+    def _check_arguments(self, arguments):
+        pass
 
     def _stop_scenario(self, error):
         scenario_id = self.openbach_function.scenario_instance.id
@@ -2486,10 +2519,7 @@ class OpenbachFunctionThread(threading.Thread):
 
 
 class StartJobInstanceThread(OpenbachFunctionThread):
-    def _run_openbach_function(self):
-        self.openbach_function.start()
-        arguments = self.openbach_function.arguments
-        owner = self.openbach_function.scenario_instance.started_by
+    def _check_arguments(self, arguments):
         entity_name = arguments.pop('entity_name')
         project = self.openbach_function.scenario_instance.scenario.project
         try:
@@ -2503,17 +2533,13 @@ class StartJobInstanceThread(OpenbachFunctionThread):
             raise errors.ConductorError(
                     'Entity does not have an associated agent',
                     entity_name=entity_name, project_name=project.name)
-
-        action = StartJobInstance(address=entity.agent.address, **arguments)
-        if owner is not None:
-            action.connected_user = owner
-        if not self._stopped.is_set():
-            return action.openbach_function(
-                    self.openbach_function,
-                    self.wait_for_finished_queues)
+        arguments['address'] = entity.agent.address
 
 
 class IfThread(OpenbachFunctionThread):
+    def _set_action(self, action_name, verbose_name):
+        pass
+
     def _run_openbach_function(self):
         instance_id = self.instance_id
         scenario = self.openbach_function.scenario_instance
@@ -2529,6 +2555,9 @@ class IfThread(OpenbachFunctionThread):
 
 
 class WhileThread(OpenbachFunctionThread):
+    def _set_action(self, action_name, verbose_name):
+        pass
+
     def _run_openbach_function(self):
         instance_id = self.instance_id
         scenario = self.openbach_function.scenario_instance
@@ -3430,23 +3459,50 @@ class WaitingQueueManager:
     being run so any function can wait for any other to be
     launched or finished executing.
     """
-    __shared_state = {'_waiting_queues': {}, 'mutex': threading.Lock()}
+    __shared_state = {
+            '_waiting_for_jobs': {},
+            '_waiting_for_scenarios': {},
+            'mutex': threading.Lock(),
+    }
 
     def __init__(self):
         """Implement the Borg pattern so any instance share the same state"""
         self.__dict__ = self.__class__.__shared_state
 
-    def add_job(self, job_id, scenario_id, function_id, queues):
+    def _generic_add(self, wait_queue, index, *arguments):
         with self.mutex:
-            self._waiting_queues[job_id] = (scenario_id, function_id, queues)
+            wait_queue[index] = arguments
 
-    def remove_job(self, job_id):
+    def add_job(self, job_id, scenario_id, function_id, queues):
+        self._generic_add(
+                self._waiting_for_jobs,
+                job_id,
+                scenario_id,
+                function_id,
+                queues)
+
+    def add_scenario(self, waited_scenario_id, scenario_id, function_id, queues):
+        self._generic_add(
+                self._waiting_for_scenarios,
+                waited_scenario_id,
+                scenario_id,
+                function_id,
+                queues)
+
+    def _generic_remove(self, wait_queue, index):
         with self.mutex:
-            scenario_id, function_id, queues = self._waiting_queues.pop(job_id)
+            scenario_id, function_id, queues = wait_queue.pop(index)
             for waited_queue in queues:
                 # Alert other functions that this one is being finished
                 waited_queue.put(function_id)
         return scenario_id
+
+    def remove_job(self, job_id):
+        return self._generic_remove(self._waiting_for_jobs, job_id)
+
+    def remove_scenario(self, scenario_id):
+        with suppress(KeyError):
+            self._generic_remove(self._waiting_for_scenarios, scenario_id)
 
 
 class StatusManager:
@@ -3495,7 +3551,7 @@ class StatusManager:
 
 def status_manager(job_instance_id, scenario_instance_id, username):
     """Check and update the status of a job instance based
-    on the informations store in database.
+    on the informations stored in the database.
 
     When jobs finish, update scenarios informations as well
     and stop StatusManager watches.
@@ -3537,6 +3593,7 @@ def status_manager(job_instance_id, scenario_instance_id, username):
         # Update the status of the Scenario Instance if it is finished
         if ThreadManager().is_scenario_stopped(scenario_instance.id):
             scenario_instance.stop(stop_status='Finished OK')
+            WaitingQueueManager().remove_scenario(scenario_instance_id)
 
 
 class ConductorServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

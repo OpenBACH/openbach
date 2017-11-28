@@ -5,6 +5,7 @@ logstash_stats_port: 2222
 elasticsearch_port: 9200
 elasticsearch_cluster_name: openbach
 influxdb_port: 8086
+influxdb_max_cache: 512m
 influxdb_database_name: openbach
 influxdb_database_precision: ms
 auditorium_broadcast_port: 2223

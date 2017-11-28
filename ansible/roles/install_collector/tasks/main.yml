@@ -70,7 +70,12 @@
   notify: restart logstash
 
 - name: Set the Port to use by InfluxDB
-  replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)bind-address = ":8086"(\s+.*)?$' replace='\1bind-address = ":{{ influxdb_port }}"\2' backup=yes
+  replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)# bind-address = ":8086"(\s+.*)?$' replace='\1bind-address = ":{{ influxdb_port }}"\2' backup=yes
+  become: yes
+  notify: restart influxdb
+
+- name: Change default max cache memory size by InfluxDB
+  replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)# cache-max-memory-size = "1g"(\s+.*)?$' replace='\1cache-max-memory-size = "{{ influxdb_max_cache }}"\2' backup=yes
   become: yes
   notify: restart influxdb
 

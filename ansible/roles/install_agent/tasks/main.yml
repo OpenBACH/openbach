@@ -101,11 +101,6 @@
     - collect_agent
   remote_user: openbach
 
-- name: Install collect-agent Script
-  copy: src=../src/agent/collect-agent/collect_agent.py dest=/opt/openbach/agent/collect_agent/ mode=0755
-  remote_user: openbach
-  notify: restart openbach agent
-
 - name: Install Rstats
   copy: src=../src/agent/rstats/{{ item }}.py dest=/opt/openbach/agent/rstats/ mode=0755
   with_items:

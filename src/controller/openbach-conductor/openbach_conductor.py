@@ -72,6 +72,7 @@ from collections import defaultdict
 from distutils.version import StrictVersion
 
 import yaml
+import numpy
 from fuzzywuzzy import fuzz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
@@ -3292,6 +3293,19 @@ class StatisticsAction(JobInstanceAction):
                 agent.collector.stats_database_name,
                 agent.collector.stats_database_precision)
 
+    def _retrieve_statistics_data(self):
+        job_name, connection = self._build_connection()
+        scenarios = list(connection.statistics(
+                fields=[self.name], job=job_name,
+                job_instance=self.instance_id))
+
+        if not scenarios:
+            return
+
+        scenario, = scenarios
+        job, = scenario.own_jobs
+        return job.statistics_data
+
 
 class StatisticsOrigin(StatisticsAction):
     """Action that retrieve the first timestamp
@@ -3314,20 +3328,70 @@ class StatisticsValues(StatisticsAction):
         super().__init__(instance_id=instance_id, name=name)
 
     def _action(self):
-        job_name, connection = self._build_connection()
-        scenarios = list(connection.statistics(
-                fields=[self.name], job=job_name,
-                job_instance=self.instance_id))
-
-        if not scenarios:
+        statistics_data = self._retrieve_statistics_data()
+        if statistics_data is None:
             return [], 200
 
-        scenario, = scenarios
-        job, = scenario.own_jobs
         statistics = itertools.chain.from_iterable(
                 statistic.json for statistic
-                in job.statistics_data.values())
+                in statistics_data.values())
         return sorted(statistics, key=operator.itemgetter('time')), 200
+
+
+class StatisticsHistogram(StatisticsAction):
+    """Action that retrieve values associated to a statistic
+    in InfluxDB and convert them to an histogram.
+    """
+
+    def __init__(self, instance_id, name, buckets):
+        super().__init__(instance_id=instance_id, name=name, buckets=buckets)
+
+    def _action(self):
+        statistics_data = self._retrieve_statistics_data()
+        if statistics_data is None:
+            return [], 200
+
+        statistics = [
+                stat[self.name]
+                for stat in itertools.chain.from_iterable(
+                    statistic.json for statistic in statistics_data.values()
+                )
+        ]
+        hist, buckets = numpy.histogram(statistics, self.buckets)
+        count = hist.sum()
+
+        return {
+                'counts': (hist / count).tolist() if count else hist.tolist(),
+                'buckets': buckets.tolist(),
+        }, 200
+
+
+class StatisticsComparison(StatisticsAction):
+    """Action that retrieve values associated to a statistic
+    in InfluxDB and convert them to an histogram.
+    """
+
+    def __init__(self, instance_id, name):
+        super().__init__(instance_id=instance_id, name=name)
+
+    def _action(self):
+        statistics_data = self._retrieve_statistics_data()
+        if statistics_data is None:
+            return [], 200
+
+        statistics = numpy.asarray([
+                stat[self.name]
+                for stat in itertools.chain.from_iterable(
+                    statistic.json for statistic in statistics_data.values()
+                )
+        ])
+
+        mean = statistics.mean()
+        variance = statistics.std()
+        if numpy.isnan(mean) or numpy.isnan(variance):
+            return None, 200
+
+        return {'mean': mean, 'variance': variance}, 200
 
 
 ################

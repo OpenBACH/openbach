@@ -46,20 +46,16 @@
   become: yes
   when: openbach_clear_databases | default(False)
 
-- name: Remove Collect-Agent Libraries
-  make:
-    chdir: /opt/openbach/agent/collect_agent/client_api/
-    target: uninstall
-    params:
-      DESTDIR: /usr/
-  become: yes
-
 - name: Remove Openbach API Modules
   pip: executable=pip3 name=openbach_api state=absent
   become: yes
 
 - name: Remove Agent Repository
   file: path=/opt/openbach/agent state=absent
+  become: yes
+
+- name: Uninstall collect-agent package
+  apt: name=collect-agent state=absent
   become: yes
 
 - name: Remove SUDO Rights for openbach User

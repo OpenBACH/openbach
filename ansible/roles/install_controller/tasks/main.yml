@@ -26,6 +26,8 @@
     - apscheduler
     - uwsgi
     - fuzzywuzzy
+    - python-Levenshtein
+    - numpy
     - ansible
   become: yes
 
@@ -110,6 +112,11 @@
 - name: Initialize the Backend's Database
   shell: /opt/openbach/controller/backend/openbach-backend.py migrate --no-input
   remote_user: openbach
+
+- name: Setup Default Superuser name and password
+  set_fact: openbach_backend_admin_name={{ openbach_backend_admin_name | default('openbach') }} openbach_backend_admin_password={{ openbach_backend_admin_password | default('openbach') }}
+  tags:
+    - consider_safe_network
 
 - name: Manage Superusers in the Backend's Database
   openbach_superuser: manager=/opt/openbach/controller/backend/openbach-backend.py

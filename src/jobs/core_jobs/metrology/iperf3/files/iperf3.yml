@@ -4,7 +4,7 @@ general:
   name:            iperf3
   description: >
       This Job launches the iperf3 tool (client or server mode)
-  job_version:     '0.1'
+  job_version:     '1.0'
   keywords:        [iperf, iperf3]
   persistent:      True
 
@@ -12,7 +12,7 @@ platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/iperf3/iperf3.py'
+    command: 'sudo python3 /opt/openbach/agent/jobs/iperf3/iperf3.py'
     command_stop:
 
 arguments:

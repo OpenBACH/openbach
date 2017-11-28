@@ -5,7 +5,7 @@ After=rstats.service
 
 [Service]
 Type=simple
-Environment=PYTHONPATH=/opt/openbach/agent/collect_agent
+User=openbach
 Environment=JOB_NAME=openbach_agent
 ExecStart=/usr/bin/python3 /opt/openbach/agent/openbach_agent.py
 

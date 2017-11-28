@@ -99,19 +99,19 @@ class ActionModule(ActionBase):
         cacheable = bool(args.pop('cacheable', False))
         username = task_vars.get('openbach_backend_admin_name')
 
+        # Retrieving the list of admin members
+        # to check if we need to create it or not
+        available_admins = self.remote_shell(result, cmd, """\
+                from django.contrib.auth.models import User
+                admins = User.objects.filter(is_staff=True)
+                admin_names = [user.get_username() for user in admins]
+                print(admin_names)""")
+
         if username is not None:
-            create_superuser = False
             user_provided_username = True
+            create_superuser = username not in available_admins
         else:
             user_provided_username = False
-
-            # Retrieving the list of admin members
-            # to check if we need to create it or not
-            available_admins = self.remote_shell(result, cmd, """\
-                    from django.contrib.auth.models import User
-                    admins = User.objects.filter(is_staff=True)
-                    admin_names = [user.get_username() for user in admins]
-                    print(admin_names)""")
             create_superuser = not available_admins
 
             if create_superuser:

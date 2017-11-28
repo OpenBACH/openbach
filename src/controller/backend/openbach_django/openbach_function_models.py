@@ -590,10 +590,13 @@ class StartScenarioInstance(OpenbachFunction):
         }}
 
     def _get_arguments(self, parameters):
-        return {
+        arguments = {
                 field_name: self.instance_value(field_name, parameters)
                 for field_name in ('scenario_name', 'arguments')
         }
+        project = self.scenario.project
+        arguments['project'] = project.name if project else None
+        return arguments
 
 
 class StopScenarioInstance(OpenbachFunction):

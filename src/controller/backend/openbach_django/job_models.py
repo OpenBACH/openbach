@@ -222,9 +222,12 @@ class StatisticInstance(models.Model):
 class JobInstance(models.Model):
     """Data associated to a Job instance"""
 
-    job = models.ForeignKey(
-            InstalledJob, models.CASCADE,
-            related_name='instances')
+    job_name = models.CharField(max_length=500)
+    agent_name = models.CharField(max_length=500)
+    agent_address = models.GenericIPAddressField()
+    collector = models.ForeignKey(
+            'Collector', models.CASCADE,
+            related_name='+')
     status = models.CharField(max_length=500)
     update_status = models.DateTimeField()
     start_date = models.DateTimeField()
@@ -260,6 +263,12 @@ class JobInstance(models.Model):
         return self.openbach_function_instance.scenario_instance.id
 
     @property
+    def project(self):
+        if self.openbach_function_instance is None:
+            return
+        return self.openbach_function_instance.scenario_instance.scenario.project
+
+    @property
     def start_timestamp(self):
         date = self.start_date
         if date < timezone.now():
@@ -268,11 +277,12 @@ class JobInstance(models.Model):
 
     @property
     def arguments(self):
-        required_args = self.job.job.required_arguments.order_by('rank')
+        job = Job.objects.get(name=self.job_name)
+        required_args = job.required_arguments.order_by('rank')
         optional_flags_only = self.optional_arguments_values.filter(
                 argument__type='None',
                 value='True')
-        optional_arguments = self.job.job.optional_arguments.exclude(type='None')
+        optional_arguments = job.optional_arguments.exclude(type='None')
 
         required = ' '.join(
                 quote(str(value)) for argument in required_args
@@ -303,7 +313,7 @@ class JobInstance(models.Model):
         self.required_arguments_values.all().delete()
         self.optional_arguments_values.all().delete()
 
-        job = self.job.job
+        job = Job.objects.get(name=self.job_name)
         for arg_name, arg_values in arguments.items():
             try:
                 argument_instance = RequiredJobArgument.objects.get(job=job, name=arg_name)
@@ -333,7 +343,9 @@ class JobInstance(models.Model):
                 job_argument.save()
 
     def __str__(self):
-        return 'Job Instance {} of {}'.format(self.id, self.job)
+        return 'Job Instance {} of {} installed on {} ({})'.format(
+                self.id, self.job_name,
+                self.agent_name, self.agent_address)
 
     @property
     def json(self):
@@ -349,8 +361,8 @@ class JobInstance(models.Model):
             stop_date = self.stop_date.astimezone(tz)
 
         return {
-                'name': self.job.job.name,
-                'agent': self.job.agent.address,
+                'name': self.job_name,
+                'agent': self.agent_address,
                 'id': self.id,
                 'arguments': arguments,
                 'update_status': self.update_status.astimezone(tz),
@@ -444,7 +456,7 @@ class RequiredJobArgumentValue(ArgumentValue):
         self._check_and_set_value(value, self.argument.type)
 
     def save(self, *args, **kwargs):
-        if self.argument.job != self.job_instance.job.job:
+        if self.argument.job.name != self.job_instance.job_name:
             raise IntegrityError(
                     'Trying to save a RequiredJobArgumentValue '
                     'with the associated JobInstance and the '
@@ -467,7 +479,7 @@ class OptionalJobArgumentValue(ArgumentValue):
         self._check_and_set_value(value, self.argument.type)
 
     def save(self, *args, **kwargs):
-        if self.argument.job != self.job_instance.job.job:
+        if self.argument.job.name != self.job_instance.job_name:
             raise IntegrityError(
                     'Trying to save an OptionalJobArgumentValue '
                     'with the associated JobInstance and the '

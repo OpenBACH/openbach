@@ -118,7 +118,7 @@ class JobManager:
 
     def add_job(self, name):
         with self._mutex:
-            new_configuration = read_job_configuration()
+            new_configuration = read_job_configuration(name)
             try:
                 installed_job = self.jobs[name]
             except KeyError:

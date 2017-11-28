@@ -1738,13 +1738,15 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
         owner = job_instance.started_by
         self._assert_user_in([owner])
 
+        job = job_instance.job.job
+        agent = job_instance.job.agent
         with db.transaction.atomic():
             try:
                 job_instance.configure(self.arguments, self.date, self.interval)
             except (KeyError, ValueError) as err:
                 raise errors.BadRequestError(
                         'An error occured when reconfiguring the JobInstance',
-                        job_name=self.name, agent_address=self.address,
+                        job_name=job.name, agent_address=agent.address,
                         job_instance_id=self.instance_id,
                         arguments=self.arguments, error_message=str(err))
             ofi = self.openbach_function_instance
@@ -1752,8 +1754,6 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
                 job_instance.openbach_function_instance = ofi
             job_instance.save()
 
-        job = job_instance.job.job
-        agent = job_instance.job.agent
         scenario_id = job_instance.scenario_id
         owner_id = get_master_scenario_id(scenario_id)
         try:

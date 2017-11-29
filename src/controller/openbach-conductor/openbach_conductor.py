@@ -1499,6 +1499,31 @@ class JobInstanceAction(ConductorAction):
                     'The requested Job Instance is not in the database',
                     job_instance_id=self.instance_id)
 
+    def _start_job_instance(self, method):
+        job_instance = self.get_job_instance_or_not_found_error()
+        scenario_id = job_instance.scenario_id
+        owner_id = get_master_scenario_id(scenario_id)
+        date = job_instance.start_timestamp if self.interval is None else None
+
+        try:
+            baton = OpenBachBaton(job_instance.agent_address)
+            getattr(baton, method)(
+                    job_instance.job_name,
+                    job_instance.id,
+                    scenario_id, owner_id,
+                    job_instance.arguments,
+                    date, self.interval)
+        except Job.DoesNotExist:
+            job_instance.delete()
+            raise errors.NotFoundError(
+                    'No Job was found in the database',
+                    job_name=self.name)
+        except errors.ConductorError:
+            job_instance.delete()
+            raise
+
+        job_instance.set_status('Running')
+
 
 class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
     """Action responsible for launching a Job on an Agent"""
@@ -1552,8 +1577,12 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         installed_job = installed_infos.get_installed_job_or_not_found_error()
 
         now = timezone.now()
+        agent = installed_job.agent
         job_instance = JobInstance.objects.create(
-                job=installed_job,
+                job_name=installed_job.job.name,
+                agent_name=agent.name,
+                agent_address=agent.address,
+                collector=agent.collector,
                 status='Scheduled',
                 update_status=now,
                 start_date=now,
@@ -1563,7 +1592,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
             job_instance.openbach_function_instance = ofi
         try:
             job_instance.configure(self.arguments, date, self.interval)
-        except (KeyError, ValueError) as err:
+        except (KeyError, ValueError, Job.DoesNotExist) as err:
             job_instance.delete()
             raise errors.BadRequestError(
                     'An error occured when configuring the JobInstance',
@@ -1576,22 +1605,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         self.instance_id = job_instance.id
 
     def _action(self):
-        job_instance = self.get_job_instance_or_not_found_error()
-        scenario_id = job_instance.scenario_id
-        owner_id = get_master_scenario_id(scenario_id)
-        date = job_instance.start_timestamp if self.interval is None else None
-        arguments = job_instance.arguments
-
-        try:
-            OpenBachBaton(self.address).start_job_instance(
-                    self.name, job_instance.id,
-                    scenario_id, owner_id,
-                    arguments, date, self.interval)
-        except errors.ConductorError:
-            job_instance.delete()
-            raise
-
-        job_instance.set_status('Running')
+        self._start_job_instance('start_job_instance')
 
 
 class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
@@ -1643,7 +1657,7 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
             raise errors.ConductorWarning(
                     'The required JobInstance is already stopped',
                     job_instance_id=self.instance_id,
-                    job_name=job_instance.job.job.name)
+                    job_name=job_instance.job_name)
 
         if self.date is None:
             date = 'now'
@@ -1652,10 +1666,10 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
             date = self.date
             tz = timezone.get_current_timezone()
             stop_date = datetime.fromtimestamp(date / 1000, tz=tz)
-        job = job_instance.job.job
-        agent = job_instance.job.agent
 
-        OpenBachBaton(agent.address).stop_job_instance(job.name, self.instance_id, date)
+        OpenBachBaton(job_instance.agent_address).stop_job_instance(
+                job_instance.job_name,
+                self.instance_id, date)
         job_instance.stop_date = stop_date
         job_instance.save()
 
@@ -1727,15 +1741,14 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
         owner = job_instance.started_by
         self._assert_user_in([owner])
 
-        job = job_instance.job.job
-        agent = job_instance.job.agent
         with db.transaction.atomic():
             try:
                 job_instance.configure(self.arguments, self.date, self.interval)
-            except (KeyError, ValueError) as err:
+            except (KeyError, ValueError, Job.DoesNotExist) as err:
                 raise errors.BadRequestError(
                         'An error occured when reconfiguring the JobInstance',
-                        job_name=job.name, agent_address=agent.address,
+                        job_name=job_instance.job_name,
+                        agent_address=job_instance.agent_address,
                         job_instance_id=self.instance_id,
                         arguments=self.arguments, error_message=str(err))
             ofi = self.openbach_function_instance
@@ -1743,18 +1756,7 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
                 job_instance.openbach_function_instance = ofi
             job_instance.save()
 
-        scenario_id = job_instance.scenario_id
-        owner_id = get_master_scenario_id(scenario_id)
-        try:
-            OpenBachBaton(agent.address).restart_job_instance(
-                    job.name, self.instance_id,
-                    scenario_id, owner_id,
-                    job_instance.arguments,
-                    self.date, self.interval)
-        except errors.ConductorError:
-            job_instance.delete()
-            raise
-        job_instance.set_status('Running')
+        self._start_job_instance('restart_job_instance')
 
 
 class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
@@ -1770,10 +1772,11 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
             self._assert_user_in([owner])
 
         if self.update:
-            address = job_instance.job.agent.address
-            job_name = job_instance.job.job.name
             try:
-                job_status = OpenBachBaton(address).status_job_instance(job_name, self.instance_id)
+                baton = OpenBachBaton(job_instance.agent_address)
+                job_status = baton.status_job_instance(
+                        job_instance.job_name,
+                        self.instance_id)
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
             finally:
@@ -2184,25 +2187,24 @@ class ExportScenarioInstance(ScenarioInstanceAction):
             headers |= set(stats_names[job_name])
 
     def _export_start_job_instance(self, start_job_instance, csv_writer, dates):
-        agent = start_job_instance.job.agent
         connection = InfluxDBConnection(
-                agent.collector.address,
-                agent.collector.stats_query_port,
-                agent.collector.stats_database_name,
-                agent.collector.stats_database_precision)
+                start_job_instance.collector.address,
+                start_job_instance.collector.stats_query_port,
+                start_job_instance.collector.stats_database_name,
+                start_job_instance.collector.stats_database_precision)
         generator = connection.raw_statistics(
                 job_instance=start_job_instance.id)
         for job_name, stats in generator:
             stats.update(dates)
-            try:
-                stats['time'] = datetime.fromtimestamp(stats['time']/1000, tz=self.tz)
-            except KeyError:
-                pass
+            with suppress(KeyError):
+                stats['time'] = datetime.fromtimestamp(
+                        stats['time'] / 1000,
+                        tz=self.tz)
             csv_writer.writerow(stats)
 
     def _export_scenario_metadata(self, start_job_instance, csv_writer, dates):
         stats = {
-                '@agent_name': start_job_instance.job.agent.name,
+                '@agent_name': start_job_instance.agent_name,
                 '@scenario_instance_id': start_job_instance.scenario_id,
                 '@job_instance_id': start_job_instance.id,
                 '@owner_scenario_instance_id': start_job_instance.started_by,
@@ -2215,7 +2217,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
             with suppress(JobInstance.DoesNotExist):
                 job_instance = openbach_function.started_job
                 dates = {
-                        '@job_name': job_instance.job.job.name,
+                        '@job_name': job_instance.job_name,
                         '@scenario_start_date': scenario_instance.start_date,
                         '@job_instance_start_date': job_instance.start_date,
                         '@scenario_stop_date': scenario_instance.stop_date,
@@ -3270,17 +3272,14 @@ class StatisticsAction(JobInstanceAction):
 
     def _build_connection(self):
         job_instance = self.get_job_instance_or_not_found_error()
-        job_name = job_instance.job.job.name
-        agent = job_instance.job.agent
-        with suppress(Entity.DoesNotExist):
-            project = agent.entity.project
-            self._assert_user_in(project.owners.all())
+        if job_instance.project is not None:
+            self._assert_user_in(job_instance.project.owners.all())
 
-        return job_name, InfluxDBConnection(
-                agent.collector.address,
-                agent.collector.stats_query_port,
-                agent.collector.stats_database_name,
-                agent.collector.stats_database_precision)
+        return job_instance.job_name, InfluxDBConnection(
+                job_instance.collector.address,
+                job_instance.collector.stats_query_port,
+                job_instance.collector.stats_database_name,
+                job_instance.collector.stats_database_precision)
 
     def _retrieve_statistics_data(self):
         job_name, connection = self._build_connection()

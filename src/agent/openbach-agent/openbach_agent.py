@@ -149,13 +149,7 @@ class JobManager:
                 job = self.jobs[name]
             except KeyError:
                 raise BadRequest('KO No job {} is installed'.format(name))
-            return {key: job[key] for key in (
-                    'sudo',
-                    'command',
-                    'command_stop',
-                    'required',
-                    'optional',
-                    'persistent')}
+            return {key: value for key, value in job.items() if key != 'instances'}
 
     def get_instances(self, name):
         with self._mutex:

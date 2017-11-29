@@ -75,7 +75,7 @@
   notify: restart influxdb
 
 - name: Change default max cache memory size by InfluxDB
-  replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)# cache-max-memory-size = "1g"(\s+.*)?$' replace='\1cache-max-memory-size = "{{ influxdb_max_cache }}"\2' backup=yes
+  replace: dest=/etc/influxdb/influxdb.conf regexp='(\s+)# cache-max-memory-size = "1g"(\s+.*)?$' replace='\1cache-max-memory-size = "{{ influxdb_max_cache }}"\2'
   become: yes
   notify: restart influxdb
 

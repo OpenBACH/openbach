@@ -6,13 +6,14 @@ general:
       This Job executes the hping3 command to send custom TCP/IP (e.g. SYN TCP) packets (like ping does with ICMP) and measures the rtt delay of the stream of packets (with a frequency of count packets).
   job_version:     '1.0'
   keywords:        [hping, rate, rtt, round, syn, ack, round, trip, time]
-  persistent:      true
+  persistent:      True
+  need_privileges: True
 
 platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command: 'sudo python3 /opt/openbach/agent/jobs/hping/hping.py'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/hping/hping.py'
     command_stop:
 
 arguments:

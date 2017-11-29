@@ -150,6 +150,7 @@ class JobManager:
             except KeyError:
                 raise BadRequest('KO No job {} is installed'.format(name))
             return {key: job[key] for key in (
+                    'sudo',
                     'command',
                     'command_stop',
                     'required',
@@ -456,9 +457,17 @@ def popen(command, args, **kwargs):
     Additional keywords arguments can be passed to the
     Popen constructor to manage the process creation.
     """
+
+    if kwargs.get('shell', False):
+        command_line = 'sudo -E {} {}'.format(command, args)
+    else:
+        command_line = shlex.split(command) + shlex.split(args)
+
     return psutil.Popen(
-            shlex.split(command) + shlex.split(args),
-            stdout=DEVNULL, stderr=DEVNULL, **kwargs)
+            command_line,
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+            **kwargs)
 
 
 def schedule_job_instance(job_name, job_instance_id, scenario_instance_id,
@@ -505,7 +514,8 @@ def launch_job(job_name, instance_id, scenario_instance_id,
                     'SCENARIO_INSTANCE_ID': scenario_instance_id,
                     'OWNER_SCENARIO_INSTANCE_ID': owner_scenario_instance_id})
     # Launch the Job Instance
-    proc = popen(command, args, env=environ)
+    job_config = JobManager().get_job(job_name)
+    proc = popen(command, args, env=environ, shell=job_config['sudo'])
     pid = proc.pid
     JobManager().set_instance_status(job_name, instance_id, pid)
     return_code = proc.wait()
@@ -545,7 +555,8 @@ def stop_job(job_name, job_instance_id):
         else:
             stop_job_already_running(job_name, job_instance_id, infos)
             if command is not None:
-                popen(command, args).wait()
+                job_config = manager.get_job(job_name)
+                popen(command, args, shell=job_config['sudo']).wait()
         finally:
             with suppress(JobLookupError):
                 manager.scheduler.remove_job(job_name + job_instance_id)
@@ -567,10 +578,12 @@ def stop_job_already_running(job_name, job_instance_id, instance_infos):
     # Kill all its children
     children = proc.children(recursive=True)
     for child in children:
-        child.terminate()
+        with suppress(psutil.AccessDenied):
+            child.terminate()
     _, still_alive = psutil.wait_procs(children, timeout=1)
     for child in still_alive:
-        child.kill()
+        with suppress(psutil.AccessDenied):
+            child.kill()
 
     # Kill the process
     proc.terminate()
@@ -673,11 +686,9 @@ def list_jobs_in_dir(dirname):
 
 
 def read_job_configuration(job_name):
-    # Get the configuration filename
+    # Load the configuration
     filename = '{}.yml'.format(job_name)
     conf_file = os.path.join(JOBS_FOLDER, filename)
-
-    # Load the configuration
     try:
         with open(conf_file, 'r') as stream:
             try:
@@ -752,6 +763,8 @@ def read_job_configuration(job_name):
                 '\'{}\' entry in section '
                 '\'general\' for job {}'
                 .format(filename, e, job_name))
+
+    configuration['sudo'] = content['general'].get('need_privileges')
 
     return configuration
 

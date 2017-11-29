@@ -937,27 +937,16 @@ class AddJob(JobAction):
         if created:
             return
 
-        # If the job existed already, update on installed agents if necessary 
+        # If the job existed already, uninstall on agents if necessary
         for installed_job in InstalledJob.objects.filter(job=job):
             installed_version = StrictVersion(installed_job.job_version)
             current_version = StrictVersion(job.job_version)
-            # If the job's major version is newer than installed, or older, reinstall
-            if ((installed_version > current_version) or 
-                    (installed_version.version[0] != current_version.version[0])):
-                agent = installed_job.agent
-                start_playbook(
-                        'uninstall_job',
-                        agent.address,
-                        agent.collector.address,
-                        job.name, job.path)
-                start_playbook(
-                        'install_job',
-                        agent.address,
-                        agent.collector.address,
-                        agent.collector.logs_port,
-                        job.name, job.path)
-                installed_job.job_version = job.job_version
-                installed_job.save()
+            # In case of rollback or major update, uninstall the Job
+            if (installed_version > current_version or
+                    installed_version.version[0] != current_version.version[0]):
+                uninstaller = UninstallJob(installed_job.agent.address, self.name)
+                self.share_user(uninstaller)
+                uninstaller.action()
 
 
 class AddTarJob(JobAction):

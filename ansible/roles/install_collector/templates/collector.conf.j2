@@ -107,7 +107,7 @@ output {
 				port => {{ influxdb_port }}
 				db => "{{ influxdb_database_name }}"
 				time_precision => "{{ influxdb_database_precision }}"
-				retention_policy => "default"
+				retention_policy => "{{ influxdb_database_name }}"
 			}
 		}
 	}

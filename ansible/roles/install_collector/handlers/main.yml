@@ -31,7 +31,7 @@
     hostname: localhost
     database_name: "{{ influxdb_database_name }}"
     port: "{{ influxdb_port }}"
-    policy_name: default
+    policy_name: "{{ influxdb_database_name }}"
     duration: 52w
     replication: 1
     default: yes

@@ -1,5 +1,8 @@
 ---
 
+influxdb_max_cache: {{ influxdb_max_cache }}
+openbach_repository: {{ openbach_repository }}
 openbach_controller: {{ inventory_hostname }}
-openbach_proxy_env: {{ openbach_proxy_env }}
+openbach_proxy_env:
+{{ openbach_proxy_env | to_nice_yaml | indent(2, True) }}
 is_run_from_conductor: true

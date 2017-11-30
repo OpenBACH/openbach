@@ -47,8 +47,7 @@
       set_fact: openbach_https_proxy={{ openbach_https_proxy is defined and openbach_https_proxy or lookup('env', 'HTTPS_PROXY') or openbach_http_proxy }}
 
     - name: Configure Proxy Environment
-      set_fact:
-        openbach_proxy_env: {}
+      set_fact: openbach_proxy_env={{ openbach_proxy_env | default({}) }}
 
     - name: Configure Http Proxy in Environment
       set_fact:

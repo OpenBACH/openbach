@@ -452,10 +452,8 @@ def popen(command, args, **kwargs):
     Popen constructor to manage the process creation.
     """
 
-    if kwargs.get('shell', False):
-        command_line = 'sudo -E {} {}'.format(command, args)
-    else:
-        command_line = shlex.split(command) + shlex.split(args)
+    kwargs.pop('shell', False):
+    command_line = shlex.split(command) + shlex.split(args)
 
     return psutil.Popen(
             command_line,

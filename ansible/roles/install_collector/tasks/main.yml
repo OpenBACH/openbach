@@ -79,6 +79,28 @@
   become: yes
   notify: restart influxdb
 
+- meta: flush_handlers
+
+- name: wait for influxdb to start
+  wait_for: port={{ influxdb_port }} timeout=60
+
+- name: Create Default InfluxDB Database
+  influxdb_database:
+    hostname: localhost
+    database_name: "{{ influxdb_database_name }}"
+    port: "{{ influxdb_port }}"
+    state: present
+
+- name: Alter Default InfluxDB Policy
+  influxdb_retention_policy:
+    hostname: localhost
+    database_name: "{{ influxdb_database_name }}"
+    port: "{{ influxdb_port }}"
+    policy_name: "{{ influxdb_database_name }}"
+    duration: 52w
+    replication: 1
+    default: yes
+
 - name: Create OpenBACH repository
   file: path=/opt/openbach/collector state=directory
   remote_user: openbach

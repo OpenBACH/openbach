@@ -83,8 +83,8 @@
       - P local_settings.py
   remote_user: openbach
   notify:
-    - start backend
-    - start conductor
+    - restart backend
+    - restart conductor
 
 - name: Copy Django's manager file
   copy: src=../src/controller/backend/openbach-backend.py dest=/opt/openbach/controller/backend/openbach-backend.py mode=0500
@@ -98,8 +98,8 @@
   template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py mode=0400
   remote_user: openbach
   notify:
-    - start backend
-    - start conductor
+    - restart backend
+    - restart conductor
 
 - name: Create the Backend's Database Admin User
   postgresql_user: db=openbach_db name=openbach password={{ openbach_local_settings_database_password }} priv=CONNECT
@@ -129,7 +129,7 @@
 - name: Create the Backend service
   copy: src=openbach_backend.service dest=/etc/systemd/system/ mode=0644
   become: yes
-  notify: start backend
+  notify: restart backend
 
 - name: Install the Conductor
   synchronize:
@@ -141,12 +141,12 @@
       - --exclude
       - __pycache__
   remote_user: openbach
-  notify: start conductor
+  notify: restart conductor
 
 - name: Create the Conductor service
   copy: src=openbach_conductor.service dest=/etc/systemd/system/ mode=0644
   become: yes
-  notify: start conductor
+  notify: restart conductor
 
 - name: Copy the sources of the Agent
   synchronize:

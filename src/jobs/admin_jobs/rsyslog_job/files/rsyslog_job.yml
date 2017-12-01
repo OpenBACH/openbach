@@ -9,12 +9,13 @@ general:
   job_version:     '1.0'
   keywords:        [rsyslog]
   persistent:      False
+  need_privileges: True
 
 platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command: 'sudo python3 /opt/openbach/agent/jobs/rsyslog_job/rsyslog_job.py'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/rsyslog_job/rsyslog_job.py'
     command_stop:
 
 arguments:

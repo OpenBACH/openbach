@@ -8,12 +8,13 @@ general:
   job_version:     '1.0'
   keywords:        [http2, server]
   persistent:      True
+  need_privileges: True
 
 platform_configuration:
   - ansible_system: 'Linux'
     ansible_distribution: 'Ubuntu'
     ansible_distribution_version: '16.04'
-    command: 'sudo python3 /opt/openbach/agent/jobs/http2_server/http2_server.py'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/http2_server/http2_server.py'
     command_stop:
 
 arguments:

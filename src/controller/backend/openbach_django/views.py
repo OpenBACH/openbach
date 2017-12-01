@@ -815,12 +815,19 @@ class StatisticView(GenericView):
 
     def get(self, request, job_instance_id):
         instance_id = int(job_instance_id)
+        suffix = request.GET.get('suffix')
         try:
             statistic_name = request.GET['name']
         except KeyError:
-            return self.conductor_execute(
-                    command='statistics_origin',
-                    instance_id=instance_id)
+            if 'origin' in request.GET:
+                return self.conductor_execute(
+                        command='statistics_origin',
+                        instance_id=instance_id)
+            else:
+                return self.conductor_execute(
+                        command='statistics_names_and_suffixes',
+                        instance_id=instance_id)
+
         else:
             histogram = request.GET.get('histogram')
             try:
@@ -830,17 +837,20 @@ class StatisticView(GenericView):
                     return self.conductor_execute(
                             command='statistics_comparison',
                             instance_id=instance_id,
-                            name=statistic_name)
+                            name=statistic_name,
+                            suffix=suffix)
                 else:
                     return self.conductor_execute(
                             command='statistics_values',
                             instance_id=instance_id,
-                            name=statistic_name)
+                            name=statistic_name,
+                            suffix=suffix)
             else:
                 return self.conductor_execute(
                         command='statistics_histogram',
                         instance_id=instance_id,
                         name=statistic_name,
+                        suffix=suffix,
                         buckets=buckets)
 
 

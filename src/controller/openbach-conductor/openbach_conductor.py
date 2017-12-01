@@ -3285,7 +3285,8 @@ class StatisticsAction(JobInstanceAction):
         job_name, connection = self._build_connection()
         scenarios = list(connection.statistics(
                 fields=[self.name], job=job_name,
-                job_instance=self.instance_id))
+                job_instance=self.instance_id,
+                suffix=self.suffix))
 
         if not scenarios:
             return
@@ -3309,11 +3310,27 @@ class StatisticsOrigin(StatisticsAction):
         return origin, 200
 
 
+class StatisticsNamesAndSuffixes(StatisticsAction):
+    """Action that retrieve both the names of the fields
+    and the available suffixes associated to a job
+    instance in InfluxDB.
+    """
+
+    def __init__(self, instance_id):
+        super().__init__(instance_id=instance_id)
+
+    def _action(self):
+        job_name, connection = self._build_connection()
+        names = connection.get_field_keys().get(job_name, [])
+        suffixes = connection.suffixes(job=job_name, job_instance=self.instance_id)
+        return {'statistics': sorted(names), 'suffixes': sorted(suffixes)}, 200
+
+
 class StatisticsValues(StatisticsAction):
     """Action that retrieve values associated to a statistic in InfluxDB"""
 
-    def __init__(self, instance_id, name):
-        super().__init__(instance_id=instance_id, name=name)
+    def __init__(self, instance_id, name, suffix=None):
+        super().__init__(instance_id=instance_id, name=name, suffix=suffix)
 
     def _action(self):
         statistics_data = self._retrieve_statistics_data()
@@ -3331,8 +3348,10 @@ class StatisticsHistogram(StatisticsAction):
     in InfluxDB and convert them to an histogram.
     """
 
-    def __init__(self, instance_id, name, buckets):
-        super().__init__(instance_id=instance_id, name=name, buckets=buckets)
+    def __init__(self, instance_id, name, buckets, suffix=None):
+        super().__init__(
+                instance_id=instance_id, name=name,
+                buckets=buckets, suffix=suffix)
 
     def _action(self):
         statistics_data = self._retrieve_statistics_data()
@@ -3359,8 +3378,8 @@ class StatisticsComparison(StatisticsAction):
     in InfluxDB and convert them to an histogram.
     """
 
-    def __init__(self, instance_id, name):
-        super().__init__(instance_id=instance_id, name=name)
+    def __init__(self, instance_id, name, suffix=None):
+        super().__init__(instance_id=instance_id, name=name, suffix=suffix)
 
     def _action(self):
         statistics_data = self._retrieve_statistics_data()

@@ -452,7 +452,7 @@ def popen(command, args, **kwargs):
     Popen constructor to manage the process creation.
     """
 
-    kwargs.pop('shell', False):
+    kwargs.pop('shell', False)
     command_line = shlex.split(command) + shlex.split(args)
 
     return psutil.Popen(

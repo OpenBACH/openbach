@@ -1181,7 +1181,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
                     agent.collector.address,
                     agent.collector.logs_port,
                     job.name, job.path)
-        OpenBachBaton(self.address).add_job(self.name)
+            OpenBachBaton(self.address).add_job(self.name)
 
         installed_job, created = InstalledJob.objects.get_or_create(
                 agent=agent, job=job, defaults={'job_version': job.job_version})
@@ -1191,12 +1191,13 @@ class InstallJob(ThreadedAction, InstalledJobAction):
         installed_job.update_status = timezone.now()
         installed_job.save()
 
-        with suppress(errors.ConductorError):
-            severity_setter = SetLogSeverityJob(
-                    self.address, self.name,
-                    self.severity, self.local_severity)
-            self.share_user(severity_setter)
-            severity_setter._threaded_action(severity_setter._action)
+        if not self.skip_playbook:
+            with suppress(errors.ConductorError):
+                severity_setter = SetLogSeverityJob(
+                        self.address, self.name,
+                        self.severity, self.local_severity)
+                self.share_user(severity_setter)
+                severity_setter._threaded_action(severity_setter._action)
 
         if not created:
             raise errors.ConductorWarning(

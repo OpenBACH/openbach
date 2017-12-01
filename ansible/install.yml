@@ -90,6 +90,14 @@
     - install_controller
 
 
+# Use a separate play here so handlers of "install_controller" are run
+- name: Setup Backend's Database
+  hosts: controller
+  gather_facts: no
+  roles:
+    - configure_backend
+
+
 - name: Install Auditoriums
   hosts: auditorium
   roles:
@@ -103,17 +111,13 @@
     - configure_ssh_keys
     - install_job
 
+
 - name: Setup Kibana defaults
   hosts: collector
   gather_facts: no
   roles:
-    - configure_kibana
-
-- name: Setup Backend's Database
-  hosts: controller
-  gather_facts: no
-  roles:
-    - configure_backend
+    - role: configure_kibana
+      when: "'auditorium' in groups and groups.auditorium"
 
 
 - name: Cleanup Generated Files

@@ -45,3 +45,8 @@
   copy: src={{ item.path }}/files/{{ item.name }}.yml dest=/opt/openbach/agent/jobs/ mode=0644
   remote_user: openbach
   with_items: "{{ jobs }}"
+
+- name: Restart Agent so that new Jobs are Taken Into Account
+  systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
+  become: yes
+  when: not is_run_from_conductor

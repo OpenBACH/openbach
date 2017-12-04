@@ -27,8 +27,6 @@
   apt: pkg=collect-agent state=installed allow_unauthenticated=yes
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify:
-    - restart openbach agent
 
 - name: Upload pip Mirror
   synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/ recursive=yes delete=yes
@@ -88,9 +86,6 @@
     - openbach_agent
     - rstats
   become: yes
-  notify:
-    - restart openbach agent
-    - restart rstats
 
 - name: Create OpenBACH repository
   file: path=/opt/openbach/agent/{{ item }} state=directory
@@ -107,16 +102,10 @@
     - rstats
     - rstats_reload
   remote_user: openbach
-  notify:
-    - restart rstats
-    - restart openbach agent
 
 - name: Configure Rstats
   template: src=rstats.yml.j2 dest=/opt/openbach/agent/rstats/rstats.yml
   remote_user: openbach
-  notify:
-    - restart rstats
-    - restart openbach agent
 
 - name: Install the Agent's Daemon
   copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}
@@ -124,7 +113,6 @@
     - {name: 'openbach_agent.py', mode: '0755'}
     - {name: 'openbach_agent_filter.conf', mode: '0644'}
   remote_user: openbach
-  notify: restart openbach agent
 
 - name: Configure the Agent
   template: src={{ item }}.j2 dest=/opt/openbach/agent/{{ item }}
@@ -134,7 +122,13 @@
   vars:
     collector_ip: "{{ openbach_collector }}"
   remote_user: openbach
-  notify: restart openbach agent
+
+- name: Restart OpenBACH Services
+  systemd: name={{ item }} state=restarted enabled=yes daemon_reload=yes
+  with_items:
+    - rstats
+    - openbach_agent
+  become: yes
 
 - name: Copy the version file on the Agent
   copy: src=../version dest=/opt/openbach/agent/version

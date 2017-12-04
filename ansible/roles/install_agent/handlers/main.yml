@@ -7,11 +7,3 @@
 - name: restart rsyslog
   systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
   become: yes
-
-- name: restart rstats
-  systemd: name=rstats state=restarted enabled=yes daemon_reload=yes
-  become: yes
-
-- name: restart openbach agent
-  systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
-  become: yes

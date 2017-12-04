@@ -7,8 +7,6 @@
     - nginx-extras
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify:
-    - restart nginx
 
 - name: Install apt Packages
   apt: pkg={{ item }} force=yes allow_unauthenticated=yes
@@ -17,26 +15,20 @@
     - kibana={{ kibana_deb_version }}
   become: yes
   environment: "{{ openbach_proxy_env }}"
-  notify: 
-    - restart grafana  
-    - restart kibana
 
 - name: Configure Grafana
   copy: src=grafana.ini dest=/etc/grafana mode=0640
   become: yes
-  notify: restart grafana
 
 - name: Configure Kibana
   template: src=kibana.yml.j2 dest=/etc/kibana/kibana.yml
   vars:
     collector_ip: "{{ openbach_collector }}"
   become: yes
-  notify: restart kibana
 
 - name: Configure Kibana environement variables 
   lineinfile: path=/etc/default/kibana line="NODE_OPTIONS=--max-old-space-size=100"
   become: yes
-  notify: restart kibana
 
 - name: Configure Nginx
   template: src=default.j2 dest=/etc/nginx/sites-available/default
@@ -45,7 +37,6 @@
     auditorium_ip: "{{ inventory_hostname }}"
     collector_ip: "{{ openbach_collector }}"
   become: yes
-  notify: restart nginx
 
 - name: Create OpenBACH repository
   file: path=/opt/openbach/auditorium/frontend state=directory
@@ -54,6 +45,14 @@
 - name: Upload Auditorium Frontend
   synchronize: src=frontend/ dest=/opt/openbach/auditorium/frontend/ recursive=yes delete=yes
   remote_user: openbach
+
+- name: Restart OpenBACH Services
+  systemd: name={{ item }} state=restarted enabled=yes daemon_reload=yes
+  with_items:
+    - kibana
+    - grafana-server
+    - nginx
+  become: yes
 
 - name: Copy the version file on the Auditorium
   copy: src=../version dest=/opt/openbach/auditorium/version

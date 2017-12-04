@@ -50,6 +50,13 @@
   local_action: jobs_metadata folders={{ openbach_jobs_folders | default([]) }} substitute=/opt/openbach/controller/src/jobs/private_jobs/
   register: openbach_jobs_metadata_extra
 
+- name: Restart OpenBACH Services
+  systemd: name={{ item }} state=restarted enabled=yes daemon_reload=yes
+  with_items:
+    - openbach_backend
+    - openbach_conductor
+  become: yes
+
 - name: Authentify into the Backend Database
   uri:
     url: http://localhost:8000/login/

@@ -7,11 +7,3 @@
 - name: restart rsyslog
   systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
   become: yes
-
-- name: restart backend
-  systemd: name=openbach_backend state=restarted enabled=yes daemon_reload=yes
-  become: yes
-
-- name: restart conductor
-  systemd: name=openbach_conductor state=restarted enabled=yes daemon_reload=yes
-  become: yes

@@ -11,6 +11,3 @@
 - name: restart influxdb
   systemd: name=influxdb state=restarted enabled=yes daemon_reload=yes
   become: yes
-  notify:
-    - wait for influxdb to start
-    - create default influxdb database

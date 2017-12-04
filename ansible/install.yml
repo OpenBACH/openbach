@@ -27,7 +27,6 @@
       add_host: name={{ item }} groups=agent openbach_controller={{ item }}
       with_items: "{{ groups.controller | default([]) }}"
 
-
 - name: Pre-configure Agents and Auditoriums
   hosts:
     - agent
@@ -68,7 +67,6 @@
       set_fact: ansible_ssh_private_key_file=/tmp/openbach_install_rsa
       when: ansible_ssh_private_key_file is not defined
 
-
 - name: Install Agents
   hosts: agent
   pre_tasks:
@@ -77,40 +75,38 @@
   roles:
     - install_agent
 
-
 - name: Install Collectors
   hosts: collector
   roles:
     - install_collector
-
 
 - name: Install Controllers
   hosts: controller
   roles:
     - install_controller
 
+- name: Configure Agents
+  hosts: agent
+  gather_facts: no
+  roles:
+    - configure_ssh_keys
 
-# Use a separate play here so handlers of "install_controller" are run
 - name: Setup Backend's Database
   hosts: controller
   gather_facts: no
   roles:
     - configure_backend
 
-
 - name: Install Auditoriums
   hosts: auditorium
   roles:
     - install_auditorium
 
-
-- name: Configure Agents
+- name: Install Default Jobs
   hosts: agent
   gather_facts: no
   roles:
-    - configure_ssh_keys
     - install_job
-
 
 - name: Setup Kibana defaults
   hosts: collector
@@ -118,7 +114,6 @@
   roles:
     - role: configure_kibana
       when: "'auditorium' in groups and groups.auditorium"
-
 
 - name: Cleanup Generated Files
   hosts:
@@ -129,7 +124,6 @@
     - name: Remove trust of the install SSH key by the openbach user
       authorized_key: user=openbach state=absent key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
       become: yes
-
 
 - hosts: localhost
   gather_facts: no

@@ -35,12 +35,13 @@ __credits__ = '''Contributors:
 '''
 
 
-import argparse
-import subprocess
+import re
+import sys
 import time
 import syslog
-import sys
-import re
+import argparse
+import subprocess
+from collections import defaultdict
 
 import collect_agent
 
@@ -92,9 +93,10 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
     p = subprocess.Popen(['stdbuf', '-oL'] + cmd, stdout=subprocess.PIPE)
 
     flows = {}
-    n_flows = 0
+    n_flows = 1
 
     while True:
+        flow_no = None
         # read output
         out = p.stdout.readline().decode()
         if not out:
@@ -131,16 +133,15 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
             flow_no = flows[out_s[0]]
         except KeyError:
             if out_s[0] == "SUM":
-                flows[out_s[0]] = "sum"
-                flow_no = "sum"
+                flows[out_s[0]] = None
             else:
-                flows[out_s[0]] = n_flows
-                flow_no = n_flows
+                flows[out_s[0]] = str(n_flows)
+                flow_no = str(n_flows)
                 n_flows += 1
 
         # remove stats covering the whole duration
         try:
-            report_ival = (float(out_s[1].split('-')[1]) - 
+            report_ival = (float(out_s[1].split('-')[1]) -
                            float(out_s[1].split('-')[0]))
         except ValueError:
             continue
@@ -157,27 +158,27 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
             # TCP
             if float(out_s[3]) == 0.0:
                 continue
-            statistics["sent_data_{}".format(flow_no)] = (float(out_s[3]) * 
+            statistics["sent_data"] = (float(out_s[3]) *
                     multiplier(out_s[4], "Bytes"))
-            statistics["throughput_{}".format(flow_no)] = (float(out_s[5]) * 
+            statistics["throughput"] = (float(out_s[5]) *
                     multiplier(out_s[6], "bits/sec"))
-            collect_agent.send_stat(timestamp, **statistics)
+            collect_agent.send_stat(timestamp, suffix=flow_no, **statistics)
         elif len(out_s) == 11:
             # UDP
             if float(out_s[3]) == 0.0:
                 continue
-            statistics["sent_data_{}".format(flow_no)] = (float(out_s[3]) * 
+            statistics["sent_data"] = (float(out_s[3]) *
                     multiplier(out_s[4], "Bytes"))
-            statistics["throughput_{}".format(flow_no)] = (float(out_s[5]) * 
+            statistics["throughput"] = (float(out_s[5]) *
                     multiplier(out_s[6], "bits/sec"))
-            statistics["jitter_{}".format(flow_no)] = (float(out_s[7]) * 
+            statistics["jitter"] = (float(out_s[7]) *
                     multiplier(out_s[8], "s"))
-            statistics["lost_pkts_{}".format(flow_no)] = int(out_s[9].split('/')[0])
-            statistics["sent_pkts_{}".format(flow_no)] = int(out_s[9].split('/')[1])
-            statistics["plr_{}".format(flow_no)] = float(out_s[10][1:-2])
-            collect_agent.send_stat(timestamp, **statistics)
+            statistics["lost_pkts"] = int(out_s[9].split('/')[0])
+            statistics["sent_pkts"] = int(out_s[9].split('/')[1])
+            statistics["plr"] = float(out_s[10][1:-2])
+            collect_agent.send_stat(timestamp, suffix=flow_no, **statistics)
         else:
-            # unknown 
+            # unknown
             continue
 
 

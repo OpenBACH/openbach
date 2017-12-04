@@ -1,5 +1,7 @@
 import os
+from contextlib import suppress
 
+import yaml
 import requests
 
 
@@ -9,6 +11,22 @@ TOKEN_HEADER = {
         'PRIVATE-TOKEN': 'UyAzSGgGPJKkc7MvMLo8',
 }
 BASE_URL = 'https://forge.net4sat.org/api/v3/projects/{}'.format(PROJECT_ID)
+
+
+def read_proxies(group_vars_file):
+    with open(group_vars_file) as openbach_variables:
+        variables = yaml.load(openbach_variables)
+
+    proxies = {}
+    proxy_configuration = variables.get('openbach_proxy_env', {})
+    for protocol in ('http', 'https'):
+        with suppress(KeyError):
+            proxies['protocol'] = proxy_configuration['{}_proxy'.format(protocol)]
+
+    return proxies
+
+
+PROXIES = read_proxies('/opt/openbach/controller/ansible/group_vars/all')
 
 
 def list_jobs_names():
@@ -78,4 +96,8 @@ def _do_request(route, **params):
     if not params:
         params = None
 
-    return requests.get(BASE_URL + route, params=params, headers=TOKEN_HEADER)
+    return requests.get(
+            BASE_URL + route,
+            params=params,
+            headers=TOKEN_HEADER,
+            proxies=PROXIES)

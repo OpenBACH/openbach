@@ -57,6 +57,9 @@
     - openbach_conductor
   become: yes
 
+- name: Wait for the OpenBACH Conductor to Start
+  wait_for: port=1113 timeout=60
+
 - name: Authentify into the Backend Database
   uri:
     url: http://localhost:8000/login/
@@ -100,7 +103,7 @@
   register: response
   with_items: "{{ groups.collector | default([]) }}"
   delay: "{{ openbach_backend_retry_delay | default(5) }}"
-  retries: 20
+  retries: 5
   until: response.json.add.returncode in (200, 204)
 
 - name: Add Agents into the Backend Database
@@ -123,5 +126,5 @@
   register: response
   with_items: "{{ groups.agent | default([]) }}"
   delay: "{{ openbach_backend_retry_delay | default(5) }}"
-  retries: 20
+  retries: 5
   until: response.json.install.returncode in (200, 204)

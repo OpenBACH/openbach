@@ -6,7 +6,7 @@ Requires=network.target
 User=openbach
 Type=simple
 WorkingDirectory=/opt/openbach/controller/backend/
-ExecStart=/usr/local/bin/uwsgi --master --workers 5 --http :8000 --module backend.wsgi --static-map /static=/opt/openbach/controller/backend/static_root
+ExecStart=/usr/local/bin/uwsgi --master --workers 5 --http :8000 --module backend.wsgi --static-map /static=/opt/openbach/controller/backend/static_root --die-on-term
 
 [Install]
 WantedBy=multi-user.target

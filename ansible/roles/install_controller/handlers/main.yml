@@ -7,3 +7,7 @@
 - name: restart rsyslog
   systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
   become: yes
+
+- name: restart pgbouncer
+  systemd: name=pgbouncer state=restarted enabled=yes daemon_reload=yes
+  become: yes

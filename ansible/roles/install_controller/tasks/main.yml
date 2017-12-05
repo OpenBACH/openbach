@@ -6,6 +6,7 @@
     - sshpass
     - postgresql-server-dev-9.5
     - postgresql
+    - pgbouncer
     - libpq-dev  # For psycopg2, necessary for ansible's postgresql_* modules
     - python-dev  # For psycopg2, necessary for ansible's postgresql_* modules
   become: yes
@@ -48,12 +49,6 @@
   become: yes
   notify: restart postgresql
 
-- meta: flush_handlers
-
-- name: Create the Backend's Database
-  postgresql_db: name=openbach_db state=present
-  become: yes
-
 - name: Create OpenBACH repository
   file: path=/opt/openbach/controller/{{ item }} state=directory
   with_items:
@@ -81,7 +76,14 @@
       - P static_root
       - --filter
       - P local_settings.py
+      - --filter
+      - P pgbouncer_auth.txt
   remote_user: openbach
+
+- name: Configure PgBouncer
+  copy: src=pgbouncer.ini dest=/etc/pgbouncer/pgbouncer.ini mode=640 owner=postgres group=postgres backup=yes
+  become: yes
+  notify: restart pgbouncer
 
 - name: Copy Django's manager file
   copy: src=../src/controller/backend/openbach-backend.py dest=/opt/openbach/controller/backend/openbach-backend.py mode=0500
@@ -91,9 +93,20 @@
   local_settings: path=/opt/openbach/controller/backend/backend/
   remote_user: openbach
 
+- name: Set up PgBouncer Users Database
+  template: src=pgbouncer_auth_file.j2 dest=/opt/openbach/controller/backend/backend/pgbouncer_auth.txt mode=0640 owner=postgres group=postgres
+  become: yes
+  notify: restart pgbouncer
+
+- meta: flush_handlers
+
 - name: Set up local settings
   template: src=backend_settings.py.j2 dest=/opt/openbach/controller/backend/backend/local_settings.py mode=0400
   remote_user: openbach
+
+- name: Create the Backend's Database
+  postgresql_db: name=openbach_db state=present
+  become: yes
 
 - name: Create the Backend's Database Admin User
   postgresql_user: db=openbach_db name=openbach password={{ openbach_local_settings_database_password }} priv=CONNECT

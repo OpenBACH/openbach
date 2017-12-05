@@ -32,16 +32,16 @@
 __author__ = 'Viveris Technologies'
 __credits__ = '''Contributors:
  * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
+ * Mathias ETTINGER <mathias.ettinger@toulouse.viveris.com>
 '''
 
 
-import re
 import sys
 import time
 import syslog
 import argparse
 import subprocess
-from collections import defaultdict
+from itertools import repeat
 
 import collect_agent
 
@@ -50,15 +50,36 @@ def multiplier(unit, base):
     if unit == base:
         return 1
     if unit.startswith('M'):
-        return 1024*1024
+        return 1024 * 1024
     if unit.startswith('K'):
         return 1024
     if unit.startswith('m'):
-        return (1.0/1000)
+        return 0.001
     return 1
 
 
-def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
+def _command_build_helper(flag, value):
+    if value is not None:
+        yield flag
+        yield str(value)
+
+
+def client(client, interval, length, port, udp, bandwidth, duration, num_flows):
+    cmd = ['iperf3', '-c', client]
+    cmd.extend(_command_build_helper('-i', interval))
+    cmd.extend(_command_build_helper('-l', length))
+    cmd.extend(_command_build_helper('-p', port))
+    if udp:
+        cmd.append('-u')
+        cmd.extend(_command_build_helper('-b', bandwidth))
+    cmd.extend(_command_build_helper('-t', duration))
+    cmd.extend(_command_build_helper('-P', num_flows))
+
+    p = subprocess.run(cmd)
+    sys.exit(p.returncode)
+
+
+def server(exit, interval, length, port, udp):
     # Connect to collect_agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/iperf3/'
@@ -68,118 +89,64 @@ def main(mode, interval, length, port, udp, bandwidth, duration, num_flows):
         collect_agent.send_log(syslog.LOG_ERR, message)
         sys.exit(message)
 
-    cmd = ['iperf3']
-    cmd += mode
-    if interval:
-        cmd += ['-i', str(interval)]
-    if length:
-        cmd += ['-l', str(length)]
-    if port:
-        cmd += ['-p', str(port)]
+    cmd = ['stdbuf', '-oL', 'iperf3', '-s']
+    if exit:
+        cmd.append('-1')
+    cmd.extend(_command_build_helper('-i', interval))
+    cmd.extend(_command_build_helper('-l', length))
+    cmd.extend(_command_build_helper('-p', port))
     if udp:
-        cmd += ['-u']
-    if mode[0] == '-c' and udp and bandwidth is not None:
-        cmd += ['-b', str(bandwidth)]
-    if mode[0] == '-c' and duration is not None:
-        cmd += ['-t', str(duration)]
-    if mode[0] == '-c' and num_flows is not None:
-        cmd += ['-P', str(num_flows)]
-    # If client, launch and exit
-    if mode[0] == '-c':
-        p = subprocess.run(cmd)
-        sys.exit(p.returncode)
-        
-    # If server, read output, and send stats
-    p = subprocess.Popen(['stdbuf', '-oL'] + cmd, stdout=subprocess.PIPE)
+        cmd.append('-u')
 
-    flows = {}
-    n_flows = 1
-
-    while True:
-        flow_no = None
-        # read output
-        out = p.stdout.readline().decode()
-        if not out:
-            if p.poll is not None:
+    # Read output, and send stats
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    for flow_number in repeat(None):
+        tokens = p.stdout.readline().decode().split()
+        if not tokens:
+            if p.poll() is not None:
                 break
             continue
 
         timestamp = int(time.time() * 1000)
 
-        # remove brackets
-        out_s = re.sub('[\[\]]', '', out).split()
-
-        # check if stats line
         try:
-            int(out_s[0])
-        except ValueError:
-            # save SUM all the same
-            if not out_s[0] == "SUM":
-                continue
-
-        # filter unnecessary messages
-        if out_s[1] == "local":
-            continue
-        if out_s[-1] in {"sender", "receiver"}:
-            # since it's last message (TCP) , remove flow
-            try: 
-                del flows[out_s[0]]
-            except KeyError:
-                pass
-            continue
-        
-        # get index
-        try:
-            flow_no = flows[out_s[0]]
-        except KeyError:
-            if out_s[0] == "SUM":
-                flows[out_s[0]] = None
+            if udp:
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
+                jitter = float(jitter)
+                datagrams = float(datagrams[1:-2])
+                lost, total = map(int, packets_stats.split('/'))
             else:
-                flows[out_s[0]] = str(n_flows)
-                flow_no = str(n_flows)
-                n_flows += 1
-
-        # remove stats covering the whole duration
-        try:
-            report_ival = (float(out_s[1].split('-')[1]) -
-                           float(out_s[1].split('-')[0]))
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units = tokens
+            transfer = float(transfer)
+            bandwidth = float(bandwidth)
+            interval_begin, interval_end = map(float, duration.split('-'))
         except ValueError:
-            continue
-        if (report_ival > float(interval)):
-            # since it's last message (UDP) , remove flow
-            try: 
-                del flows[out_s[0]]
-            except KeyError:
-                pass
+            # filter out non-stats lines
             continue
 
-        statistics = {}
-        if len(out_s) == 7:
-            # TCP
-            if float(out_s[3]) == 0.0:
-                continue
-            statistics["sent_data"] = (float(out_s[3]) *
-                    multiplier(out_s[4], "Bytes"))
-            statistics["throughput"] = (float(out_s[5]) *
-                    multiplier(out_s[6], "bits/sec"))
-            collect_agent.send_stat(timestamp, suffix=flow_no, **statistics)
-        elif len(out_s) == 11:
-            # UDP
-            if float(out_s[3]) == 0.0:
-                continue
-            statistics["sent_data"] = (float(out_s[3]) *
-                    multiplier(out_s[4], "Bytes"))
-            statistics["throughput"] = (float(out_s[5]) *
-                    multiplier(out_s[6], "bits/sec"))
-            statistics["jitter"] = (float(out_s[7]) *
-                    multiplier(out_s[8], "s"))
-            statistics["lost_pkts"] = int(out_s[9].split('/')[0])
-            statistics["sent_pkts"] = int(out_s[9].split('/')[1])
-            statistics["plr"] = float(out_s[10][1:-2])
-            collect_agent.send_stat(timestamp, suffix=flow_no, **statistics)
-        else:
-            # unknown
+        if not transfer or interval_end - interval_begin >= interval:
+            # filter out lines covering the whole duration
             continue
+
+        try:
+            # Remove brackets
+            flow = int(flow[1:-1])
+        except ValueError:
+            if flow[1:-1].strip().upper() != "SUM":
+                continue
+        else:
+            flow_number = str(flow)
+
+        statistics = {
+                'sent_data': transfer * multiplier(transfer_units, 'Bytes'),
+                'throughput': bandwidth * multiplier(bandwidth_units, 'bits/sec'),
+        }
+        if udp:
+            statistics['jitter'] = jitter * multiplier(jitter_units, 's')
+            statistics['lost_pkts'] = lost
+            statistics['sent_pkts'] = total
+            statistics['plr'] = datagrams
+        collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
 
 
 if __name__ == "__main__":
@@ -225,17 +192,15 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    server = args.server
-    client = args.client
-    exit = args.exit
-    mode = ['-s','-1'] if server and exit else \
-           ['-s'] if server else ['-c', client]
     interval = args.interval
     length = args.length
     port = args.port
     udp = args.udp
-    bandwidth = args.bandwidth
-    duration= args.time
-    num_flows = args.num_flows
 
-    main(mode, interval, length, port, udp, bandwidth, duration, num_flows)
+    if args.server:
+        server(args.exit, interval, length, port, udp)
+    else:
+        bandwidth = args.bandwidth
+        duration = args.time
+        num_flows = args.num_flows
+        client(args.client, interval, length, port, udp, bandwidth, duration, num_flows)

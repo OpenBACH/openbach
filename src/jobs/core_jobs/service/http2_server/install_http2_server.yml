@@ -51,6 +51,8 @@
     - libevent-dev
     - libjansson-dev
     - libjemalloc-dev
+    - libsystemd-dev
+    - libc-ares-dev
     - cython
     - python3-dev
     - python-setuptools
@@ -65,7 +67,7 @@
   changed_when: nghttp_check_deb.rc == 1
   
 - name: Download nghttp2 sources
-  git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2 force=yes
+  git: repo=https://github.com/nghttp2/nghttp2 dest=/tmp/nghttp2 force=yes version=96ea9cdaf78cefcbc220c6cad03d644061cfce16
   when: nghttp_check_deb.rc == 1
   
 - name: Compile nghttp2
@@ -74,7 +76,7 @@
     - "autoreconf -i"
     - "automake"
     - "autoconf"
-    - "./configure"
+    - "./configure --enable-app"
     - "make"
   when: nghttp_check_deb.rc == 1
 

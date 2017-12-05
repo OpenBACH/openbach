@@ -2183,7 +2183,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
         super().__init__(instance_id=instance_id, tz=timezone.get_current_timezone())
 
     def _compute_headers(self, start_job_instance, headers, stats_names, **kwargs):
-        job_name = start_job_instance.job.job.name
+        job_name = start_job_instance.job_name
         with suppress(KeyError):
             headers |= set(stats_names[job_name])
 

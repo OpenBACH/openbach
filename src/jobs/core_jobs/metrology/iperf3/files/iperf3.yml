@@ -54,7 +54,7 @@ arguments:
       count:       0
       flag:        '-u'
       description: >
-          Use UDP rather than TCP
+          Use UDP rather than TCP (client mode only)
     - name:        bandwidth
       type:        'str'
       count:       1

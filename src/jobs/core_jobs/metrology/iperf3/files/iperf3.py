@@ -36,6 +36,7 @@ __credits__ = '''Contributors:
 '''
 
 
+import re
 import sys
 import time
 import syslog
@@ -44,6 +45,9 @@ import subprocess
 from itertools import repeat
 
 import collect_agent
+
+
+BRACKETS = re.compile(r'[\[\]]')
 
 
 def multiplier(unit, base):
@@ -99,7 +103,8 @@ def server(exit, interval, length, port):
     # Read output, and send stats
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     for flow_number in repeat(None):
-        tokens = p.stdout.readline().decode().split()
+        line = p.stdout.readline().decode()
+        tokens = BRACKETS.sub('', line).split()
         if not tokens:
             if p.poll() is not None:
                 break
@@ -130,13 +135,12 @@ def server(exit, interval, length, port):
             continue
 
         try:
-            # Remove brackets
-            flow = int(flow[1:-1])
+            int(flow)
         except ValueError:
-            if flow[1:-1].strip().upper() != "SUM":
+            if flow.upper() != "SUM":
                 continue
         else:
-            flow_number = str(flow)
+            flow_number = flow
 
         statistics = {
                 'sent_data': transfer * multiplier(transfer_units, 'Bytes'),

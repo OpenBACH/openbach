@@ -741,14 +741,40 @@ class ListAgents(AgentAction):
         super().__init__(update=update)
 
     def _action(self):
-        return list(self._infos_agents()), 200
+        user_id = self.connected_user.id
+        query_filter = (
+                db.models.Q(entity__isnull=True) |
+                db.models.Q(entity__project__owners__id__exact=user_id)
+        )
+        if self.connected_user.is_staff:
+            query_filter |= db.models.Q(entity__isnull=False)
 
-    def _infos_agents(self):
-        for agent in Agent.objects.all():
-            with suppress(errors.ForbiddenError):
-                agent_infos = InfosAgent(agent.address, self.update)
-                self.share_user(agent_infos)
-                yield agent_infos._action()[0]
+        agents = Agent.objects.filter(query_filter)
+        if self.update:
+            addresses = [agent.address for agent in agents]
+            errors = start_playbook('check_connections', *addresses)
+            return [self._infos_agent(agent, errors) for agent in agents], 200
+        return [agent.json for agent in agents], 200
+
+    @staticmethod
+    def _infos_agent(agent, agents_in_error):
+        address = agent.address
+        if address in agents_in_error:
+            agent.set_reachable(False)
+            agent.set_available(False)
+            agent.set_status('Agent unreachable')
+        else:
+            agent.set_reachable(True)
+            try:
+                OpenBachBaton(address)
+            except errors.UnprocessableError:
+                agent.set_available(False)
+                agent.set_status('Agent reachable but daemon not available')
+            else:
+                agent.set_available(True)
+                agent.set_status('Available')
+        agent.save()
+        return agent.json
 
 
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):

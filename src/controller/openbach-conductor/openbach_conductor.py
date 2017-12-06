@@ -2280,7 +2280,8 @@ class ExportScenarioInstance(ScenarioInstanceAction):
                 '@job_instance_stop_date',
                 '@scenario_start_date',
                 '@scenario_stop_date',
-                '@job_name'
+                '@job_name',
+                '@suffix',
         }
 
         self._recurse_into_scenario_instance(
@@ -2289,7 +2290,7 @@ class ExportScenarioInstance(ScenarioInstanceAction):
                 headers,
                 stats_names)
 
-        has_jobs_stats = len(headers) > 9
+        has_jobs_stats = len(headers) > 10
         if has_jobs_stats:
             headers.add('time')
 

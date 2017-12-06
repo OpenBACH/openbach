@@ -2291,13 +2291,20 @@ class ListScenarioInstances(ScenarioInstanceAction):
     def _action(self):
         scenario_info = InfosScenario(self.name, self.project)
         self.share_user(scenario_info)
-
-        if self.name is not None:
-            scenario = scenario_info.get_scenario_or_not_found_error()
-            return list(self._infos_scenario_instances(scenario)), 200
-
         project = scenario_info._get_project_if_own()
+
         scenarios = Scenario.objects.prefetch_related('versions__instances').filter(project=project)
+        if self.name is not None:
+            try:
+                scenario = scenarios.get(name=self.name, project=project)
+            except Scenario.DoesNotExist:
+                raise errors.NotFoundError(
+                        'The requested Scenario is not in the database',
+                        scenario_name=self.name,
+                        project_name=self.project)
+            else:
+                scenarios = [scenario]
+
         instances = [
                 instance for scenario in scenarios
                 for instance in self._infos_scenario_instances(scenario)

@@ -741,14 +741,40 @@ class ListAgents(AgentAction):
         super().__init__(update=update)
 
     def _action(self):
-        return list(self._infos_agents()), 200
+        user_id = self.connected_user.id
+        query_filter = (
+                db.models.Q(entity__isnull=True) |
+                db.models.Q(entity__project__owners__id__exact=user_id)
+        )
+        if self.connected_user.is_staff:
+            query_filter |= db.models.Q(entity__isnull=False)
 
-    def _infos_agents(self):
-        for agent in Agent.objects.all():
-            with suppress(errors.ForbiddenError):
-                agent_infos = InfosAgent(agent.address, self.update)
-                self.share_user(agent_infos)
-                yield agent_infos._action()[0]
+        agents = Agent.objects.filter(query_filter)
+        if self.update:
+            addresses = [agent.address for agent in agents]
+            errors = start_playbook('check_connections', *addresses)
+            return [self._infos_agent(agent, errors) for agent in agents], 200
+        return [agent.json for agent in agents], 200
+
+    @staticmethod
+    def _infos_agent(agent, agents_in_error):
+        address = agent.address
+        if address in agents_in_error:
+            agent.set_reachable(False)
+            agent.set_available(False)
+            agent.set_status('Agent unreachable')
+        else:
+            agent.set_reachable(True)
+            try:
+                OpenBachBaton(address)
+            except errors.UnprocessableError:
+                agent.set_available(False)
+                agent.set_status('Agent reachable but daemon not available')
+            else:
+                agent.set_available(True)
+                agent.set_status('Available')
+        agent.save()
+        return agent.json
 
 
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
@@ -2291,13 +2317,20 @@ class ListScenarioInstances(ScenarioInstanceAction):
     def _action(self):
         scenario_info = InfosScenario(self.name, self.project)
         self.share_user(scenario_info)
-
-        if self.name is not None:
-            scenario = scenario_info.get_scenario_or_not_found_error()
-            return list(self._infos_scenario_instances(scenario)), 200
-
         project = scenario_info._get_project_if_own()
+
         scenarios = Scenario.objects.prefetch_related('versions__instances').filter(project=project)
+        if self.name is not None:
+            try:
+                scenario = scenarios.get(name=self.name, project=project)
+            except Scenario.DoesNotExist:
+                raise errors.NotFoundError(
+                        'The requested Scenario is not in the database',
+                        scenario_name=self.name,
+                        project_name=self.project)
+            else:
+                scenarios = [scenario]
+
         instances = [
                 instance for scenario in scenarios
                 for instance in self._infos_scenario_instances(scenario)

@@ -104,6 +104,12 @@ class SetupResult(PlayResult):
             self.ansible_facts = result._result['ansible_facts']
 
 
+class SilentResult(PlayResult):
+    def raise_for_error(self):
+        with suppress(errors.UnprocessableError):
+            super().raise_for_error()
+
+
 class Options:
     """Utility class that mimic a namedtuple or an argparse's Namespace
     so that Ansible can extract out whatever option we pass in.
@@ -194,14 +200,15 @@ class PlaybookBuilder():
         variables.update(kwargs)
         self.variables.extra_vars = variables
 
-    def launch_playbook(self, play_name):
+    def launch_playbook(self, play_name, playbook_results=None):
         """Actually run the configured Playbook.
 
         Check that the configuration is valid before doing so
         and raise a ConductorError if not.
         """
         playbook = '/opt/openbach/controller/ansible/{}.yml'.format(play_name)
-        playbook_results = PlayResult()
+        if playbook_results is None:
+            playbook_results = PlayResult()
         tasks = PlaybookExecutor(
                 playbooks=[playbook], inventory=self.inventory,
                 variable_manager=self.variables, loader=self.loader,
@@ -282,6 +289,14 @@ class PlaybookBuilder():
         self.launch_playbook('check_connection')
 
     @classmethod
+    def check_connections(cls, *addresses):
+        self = cls('\n'.join(addresses))
+        self.options.forks = len(addresses)
+        playbook_results = SilentResult()
+        self.launch_playbook('check_connection', playbook_results)
+        return playbook_results.failure
+
+    @classmethod
     def assign_collector(cls, address, collector):
         self = cls(address)
         self.add_variables(
@@ -333,15 +348,8 @@ class PlaybookBuilder():
     @classmethod
     def gather_facts(cls, address):
         self = cls(address)
-        playbook = '/opt/openbach/controller/ansible/check_connection.yml'
         playbook_results = SetupResult()
-        tasks = PlaybookExecutor(
-                playbooks=[playbook], inventory=self.inventory,
-                variable_manager=self.variables, loader=self.loader,
-                options=self.options, passwords=self.passwords)
-        tasks._tqm._callback_plugins.append(playbook_results)
-        tasks.run()
-        playbook_results.raise_for_error()
+        self.launch_playbook('check_connection', playbook_results)
         return playbook_results.ansible_facts
 
 
@@ -419,7 +427,7 @@ def start_playbook(name, *args, **kwargs):
     parent_conn, child_conn = multiprocessing.Pipe()
     _COMMUNICATOR.put((child_conn, name, args, kwargs))
     result = parent_conn.recv()
-    if result is not None and 'ansible_python' not in result:
+    if result is not None and 'response' in result and 'returncode' in result:
         raise errors.ConductorError.copy_from(result)
     return result
 

@@ -164,24 +164,32 @@ class Scenario(models.Model):
         return self.name
 
     @property
+    def last_version(self):
+        try:
+            return self._last_version
+        except AttributeError:
+            self._last_version = version = self.versions.last()
+            return version
+
+    @property
     def arguments(self):
-        return self.versions.last().arguments
+        return self.last_version.arguments
 
     @property
     def constants(self):
-        return self.versions.last().constants
+        return self.last_version.constants
 
     @property
     def openbach_functions(self):
-        return self.versions.last().openbach_functions
+        return self.last_version.openbach_functions
 
     @property
     def instances(self):
-        return self.versions.last().instances
+        return self.last_version.instances
 
     @property
     def json(self):
-        scenario = self.versions.last()
+        scenario = self.last_version
         functions = [f.json for f in scenario.openbach_functions.order_by('id')]
         return {
                 'name': self.name,
@@ -453,12 +461,24 @@ class Scenario(models.Model):
         super().save(*args, **kwargs)
 
 
+class ScenarioVersionManager(models.Manager):
+    """Custom manager to limit database queries when
+    dealing with ScenarioVersions.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('scenario')
+
+
 class ScenarioVersion(models.Model):
     """Data associated to a unique version of a Scenario"""
 
     scenario = models.ForeignKey(
             Scenario, models.CASCADE,
             related_name='versions')
+
+    # Override default manager
+    objects = ScenarioVersionManager()
 
     def __str__(self):
         return self.scenario.name

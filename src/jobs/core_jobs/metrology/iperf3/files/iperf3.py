@@ -79,7 +79,7 @@ def client(client, interval, length, port, udp, bandwidth, duration, num_flows):
     sys.exit(p.returncode)
 
 
-def server(exit, interval, length, port, udp):
+def server(exit, interval, length, port):
     # Connect to collect_agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/iperf3/'
@@ -95,8 +95,6 @@ def server(exit, interval, length, port, udp):
     cmd.extend(_command_build_helper('-i', interval))
     cmd.extend(_command_build_helper('-l', length))
     cmd.extend(_command_build_helper('-p', port))
-    if udp:
-        cmd.append('-u')
 
     # Read output, and send stats
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -110,13 +108,16 @@ def server(exit, interval, length, port, udp):
         timestamp = int(time.time() * 1000)
 
         try:
-            if udp:
+            try:
                 flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
                 jitter = float(jitter)
                 datagrams = float(datagrams[1:-2])
                 lost, total = map(int, packets_stats.split('/'))
-            else:
+            except ValueError:
+                udp = False
                 flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units = tokens
+            else:
+                udp = True
             transfer = float(transfer)
             bandwidth = float(bandwidth)
             interval_begin, interval_end = map(float, duration.split('-'))
@@ -198,7 +199,7 @@ if __name__ == "__main__":
     udp = args.udp
 
     if args.server:
-        server(args.exit, interval, length, port, udp)
+        server(args.exit, interval, length, port)
     else:
         bandwidth = args.bandwidth
         duration = args.time

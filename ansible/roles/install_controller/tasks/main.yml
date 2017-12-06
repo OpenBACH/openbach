@@ -133,6 +133,10 @@
   shell: /opt/openbach/controller/backend/openbach-backend.py collectstatic --no-input
   remote_user: openbach
 
+- name: Create the Backend PID Repository
+  file: path=/var/run/openbach state=directory owner=openbach group=openbach
+  become: yes
+
 - name: Create the Backend service
   copy: src=openbach_backend.service dest=/etc/systemd/system/ mode=0644
   become: yes

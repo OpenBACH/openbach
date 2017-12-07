@@ -4,14 +4,12 @@ from contextlib import suppress
 import yaml
 import requests
 
-
 PROJECT_ID = 102  # Internal ID of the openbach/openbach-external-jobs
 TOKEN_HEADER = {
         # Access Token of the anonymous user of the net4sat gitlab
         'PRIVATE-TOKEN': 'UyAzSGgGPJKkc7MvMLo8',
 }
 BASE_URL = 'https://forge.net4sat.org/api/v3/projects/{}'.format(PROJECT_ID)
-
 
 def read_proxies(group_vars_file):
     with open(group_vars_file) as openbach_variables:
@@ -21,13 +19,11 @@ def read_proxies(group_vars_file):
     proxy_configuration = variables.get('openbach_proxy_env', {})
     for protocol in ('http', 'https'):
         with suppress(KeyError):
-            proxies['protocol'] = proxy_configuration['{}_proxy'.format(protocol)]
+            proxies[protocol] = proxy_configuration['{}_proxy'.format(protocol)]
 
     return proxies
 
-
 PROXIES = read_proxies('/opt/openbach/controller/ansible/group_vars/all')
-
 
 def list_jobs_names():
     filenames = {
@@ -42,7 +38,6 @@ def list_jobs_names():
                 'name': name,
             } for name in _list_jobs_names(filenames)
     ]
-
 
 def add_job(name, src_dir='/opt/openbach/controller/src/jobs/private_jobs/'):
     yaml = '{}.yml'.format(name)
@@ -63,7 +58,6 @@ def add_job(name, src_dir='/opt/openbach/controller/src/jobs/private_jobs/'):
 
     return os.path.join(src_dir, base_directory)
 
-
 def _list_jobs_names(files):
     for filename in files:
         folder, filename = os.path.split(filename)
@@ -73,7 +67,6 @@ def _list_jobs_names(files):
         uninstall = os.path.join(parent_folder, 'uninstall_{}.yml'.format(job_name))
         if install in files and uninstall in files:
             yield job_name
-
 
 def _retrieve_file(file_path, dest_file):
     response = _do_request('/repository/blobs/HEAD', filepath=file_path)
@@ -85,12 +78,10 @@ def _retrieve_file(file_path, dest_file):
     with open(dest_file, 'wb') as f:
         f.write(response.content)
 
-
 def _list_project_files():
     response = _do_request('/repository/tree', recursive='true')
     response.raise_for_status()
     return response.json()
-
 
 def _do_request(route, **params):
     if not params:

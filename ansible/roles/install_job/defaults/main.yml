@@ -1,21 +1,13 @@
 ---
 
 default_jobs:
-  - rstats_job
-  - rsyslog_job
-  - synchronization
-  - rate_monitoring
-  - tcpprobe_monitoring
-  - iperf
   - fping
   - hping
   - iperf3
-  - socat
-  - http_server
-  - http_client_plt
-  - http2_server
-  - http2_client
-  - http2_client_plt
+  - rstats_job
+  - rsyslog_job
+  - rate_monitoring
+  - synchronization
 
 default_collector_jobs:
   - empty_influxdb_db

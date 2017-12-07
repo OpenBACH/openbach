@@ -1,2 +1,2 @@
-if $programname == 'openbach_conductor' and $syslogseverity <= '3' then \
+if $programname == 'openbach_conductor' and $syslogseverity <= '4' then \
   @{{ collector_ip }}:{{ logstash_logs_port }}

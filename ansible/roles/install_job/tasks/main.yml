@@ -28,7 +28,7 @@
   template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job.j2 dest=/etc/rsyslog.d/{{ item.name }}.conf
   vars:
     job: "{{ item.name }}"
-    syslogseverity: 1
+    syslogseverity: 4
     collector_ip: "{{ openbach_collector }}"
   become: yes
   with_items: "{{ jobs }}"
@@ -37,7 +37,7 @@
   template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job_local.j2 dest=/etc/rsyslog.d/{{ item.name }}_local.conf
   vars:
     job: "{{ item.name }}"
-    syslogseverity_local: 1
+    syslogseverity_local: 4
   become: yes
   with_items: "{{ jobs }}"
 

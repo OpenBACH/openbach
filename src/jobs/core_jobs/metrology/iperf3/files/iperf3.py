@@ -43,11 +43,21 @@ import syslog
 import argparse
 import subprocess
 from itertools import repeat
+from collections import defaultdict
 
 import collect_agent
 
 
 BRACKETS = re.compile(r'[\[\]]')
+
+
+class AutoIncrementFlowNumber:
+    def __init__(self):
+        self.count = 0
+
+    def __call__(self):
+        self.count += 1
+        return 'Flow{0.count}'.format(self)
 
 
 def multiplier(unit, base):
@@ -102,6 +112,9 @@ def server(exit, interval, length, port):
 
     # Read output, and send stats
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+
+    flow_map = defaultdict(AutoIncrementFlowNumber())
+
     for flow_number in repeat(None):
         line = p.stdout.readline().decode()
         tokens = BRACKETS.sub('', line).split()
@@ -135,12 +148,10 @@ def server(exit, interval, length, port):
             continue
 
         try:
-            int(flow)
+            flow_number = flow_map[int(flow)]
         except ValueError:
             if flow.upper() != "SUM":
                 continue
-        else:
-            flow_number = flow
 
         statistics = {
                 'sent_data': transfer * multiplier(transfer_units, 'Bytes'),

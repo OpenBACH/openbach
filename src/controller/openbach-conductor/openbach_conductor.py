@@ -1644,7 +1644,8 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
 
     def openbach_function(self, openbach_function_instance, waiters):
         """Retrieve the job instance id launched by the provided
-        openbach function id and store it in the instance.
+        openbach function id and store it in the instance for the
+        _action to take effect.
         """
         scenario = openbach_function_instance.scenario_instance
         try:
@@ -2146,8 +2147,33 @@ class StartScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
 class StopScenarioInstance(OpenbachFunctionMixin, ScenarioInstanceAction):
     """Action responsible of stopping an existing Scenario Instance"""
 
-    def __init__(self, instance_id, date=None):
+    def __init__(self, instance_id=None, date=None, openbach_function_id=None):
         super().__init__(instance_id=instance_id, date=date)
+
+    def openbach_function(self, openbach_function_instance, waiters):
+        """Retrieve the scenario instance id launched by the provided
+        openbach function id and store it in the instance for the
+        _action to take effect.
+        """
+        scenario = openbach_function_instance.scenario_instance
+        try:
+            openbach_function_to_stop = scenario.openbach_functions_instances.get(id=self.openbach_function_id)
+        except OpenbachFunctionInstance.DoesNotExist:
+            raise errors.NotFoundError(
+                    'The provided Openbach Function Instance is '
+                    'not found in the database for the given Scenario',
+                    openbach_function_id=self.openbach_function_id,
+                    scenario_name=scenario.scenario.name)
+
+        try:
+            self.instance_id = openbach_function_to_stop.started_scenario.id
+        except ScenarioInstance.DoesNotExist:
+            raise errors.NotFoundError(
+                    'The provided Openbach Function Instance is '
+                    'not associated to a launched scenario',
+                    openbach_function_id=self.openbach_function_id,
+                    openbach_function_name=openbach_function_to_stop.name)
+        return super().openbach_function(openbach_function_instance, waiters)
 
     def _action(self):
         scenario_instance = self.get_scenario_instance_or_not_found_error()

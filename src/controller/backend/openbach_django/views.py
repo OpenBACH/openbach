@@ -332,8 +332,8 @@ class BaseJobView(GenericView):
     def _action_install(self, names, addresses):
         """Install jobs on some agents"""
         try:
-            severity = extract_integer(self.request.JSON, 'severity', default=1)
-            l_severity = extract_integer(self.request.JSON, 'local_severity', default=1)
+            severity = extract_integer(self.request.JSON, 'severity', default=2)
+            l_severity = extract_integer(self.request.JSON, 'local_severity', default=2)
         except ValueError as e:
             return {'msg': 'POST data malformed: {} '
                     'should be an integer'.format(e)}, 400

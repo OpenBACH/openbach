@@ -1154,7 +1154,7 @@ class InstalledJobAction(ConductorAction):
 class InstallJob(ThreadedAction, InstalledJobAction):
     """Action responsible for installing a Job on an Agent"""
 
-    def __init__(self, address, name, severity=1, local_severity=1, skip_playbook=False):
+    def __init__(self, address, name, severity=2, local_severity=2, skip_playbook=False):
         super().__init__(address=address, name=name, skip_playbook=skip_playbook,
                          severity=severity, local_severity=local_severity)
 
@@ -1235,7 +1235,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
 class InstallJobs(InstalledJobAction):
     """Action responsible for installing several Jobs on several Agents"""
 
-    def __init__(self, addresses, names, severity=1, local_severity=1):
+    def __init__(self, addresses, names, severity=2, local_severity=2):
         super().__init__(addresses=addresses, names=names,
                          severity=severity, local_severity=local_severity)
 

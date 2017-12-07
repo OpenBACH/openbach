@@ -3336,23 +3336,21 @@ class StatisticsAction(JobInstanceAction):
         if job_instance.project is not None:
             self._assert_user_in(job_instance.project.owners.all())
 
-        return job_instance.job_name, InfluxDBConnection(
+        connection = InfluxDBConnection(
                 job_instance.collector.address,
                 job_instance.collector.stats_query_port,
                 job_instance.collector.stats_database_name,
                 job_instance.collector.stats_database_precision)
+        return job_instance.job_name, job_instance.scenario_id, connection
 
     def _retrieve_statistics_data(self):
-        job_name, connection = self._build_connection()
+        job_name, scenario_id, connection = self._build_connection()
         scenarios = list(connection.statistics(
                 fields=[self.name], job=job_name,
                 job_instance=self.instance_id,
                 suffix=self.suffix))
 
-        if not scenarios:
-            return
-
-        scenario, = scenarios
+        scenario = next(s for s in scenarios if s.instance_id == scenario_id)
         job, = scenario.own_jobs
         return job.statistics_data
 
@@ -3366,7 +3364,7 @@ class StatisticsOrigin(StatisticsAction):
         super().__init__(instance_id=instance_id)
 
     def _action(self):
-        job_name, connection = self._build_connection()
+        job_name, _, connection = self._build_connection()
         origin = connection.origin(job=job_name, job_instance=self.instance_id)
         return origin, 200
 
@@ -3381,7 +3379,7 @@ class StatisticsNamesAndSuffixes(StatisticsAction):
         super().__init__(instance_id=instance_id)
 
     def _action(self):
-        job_name, connection = self._build_connection()
+        job_name, _, connection = self._build_connection()
         names = connection.get_field_keys().get(job_name, [])
         suffixes = connection.suffixes(job=job_name, job_instance=self.instance_id)
         return {'statistics': sorted(names), 'suffixes': sorted(suffixes)}, 200
@@ -3394,8 +3392,9 @@ class StatisticsValues(StatisticsAction):
         super().__init__(instance_id=instance_id, name=name, suffix=suffix)
 
     def _action(self):
-        statistics_data = self._retrieve_statistics_data()
-        if statistics_data is None:
+        try:
+            statistics_data = self._retrieve_statistics_data()
+        except StopIteration:
             return [], 200
 
         statistics = itertools.chain.from_iterable(
@@ -3415,8 +3414,9 @@ class StatisticsHistogram(StatisticsAction):
                 buckets=buckets, suffix=suffix)
 
     def _action(self):
-        statistics_data = self._retrieve_statistics_data()
-        if statistics_data is None:
+        try:
+            statistics_data = self._retrieve_statistics_data()
+        except StopIteration:
             return [], 200
 
         statistics = [
@@ -3443,8 +3443,9 @@ class StatisticsComparison(StatisticsAction):
         super().__init__(instance_id=instance_id, name=name, suffix=suffix)
 
     def _action(self):
-        statistics_data = self._retrieve_statistics_data()
-        if statistics_data is None:
+        try:
+            statistics_data = self._retrieve_statistics_data()
+        except StopIteration:
             return [], 200
 
         statistics = numpy.asarray([

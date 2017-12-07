@@ -130,7 +130,7 @@ def server(exit, interval, length, port):
             # filter out non-stats lines
             continue
 
-        if not transfer or interval_end - interval_begin >= interval:
+        if not transfer or interval_end - interval_begin > interval:
             # filter out lines covering the whole duration
             continue
 

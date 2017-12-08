@@ -141,3 +141,6 @@ class OpenBachBaton:
 
     def restart_agent(self):
         return self.communicate('restart_agent')
+
+    def check_connection(self):
+        return self.communicate('check_connection')

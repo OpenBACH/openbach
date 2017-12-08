@@ -606,7 +606,7 @@ class AgentAction(ConductorAction):
 
         agent.set_reachable(True)
         try:
-            OpenBachBaton(agent.address)
+            OpenBachBaton(agent.address).check_connection()
         except errors.UnprocessableError:
             agent.set_available(False)
             agent.set_status('Agent reachable but daemon not available')
@@ -766,7 +766,7 @@ class ListAgents(AgentAction):
         else:
             agent.set_reachable(True)
             try:
-                OpenBachBaton(address)
+                OpenBachBaton(address).check_connection()
             except errors.UnprocessableError:
                 agent.set_available(False)
                 agent.set_status('Agent reachable but daemon not available')

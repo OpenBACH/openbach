@@ -423,18 +423,12 @@ class StopJobInstanceAgent(AgentAction):
 
 
 class StatusJobsAgent(AgentAction):
-    def __init__(self):
-        super().__init__()
-
     def _action(self):
         jobs = JobManager().job_names
         return ' '.join(map(shlex.quote, jobs))
 
 
 class RestartAgent(AgentAction):
-    def __init__(self):
-        super().__init__()
-
     def _action(self):
         with JobManager() as manager:
             for job_name in manager.job_names:
@@ -442,6 +436,11 @@ class RestartAgent(AgentAction):
                     manager.scheduler.add_job(
                             stop_job, 'date', args=(job_name, job_instance_id),
                             id='{}{}_stop'.format(job_name, job_instance_id))
+
+
+class CheckConnection(AgentAction):
+    def _action(self):
+        pass
 
 
 def popen(command, args, **kwargs):

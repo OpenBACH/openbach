@@ -1,3 +1,9 @@
+collect-agent (1.0.1) xenial; urgency=low
+
+  * Fix the name of the logs opened by register_collect
+
+ -- OpenBACH maintainers <admin@openbach.org>  Fri, 8 Dec 2017 16:06:23 +0100
+
 collect-agent (1.0) xenial; urgency=low
 
   * Initial release

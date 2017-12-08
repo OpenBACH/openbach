@@ -35,14 +35,17 @@ __credits__ = '''Contributors:
 '''
 
 
+import os
 import ctypes
 from shlex import quote
 
 
 try:
     library = ctypes.cdll.LoadLibrary('libcollectagent.so')
+    import syslog
 except OSError:
     library = ctypes.cdll.LoadLibrary('collectagent.dll')
+    syslog = None
 
 
 _register_collect = library.collect_agent_register_collect
@@ -75,11 +78,14 @@ _change_config.argtypes = [ctypes.c_bool, ctypes.c_bool]
 
 
 def register_collect(config_file, log_option=0x01, log_facility=1<<3, new=False):
-    return _register_collect(
+    success = _register_collect(
             config_file.encode(),
             log_option,
             log_facility,
             new)
+    if syslog:
+        syslog.openlog(os.environ.get('JOB_NAME', 'job_debug'))
+    return success
 
 
 def send_log(priority, log):

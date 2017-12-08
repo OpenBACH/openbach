@@ -43,6 +43,7 @@ import atexit
 import tempfile
 import multiprocessing
 from contextlib import suppress
+from collections import defaultdict
 
 from ansible.cli import CLI
 from ansible.executor.playbook_executor import PlaybookExecutor
@@ -61,7 +62,7 @@ class PlayResult(CallbackBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.failure = {}
+        self.failure = defaultdict(list)
         self._context = None
 
     def set_play_context(self, play_context):
@@ -80,7 +81,7 @@ class PlayResult(CallbackBase):
                     **self.failure)
 
     def _store_failure(self, result):
-        self.failure[result._host.get_name()] = result._result
+        self.failure[result._host.get_name()].append(result._result)
 
     # From here on, Ansible hooks definition
 

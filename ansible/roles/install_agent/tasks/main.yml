@@ -24,7 +24,7 @@
     - restart rsyslog
 
 - name: Install collect-agent Library
-  apt: pkg=collect-agent state=installed allow_unauthenticated=yes
+  apt: pkg=collect-agent update_cache=yes state=latest allow_unauthenticated=yes
   become: yes
   environment: "{{ openbach_proxy_env }}"
 

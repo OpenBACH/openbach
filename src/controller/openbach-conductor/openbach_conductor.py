@@ -2736,6 +2736,9 @@ class ProjectAction(ConductorAction):
             ]
             entity.networks.set(networks)
 
+        # Remove networks associated to interfaces that were removed
+        project.networks.filter(entities__isnull=True).exclude(address__in=hidden_networks).delete()
+
     def _import_topology(self, json_data):
         project = self.get_project_or_not_found_error()
 

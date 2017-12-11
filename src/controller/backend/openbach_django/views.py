@@ -299,6 +299,17 @@ class AgentView(BaseAgentView):
                 update='update' in request.GET)
 
     def post(self, request, address):
+        """dispatch the request to the correct method"""
+        action = request.JSON.get('action', 'assign_collector')
+
+        try:
+            function = getattr(self, '_action_' + action)
+        except AttributeError:
+            return {'msg': 'POST data malformed: unknown action {}'.format(action)}, 400
+
+        return function(request, address)
+
+    def _action_assign_collector(self, request, address):
         """assign a collector to the agent"""
         try:
             collector_ip = request.JSON['collector_ip']
@@ -308,6 +319,22 @@ class AgentView(BaseAgentView):
         return self.conductor_execute(
                 command='assign_collector',
                 address=address, collector_ip=collector_ip)
+
+    def _action_log_severity(self, request, address):
+        """change the log severity on an agent"""
+
+        try:
+            severity = extract_integer(request.JSON, 'severity')
+            local_severity = extract_integer(request.JSON, 'local_severity')
+        except ValueError as e:
+            return {'msg': 'POST data malformed: \'{}\' is not an integer'.format(e)}, 400
+        if severity is None:
+            return {'msg': 'POST data malformed: \'severity\' missing'}, 400
+
+        return self.conductor_execute(
+                command='set_log_severity_agent',
+                address=address, severity=severity,
+                local_severity=local_severity)
 
     def delete(self, request, address):
         """remove an agent from the database"""
@@ -478,15 +505,18 @@ class JobView(BaseJobView):
             return {'msg': 'POST data malformed: \'addresses\' should '
                     'contain 1 item for action \'log_severity\''}, 400
         try:
-            severity = self.request.JSON['severity']
-        except KeyError:
+            severity = extract_integer(self.request.JSON, 'severity')
+            local_severity = extract_integer(self.request.JSON, 'local_severity')
+        except ValueError as e:
+            return {'msg': 'POST data malformed: \'{}\' is not an integer'.format(e)}, 400
+        if severity is None:
             return {'msg': 'POST data malformed: \'severity\' missing'}, 400
 
         return self.conductor_execute(
                 command='set_log_severity_job',
                 address=address, name=name,
                 severity=severity,
-                local_severity=self.request.JSON.get('local_severity'),
+                local_severity=local_severity,
                 date=self.request.JSON.get('date'))
 
     def _action_stat_policy(self, names, addresses):

@@ -796,6 +796,24 @@ class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
         agent.save()
 
 
+class SetLogSeverityAgent(ThreadedAction, AgentAction):
+    """Action responsible for changing the log severity of an Agent"""
+
+    def __init__(self, address, severity, local_severity=None):
+        super().__init__(address=address, severity=severity, local_severity=local_severity)
+
+    def _create_command_result(self):
+        command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
+        return self.set_running(command_result, 'status_log_severity')
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        self.get_agent_or_not_found_error()
+        rsyslog_modifier = SetLogSeverityJob(self.address, 'openbach_agent', None)
+        self.share_user(rsyslog_modifier)
+        rsyslog_modifier._physical_set_severity(self.severity, self.local_severity)
+
+
 ########
 # Jobs #
 ########
@@ -887,8 +905,8 @@ class AddJob(JobAction):
         job.persistent = general_section['persistent']
         job.has_uncertain_required_arg = False
         job.save()
-   
-        system_list={}
+
+        system_list = {}
 
         # Associate OSes
         os_commands = content['platform_configuration']
@@ -898,7 +916,7 @@ class AddJob(JobAction):
             os_distribution_version = os_description['ansible_distribution_version']
             command = os_description['command']
             command_stop = os_description.get('command_stop')
-            system_list.setdefault(os_system,{}).setdefault(os_distribution,[]).append(os_distribution_version)
+            system_list.setdefault(os_system, {}).setdefault(os_distribution, []).append(os_distribution_version)
             os_command, _ = OsCommand.objects.get_or_create(
                     job=job, family=os_system, distribution=os_distribution,
                     version=os_distribution_version,

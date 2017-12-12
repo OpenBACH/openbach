@@ -50,3 +50,7 @@
   systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
   become: yes
   when: not is_run_from_conductor
+
+- name: Restart RSyslog
+  systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
+  become: yes

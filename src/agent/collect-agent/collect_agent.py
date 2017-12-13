@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # OpenBACH is a generic testbed able to control/configure multiple
 # network/physical entities (under test) and collect data from them. It is
@@ -37,7 +38,10 @@ __credits__ = '''Contributors:
 
 import os
 import ctypes
-from shlex import quote
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
 
 
 try:

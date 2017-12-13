@@ -187,7 +187,7 @@ if __name__ == "__main__":
     parser.add_argument(
             '-p', '--port', type=int,
             help='Set server port to listen on/connect to '
-            'n (default 5001)')
+            'n (default 5201)')
     parser.add_argument(
             '-u', '--udp', action='store_true',
             help='Use UDP rather than TCP')

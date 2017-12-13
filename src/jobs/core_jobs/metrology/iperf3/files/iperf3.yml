@@ -48,7 +48,7 @@ arguments:
       count:       1
       flag:        '-p'
       description: >
-          Set server port to listen on/connect to to n (default 5001)
+          Set server port to listen on/connect to to n (default 5201)
     - name:        udp
       type:        'None'
       count:       0

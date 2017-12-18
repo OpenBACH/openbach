@@ -11,6 +11,7 @@ unsigned int job_instance_id = 0;
 unsigned int scenario_instance_id = 0;
 unsigned int owner_scenario_instance_id = 0;
 std::string agent_name("");
+std::string job_name;
 
 
 namespace collect_agent {
@@ -92,7 +93,7 @@ bool register_collect(
     int log_facility,
     bool _new) {
   // Get the ids
-  std::string job_name = getenv("JOB_NAME");
+  job_name = getenv("JOB_NAME");
   if (job_name.empty()) {
     job_name = "job_debug";
   }

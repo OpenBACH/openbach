@@ -569,19 +569,20 @@ def stop_job_already_running(job_name, job_instance_id, instance_infos):
     # Kill all its children
     children = proc.children(recursive=True)
     for child in children:
-        with suppress(psutil.AccessDenied):
+        with suppress(psutil.AccessDenied, psutil.NoSuchProcess):
             child.terminate()
     _, still_alive = psutil.wait_procs(children, timeout=1)
     for child in still_alive:
-        with suppress(psutil.AccessDenied):
+        with suppress(psutil.AccessDenied, psutil.NoSuchProcess):
             child.kill()
 
     # Kill the process
-    proc.terminate()
-    try:
-        proc.wait(timeout=2)
-    except psutil.TimeoutExpired:
-        proc.kill()
+    with suppress(psutil.AccessDenied, psutil.NoSuchProcess):
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except psutil.TimeoutExpired:
+            proc.kill()
 
 
 class AgentServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

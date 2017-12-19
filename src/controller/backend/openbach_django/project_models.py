@@ -43,18 +43,23 @@ __credits__ = '''Contributors:
 '''
 
 
+from contextlib import suppress
+
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 
-from .scenario_models import Scenario
 from .utils import nullable_json
+from .command_models import (
+        CollectorCommandResult, AgentCommandResult,
+        FileCommandResult, InstalledJobCommandResult,
+)
 
 
 class Collector(models.Model):
     """Data associated to a Collector"""
 
-    address = models.GenericIPAddressField(primary_key=True)
+    address = models.CharField(max_length=500, db_index=True, unique=True)
     logs_port = models.IntegerField(default=10514)
     logs_query_port = models.IntegerField(default=9200)
     logs_database_name = models.CharField(max_length=500, default='openbach')
@@ -66,8 +71,27 @@ class Collector(models.Model):
             max_length=3, default='udp', choices=(('udp', 'UDP'), ('tcp', 'TCP')))
     logstash_broadcast_port = models.IntegerField(default=2223)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__original_address = self.address
+
     def __str__(self):
         return self.address
+
+    def save(self, *args, **kwargs):
+        address_changed = self.address != self.__original_address
+        super().save(*args, **kwargs)
+        if address_changed:
+            (
+                    CollectorCommandResult
+                    .objects.filter(address=self.__original_address)
+                    .update(address=self.address)
+            )
+
+            with suppress(Agent.DoesNotExist):
+                agent = Agent.objects.get(address=self.__original_address)
+                agent.address = self.address
+                agent.save()
 
     def update(self, logs_port=None, logs_query=None, logs_cluster=None,
                stats_port=None, stats_query=None, database_name=None,
@@ -112,8 +136,8 @@ class Collector(models.Model):
 class Agent(models.Model):
     """Data associated to an Agent"""
 
-    name = models.CharField(max_length=500, unique=True)
-    address = models.GenericIPAddressField(primary_key=True)
+    name = models.CharField(max_length=500, db_index=True, unique=True)
+    address = models.CharField(max_length=500, db_index=True, unique=True)
     status = models.CharField(max_length=500, null=True, blank=True)
     update_status = models.DateTimeField(null=True, blank=True)
     reachable = models.BooleanField(default=False)
@@ -121,6 +145,29 @@ class Agent(models.Model):
     available = models.BooleanField(default=False)
     update_available = models.DateTimeField(null=True, blank=True)
     collector = models.ForeignKey(Collector, related_name='agents')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__original_address = self.address
+
+    def __str__(self):
+        return '{0.name} ({0.address})'.format(self)
+
+    def save(self, *args, **kwargs):
+        address_changed = self.__original_address != self.address
+        super().save(*args, **kwargs)
+        if address_changed:
+            for model in (AgentCommandResult, FileCommandResult, InstalledJobCommandResult):
+                (
+                        model.objects
+                        .filter(address=self.__original_address)
+                        .update(address=self.address)
+                )
+
+            with suppress(Collector.DoesNotExist):
+                collector = Collector.objects.get(address=self.__original_address)
+                collector.address = self.address
+                collector.save()
 
     def set_status(self, status):
         self.status = status
@@ -133,9 +180,6 @@ class Agent(models.Model):
     def set_available(self, available):
         self.available = available
         self.update_available = timezone.now()
-
-    def __str__(self):
-        return '{0.name} ({0.address})'.format(self)
 
     @property
     def has_entity(self):
@@ -272,6 +316,7 @@ class Project(models.Model):
             HiddenNetwork.objects.get_or_create(
                     name=hidden_network_name, project=self)
 
+        from .scenario_models import Scenario  # avoid circular dependencies
         scenarios = json_data.get('scenario', [])
         for index, scenario in enumerate(scenarios):
             if not isinstance(scenario, dict):

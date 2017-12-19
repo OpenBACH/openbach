@@ -48,10 +48,9 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 
 from .base_models import Argument, ArgumentValue, OpenbachFunctionArgument
-from . import openbach_function_models
 from .job_models import Job, RequiredJobArgument, OptionalJobArgument
-from .condition_models import Condition
-from .openbach_function_models import (
+from . import openbach_function_models  # So we can getattr from this module
+from .openbach_function_models import (  # Shortcuts
         OpenbachFunction, OpenbachFunctionInstance,
         StartJobInstance, StartJobInstanceArgument,
         StartScenarioInstance,
@@ -59,68 +58,6 @@ from .openbach_function_models import (
 )
 
 from .utils import check_and_get_value
-
-
-def prepare_arguments(arguments, function_name):
-    try:
-        preparator = PREPARATORS[function_name]
-    except KeyError:
-        return arguments
-
-    return preparator(arguments)
-
-
-def prepare_start_job_instance(arguments):
-    offset = arguments.pop('offset', 0)
-    if not isinstance(offset, int):
-        raise TypeError(int, offset, 'offset')
-    entity_name = arguments.pop('entity_name')
-    if len(arguments) > 1:
-        raise ValueError('Too much job names to start')
-    if len(arguments) < 1:
-        raise ValueError('The name of the job to start is missing')
-    job_name, = arguments
-    if not isinstance(arguments[job_name], dict):
-        raise TypeError(dict, arguments[job_name], job_name)
-
-    return {
-            'offset': offset,
-            'entity_name': entity_name,
-            'job_name': job_name,
-    }
-
-
-def prepare_if(arguments):
-    condition = Condition.load_from_json(arguments['condition'])
-    for name in ('openbach_functions_true_ids', 'openbach_functions_false_ids'):
-        functions = arguments[name]
-        if not isinstance(functions, list):
-            raise TypeError(list, functions, name)
-    return {
-            'condition': condition,
-            'functions_true': arguments['openbach_functions_true_ids'],
-            'functions_false': arguments['openbach_functions_false_ids'],
-    }
-
-
-def prepare_while(arguments):
-    condition = Condition.load_from_json(arguments['condition'])
-    for name in ('openbach_functions_while_ids', 'openbach_functions_end_ids'):
-        functions = arguments[name]
-        if not isinstance(functions, list):
-            raise TypeError(list, functions, name)
-    return {
-            'condition': condition,
-            'functions_while': arguments['openbach_functions_while_ids'],
-            'functions_end': arguments['openbach_functions_end_ids'],
-    }
-
-
-PREPARATORS = {
-        'start_job_instance': prepare_start_job_instance,
-        'if': prepare_if,
-        'while': prepare_while,
-}
 
 
 class Scenario(models.Model):
@@ -281,14 +218,13 @@ class Scenario(models.Model):
                         'openbach_functions.{}.{}'.format(index, function_name),
                         override_error='Unknown OpenBACH Function')
             try:
-                openbach_function_arguments = prepare_arguments(
-                        function[function_name],
-                        function_name)
+                openbach_function = OpenbachFunctionFactory.build_from_arguments(
+                        id_, label, scenario, wait_time, function[function_name])
             except KeyError as e:
                 raise Scenario.MalformedError(
                         'openbach_functions.{}.{}'.format(index, function_name),
                         override_error='Missing entry \'{}\''.format(e))
-            except ValueError as e:
+            except (ValidationError, IntegrityError, ValueError) as e:
                 raise Scenario.MalformedError(
                         'openbach_functions.{}.{}'.format(index, function_name),
                         override_error=str(e))
@@ -303,18 +239,6 @@ class Scenario(models.Model):
                     raise Scenario.MalformedError(
                             'openbach_functions.{}.{}.{}'.format(index, function_name, name),
                             value=value, expected_type=expected_type)
-
-            try:
-                openbach_function = OpenbachFunctionFactory.objects.create(
-                        function_id=id_,
-                        label=label,
-                        scenario_version=scenario,
-                        wait_time=wait_time,
-                        **openbach_function_arguments)
-            except (ValidationError, IntegrityError, TypeError) as err:
-                raise Scenario.MalformedError(
-                        'openbach_functions.{}.{}'.format(index, function_name),
-                        override_error=str(err))
 
             # Register required and optional arguments for a start_job_instance
             if function_name == 'start_job_instance':

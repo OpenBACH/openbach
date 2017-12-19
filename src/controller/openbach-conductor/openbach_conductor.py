@@ -568,13 +568,33 @@ class InfosCollector(CollectorAction):
 class ListCollectors(CollectorAction):
     """Action responsible for information retrieval about all Collectors"""
 
-    def __init__(self):
-        super().__init__()
-
     @require_connected_user(admin=True)
     def _action(self):
         infos = [c.json for c in Collector.objects.all()]
         return infos, 200
+
+
+class ChangeCollectorAddress(CollectorAction):
+    """Action responsible for changing the address of a Collector and
+    updating this information on all associated Agents.
+    """
+
+    def __init__(self, address, new_address):
+        super().__init__(address=address, new_address=new_address)
+
+    @require_connected_user(admin=True)
+    def _action(self):
+        new_address = self.new_address
+        collector = self.get_collector_or_not_found_error()
+        collector.address = new_address
+        collector.save()
+
+        for agent_address, in collector.agents.values_list('address'):
+            assignment = AssignCollector(agent_address, new_address)
+            self.share_user(assignment)
+            assignment.action()
+
+        return None, 204
 
 
 #########
@@ -629,11 +649,11 @@ class AgentAction(ConductorAction):
 class InstallAgent(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for the installation of an Agent"""
 
-    def __init__(self, address, name, collector_ip,
+    def __init__(self, address, name, collector,
                  username=None, password=None, skip_playbook=False):
         super().__init__(address=address, username=username,
                          name=name, password=password,
-                         collector_ip=collector_ip,
+                         collector_ip=collector,
                          skip_playbook=skip_playbook)
 
     def _create_command_result(self):
@@ -780,8 +800,8 @@ class ListAgents(AgentAction):
 class AssignCollector(OpenbachFunctionMixin, ThreadedAction, AgentAction):
     """Action responsible for assigning a Collector to an Agent"""
 
-    def __init__(self, address, collector_ip):
-        super().__init__(address=address, collector_ip=collector_ip)
+    def __init__(self, address, collector):
+        super().__init__(address=address, collector_ip=collector)
 
     def _create_command_result(self):
         command_result, _ = AgentCommandResult.objects.get_or_create(address=self.address)
@@ -1178,7 +1198,7 @@ class InstallJob(ThreadedAction, InstalledJobAction):
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
-                agent_ip=self.address,
+                address=self.address,
                 job_name=self.name)
         return self.set_running(command_result, 'status_install')
 
@@ -1274,7 +1294,7 @@ class UninstallJob(ThreadedAction, InstalledJobAction):
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
-                agent_ip=self.address,
+                address=self.address,
                 job_name=self.name)
         return self.set_running(command_result, 'status_uninstall')
 
@@ -1387,7 +1407,7 @@ class SetLogSeverityJob(OpenbachFunctionMixin, ThreadedAction, InstalledJobActio
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
-                agent_ip=self.address, job_name=self.name)
+                address=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_log_severity')
 
     @require_connected_user()
@@ -1449,7 +1469,7 @@ class SetStatisticsPolicyJob(OpenbachFunctionMixin, ThreadedAction, InstalledJob
 
     def _create_command_result(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
-                agent_ip=self.address, job_name=self.name)
+                address=self.address, job_name=self.name)
         return self.set_running(command_result, 'status_stat_policy')
 
     @require_connected_user()
@@ -1549,21 +1569,22 @@ class JobInstanceAction(ConductorAction):
         scenario_id = job_instance.scenario_id
         owner_id = get_master_scenario_id(scenario_id)
         date = job_instance.start_timestamp if self.interval is None else None
+        agent = job_instance.agent
+
+        if agent is None:
+            raise errors.UnprocessableError(
+                    'The Agent associated to this JobInstance was uninstalled',
+                    job_name=self.name, job_instance_id=job_instance.id)
 
         try:
-            baton = OpenBachBaton(job_instance.agent_address)
+            baton = OpenBachBaton(agent.address)
             getattr(baton, method)(
                     job_instance.job_name,
                     job_instance.id,
                     scenario_id, owner_id,
                     job_instance.arguments,
                     date, self.interval)
-        except Job.DoesNotExist:
-            job_instance.delete()
-            raise errors.NotFoundError(
-                    'No Job was found in the database',
-                    job_name=self.name)
-        except errors.ConductorError:
+        except (AttributeError, errors.ConductorError):
             job_instance.delete()
             raise
 
@@ -1625,8 +1646,7 @@ class StartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction)
         agent = installed_job.agent
         job_instance = JobInstance.objects.create(
                 job_name=installed_job.job.name,
-                agent_name=agent.name,
-                agent_address=agent.address,
+                agent=agent, agent_name=agent.name,
                 collector=agent.collector,
                 status='Scheduled',
                 update_status=now,
@@ -1719,11 +1739,22 @@ class StopJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceAction):
             tz = timezone.get_current_timezone()
             stop_date = datetime.fromtimestamp(date / 1000, tz=tz)
 
-        OpenBachBaton(job_instance.agent_address).stop_job_instance(
+        agent = job_instance.agent
+        try:
+            baton = OpenBachBaton(agent.address)
+        except AttributeError:
+            raise errors.ConductorWarning(
+                    'The Agent associated to this JobInstance was '
+                    'uninstalled. Marking the JobInstance stopped anyway.',
+                    job_instance_id=self.instance_id,
+                    job_name=job_instance.job_name)
+        else:
+            baton.stop_job_instance(
                 job_instance.job_name,
                 self.instance_id, date)
-        job_instance.stop_date = stop_date
-        job_instance.save()
+        finally:
+            job_instance.stop_date = stop_date
+            job_instance.save()
 
 
 class StopJobInstances(OpenbachFunctionMixin, ConductorAction):
@@ -1793,7 +1824,6 @@ class RestartJobInstance(OpenbachFunctionMixin, ThreadedAction, JobInstanceActio
                 raise errors.BadRequestError(
                         'An error occured when reconfiguring the JobInstance',
                         job_name=job_instance.job_name,
-                        agent_address=job_instance.agent_address,
                         job_instance_id=self.instance_id,
                         arguments=self.arguments, error_message=str(err))
             ofi = self.openbach_function_instance
@@ -1813,21 +1843,30 @@ class StatusJobInstance(OpenbachFunctionMixin, JobInstanceAction):
     def _action(self):
         job_instance = self.get_job_instance_or_not_found_error()
         owner = job_instance.started_by
+        agent = job_instance.agent
         if not job_instance.is_stopped:
             self._assert_user_in([owner])
 
-        if self.update:
+        if self.update and agent is not None:
             try:
-                baton = OpenBachBaton(job_instance.agent_address)
-                job_status = baton.status_job_instance(
-                        job_instance.job_name,
-                        self.instance_id)
+                job_status = OpenBachBaton(agent.address).status_job_instance(
+                        job_instance.job_name, self.instance_id)
             except errors.UnprocessableError:
                 job_status = 'Error Agent'
             finally:
                 job_instance.set_status(job_status)
 
-        return job_instance.json, 200
+        status = job_instance.json
+        if self.update and agent is None:
+            warning_message = 'The Agent of this JobInstance was uninstalled. Status not updated.'
+            status['warning'] = warning_message
+            warning = errors.ConductorWarning(
+                    warning_message,
+                    job_instance_id=self.instance_id,
+                    job_name=job_instance.job_name)
+            syslog.syslog(syslog.LOG_WARNING, str(warning.json))
+
+        return status, 200
 
 
 class ListJobInstance(JobInstanceAction):
@@ -2425,7 +2464,6 @@ def create_thread(openbach_function, functions_table):
     thread_chooser = {
             'If': IfThread,
             'While': WhileThread,
-            'StartJobInstance': StartJobInstanceThread,
     }
     openbach_function_model = openbach_function.openbach_function.get_content_model()
     openbach_function_name = openbach_function_model.__class__.__name__
@@ -2570,7 +2608,6 @@ class OpenbachFunctionThread(threading.Thread):
         self.openbach_function.start()
         arguments = self.openbach_function.arguments
         owner = self.openbach_function.scenario_instance.started_by
-        self._check_arguments(arguments)
         action = self.action(**arguments)
         if owner is not None:
             action.connected_user = owner
@@ -2578,9 +2615,6 @@ class OpenbachFunctionThread(threading.Thread):
             return action.openbach_function(
                     self.openbach_function,
                     self.wait_for_finished_queues)
-
-    def _check_arguments(self, arguments):
-        pass
 
     def _stop_scenario(self, error):
         scenario_id = self.openbach_function.scenario_instance.id
@@ -2594,24 +2628,6 @@ class OpenbachFunctionThread(threading.Thread):
 
     def stop(self):
         self._stopped.set()
-
-
-class StartJobInstanceThread(OpenbachFunctionThread):
-    def _check_arguments(self, arguments):
-        entity_name = arguments.pop('entity_name')
-        project = self.openbach_function.scenario_instance.scenario.project
-        try:
-            entity = Entity.objects.get(name=entity_name, project=project)
-        except Entity.DoesNotExist:
-            raise errors.ConductorError(
-                    'Entity does not exist in the project',
-                    entity_name=entity_name, project_name=project.name)
-
-        if entity.agent is None:
-            raise errors.ConductorError(
-                    'Entity does not have an associated agent',
-                    entity_name=entity_name, project_name=project.name)
-        arguments['address'] = entity.agent.address
 
 
 class IfThread(OpenbachFunctionThread):
@@ -3184,7 +3200,7 @@ class StateJob(ConductorAction):
 
     def _action(self):
         command_result, _ = InstalledJobCommandResult.objects.get_or_create(
-                agent_ip=self.address,
+                address=self.address,
                 job_name=self.name)
         return command_result.json, 200
 

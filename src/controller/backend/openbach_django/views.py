@@ -241,6 +241,17 @@ class CollectorView(GenericView):
         return self.conductor_execute(
                 command='infos_collector', address=address)
 
+    def post(self, request, address):
+        """change the address of this collector"""
+        try:
+            new_address = request.JSON['address']
+        except KeyError:
+            return {'msg': 'Missing parameter \'address\''}, 400
+
+        return self.conductor_execute(
+                command='change_collector_address',
+                address=address, new_address=new_address)
+
     def delete(self, request, address):
         """remove a collector from the database"""
         return self.conductor_execute(
@@ -281,7 +292,7 @@ class AgentsView(BaseAgentView):
                     command='install_agent',
                     name=request.JSON['name'],
                     address=request.JSON['address'],
-                    collector_ip=request.JSON['collector_ip'],
+                    collector=request.JSON['collector_ip'],
                     username=request.JSON.get('username'),
                     password=request.JSON.get('password'),
                     skip_playbook=request.JSON.get('skip_playbook', False))
@@ -318,7 +329,7 @@ class AgentView(BaseAgentView):
 
         return self.conductor_execute(
                 command='assign_collector',
-                address=address, collector_ip=collector_ip)
+                address=address, collector=collector_ip)
 
     def _action_log_severity(self, request, address):
         """change the log severity on an agent"""

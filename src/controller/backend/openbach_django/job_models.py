@@ -224,7 +224,10 @@ class JobInstance(models.Model):
 
     job_name = models.CharField(max_length=500)
     agent_name = models.CharField(max_length=500)
-    agent_address = models.GenericIPAddressField()
+    agent = models.ForeignKey(
+            'Agent', models.SET_NULL,
+            null=True, blank=True,
+            related_name='+')
     collector = models.ForeignKey(
             'Collector', models.CASCADE,
             related_name='+')

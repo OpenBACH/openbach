@@ -5,7 +5,7 @@ Requires=network.target
 [Service]
 Type=simple
 User=openbach
-Environment="PYTHONPATH=/opt/openbach/controller/backend/"
+Environment="PYTHONPATH=/opt/openbach/controller/backend/:/opt/openbach/controller/conductor/utils/"
 ExecStart=/usr/bin/python3 /opt/openbach/controller/conductor/openbach_conductor.py
 
 [Install]

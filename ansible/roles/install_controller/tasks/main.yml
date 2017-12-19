@@ -119,6 +119,8 @@
 - name: Initialize the Backend's Database
   shell: /opt/openbach/controller/backend/openbach-backend.py migrate --no-input
   remote_user: openbach
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Setup Default Superuser name and password
   set_fact: openbach_backend_admin_name={{ openbach_backend_admin_name | default('openbach') }} openbach_backend_admin_password={{ openbach_backend_admin_password | default('openbach') }}
@@ -128,10 +130,14 @@
 - name: Manage Superusers in the Backend's Database
   openbach_superuser: manager=/opt/openbach/controller/backend/openbach-backend.py
   remote_user: openbach
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Collect Django's static files
   shell: /opt/openbach/controller/backend/openbach-backend.py collectstatic --no-input
   remote_user: openbach
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Create the Backend PID Repository
   file: path=/var/run/openbach state=directory owner=openbach group=openbach

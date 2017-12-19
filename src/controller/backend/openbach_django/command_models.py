@@ -91,7 +91,7 @@ class CommandResult(models.Model):
 class CollectorCommandResult(models.Model):
     """State of actions allowed on a Collector"""
 
-    address = models.GenericIPAddressField(primary_key=True)
+    address = models.CharField(max_length=500, primary_key=True)
     status_add = models.ForeignKey(
             CommandResult,
             models.SET_NULL,
@@ -120,7 +120,7 @@ class CollectorCommandResult(models.Model):
 class AgentCommandResult(models.Model):
     """State of actions allowed on a Agent"""
 
-    address = models.GenericIPAddressField(primary_key=True)
+    address = models.CharField(max_length=500, primary_key=True)
     status_install = models.ForeignKey(
             CommandResult,
             models.SET_NULL,
@@ -157,7 +157,7 @@ class FileCommandResult(CommandResult):
 
     filename = models.CharField(max_length=500)
     remote_path = models.CharField(max_length=500)
-    address = models.GenericIPAddressField()
+    address = models.CharField(max_length=500)
 
     class Meta:
         unique_together = ('filename', 'address', 'remote_path')
@@ -173,7 +173,7 @@ class FileCommandResult(CommandResult):
 class InstalledJobCommandResult(models.Model):
     """State of actions allowed on a Job"""
 
-    agent_ip = models.GenericIPAddressField()
+    address = models.CharField(max_length=500)
     job_name = models.CharField(max_length=500)
     status_install = models.ForeignKey(
             CommandResult,
@@ -197,7 +197,7 @@ class InstalledJobCommandResult(models.Model):
             related_name='+')
 
     class Meta:
-        unique_together = ('agent_ip', 'job_name')
+        unique_together = ('address', 'job_name')
 
     @property
     def json(self):

@@ -51,6 +51,7 @@ from django.core.exceptions import MultipleObjectsReturned
 
 from .utils import extract_models
 from .base_models import ContentTyped, OpenbachFunctionArgument
+from .project_models import Agent
 
 
 class Operand(ContentTyped):
@@ -189,7 +190,6 @@ class OperandStatistic(Operand):
     agent_address = OpenbachFunctionArgument(type=str)
 
     def get_value(self, scenario_id, parameters):
-        from .project_models import Agent  # Avoid circular dependencies
         job_name = self._get_field_value('job_name', self.job_name, parameters)
         agent_ip = self.agent_address
         agent_ip = self._get_field_value('agent_address', agent_ip, parameters)

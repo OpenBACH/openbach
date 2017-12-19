@@ -84,11 +84,12 @@ class ActionModule(ActionBase):
             task_vars = dict()
 
         result = super(ActionModule, self).run(tmp, task_vars)
+        environment_string = self._compute_environment_string()
 
         args = self._task.args
         result['invocation'] = dict(module_args=args)
         try:
-            cmd = '{} shell'.format(args['manager'])
+            cmd = '{} {} shell'.format(environment_string, args['manager'])
         except KeyError:
             result['failed'] = True
             result['changed'] = False

@@ -71,4 +71,27 @@ arguments:
           This setting requires client mode.
 
 statistics:
-
+    - name: "sent_data_*flow_number*"
+      description: >
+          The amount of data sent in this period, in Bytes
+      frequency: 'every *interval* seconds'
+    - name: "throughput_*flow_number*"
+      description: >
+          The throughput in this period, in bits/sec
+      frequency: 'every *interval* seconds'
+    - name: "jitter_*flow_number*"
+      description: >
+          The jitter between packets in this period, in seconds
+      frequency: 'every *interval* seconds'
+    - name: "sent_pkts_*flow_number*"
+      description: >
+          The number of sent packets
+      frequency: 'every *interval* seconds'
+    - name: "lost_pkts_*flow_number*"
+      description: >
+          The number of lost packets
+      frequency: 'every *interval* seconds'
+    - name: "plr_*flow_number*"
+      description: >
+          The packet loss rate for this period, in %
+      frequency: 'every *interval* seconds'

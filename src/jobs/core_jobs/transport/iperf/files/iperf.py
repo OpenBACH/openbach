@@ -36,12 +36,134 @@ __credits__ = '''Contributors:
  * Joaquin MUGUERZA <joaquin.muguerza@toulouse.viveris.com>
 '''
 
+import re
 import sys
 import syslog
+import time
 import argparse
 import subprocess
-
+from itertools import repeat
+from collections import defaultdict
 import collect_agent
+
+BRACKETS = re.compile(r'[\[\]]')
+
+class AutoIncrementFlowNumber:
+    def __init__(self):
+        self.count = 0
+
+    def __call__(self):
+        self.count += 1
+        return 'Flow{0.count}'.format(self)
+
+
+def multiplier(unit, base):
+    if unit == base:
+        return 1
+    if unit.startswith('M'):
+        return 1024 * 1024
+    if unit.startswith('K'):
+        return 1024
+    if unit.startswith('m'):
+        return 0.001
+    return 1
+
+
+def _command_build_helper(flag, value):
+    if value is not None:
+        yield flag
+        yield str(value)
+
+
+def client(client, interval, length, port, udp, bandwidth, time):
+    cmd = ['iperf', '-c', client]
+    if interval:
+        cmd += ['-i', str(interval)]
+    if length:
+        cmd += ['-l', str(length)]
+    if port:
+        cmd += ['-p', str(port)]
+    if udp:
+        cmd += ['-u']
+    if udp and bandwidth is not None:
+        cmd += ['-b', str(bandwidth)]
+    if time is not None:
+        cmd += ['-t', str(time)]
+    p = subprocess.run(cmd)
+    if p.returncode:
+        message = 'WARNING: \'{}\' exited with non-zero code'.format(
+                ' '.join(cmd))
+        
+
+def server(interval, length, port, udp, bandwidth, duration):
+    # Connect to collect agent
+    collect_agent.register_collect(
+            '/opt/openbach/agent/jobs/iperf/'
+            'iperf_rstats_filter.conf')
+    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job iperf')
+    
+    cmd = ['iperf', '-s']
+    if interval:
+        cmd += ['-i', str(interval)]
+    if length:
+        cmd += ['-l', str(length)]
+    if port:
+        cmd += ['-p', str(port)]
+    if udp:
+        cmd += ['-u']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    
+    flow_map = defaultdict(AutoIncrementFlowNumber())
+
+    for flow_number in repeat(None):
+        line = p.stdout.readline().decode()
+        tokens = BRACKETS.sub('', line).split()
+        if not tokens:
+            if p.poll() is not None:
+                break
+            continue
+
+        timestamp = int(time.time() * 1000)
+        try:
+            try:
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
+                jitter = float(jitter)
+                datagrams = float(datagrams[1:-2])
+                lost, total = map(int, packets_stats.split('/'))
+            except ValueError:
+                udp = False
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units = tokens
+            else:
+                udp = True
+            transfer = float(transfer)
+            bandwidth = float(bandwidth)
+            interval_begin, interval_end = map(float, duration.split('-'))
+        except ValueError:
+            # filter out non-stats lines
+            continue
+
+        if not transfer or interval_end - interval_begin > interval:
+            # filter out lines covering the whole duration
+            continue
+
+        try:
+            flow_number = flow_map[int(flow)]
+        except ValueError:
+            if flow.upper() != "SUM":
+                continue
+
+        statistics = {
+                'sent_data': transfer * multiplier(transfer_units, 'Bytes'),
+                'throughput': bandwidth * multiplier(bandwidth_units, 'bits/sec'),
+        }
+        if udp:
+            statistics['jitter'] = jitter * multiplier(jitter_units, 's')
+            statistics['lost_pkts'] = lost
+            statistics['sent_pkts'] = total
+            statistics['plr'] = datagrams
+        collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
+
+
 
 def main(mode, interval, length, port, udp, bandwidth, time):
     # Connect to collect agent
@@ -82,7 +204,7 @@ if __name__ == "__main__":
             '-c', '--client', type=str,
             help='Run in client mode and specify server IP address')
     parser.add_argument(
-            '-i', '--interval', type=int,
+            '-i', '--interval', type=int, default=1,
             help='Pause *interval* seconds between '
             'periodic bandwidth reports')
     parser.add_argument(
@@ -106,14 +228,17 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-    server = args.server
-    client = args.client
-    mode = ['-s'] if server else ['-c', str(client)]
+#    server = args.server
+#    client = args.client
+#    mode = ['-s'] if server else ['-c', str(client)]
     interval = args.interval
     length = args.length
     port = args.port
     udp = args.udp
     bandwidth = args.bandwidth
-    time = args.time
-
-    main(mode, interval, length, port, udp, bandwidth, time)
+    duration = args.time
+    if args.server:
+        server(interval, length, port, udp, bandwidth, duration)
+    else:
+        client(args.client, interval, length, port, udp, bandwidth, duration)
+#    main(mode, interval, length, port, udp, bandwidth, time)

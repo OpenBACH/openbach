@@ -122,8 +122,10 @@ def server(interval, length, port, udp, bandwidth, duration):
             if p.poll() is not None:
                 break
             continue
-
         timestamp = int(time.time() * 1000)
+        if len(tokens) > 1 and tokens[1][-1] == '-':
+            tokens[1] = tokens[1] + tokens[2]
+            del(tokens[2])
         try:
             try:
                 flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens

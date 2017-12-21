@@ -126,6 +126,9 @@ def server(interval, length, port, udp, bandwidth, duration):
         if len(tokens) > 1 and tokens[1][-1] == '-':
             tokens[1] = tokens[1] + tokens[2]
             del(tokens[2])
+        if len(tokens) > 9 and tokens[9][-1] == '/':
+            tokens[9] = tokens[9] + tokens[10]
+            del(tokens[10])
         try:
             try:
                 flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
@@ -166,33 +169,6 @@ def server(interval, length, port, udp, bandwidth, duration):
         collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
 
 
-
-def main(mode, interval, length, port, udp, bandwidth, time):
-    # Connect to collect agent
-    collect_agent.register_collect(
-            '/opt/openbach/agent/jobs/iperf/'
-            'iperf_rstats_filter.conf')
-    collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job iperf')
-
-    cmd = ['iperf'] + mode
-    if interval:
-        cmd += ['-i', str(interval)]
-    if length:
-        cmd += ['-l', str(length)]
-    if port:
-        cmd += ['-p', str(port)]
-    if udp:
-        cmd += ['-u']
-    if mode[0] == '-c' and udp and bandwidth is not None:
-        cmd += ['-b', str(bandwidth)]
-    if mode[0] == '-c' and time is not None:
-        cmd += ['-t', str(time)]
-    p = subprocess.run(cmd)
-    if p.returncode:
-        message = 'WARNING: \'{}\' exited with non-zero code'.format(
-                ' '.join(cmd))
-
-
 if __name__ == "__main__":
     # Define Usage
     parser = argparse.ArgumentParser(
@@ -230,9 +206,6 @@ if __name__ == "__main__":
 
     # get args
     args = parser.parse_args()
-#    server = args.server
-#    client = args.client
-#    mode = ['-s'] if server else ['-c', str(client)]
     interval = args.interval
     length = args.length
     port = args.port
@@ -243,4 +216,3 @@ if __name__ == "__main__":
         server(interval, length, port, udp, bandwidth, duration)
     else:
         client(args.client, interval, length, port, udp, bandwidth, duration)
-#    main(mode, interval, length, port, udp, bandwidth, time)

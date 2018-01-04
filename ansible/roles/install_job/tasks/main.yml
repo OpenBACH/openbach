@@ -32,6 +32,7 @@
     collector_ip: "{{ openbach_collector }}"
   become: yes
   with_items: "{{ jobs }}"
+  notify: restart rsyslog
 
 - name: Set Default Logs Local Severity
   template: src=../src/jobs/admin_jobs/rsyslog_job/templates/job_local.j2 dest=/etc/rsyslog.d/{{ item.name }}_local.conf
@@ -40,6 +41,7 @@
     syslogseverity_local: 4
   become: yes
   with_items: "{{ jobs }}"
+  notify: restart rsyslog
 
 - name: Inform Agent that a new Job is Installed
   copy: src={{ item.path }}/files/{{ item.name }}.yml dest=/opt/openbach/agent/jobs/ mode=0644
@@ -50,7 +52,3 @@
   systemd: name=openbach_agent state=restarted enabled=yes daemon_reload=yes
   become: yes
   when: not is_run_from_conductor
-
-- name: Restart RSyslog
-  systemd: name=rsyslog state=restarted enabled=yes daemon_reload=yes
-  become: yes

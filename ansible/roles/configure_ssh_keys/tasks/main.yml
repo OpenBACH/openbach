@@ -1,7 +1,7 @@
 ---
 
 - name: Trust the SSH key of the Controllers by the Agents
-  authorized_key: user=openbach key={{ lookup('file', '/tmp/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
+  authorized_key: user=openbach key={{ lookup('file', '{{ openbach_installer_folder }}/controller_key/{{ item }}/home/openbach/.ssh/id_rsa.pub') }}
   become: yes
   with_items: "{{ groups.controller | default([]) }}"
 

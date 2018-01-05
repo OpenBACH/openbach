@@ -113,7 +113,7 @@
   become: yes
 
 - name: Fetch the openbach User's SSH public Key
-  fetch: src=/home/openbach/.ssh/id_rsa.pub dest=/tmp/controller_key
+  fetch: src=/home/openbach/.ssh/id_rsa.pub dest={{ openbach_installer_folder }}/controller_key
   become: yes
 
 - name: Initialize the Backend's Database

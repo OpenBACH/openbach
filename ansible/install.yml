@@ -3,10 +3,13 @@
 - hosts: localhost
   gather_facts: no
   pre_tasks:
+    - name: Create temporary Folder
+      file: path={{ openbach_installer_folder }} state=directory
+
     - name: Create temporary SSH key
-      shell: ssh-keygen -b 4096 -t rsa -f /tmp/openbach_install_rsa -q -N ""
+      shell: ssh-keygen -b 4096 -t rsa -f {{ openbach_installer_folder }}/openbach_install_rsa -q -N ""
       args:
-        creates: /tmp/openbach_install_rsa
+        creates: "{{ openbach_installer_folder }}/openbach_install_rsa"
       when: ansible_ssh_private_key_file is not defined
 
     - name: Add Default Collector if Needed
@@ -64,7 +67,7 @@
       ignore_errors: true
 
     - name: Use the temporary SSH key as the Default for this Installation
-      set_fact: ansible_ssh_private_key_file=/tmp/openbach_install_rsa
+      set_fact: ansible_ssh_private_key_file={{ openbach_installer_folder }}/openbach_install_rsa
       when: ansible_ssh_private_key_file is not defined
 
 - name: Install Agents
@@ -129,8 +132,4 @@
   gather_facts: no
   post_tasks:
     - name: Remove the Controllers SSH Keys from the Local Machine
-      file: path=/tmp/{{ item }} state=absent
-      with_items:
-        - controller_key
-        - openbach_install_rsa
-        - openbach_install_rsa.pub
+      file: path={{ openbach_installer_folder }} state=absent

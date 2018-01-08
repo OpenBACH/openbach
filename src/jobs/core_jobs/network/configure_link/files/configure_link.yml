@@ -3,7 +3,7 @@
 general:
   name:            configure_link
   description: >
-      This Job configures the delay and bandwidth on an interface
+      This Job configures the delay and bandwidth on an interface (it removes the previous configuration of the interface)
 
   job_version:     '1.0'
   keywords:        [delay, bandwidth, interface, link, netem]

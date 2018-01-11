@@ -80,6 +80,17 @@
       - P pgbouncer_auth.txt
   remote_user: openbach
 
+- name: Install the Conductor
+  synchronize:
+    src: ../src/controller/openbach-conductor/
+    dest: /opt/openbach/controller/conductor/
+    recursive: yes
+    delete: yes
+    rsync_opts:
+      - --exclude
+      - __pycache__
+  remote_user: openbach
+
 - name: Configure PgBouncer
   copy: src=pgbouncer.ini dest=/etc/pgbouncer/pgbouncer.ini mode=640 owner=postgres group=postgres backup=yes
   become: yes
@@ -146,17 +157,6 @@
 - name: Create the Backend service
   copy: src=openbach_backend.service dest=/etc/systemd/system/ mode=0644
   become: yes
-
-- name: Install the Conductor
-  synchronize:
-    src: ../src/controller/openbach-conductor/
-    dest: /opt/openbach/controller/conductor/
-    recursive: yes
-    delete: yes
-    rsync_opts:
-      - --exclude
-      - __pycache__
-  remote_user: openbach
 
 - name: Create the Conductor service
   copy: src=openbach_conductor.service dest=/etc/systemd/system/ mode=0644

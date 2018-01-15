@@ -78,7 +78,9 @@ def _command_build_helper(flag, value):
         yield str(value)
 
 
-def client(client, interval, length, port, udp, bandwidth, duration, num_flows):
+def client(
+        client, interval, length, port, udp, bandwidth,
+        duration, num_flows, cong_control):
     cmd = ['iperf3', '-c', client]
     cmd.extend(_command_build_helper('-i', interval))
     cmd.extend(_command_build_helper('-l', length))
@@ -86,6 +88,8 @@ def client(client, interval, length, port, udp, bandwidth, duration, num_flows):
     if udp:
         cmd.append('-u')
         cmd.extend(_command_build_helper('-b', bandwidth))
+    else:
+        cmd.extend(_command_build_helper('-C', cong_control))
     cmd.extend(_command_build_helper('-t', duration))
     cmd.extend(_command_build_helper('-P', num_flows))
 
@@ -205,6 +209,9 @@ if __name__ == "__main__":
     parser.add_argument(
             '-n', '--num-flows', type=int,
             help='For a client, the number of parallel flows.')
+    parser.add_argument(
+            '-C', '--cong-control', type=str,
+            help='For a client, the congestion control algorithm.')
 
     # get args
     args = parser.parse_args()
@@ -219,4 +226,7 @@ if __name__ == "__main__":
         bandwidth = args.bandwidth
         duration = args.time
         num_flows = args.num_flows
-        client(args.client, interval, length, port, udp, bandwidth, duration, num_flows)
+        cong_control = args.cong_control
+        client(
+                args.client, interval, length, port, udp,
+                bandwidth, duration, num_flows, cong_control)

@@ -89,7 +89,7 @@ def main(interfaces, delay=None, bandwidth=None, loss=None):
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting configure_link job')
 
     for interface in interfaces.split(','):
-        handle = ['root', 'handle 1:']
+        handle = ['root', 'handle', '1:']
         # Delete existing qdisc
         delete_qdisc(interface)
         # Add bandwidth if pertinent

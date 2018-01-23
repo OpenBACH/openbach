@@ -3,7 +3,7 @@
 general:
   name:            tcpprobe_monitoring
   description: >
-      This Job measures different statistics of a TCP connection by means of the tcpprobe Linux module.
+      This Job measures different statistics of outgoing TCP connection by means of the tcpprobe Linux module.
   job_version:     '1.0'
   keywords:        [congestion, window, cwnd, monitorinig, rtt, ssthresh, rcvwnd, sndwnd, delay, tcp]
   persistent:      True
@@ -22,7 +22,7 @@ arguments:
       type:        'int'
       count:       1
       description: >
-          The TCP port where the Job will monitor the TCP connections
+          The TCP port where the Job will monitor the TCP connections (dest or src)
   optional:
     - name:        interval
       type:        'int'

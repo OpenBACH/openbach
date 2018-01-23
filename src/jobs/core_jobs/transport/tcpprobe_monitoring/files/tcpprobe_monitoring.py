@@ -51,7 +51,7 @@ def signal_term_handler(signal, frame):
     cmd = 'PID=`cat /var/run/tcpprobe_monitoring.pid`; kill -TERM $PID; rm '
     cmd += '/var/run/tcpprobe_monitoring.pid'
     os.system(cmd)
-    cmd = 'rmmod tcp_probe_new_fix > /dev/null 2>&1'
+    cmd = 'rmmod tcp_probe > /dev/null 2>&1'
     os.system(cmd)
     exit(0)
 
@@ -85,7 +85,7 @@ def main(path, port, interval):
 
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job'
             ' tcpprobe_monitoring')
-
+    
     # Build stat names
     stats_list = [
             'cwnd_monitoring',
@@ -100,17 +100,35 @@ def main(path, port, interval):
             'DEBUG: the following stats have been '
             'built --> {}'.format(stats_list))
 
-    # Monitoring setup
-    cmd = (
-            'insmod /opt/openbach/agent/jobs/tcpprobe_monitoring/'
-            'tcp_probe_new_fix/tcp_probe_new_fix.ko port={} '
-            'full=1 > /dev/null 2>&1'.format(port)
-    )
+    # Unload existing tcp_probe job and/or module (if exists)
+    cmd = 'PID=`cat /var/run/tcpprobe_monitoring.pid`; kill -TERM $PID; rm '
+    cmd += '/var/run/tcpprobe_monitoring.pid'
     try:
         os.system(cmd)
     except Exception as exe_error:
-        collect_agent.send_log(syslog.LOG_ERROR, 'ERROR: %s' % exe_error)
-        exit('tcp_probe_new_fix.ko can not be executed')
+        collect_agent.send_log(syslog.LOG_DEBUG, 'No previous tcp_probe job to kill before launching the job: %s' % exe_error)
+        exit('No previous tcp_probe job to kill before launching the job')
+    
+    cmd = 'rmmod tcp_probe > /dev/null 2>&1'
+    try:
+        os.system(cmd)
+    except Exception as exe_error:
+        collect_agent.send_log(syslog.LOG_ERROR, 'Existing tcp_probe cannot be unloaded: %s' % exe_error)
+
+    # Monitoring setup
+    cmd = (
+            'modprobe tcp_probe port={}'
+            ' full=1 > /dev/null 2>&1'.format(port)
+    )
+    
+    # The reference time
+    init_time = int(time.time() * 1000)
+    
+    try:
+        os.system(cmd)
+    except Exception as exe_error:
+        collect_agent.send_log(syslog.LOG_ERROR, 'tcp_probe cannot be executed: %s' % exe_error)
+        exit('tcp_probe cannot be executed')
 
     cmd = 'chmod 444 /proc/net/tcpprobe'
     os.system(cmd)
@@ -122,15 +140,14 @@ def main(path, port, interval):
 
     for i, row in enumerate(watch(path)):
         if i % interval == 0:
-            data = row.split(' ')
+            data = row.split()
             if len(data) == 11:
-                timestamp = data[0]
-                timestamp_sec = timestamp.split('.')[0]
-                timestamp_nsec = timestamp.split('.')[1]
-                timestamp = timestamp_sec + timestamp_nsec[:3]
+                timestamp = data[0].strip('\x00')
+                timestamp_sec, timestamp_nsec = timestamp.split('.', 1)
+                timestamp_real = init_time + int(timestamp_sec)*1000 + int(timestamp_nsec[:3])
                 try:
                     collect_agent.send_stat(
-                            int(timestamp),
+                            timestamp_real,
                             port=port,
                             cwnd_monitoring=data[6],
                             ssthresh_monitoring=data[7],
@@ -146,9 +163,9 @@ def main(path, port, interval):
 if __name__ == '__main__':
     # Define Usage
     parser = argparse.ArgumentParser(
-            description='Activate/Deactivate tcpprobe monitoring.',
+            description='Activate/Deactivate tcpprobe monitoring on outgoing traffic.',
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('port', type=int, help='Port to monitor')
+    parser.add_argument('port', type=int, help='Port to monitor (dest or src)')
     parser.add_argument(
             '-p', '--path', default='/tmp/tcpprobe.out',
             help='path to result file')

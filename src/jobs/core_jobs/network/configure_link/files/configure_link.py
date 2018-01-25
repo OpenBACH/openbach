@@ -113,7 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('interfaces', type=str, help='')
     parser.add_argument('-d', '--delay', type=int, default=0, help='')
     parser.add_argument('-b', '--bandwidth', type=str, help='')
-    parser.add_argument('-l', '--loss', type=int, default=0, help='')
+    parser.add_argument('-l', '--loss', type=float, default=0.0, help='')
 
     # get args
     args = parser.parse_args()

@@ -34,7 +34,7 @@ arguments:
           The delay to add, in milliseconds (default=0)
 
     - name:        loss
-      type:        'int'
+      type:        'float'
       count:       1
       flag:        '-l'
       description: >

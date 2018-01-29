@@ -1,16 +1,167 @@
 @startuml
 
-class CollectorConnection {
-  agent_names(job_name: String, scenario_instance_id: Integer, job_instance_id: Integer, suffix: String, timestamp: Integers)
-  job_names(scenario_instance_id: Integer, agent_name: String, job_instance_id: Integer, suffix: String, timestamp: Integers)
-  job_instance_ids(job_name: String, scenario_instance_id: Integer, agent_name: String, suffix: String, timestamp: Integers)
-  scenario_instance_ids(job_name: String, agent_name: String, job_instance_id: Integer, suffix: String, timestamp: Integers)
-  timestamps(job_name: String, scenario_instance_id: Integer, agent_name: String, job_instance_id: Integer, suffix: String, condition: Condition, only_bounds: Boolean)
-  suffixes(job_name: String, scenario_instance_id: Integer, agent_name: String, job_instance_id: Integer)
-  scenarios(job_name: String, scenario_instance_id: Integer, agent_name: String, job_instance_id: Integer, suffix: String, fields: Strings, condition: Condition, timestamps: Integers)
-  import_scenario(scenario_instance: Scenario)
-  remove_statistics(job_name: String, scenario_instance_id: Integer, agent_name: String, job_instance_id: Integer, suffix: String, condition: Condition, timestamps: Integers)
-  orphans(timestamps: Integers, condition: Condition)
+!include data_access_collector_connection.wsd
+
+class AsyncCollectorConnection
+
+class ElasticSearchCommunicator {
+  __init__(ip: String, port: Integer)
+  search_query(body: Dictionnary, **query: Dictionnary)
+  delete_query(query: Dictionnary)
+  data_write(body: String, first_time_request: Boolean)
 }
+
+class ElasticSearchConnection {
+  agent_names(job: String, scenario: Integer, job_instance: Integer, timestamps: Integers)
+  job_names(scenario: Integer, agent: String, job_instance: Integer, timestamps: Integers)
+  job_instance_ids(job: String, scenario: Integer, agent: String, timestamps: Integers)
+  scenario_instance_ids(job: String, agent: String, job_instance: String, timestamps: Integers)
+  timestamps(job: String, scenario: Integer, agent: String, job_instance: Integer)
+  logs(job: String, scenario: Integer, agent: String, job_instance: Integer, timestamps: Integers)
+  orphans(timestamps: Integers)
+  remove_logs(job: String, scenario: Integer, agent: String, job_instance: Integer, timestamps: Integers)
+  import_job(scenario_id: Integer, owner_id: Integer, job: Job)
+}
+
+abstract class Condition {
+  is_timestamp(): Boolean
+  __str__()
+}
+
+abstract class BooleanCondition {
+  __init__(*conditions: Conditions)
+}
+
+class ConditionAnd {
+  KEYWORD: String = 'AND'
+}
+
+class ConditionOr {
+  KEYWORD: String = 'OR'
+}
+
+enum Operator {
+  Equal
+  NotEqual
+  Different
+  GreaterThan
+  GreaterOrEqual
+  LessThan
+  LessOrEqual
+  Matches
+  DoesNotMatch
+}
+
+abstract class ComparatorCondition {
+  __init__(name: String, operator: Operator, value)
+}
+
+class ConditionTag {
+  escaped_value
+}
+
+class ConditionField {
+  escaped_value
+}
+
+class ConditionTimestamp {
+  __init__(operator: Operator, value: Integer, unit: String, from_now: Boolean)
+  escaped_value
+  is_timestamp()
+}
+
+
+class InfluxDBCommunicator {
+  __init__(ip: String, port: Integer, db_name: String, precision: String)
+  sql_query(query: String)
+  data_write(data: String)
+}
+
+
+class InfluxDBConnection {
+  agent_names(job: String, scenario: Integer, job_instance: Integer, suffix: String)
+  job_names(scenario: Integer, agent: String, job_instance: Integer, suffix: String)
+  job_instance_ids(job: String, scenario: Integer, agent: String, suffix: String)
+  scenario_instance_ids(job: String, agent: String, job_instance: String, suffix: String)
+  timestamps(job: String, scenario: Integer, agent: String, job_instance: Integer, suffix: String, condition: Condition)
+  origin(job: String, scenario: Integer, agent: String, job_instance: Integer, suffix: String, condition: Condition)
+  suffixes(job: String, scenario: Integer, agent: String, job_instance: Integer)
+  raw_statistics(job: String, scenario: Integer, agent: String, job_instance: Integer, suffix: String, fields: Strings, condition: Condition)
+  statistics(job: String, scenario: Integer, agent: String, job_instance: Integer, suffix: String, fields: Strings, condition: Condition)
+  orphans(condition: Condition, timestamps: Integers)
+  remove_statistics(job: String, scenario: Integer, agent: String, job_instance: Integer, suffix: String, condition: Condition)
+  import_job(scenario_id: Integer, owner_id: Integer, job: Job)
+  get_field_keys()
+}
+
+
+class Scenario {
+  __init__(instance_id: Integer, owner: Scenario)
+  get_or_create_subscenario(instance_id: Integer)
+  get_or_create_job(name: String, instance_id: Integer, agent: String)
+  owner_instance_id
+  own_jobs
+  jobs
+  own_scenarios
+  scenarios
+  own_agents
+  agents
+  json
+  load(scenario_data: Dictionary)
+}
+
+class Agent {
+  __init__(name: String, scenario: Scenario)
+  get_or_create_job(name: String, instance_id: Integer)
+  json
+}
+
+class Job {
+  __init__(name: String, instance_id: Integer, agent: String)
+  get_or_create_statistics(suffix: String)
+  statistics
+  stats
+  json
+  logs
+  load(job_data: Dictionary)
+}
+
+class Statistic {
+  __init__()
+  add_statistic(timestamp: Integer, **kwargs: Dictionary)
+  json
+  load(statistics_data: Dictionary)
+}
+
+class Log {
+  __init__()
+  add_log(_id, _type, _index, _timestamp, _version, facility, facility_label, host, message, pid, priority, severity, severity_label, source)
+  json
+  load(logs_data: Dictionary)
+}
+
+
+AsyncCollectorConnection ..|> CollectorConnection
+ElasticSearchCommunicator <|-- ElasticSearchConnection
+CollectorConnection *- ElasticSearchConnection
+InfluxDBConnection --|> InfluxDBCommunicator
+CollectorConnection *- InfluxDBConnection
+
+ElasticSearchConnection -[hidden]- InfluxDBConnection
+
+Condition <|-- BooleanCondition
+Condition <|-- ComparatorCondition
+BooleanCondition <|-- ConditionAnd
+BooleanCondition <|-- ConditionOr
+ComparatorCondition <|-- ConditionTag
+ComparatorCondition <|-- ConditionField
+ComparatorCondition <|-- ConditionTimestamp
+
+Scenario *- Job
+Scenario . Agent
+Agent .. Job
+Job *- Statistic
+Job *- Log
+Statistic -[hidden]- Log
 
 @enduml

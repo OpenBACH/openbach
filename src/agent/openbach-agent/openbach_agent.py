@@ -341,7 +341,7 @@ class StartJobInstanceAgent(AgentAction):
 
     def _action(self):
         with JobManager() as manager:
-            arguments = ' '.join(self.arguments)
+            arguments = ' '.join(map(shlex.quote, self.arguments))
             if self.date_type == 'date':
                 date, _ = schedule_job_instance(
                         self.name, self.instance_id, self.scenario_id,

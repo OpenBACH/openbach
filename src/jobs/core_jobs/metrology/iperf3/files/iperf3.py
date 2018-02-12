@@ -63,12 +63,15 @@ class AutoIncrementFlowNumber:
 def multiplier(unit, base):
     if unit == base:
         return 1
+    if unit.startswith('G'):
+        return 1024 * 1024 * 1024
     if unit.startswith('M'):
         return 1024 * 1024
     if unit.startswith('K'):
         return 1024
     if unit.startswith('m'):
         return 0.001
+    collect_agent.send_log(syslog.LOG_ERR, 'Units of iperf metrics are not available/correct')
     return 1
 
 
@@ -115,8 +118,7 @@ def server(exit, interval, length, port):
     cmd.extend(_command_build_helper('-p', port))
 
     # Read output, and send stats
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     flow_map = defaultdict(AutoIncrementFlowNumber())
 
     for flow_number in repeat(None):
@@ -167,6 +169,10 @@ def server(exit, interval, length, port):
             statistics['sent_pkts'] = total
             statistics['plr'] = datagrams
         collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
+    error_log = p.stderr.readline()
+    if error_log:
+        collect_agent.send_log(syslog.LOG_ERR, 'Error when launching iperf3: {}'.format(error_log))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

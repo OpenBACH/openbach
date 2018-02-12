@@ -3,9 +3,9 @@
 general:
   name:            configure_link
   description: >
-      This Job configures the delay and bandwidth on an interface
+      This Job configures the delay and bandwidth on an interface (it removes the previous configuration of the interface)
 
-  job_version:     '1.0'
+  job_version:     '1.1'
   keywords:        [delay, bandwidth, interface, link, netem]
   persistent:      False
   need_privileges: True
@@ -34,7 +34,7 @@ arguments:
           The delay to add, in milliseconds (default=0)
 
     - name:        loss
-      type:        'int'
+      type:        'float'
       count:       1
       flag:        '-l'
       description: >

@@ -1,1 +1,0 @@
-cmd_/home/opensand/openbach/tcp_probe_new_fix/tcp_probe_new_fix.ko := ld -r -m elf_i386 -T ./scripts/module-common.lds --build-id  -o /home/opensand/openbach/tcp_probe_new_fix/tcp_probe_new_fix.ko /home/opensand/openbach/tcp_probe_new_fix/tcp_probe_new_fix.o /home/opensand/openbach/tcp_probe_new_fix/tcp_probe_new_fix.mod.o

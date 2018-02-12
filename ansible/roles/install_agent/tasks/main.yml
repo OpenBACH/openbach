@@ -75,6 +75,8 @@
   vars:
     collector_ip: "{{ openbach_collector }}"
   become: yes
+  notify:
+    - restart rsyslog
 
 - name: Create OpenBACH's stats folder
   file: path=/var/openbach_stats/openbach_agent state=directory mode=0755 owner=openbach group=openbach

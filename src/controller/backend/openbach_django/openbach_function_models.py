@@ -42,7 +42,6 @@ __credits__ = '''Contributors:
 '''
 
 
-import ipaddress
 from contextlib import suppress
 
 from django.db import models, IntegrityError
@@ -50,6 +49,9 @@ from django.utils import timezone
 
 from .base_models import ContentTyped, OpenbachFunctionArgument
 from .condition_models import Condition
+from .project_models import Agent, Collector, Entity
+
+import errors
 
 
 class OpenbachFunction(ContentTyped):
@@ -76,6 +78,15 @@ class OpenbachFunction(ContentTyped):
         """
         self.set_content_model()
         super().save(*args, **kwargs)
+
+    @classmethod
+    def build_from_arguments(cls, function_id, label, scenario, wait_time, arguments):
+        return cls.objects.create(
+                function_id=function_id,
+                label=label,
+                scenario_version=scenario,
+                wait_time=wait_time,
+                **arguments)
 
     @property
     def scenario(self):
@@ -258,9 +269,27 @@ class WaitForFinished(models.Model):
 
 # From here on, definition of supported OpenBACH functions
 
+class AssignCollector(OpenbachFunction):
+    address = OpenbachFunctionArgument(type=str)
+    collector = OpenbachFunctionArgument(type=str)
+
+    @property
+    def _json(self):
+        return {'assign_collector': {
+            'address': self.address,
+            'collector': self.collector,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'address': self.instance_value('address', parameters),
+                'collector': self.instance_value('collector', parameters),
+        }
+
+
 class InstallAgent(OpenbachFunction):
-    address = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
-    collector = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    address = OpenbachFunctionArgument(type=str)
+    collector = OpenbachFunctionArgument(type=str)
     username = OpenbachFunctionArgument(type=str)
     password = OpenbachFunctionArgument(type=str)
     name = OpenbachFunctionArgument(type=str)
@@ -268,132 +297,57 @@ class InstallAgent(OpenbachFunction):
     @property
     def _json(self):
         return {'install_agent': {
-            'address': self.address.compressed,
-            'collector': self.collector.compressed,
+            'address': self.address,
+            'collector': self.collector,
             'username': self.username,
             'password': self.password,
             'name': self.name,
         }}
 
+    def _get_arguments(self, parameters):
+        return {
+                'name': self.instance_value('name', parameters),
+                'address': self.instance_value('address', parameters),
+                'collector': self.instance_value('collector', parameters),
+                'username': self.instance_value('username', parameters),
+                'password': self.instance_value('password', parameters),
+        }
+
 
 class UninstallAgent(OpenbachFunction):
-    address = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    address = OpenbachFunctionArgument(type=str)
 
     @property
     def _json(self):
         return {'uninstall_agent': {
-            'address': self.address.compressed,
+            'address': self.address,
         }}
 
-
-class ListAgent(OpenbachFunction):
-    update = OpenbachFunctionArgument(type=bool)
-
-    @property
-    def _json(self):
-        return {'list_agent': {
-            'update': self.update,
-        }}
-
-
-class RetrieveStatusAgents(OpenbachFunction):
-    addresses = OpenbachFunctionArgument(type=list)
-    update = OpenbachFunctionArgument(type=bool)
-
-    @property
-    def _json(self):
-        return {'retrieve_status_agent': {
-            'addresses': self.addresses,
-            'update': self.update,
-        }}
-
-
-class AddJob(OpenbachFunction):
-    name = OpenbachFunctionArgument(type=str)
-    path = OpenbachFunctionArgument(type=str)
-
-    @property
-    def _json(self):
-        return {'add_job': {
-            'name': self.name,
-            'path': self.path,
-        }}
-
-
-class DeleteJob(OpenbachFunction):
-    name = OpenbachFunctionArgument(type=str)
-
-    @property
-    def _json(self):
-        return {'del_job': {
-            'name': self.name,
-        }}
-
-
-class ListJobs(OpenbachFunction):
-    verbosity = OpenbachFunctionArgument(type=int)
-
-    @property
-    def _json(self):
-        return {'list_jobs': {
-            'verbosity': self.verbosity,
-        }}
-
-
-class GetStatisticsJob(OpenbachFunction):
-    name = OpenbachFunctionArgument(type=str)
-    verbosity = OpenbachFunctionArgument(type=int)
-
-    @property
-    def _json(self):
-        return {}
-
-
-class GetHelpJob(OpenbachFunction):
-    name = OpenbachFunctionArgument(type=str)
-
-    @property
-    def _json(self):
-        return {}
-
-
-class InstallJobs(OpenbachFunction):
-    addresses = OpenbachFunctionArgument(type=list)
-    names = OpenbachFunctionArgument(type=list)
-    severity = OpenbachFunctionArgument(type=int)
-    local_severity = OpenbachFunctionArgument(type=int)
-
-    @property
-    def _json(self):
-        return {}
-
-
-class ListInstalledJobs(OpenbachFunction):
-    address = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
-    update = OpenbachFunctionArgument(type=bool)
-    verbosity = OpenbachFunctionArgument(type=int)
-
-    @property
-    def _json(self):
-        return {}
-
-
-class RetrieveStatusJobs(OpenbachFunction):
-    addresses = OpenbachFunctionArgument(type=list)
-
-    @property
-    def _json(self):
-        return {}
+    def _get_arguments(self, parameters):
+        return {
+                'address': self.instance_value('address', parameters),
+        }
 
 
 class PushFile(OpenbachFunction):
     local_path = OpenbachFunctionArgument(type=str)
     remote_path = OpenbachFunctionArgument(type=str)
-    agent_ip = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    address = OpenbachFunctionArgument(type=str)
 
     @property
     def _json(self):
-        return {}
+        return {'push_file': {
+            'address': self.address,
+            'local_path': self.local_path,
+            'remote_path': self.remote_path,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'address': self.instance_value('address', parameters),
+                'local_path': self.instance_value('local_path', parameters),
+                'remote_path': self.instance_value('remote_path', parameters),
+        }
 
 
 class StartJobInstance(OpenbachFunction):
@@ -405,6 +359,29 @@ class StartJobInstance(OpenbachFunction):
         yield from super()._openbach_function_argument_values()
         for argument in self.arguments.all():
             yield argument.value
+
+    @classmethod
+    def build_from_arguments(cls, function_id, label, scenario, wait_time, arguments):
+        offset = arguments.pop('offset', 0)
+        if not isinstance(offset, int):
+            raise TypeError(int, offset, 'offset')
+        entity_name = arguments.pop('entity_name')
+        if len(arguments) > 1:
+            raise ValueError('Too much job names to start')
+        if len(arguments) < 1:
+            raise ValueError('The name of the job to start is missing')
+        job_name, = arguments
+        if not isinstance(arguments[job_name], dict):
+            raise TypeError(dict, arguments[job_name], job_name)
+
+        return cls.objects.create(
+                function_id=function_id,
+                label=label,
+                scenario_version=scenario,
+                wait_time=wait_time,
+                offset=offset,
+                job_name=job_name,
+                entity_name=entity_name)
 
     def _prepare_arguments(self, parameters=None):
         arguments = {}
@@ -430,10 +407,25 @@ class StartJobInstance(OpenbachFunction):
         }}
 
     def _get_arguments(self, parameters):
+        entity_name = self.instance_value('entity_name', parameters)
+        project = self.scenario.project
+        project_name = None if project is None else project.name
+
+        try:
+            entity = Entity.objects.get(name=entity_name, project=project)
+        except Entity.DoesNotExist:
+            raise errors.ConductorError(
+                    'Entity does not exist in the project',
+                    entity_name=entity_name, project_name=project_name)
+        if entity.agent is None:
+            raise errors.ConductorError(
+                    'Entity does not have an associated agent',
+                    entity_name=entity_name, project_name=project_name)
+
         return {
-                'entity_name': self.instance_value('entity_name', parameters),
                 'name': self.instance_value('job_name', parameters),
                 'offset': self.instance_value('offset', parameters),
+                'address': entity.agent.address,
                 'arguments': self._prepare_arguments(parameters),
         }
 
@@ -455,6 +447,21 @@ class StartJobInstanceArgument(models.Model):
         value = self.value
         field = self._meta.get_field('value')
         return field.validate_openbach_value(value, parameters)
+
+
+class StopJobInstance(OpenbachFunction):
+    openbach_function_id = OpenbachFunctionArgument(type=int)
+
+    @property
+    def _json(self):
+        return {'stop_job_instance': {
+            'openbach_function_id': self.openbach_function_id,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'openbach_function_id': self.instance_value('openbach_function_id', parameters),
+        }
 
 
 class StopJobInstances(OpenbachFunction):
@@ -480,45 +487,105 @@ class RestartJobInstance(OpenbachFunction):
     date = OpenbachFunctionArgument(type=str)
     interval = OpenbachFunctionArgument(type=int)
 
+    @classmethod
+    def build_from_arguments(cls, function_id, label, scenario, wait_time, arguments):
+        instance_id = arguments.pop('instance_id')
+        args = arguments.pop('arguments')
+        if not isinstance(args, dict):
+            raise TypeError(dict, args, instance_id)
+
+        return cls.objects.create(
+                function_id=function_id,
+                label=label,
+                scenario_version=scenario,
+                wait_time=wait_time,
+                instance_id=instance_id,
+                instance_args=args,
+                **arguments)
+
     @property
     def _json(self):
-        return {}
+        return {'restart_job_instance': {
+            'instance_id': self.instance_id,
+            'arguments': self.instance_args,
+            'date': self.date,
+            'interval': self.interval,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'instance_id': self.instance_value('instance_id', parameters),
+                'arguments': self.instance_value('instance_args', parameters),
+                'date': self.instance_value('date', parameters),
+                'interval': self.instance_value('interval', parameters),
+        }
 
 
 class StatusJobInstance(OpenbachFunction):
     instance_id = OpenbachFunctionArgument(type=int)
-    verbosity = OpenbachFunctionArgument(type=int)
     update = OpenbachFunctionArgument(type=bool)
 
     @property
     def _json(self):
-        return {}
+        return {'status_job_instance': {
+            'instance_id': self.instance_id,
+            'update': self.update,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'instance_id': self.instance_value('instance_id', parameters),
+                'update': self.instance_value('update', parameters),
+        }
 
 
 class ListJobInstances(OpenbachFunction):
     addresses = OpenbachFunctionArgument(type=list)
     update = OpenbachFunctionArgument(type=bool)
-    verbosity = OpenbachFunctionArgument(type=int)
 
     @property
     def _json(self):
-        return {}
+        return {'status_job_instance': {
+            'addresses': self.addresses,
+            'update': self.update,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'addresses': self.instance_value('addresses', parameters),
+                'update': self.instance_value('update', parameters),
+        }
 
 
 class SetLogSeverityJob(OpenbachFunction):
-    address = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    address = OpenbachFunctionArgument(type=str)
     job_name = OpenbachFunctionArgument(type=str)
     severity = OpenbachFunctionArgument(type=int)
-    date = OpenbachFunctionArgument(type=str)
     local_severity = OpenbachFunctionArgument(type=int)
+    date = OpenbachFunctionArgument(type=str)
 
     @property
     def _json(self):
-        return {}
+        return {'set_log_severity_job': {
+            'address': self.address,
+            'job_name': self.job_name,
+            'severity': self.severity,
+            'local_severity': self.local_severity,
+            'date': self.date,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'address': self.instance_value('address', parameters),
+                'name': self.instance_value('job_name', parameters),
+                'severity': self.instance_value('severity', parameters),
+                'local_severity': self.instance_value('local_severity', parameters),
+                'date': self.instance_value('date', parameters),
+        }
 
 
 class SetStatisticsPolicyJob(OpenbachFunction):
-    address = OpenbachFunctionArgument(type=ipaddress._BaseAddress)
+    address = OpenbachFunctionArgument(type=str)
     job_name = OpenbachFunctionArgument(type=str)
     stat_name = OpenbachFunctionArgument(type=str)
     storage = OpenbachFunctionArgument(type=bool)
@@ -527,7 +594,24 @@ class SetStatisticsPolicyJob(OpenbachFunction):
 
     @property
     def _json(self):
-        return {}
+        return {'set_log_severity_job': {
+            'address': self.address,
+            'job_name': self.job_name,
+            'stat_name': self.stat_name,
+            'storage': self.storage,
+            'broadcast': self.broadcast,
+            'date': self.date,
+        }}
+
+    def _get_arguments(self, parameters):
+        return {
+                'address': self.instance_value('address', parameters),
+                'name': self.instance_value('job_name', parameters),
+                'stat_name': self.instance_value('stat_name', parameters),
+                'storage': self.instance_value('storage', parameters),
+                'broadcast': self.instance_value('broadcast', parameters),
+                'date': self.instance_value('date', parameters),
+        }
 
 
 class If(OpenbachFunction):
@@ -537,6 +621,23 @@ class If(OpenbachFunction):
             related_name='if_function')
     functions_true = OpenbachFunctionArgument(type=list)
     functions_false = OpenbachFunctionArgument(type=list)
+
+    @classmethod
+    def build_from_arguments(cls, function_id, label, scenario, wait_time, arguments):
+        condition = Condition.load_from_json(arguments['condition'])
+        for name in ('openbach_functions_true_ids', 'openbach_functions_false_ids'):
+            functions = arguments[name]
+            if not isinstance(functions, list):
+                raise TypeError(list, functions, name)
+
+        return cls.objects.create(
+                function_id=function_id,
+                label=label,
+                scenario_version=scenario,
+                wait_time=wait_time,
+                condition=condition,
+                functions_true=arguments['openbach_functions_true_ids'],
+                functions_false=arguments['openbach_functions_false_ids'])
 
     @property
     def _json(self):
@@ -561,6 +662,23 @@ class While(OpenbachFunction):
             related_name='while_function')
     functions_while = OpenbachFunctionArgument(type=list)
     functions_end = OpenbachFunctionArgument(type=list)
+
+    @classmethod
+    def build_from_arguments(cls, function_id, label, scenario, wait_time, arguments):
+        condition = Condition.load_from_json(arguments['condition'])
+        for name in ('openbach_functions_while_ids', 'openbach_functions_end_ids'):
+            functions = arguments[name]
+            if not isinstance(functions, list):
+                raise TypeError(list, functions, name)
+
+        return cls.objects.create(
+                function_id=function_id,
+                label=label,
+                scenario_version=scenario,
+                wait_time=wait_time,
+                condition=condition,
+                functions_while=arguments['openbach_functions_while_ids'],
+                functions_end=arguments['openbach_functions_end_ids'])
 
     @property
     def _json(self):

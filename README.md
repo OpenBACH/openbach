@@ -3,7 +3,7 @@ OpenBACH
 
 OpenBACH is a testbed able to control multiple network entity and collect data from them. It is composed of one controller, one collector and multiple agents. The controller controls the agents and can launch jobs into them. The collector will then collecte the results.
 
-Read the documentation and more at http://opensand.org/support/wiki/doku.php?id=openbach:index
+Read the documentation and more at https://wiki.net4sat.org/doku.php?id=openbach:index
 
 Design Principles
 =================

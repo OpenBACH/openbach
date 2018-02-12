@@ -80,6 +80,17 @@
       - P pgbouncer_auth.txt
   remote_user: openbach
 
+- name: Install the Conductor
+  synchronize:
+    src: ../src/controller/openbach-conductor/
+    dest: /opt/openbach/controller/conductor/
+    recursive: yes
+    delete: yes
+    rsync_opts:
+      - --exclude
+      - __pycache__
+  remote_user: openbach
+
 - name: Configure PgBouncer
   copy: src=pgbouncer.ini dest=/etc/pgbouncer/pgbouncer.ini mode=640 owner=postgres group=postgres backup=yes
   become: yes
@@ -113,12 +124,14 @@
   become: yes
 
 - name: Fetch the openbach User's SSH public Key
-  fetch: src=/home/openbach/.ssh/id_rsa.pub dest=/tmp/controller_key
+  fetch: src=/home/openbach/.ssh/id_rsa.pub dest={{ openbach_installer_folder }}/controller_key
   become: yes
 
 - name: Initialize the Backend's Database
   shell: /opt/openbach/controller/backend/openbach-backend.py migrate --no-input
   remote_user: openbach
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Setup Default Superuser name and password
   set_fact: openbach_backend_admin_name={{ openbach_backend_admin_name | default('openbach') }} openbach_backend_admin_password={{ openbach_backend_admin_password | default('openbach') }}
@@ -128,29 +141,18 @@
 - name: Manage Superusers in the Backend's Database
   openbach_superuser: manager=/opt/openbach/controller/backend/openbach-backend.py
   remote_user: openbach
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Collect Django's static files
   shell: /opt/openbach/controller/backend/openbach-backend.py collectstatic --no-input
   remote_user: openbach
-
-- name: Create the Backend PID Repository
-  file: path=/var/run/openbach state=directory owner=openbach group=openbach
-  become: yes
+  environment:
+    PYTHONPATH: /opt/openbach/controller/conductor/utils/
 
 - name: Create the Backend service
   copy: src=openbach_backend.service dest=/etc/systemd/system/ mode=0644
   become: yes
-
-- name: Install the Conductor
-  synchronize:
-    src: ../src/controller/openbach-conductor/
-    dest: /opt/openbach/controller/conductor/
-    recursive: yes
-    delete: yes
-    rsync_opts:
-      - --exclude
-      - __pycache__
-  remote_user: openbach
 
 - name: Create the Conductor service
   copy: src=openbach_conductor.service dest=/etc/systemd/system/ mode=0644

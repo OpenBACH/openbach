@@ -224,7 +224,10 @@ class JobInstance(models.Model):
 
     job_name = models.CharField(max_length=500)
     agent_name = models.CharField(max_length=500)
-    agent_address = models.GenericIPAddressField()
+    agent = models.ForeignKey(
+            'Agent', models.SET_NULL,
+            null=True, blank=True,
+            related_name='+')
     collector = models.ForeignKey(
             'Collector', models.CASCADE,
             related_name='+')
@@ -360,9 +363,13 @@ class JobInstance(models.Model):
         if self.stop_date is not None:
             stop_date = self.stop_date.astimezone(tz)
 
+        agent_address = None
+        if self.agent:
+            agent_address = self.agent.address
+
         return {
                 'name': self.job_name,
-                'agent': self.agent_address,
+                'agent': agent_address,
                 'id': self.id,
                 'arguments': arguments,
                 'update_status': self.update_status.astimezone(tz),

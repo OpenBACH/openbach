@@ -60,12 +60,15 @@ class AutoIncrementFlowNumber:
 def multiplier(unit, base):
     if unit == base:
         return 1
+    if unit.startswith('G'):
+        return 1024 * 1024 * 1024
     if unit.startswith('M'):
         return 1024 * 1024
     if unit.startswith('K'):
         return 1024
     if unit.startswith('m'):
         return 0.001
+    collect_agent.send_log(syslog.LOG_ERR, 'Units of iperf metrics are not available/correct')
     return 1
 
 
@@ -90,9 +93,7 @@ def client(client, interval, length, port, udp, bandwidth, time):
     if time is not None:
         cmd += ['-t', str(time)]
     p = subprocess.run(cmd)
-    if p.returncode:
-        message = 'WARNING: \'{}\' exited with non-zero code'.format(
-                ' '.join(cmd))
+    sys.exit(p.returncode)
         
 
 def server(interval, length, port, udp, bandwidth, duration):
@@ -111,8 +112,8 @@ def server(interval, length, port, udp, bandwidth, duration):
         cmd += ['-p', str(port)]
     if udp:
         cmd += ['-u']
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    
+        
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     flow_map = defaultdict(AutoIncrementFlowNumber())
 
     for flow_number in repeat(None):
@@ -166,8 +167,13 @@ def server(interval, length, port, udp, bandwidth, duration):
             statistics['lost_pkts'] = lost
             statistics['sent_pkts'] = total
             statistics['plr'] = datagrams
+        
         collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
-
+    
+    error_log = p.stderr.readline()
+    if error_log:
+        collect_agent.send_log(syslog.LOG_ERR, 'Error when launching iperf: {}'.format(error_log))
+        sys.exit(1)
 
 if __name__ == "__main__":
     # Define Usage

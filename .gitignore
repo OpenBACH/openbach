@@ -1,3 +1,6 @@
 __pycache__
+*.pyc
 *.swp
 *.retry
+ansible/inventory/
+ansible/.ansible_venv/

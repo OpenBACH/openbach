@@ -11,6 +11,7 @@ unsigned int job_instance_id = 0;
 unsigned int scenario_instance_id = 0;
 unsigned int owner_scenario_instance_id = 0;
 std::string agent_name("");
+std::string job_name;
 
 
 namespace collect_agent {
@@ -21,23 +22,30 @@ namespace collect_agent {
  */
 asio::io_service io_service;
 asio::ip::udp::resolver resolver(io_service);
-asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::query(asio::ip::udp::v4(), "", "1111"));
 
 
-inline unsigned int from_env(const char* name, unsigned int default_value) {
+inline std::string getenv(const char* name) {
 #if defined _WIN32
   const unsigned int ENV_VALUE_LENGTH = 1000;
   char value[ENV_VALUE_LENGTH];
   unsigned int retrieved = GetEnvironmentVariableA(name, value, ENV_VALUE_LENGTH);
   if (!retrieved) {
-    return default_value;
+    return std::string();
   }
 #else
   const char* value = std::getenv(name);
   if (!value) {
-    return default_value;
+    return std::string();
   }
 #endif
+  return value;
+}
+
+inline unsigned int from_env(const char* name, unsigned int default_value) {
+  const std::string value = getenv(name);
+  if (value.empty()) {
+    return default_value;
+  }
   std::stringstream parser;
   parser << value;
   unsigned int parsed;
@@ -51,6 +59,7 @@ inline unsigned int from_env(const char* name, unsigned int default_value) {
  */
 std::string rstats_messager(const std::string& message) {
   asio::error_code error;
+  static asio::ip::udp::endpoint endpoint = *resolver.resolve(asio::ip::udp::resolver::query(asio::ip::udp::v4(), "", "1111"));
 
   // Connect to the RStats service and send our message
   asio::ip::udp::socket sock(io_service);
@@ -84,14 +93,16 @@ bool register_collect(
     int log_facility,
     bool _new) {
   // Get the ids
-  const char* job = std::getenv("JOB_NAME");
-  const char* job_name(job ? job : "job_debug");
+  job_name = getenv("JOB_NAME");
+  if (job_name.empty()) {
+    job_name = "job_debug";
+  }
   job_instance_id = from_env("JOB_INSTANCE_ID", 0);
   scenario_instance_id = from_env("SCENARIO_INSTANCE_ID", 0);
   owner_scenario_instance_id = from_env("OWNER_SCENARIO_INSTANCE_ID", 0);
   std::ifstream agent_name_file;
   
-  agent_name_file.open("/opt/openbach-agent/agent_name");
+  agent_name_file.open("/opt/openbach/agent/agent_name");
   if (agent_name_file.is_open()) {
     goto read;
   }
@@ -111,7 +122,7 @@ read:
   }
 
   // Open the log
-  openlog(job_name, log_option, log_facility);
+  openlog(job_name.c_str(), log_option, log_facility);
 
   // Format the message to send to rstats
   std::stringstream command;

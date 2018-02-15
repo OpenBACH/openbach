@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: rstats_job.yml
-
-  tasks:
-  - name: Uninstall Rstats_job
-    file: path=/opt/openbach-jobs/rstats_job state=absent
-    become: yes
-
-  - name: Inform Agent that Rstats_job is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the Rstats_job Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

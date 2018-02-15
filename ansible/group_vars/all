@@ -1,0 +1,15 @@
+---
+
+logstash_logs_port: 10514
+logstash_stats_port: 2222
+elasticsearch_port: 9200
+elasticsearch_cluster_name: openbach
+influxdb_port: 8086
+influxdb_database_name: openbach
+influxdb_database_precision: ms
+auditorium_broadcast_port: 2223
+broadcast_mode: udp
+database_max_cache: 512m
+is_run_from_conductor: false
+openbach_repository: deb http://packages.net4sat.org/openbach xenial stable
+openbach_installer_folder: '~/.openbach_installer'

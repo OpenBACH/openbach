@@ -5,14 +5,16 @@ general:
   description: >
       This Job will resend the statistics produce by the named Job since the
       date
-  job_version:     0.1
+  job_version:     '1.0'
   keywords:        [stats]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/send_stats/send_stats.py'
+
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/send_stats/send_stats.py'
     command_stop:
 
 arguments:

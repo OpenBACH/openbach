@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: rsyslog_job.yml
-
-  tasks:
-  - name: Uninstall Rsyslog_job
-    file: path=/opt/openbach-jobs/rsyslog_job state=absent
-    become: yes
-
-  - name: Inform Agent that Rsyslog_job is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the Rsyslog_job Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

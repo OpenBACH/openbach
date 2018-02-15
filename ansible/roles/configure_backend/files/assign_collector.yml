@@ -1,0 +1,14 @@
+---
+
+- hosts: all
+  tasks:
+    - name: Assign a new Collector to an Agent
+      template: src=roles/install_agent/templates/collector.yml.j2 dest=/opt/openbach/agent/collector.yml
+      remote_user: openbach
+
+    - name: Restart Agent Services
+      systemd: name={{ item }} state=restarted
+      with_items:
+        - rstats
+        - openbach_agent
+      become: yes

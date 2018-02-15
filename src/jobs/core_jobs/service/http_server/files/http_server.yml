@@ -1,0 +1,30 @@
+---
+
+general:
+  name:            http_server
+  description: >
+      This Job will start an HTTP server in order to generate HTTP1 traffic.
+  job_version:     '1.0'
+  keywords:        [http, server]
+  persistent:      True
+  need_privileges: True
+
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/http_server/http_server.py'
+    command_stop:
+
+arguments:
+  required:
+    - name:        port
+      type:        'int'
+      count:       1
+      description: >
+          Port where the server is available
+   
+  optional:
+
+statistics:
+

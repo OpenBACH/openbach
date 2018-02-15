@@ -33,20 +33,5 @@
 
 ---
 
-- hosts: Agents
-  vars_files:
-    - vars/main.yml
-  vars:
-    - job_conf: send_stats.yml
-
-  tasks:
-  - name: Uninstall send_stats
-    file: path=/opt/openbach-jobs/send_stats state=absent
-    become: yes
-
-  - name: Inform Agent that send_stats is uninstalled
-    file: path=/opt/openbach-agent/jobs/{{ job_conf }} state=absent
-    become: yes
-
-  - include: '{{ path_src }}/del_job.yml'
-
+- name: Remove the Send_Stats Job Repository
+  file: path=/opt/openbach/agent/jobs/{{ job_name }} state=absent

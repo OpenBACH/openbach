@@ -1,0 +1,18 @@
+[Unit]
+Description=Startup script for OpenBACH Backend
+Requires=network.target
+
+[Service]
+User=openbach
+Group=openbach
+Type=simple
+RuntimeDirectory=openbach
+WorkingDirectory=/opt/openbach/controller/backend/
+Environment="PYTHONPATH=/opt/openbach/controller/conductor/utils/"
+ExecStart=/usr/local/bin/uwsgi --master --workers 5 --http :8000 --module backend.wsgi --static-map /static=/opt/openbach/controller/backend/static_root --pidfile /var/run/openbach/openbach_backend.pid --die-on-term
+ExecStop=/usr/local/bin/uwsgi --stop /var/run/openbach/openbach_backend.pid
+ExecRestart=/usr/local/bin/uwsgi --reload /var/run/openbach/openbach_backend.pid
+PIDFile=/var/run/openbach/openbach_backend.pid
+
+[Install]
+WantedBy=multi-user.target

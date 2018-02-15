@@ -4,14 +4,16 @@ general:
   name:            synchronization
   description: >
       This Job is used to launch the ntpdate command (admin job)
-  job_version:     0.1
+  job_version:     '1.0'
   keywords:        [synchronization, admin]
   persistent:      False
+  need_privileges: True
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/synchronization/synchronization.py'
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/synchronization/synchronization.py'
     command_stop:
 
 arguments:

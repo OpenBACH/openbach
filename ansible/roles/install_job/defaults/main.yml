@@ -1,0 +1,14 @@
+---
+
+default_jobs:
+  - fping
+  - hping
+  - iperf3
+  - rstats_job
+  - rsyslog_job
+  - rate_monitoring
+  - synchronization
+
+default_collector_jobs:
+  - empty_influxdb_db
+  - empty_elasticsearch_db

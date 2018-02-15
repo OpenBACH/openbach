@@ -1,0 +1,9 @@
+---
+
+database_max_cache: {{ database_max_cache }}
+openbach_repository: {{ openbach_repository }}
+openbach_controller: {{ inventory_hostname }}
+openbach_proxy_env:
+{{ openbach_proxy_env | to_nice_yaml | indent(2, True) }}
+openbach_installer_folder: {{ openbach_installer_folder }}
+is_run_from_conductor: true

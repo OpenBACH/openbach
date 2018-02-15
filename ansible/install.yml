@@ -1,0 +1,135 @@
+---
+
+- hosts: localhost
+  gather_facts: no
+  pre_tasks:
+    - name: Create temporary Folder
+      file: path={{ openbach_installer_folder }} state=directory
+
+    - name: Create temporary SSH key
+      shell: ssh-keygen -b 4096 -t rsa -f {{ openbach_installer_folder }}/openbach_install_rsa -q -N ""
+      args:
+        creates: "{{ openbach_installer_folder }}/openbach_install_rsa"
+      when: ansible_ssh_private_key_file is not defined
+
+    - name: Add Default Collector if Needed
+      add_host: name={{ item }} groups=collector openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+      when: ('collector' not in groups) or not groups.collector
+
+    - name: Add Default Auditorium if Needed
+      add_host: name={{ item }} groups=auditorium openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+      when: ('auditorium' not in groups) or not groups.auditorium
+
+    - name: Add Default Agent on Collectors
+      add_host: name={{ item }} groups=agent openbach_collector={{ item }}
+      with_items: "{{ groups.collector | default([]) }}"
+
+    - name: Add Default Agent on Controllers
+      add_host: name={{ item }} groups=agent openbach_controller={{ item }}
+      with_items: "{{ groups.controller | default([]) }}"
+
+- name: Pre-configure Agents and Auditoriums
+  hosts:
+    - agent
+    - auditorium
+  gather_facts: no
+  pre_tasks:
+    - name: Configure Controller Machine
+      set_fact: openbach_controller={{ openbach_controller | default(('controller' in group_names and inventory_hostname) or ('controller' in groups and groups.controller and groups.controller[0]) or '127.0.0.1') }}
+
+    - name: Configure Collector Machine
+      set_fact: openbach_collector={{ openbach_collector | default(('collector' in group_names and inventory_hostname) or ('collector' in groups and groups.collector and groups.collector[0]) or '127.0.0.1') }}
+
+    - name: Configure Http Proxy
+      set_fact: openbach_http_proxy={{ openbach_http_proxy is defined and openbach_http_proxy or lookup('env', 'HTTP_PROXY') }}
+
+    - name: Configure Https Proxy
+      set_fact: openbach_https_proxy={{ openbach_https_proxy is defined and openbach_https_proxy or lookup('env', 'HTTPS_PROXY') or openbach_http_proxy }}
+
+    - name: Configure Proxy Environment
+      set_fact: openbach_proxy_env={{ openbach_proxy_env | default({}) }}
+
+    - name: Configure Http Proxy in Environment
+      set_fact:
+        openbach_proxy_env: "{{ openbach_proxy_env | combine({'http_proxy': openbach_http_proxy, 'HTTP_PROXY': openbach_http_proxy}) }}"
+      when: openbach_http_proxy != ''
+
+    - name: Configure Https Proxy in Environment
+      set_fact:
+        openbach_proxy_env: "{{ openbach_proxy_env | combine({'https_proxy': openbach_https_proxy, 'HTTPS_PROXY': openbach_https_proxy}) }}"
+      when: openbach_https_proxy != ''
+
+    - name: Install python-minimal
+      raw: sudo apt-get -y install python-minimal
+      become: yes
+      ignore_errors: true
+
+    - name: Use the temporary SSH key as the Default for this Installation
+      set_fact: ansible_ssh_private_key_file={{ openbach_installer_folder }}/openbach_install_rsa
+      when: ansible_ssh_private_key_file is not defined
+
+- name: Install Agents
+  hosts: agent
+  pre_tasks:
+    - name: Configure Default OpenBACH Name
+      set_fact: openbach_name={{ openbach_name | default(ansible_hostname + ' ' + ansible_default_ipv4.address) }}
+  roles:
+    - install_agent
+
+- name: Install Collectors
+  hosts: collector
+  roles:
+    - install_collector
+
+- name: Install Controllers
+  hosts: controller
+  roles:
+    - install_controller
+
+- name: Configure Agents
+  hosts: agent
+  gather_facts: no
+  roles:
+    - configure_ssh_keys
+
+- name: Setup Backend's Database
+  hosts: controller
+  gather_facts: no
+  roles:
+    - configure_backend
+
+- name: Install Auditoriums
+  hosts: auditorium
+  roles:
+    - install_auditorium
+
+- name: Install Default Jobs
+  hosts: agent
+  gather_facts: no
+  roles:
+    - install_job
+
+- name: Setup Kibana defaults
+  hosts: collector
+  gather_facts: no
+  roles:
+    - role: configure_kibana
+      when: "'auditorium' in groups and groups.auditorium"
+
+- name: Cleanup Generated Files
+  hosts:
+    - agent
+    - auditorium
+  gather_facts: no
+  post_tasks:
+    - name: Remove trust of the install SSH key by the openbach user
+      authorized_key: user=openbach state=absent key={{ lookup('file', '{{ ansible_ssh_private_key_file }}.pub') }}
+      become: yes
+
+- hosts: localhost
+  gather_facts: no
+  post_tasks:
+    - name: Remove the Controllers SSH Keys from the Local Machine
+      file: path={{ openbach_installer_folder }} state=absent

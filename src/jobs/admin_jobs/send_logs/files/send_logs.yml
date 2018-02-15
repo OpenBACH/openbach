@@ -4,14 +4,15 @@ general:
   name:            send_logs
   description: >
       This Job will resend the logs produce by the named Job since the date
-  job_version:     0.1
+  job_version:     '1.0'
   keywords:        [logs]
   persistent:      False
 
-os:
-  linux:
-    requirements:  'Ubuntu 14.04/16.04'
-    command:       '/opt/openbach-jobs/send_logs/send_logs.py'
+platform_configuration:
+  - ansible_system: 'Linux'
+    ansible_distribution: 'Ubuntu'
+    ansible_distribution_version: '16.04'
+    command: '/usr/bin/env python3 /opt/openbach/agent/jobs/send_logs/send_logs.py'
     command_stop:
 
 arguments:

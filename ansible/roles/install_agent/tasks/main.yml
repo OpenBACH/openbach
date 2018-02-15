@@ -1,0 +1,137 @@
+---
+
+- name: Expand openbach User
+  user: name=openbach generate_ssh_key=yes ssh_key_bits=4096 shell=/bin/bash
+  become: yes
+
+- name: Enable SUDO Rights for openbach User
+  copy: src=sudoers dest=/etc/sudoers.d/passwordless_openbach mode='0440'
+  become: yes
+
+- name: Install apt dependencies
+  apt: pkg={{ item }} state=installed update_cache=no
+  with_items:
+    - ntp
+    - python-pip
+    - python3-pip
+    - python3-setuptools
+    - rsyslog
+    - rsync
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+  notify:
+    - restart ntp
+    - restart rsyslog
+
+- name: Install collect-agent Library
+  apt: pkg=collect-agent update_cache=yes state=latest allow_unauthenticated=yes
+  become: yes
+  environment: "{{ openbach_proxy_env }}"
+
+- name: Upload pip Mirror
+  synchronize: src=../pip_mirror/ dest=/opt/openbach/pip_mirror/ recursive=yes delete=yes
+  remote_user: openbach
+
+- name: Install pip2 Dependencies
+  pip: name={{ item }} executable=pip2 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python2/'
+  with_items:
+    - pip
+    - setuptools
+  become: yes
+
+- name: Install pip3 Dependencies
+  pip: name={{ item }} executable=pip3 extra_args='-U --no-index --find-links=file:///opt/openbach/pip_mirror/python3/'
+  with_items:
+    - pip
+    - setuptools
+    - apscheduler
+    - psutil
+    - PyYAML
+    - openbach_api
+  become: yes
+
+- name: Configure NTP Server
+  template: backup=yes src=ntp.conf.j2 dest=/etc/ntp.conf
+  become: yes
+  notify: restart ntp
+  tags:
+    - configure_ntp_server
+
+- name: Create OpenBACH's log folder
+  file: path=/var/log/openbach state=directory mode=0777
+  become: yes
+
+- name: Configure logrotate
+  copy: src=openbach_logrotate.conf dest=/etc/logrotate.d/
+  become: yes
+
+- name: Configure Rsyslog
+  template: src={{ item }}.j2 dest=/etc/rsyslog.d/{{ item }}.conf mode=0644
+  with_items:
+    - rstats
+    - rstats_local
+    - openbach_agent
+    - openbach_agent_local
+  vars:
+    collector_ip: "{{ openbach_collector }}"
+  become: yes
+  notify:
+    - restart rsyslog
+
+- name: Create OpenBACH's stats folder
+  file: path=/var/openbach_stats/openbach_agent state=directory mode=0755 owner=openbach group=openbach
+  become: yes
+
+- name: Create Service Files
+  copy: src={{ item }}.service dest=/etc/systemd/system/ mode=0644
+  with_items:
+    - openbach_agent
+    - rstats
+  become: yes
+
+- name: Create OpenBACH repository
+  file: path=/opt/openbach/agent/{{ item }} state=directory
+  with_items:
+    - jobs
+    - job_instances
+    - rstats
+    - collect_agent
+  remote_user: openbach
+
+- name: Install Rstats
+  copy: src=../src/agent/rstats/{{ item }}.py dest=/opt/openbach/agent/rstats/ mode=0755
+  with_items:
+    - rstats
+    - rstats_reload
+  remote_user: openbach
+
+- name: Configure Rstats
+  template: src=rstats.yml.j2 dest=/opt/openbach/agent/rstats/rstats.yml
+  remote_user: openbach
+
+- name: Install the Agent's Daemon
+  copy: src=../src/agent/openbach-agent/{{ item.name }} dest=/opt/openbach/agent/ mode={{ item.mode }}
+  with_items:
+    - {name: 'openbach_agent.py', mode: '0755'}
+    - {name: 'openbach_agent_filter.conf', mode: '0644'}
+  remote_user: openbach
+
+- name: Configure the Agent
+  template: src={{ item }}.j2 dest=/opt/openbach/agent/{{ item }}
+  with_items:
+    - agent_name
+    - collector.yml
+  vars:
+    collector_ip: "{{ openbach_collector }}"
+  remote_user: openbach
+
+- name: Restart OpenBACH Services
+  systemd: name={{ item }} state=restarted enabled=yes daemon_reload=yes
+  with_items:
+    - rstats
+    - openbach_agent
+  become: yes
+
+- name: Copy the version file on the Agent
+  copy: src=../version dest=/opt/openbach/agent/version
+  remote_user: openbach

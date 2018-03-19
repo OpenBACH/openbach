@@ -48,16 +48,14 @@ def main(iface, out_file, duration):
     collect_agent.register_collect(conffile)
 
     collect_agent.send_log(syslog.LOG_DEBUG, "Starting job tcpdump")
-
     # Launch tcpdump
     cmd = ["tcpdump", "-i", iface]
     if out_file:
         cmd += ["-w", out_file]
     if duration:
-        cmd = ["timeout", str(duration)] + cmd
-    p = subprocess.Popen(cmd)
-    if duration:
-        p.wait()
+        cmd += ["-G", str(duration), "-W", str(1)]
+    p = subprocess.run(cmd)
+    sys.exit(p.returncode)
 
 if __name__ == "__main__":
     # Define usage
@@ -66,8 +64,8 @@ if __name__ == "__main__":
 
     parser.add_argument("iface", type=str,
                         help='The interface name')
-    parser.add_argument('-w', '--write', type=str, default='',
-                        help='Output filename')
+    parser.add_argument('-w', '--write', type=str, default='/tmp/openbach_test.pcap',
+                        help='Path to the output filename')
     parser.add_argument('-d', '--duration', type=int, default=0,
                         help='Duration in seconds of the capture')
     

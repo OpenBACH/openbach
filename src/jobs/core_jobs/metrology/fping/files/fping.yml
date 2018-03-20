@@ -46,15 +46,13 @@ arguments:
       count:       1
       flag:        '-m'
       description: >
-          Show the RTT mean of every N packets (default=1)
+          The statistics will show the RTT mean of every N packets (default=1 packet)
     - name:        interface
       type:        'str'
       count:       1
       flag:        '-I'
       description: >
-          interface is either an address, or an interface name.
-          If interface is an address, it sets source address to specified interface address.
-          If interface is an interface name, it sets source interface to specified interface.
+          Bind to a particular interface name (i.e. fping will be bound to this source interface name)
     - name:        packetsize
       type:        'int'
       count:       1

@@ -358,6 +358,9 @@ class ThreadedAction(ConductorAction):
         try:
             real_action()
         except errors.ConductorError as e:
+            is_warning = isinstance(e, errors.ConductorWarning)
+            log_level = syslog.LOG_WARNING if is_warning else syslog.LOG_ERR
+            syslog.syslog(log_level, '{}'.format(e.json))
             command_result.update(e.json, e.ERROR_CODE)
             raise
         except Exception as err:
@@ -366,6 +369,7 @@ class ThreadedAction(ConductorAction):
                     'error': str(err),
                     'traceback': traceback.format_exc(),
             }
+            syslog.syslog(syslog.LOG_ALERT, '{}'.format(infos))
             command_result.update(infos, 500)
             raise
         command_result.update(None, 204)

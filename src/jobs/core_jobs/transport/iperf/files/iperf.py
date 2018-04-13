@@ -44,6 +44,7 @@ import argparse
 import subprocess
 from itertools import repeat
 from collections import defaultdict
+
 import collect_agent
 
 BRACKETS = re.compile(r'[\[\]]')
@@ -78,25 +79,29 @@ def _command_build_helper(flag, value):
         yield str(value)
 
 
-def client(client, interval, length, port, udp, bandwidth, time):
+def client(
+        client, interval, window_size, port, udp, bandwidth, duration,
+        num_flows, cong_control, mss, iterations):
     cmd = ['iperf', '-c', client]
-    if interval:
-        cmd += ['-i', str(interval)]
-    if length:
-        cmd += ['-l', str(length)]
-    if port:
-        cmd += ['-p', str(port)]
+    cmd.extend(_command_build_helper('-i', interval))
+    cmd.extend(_command_build_helper('-w', window_size))
+    cmd.extend(_command_build_helper('-p', port))
+    cmd.extend(_command_build_helper('-i', interval))
     if udp:
-        cmd += ['-u']
-    if udp and bandwidth is not None:
-        cmd += ['-b', str(bandwidth)]
-    if time is not None:
-        cmd += ['-t', str(time)]
-    p = subprocess.run(cmd)
-    sys.exit(p.returncode)
+        cmd.append('-u')
+        cmd.extend(_command_build_helper('-b', bandwidth))
+    else:
+        cmd.extend(_command_build_helper('-Z', cong_control))
+    cmd.extend(_command_build_helper('-t', duration))
+    cmd.extend(_command_build_helper('-P', num_flows))
+    cmd.extend(_command_build_helper('-M', mss))
+
+    for i in range(iterations):
+        subprocess.run(cmd)
+        time.sleep(5)
         
 
-def server(interval, length, port, udp, bandwidth, duration):
+def server(interval, window_size, port, udp, rate_compute_time, num_flows):
     # Connect to collect agent
     collect_agent.register_collect(
             '/opt/openbach/agent/jobs/iperf/'
@@ -104,17 +109,17 @@ def server(interval, length, port, udp, bandwidth, duration):
     collect_agent.send_log(syslog.LOG_DEBUG, 'Starting job iperf')
     
     cmd = ['iperf', '-s']
-    if interval:
-        cmd += ['-i', str(interval)]
-    if length:
-        cmd += ['-l', str(length)]
-    if port:
-        cmd += ['-p', str(port)]
+    cmd.extend(_command_build_helper('-i', interval))
+    cmd.extend(_command_build_helper('-w', window_size))
+    cmd.extend(_command_build_helper('-p', port))
     if udp:
-        cmd += ['-u']
+        cmd.append('-u')
         
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     flow_map = defaultdict(AutoIncrementFlowNumber())
+    ref = int(time.time())
+
+    total_rate = []
 
     for flow_number in repeat(None):
         line = p.stdout.readline().decode()
@@ -152,11 +157,15 @@ def server(interval, length, port, udp, bandwidth, duration):
             # filter out lines covering the whole duration
             continue
 
+        elapsed = int(time.time()) - ref
+
         try:
             flow_number = flow_map[int(flow)]
         except ValueError:
             if flow.upper() != "SUM":
                 continue
+            elif flow.upper() == "SUM" and elapsed > rate_compute_time:
+                total_rate.append(bandwidth * multiplier(bandwidth_units, 'bits/sec'))
 
         statistics = {
                 'sent_data': transfer * multiplier(transfer_units, 'Bytes'),
@@ -167,13 +176,21 @@ def server(interval, length, port, udp, bandwidth, duration):
             statistics['lost_pkts'] = lost
             statistics['sent_pkts'] = total
             statistics['plr'] = datagrams
+        if num_flows == 1 and elapsed > rate_compute_time:
+            total_rate.append(bandwidth * multiplier(bandwidth_units, 'bits/sec'))
         
         collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
-    
     error_log = p.stderr.readline()
     if error_log:
         collect_agent.send_log(syslog.LOG_ERR, 'Error when launching iperf: {}'.format(error_log))
         sys.exit(1)
+    p.wait()
+    # TODO: unlike iperf3 with the one-shot option, iperf2 server neevr exists. 
+    # p.wait will wait forever, and the following stats will never be sent.
+    statistics = {}
+    statistics['mean_total_rate'] = sum(total_rate)/len(total_rate)
+    statistics['max_total_rate'] = max(total_rate)
+    collect_agent.send_stat(timestamp, **statistics)
 
 if __name__ == "__main__":
     # Define Usage
@@ -192,8 +209,8 @@ if __name__ == "__main__":
             help='Pause *interval* seconds between '
             'periodic bandwidth reports')
     parser.add_argument(
-            '-l', '--length', type=int,
-            help='Set length read/write buffer to n (default 8 KB)')
+            '-w', '--window-size', type=str,
+            help='Socket buffer sizes. For TCP, this sets the TCP window size')
     parser.add_argument(
             '-p', '--port', type=int,
             help='Set server port to listen on/connect to '
@@ -209,16 +226,44 @@ if __name__ == "__main__":
             '-t', '--time', type=float,
             help='Time in seconds to transmit for (default 10secs). '
             'This setting requires client mode.')
+    parser.add_argument(
+            '-n', '--num-flows', type=int, default=1,
+            help='For client/server, the number of parallel flows.')
+    parser.add_argument(
+            '-C', '--cong-control', type=str,
+            help='For a client, the congestion control algorithm.')
+    parser.add_argument(
+            '-M', '--mss', type=str,
+            help='For a client, set TCP/SCTP maximum segment size (MTU - 40 bytes)')
+    parser.add_argument(
+            '-k', '--iterations', type=int, default=1,
+            help='Number of test repetitions (on client and server) '
+                 '--> needs parameter exit=True')
+    parser.add_argument(
+            '-e', '--rate_compute_time', type=int, default=0,
+            help='For the server, the elasped time after which we '
+            'begin to consider the rate measures for TCP mean calculation')
+
+
 
     # get args
     args = parser.parse_args()
     interval = args.interval
-    length = args.length
+    window_size = args.window_size
     port = args.port
     udp = args.udp
-    bandwidth = args.bandwidth
-    duration = args.time
+    rate_compute_time = args.rate_compute_time
+    num_flows = args.num_flows
+
     if args.server:
-        server(interval, length, port, udp, bandwidth, duration)
+        server(interval, window_size, port, udp, rate_compute_time, num_flows)
     else:
-        client(args.client, interval, length, port, udp, bandwidth, duration)
+        iterations = args.iterations
+        bandwidth = args.bandwidth
+        duration = args.time
+        num_flows = args.num_flows
+        cong_control = args.cong_control
+        mss = args.mss
+        client(
+                args.client, interval, window_size, port, udp, bandwidth,
+                duration, num_flows, cong_control, mss, iterations)

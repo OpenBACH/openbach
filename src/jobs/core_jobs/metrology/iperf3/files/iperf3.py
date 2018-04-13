@@ -95,16 +95,12 @@ def client(
         cmd.extend(_command_build_helper('-C', cong_control))
     cmd.extend(_command_build_helper('-t', duration))
     cmd.extend(_command_build_helper('-P', num_flows))
-    
-    if mss:
-        cmd.extend(_command_build_helper('-M', mss))
-    if tos:
-        cmd.extend(_command_build_helper('-S', tos))
+    cmd.extend(_command_build_helper('-M', mss))
+    cmd.extend(_command_build_helper('-S', tos))
     
     for i in range(iterations):
-        p = subprocess.run(cmd)
-        #sys.exit(p.returncode)
-        time.sleep(15)
+        subprocess.run(cmd)
+        time.sleep(5)
 
 
 def server(exit, interval, port, iterations, rate_compute_time, num_flows):
@@ -123,7 +119,7 @@ def server(exit, interval, port, iterations, rate_compute_time, num_flows):
     cmd.extend(_command_build_helper('-i', interval))
     cmd.extend(_command_build_helper('-p', port))
     
-    total_rate=[]
+    total_rate = []
     
     # Read output, and send stats
     for i in range(iterations):
@@ -193,7 +189,7 @@ def server(exit, interval, port, iterations, rate_compute_time, num_flows):
         statistics['mean_total_rate'] = sum(total_rate)/len(total_rate)
         statistics['max_total_rate'] = max(total_rate)
         collect_agent.send_stat(timestamp, **statistics)
-        time.sleep(10)
+        time.sleep(3)
     
 
 if __name__ == "__main__":
@@ -235,7 +231,7 @@ if __name__ == "__main__":
             '-1', '--exit', action='store_true',
             help='For a server, exit upon completion of one connection.')
     parser.add_argument(
-            '-n', '--num-flows', type=int,
+            '-n', '--num-flows', type=int, default=1,
             help='For client/server, the number of parallel flows.')
     parser.add_argument(
             '-C', '--cong-control', type=str,
@@ -247,14 +243,14 @@ if __name__ == "__main__":
             '-S', '--tos', type=str,
             help='For a client, set the IP type of service. The usual prefixes for octal and '
             'hex can be used, i.e. 52, 064 and 0x34 specify the same value..')
-
     parser.add_argument(
             '-k', '--iterations', type=int, default=1,
-            help='Number of test repetitions (on client and server) --> needs parameter exit=True')
-    
+            help='Number of test repetitions (on client and server) '
+            '--> needs parameter exit=True')
     parser.add_argument(
             '-e', '--rate_compute_time', type=int, default=0,
-            help='For the server, the elasped time after which we begin to consider the rate measures for TCP mean calculation')
+            help='For the server, the elasped time after which we '
+            'begin to consider the rate measures for TCP mean calculation')
     
     # get args
     args = parser.parse_args()
@@ -272,7 +268,6 @@ if __name__ == "__main__":
     else:
         bandwidth = args.bandwidth
         duration = args.time
-        num_flows = args.num_flows
         cong_control = args.cong_control
         mss =  args.mss
         tos = args.tos

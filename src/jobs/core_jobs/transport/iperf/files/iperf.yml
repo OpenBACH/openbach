@@ -37,12 +37,12 @@ arguments:
       flag:        '-i'
       description: >
           Pause interval seconds between periodic bandwidth reports
-    - name:        length
-      type:        'int'
+    - name:        window_size
+      type:        'str'
       count:       1
-      flag:        '-l'
+      flag:        '-w'
       description: >
-          Set length read/write buffer to n (default 8 KB)
+          Socket buffer sizes in B[M/L]. For TCP, this sets the TCP window size.
     - name:        port
       type:        'int'
       count:       1
@@ -69,6 +69,37 @@ arguments:
       description: >
           Time in seconds to transmit for (default 10 secs).
           This setting requires client mode.
+    - name:        num_flows
+      type:        'int'
+      count:       1
+      flag:        '-n'
+      description: >
+          For client/server, the number of parallel flows (default: 1).
+    - name:        cong_control
+      type:        'str'
+      count:       1
+      flag:        '-C'
+      description: >
+          For a client, the TCP congestion control algorithm to use (e.g. cubic, reno).
+    - name:       mss
+      type:        'int'
+      count:       1
+      flag:        '-M'
+      description: >
+          The TCP/SCTP maximum segment size (MTU - 40 bytes)
+    - name:        iterations
+      type:        'int'
+      count:       1
+      flag:        '-k'
+      description: >
+          Number of test repetitions on client/server (default: 1) --> needs parameter exit=True.
+    - name:        rate_compute_time
+      type:        'int'
+      count:       1
+      flag:        '-e'
+      description: >
+           The elasped time after which we begin to consider the rate measures for TCP mean calculation (default: 0*interval second)
+
 
 statistics:
     - name: "sent_data_*flow_number*"

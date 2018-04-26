@@ -30,31 +30,31 @@ arguments:
       count:       '1'
       flag:        '-c'
       description: >
-          The IP address of server to start the iperf in client mode
+          The IP address of server to start the iperf in client mode (only for client mode).
     - name:        interval
       type:        'int'
       count:       1
       flag:        '-i'
       description: >
-          Pause interval seconds between periodic bandwidth reports
+          Pause interval seconds between periodic bandwidth reports (only for server mode).
     - name:        window_size
       type:        'str'
       count:       1
       flag:        '-w'
       description: >
-          Socket buffer sizes in B[M/L]. For TCP, this sets the TCP window size.
+          Socket buffer sizes in B[M/L]. For TCP, this sets the TCP window size (for server and client mode).
     - name:        port
       type:        'int'
       count:       1
       flag:        '-p'
       description: >
-          Set server port to listen on/connect to to n (default 5001)
+          Set server port to listen on/connect to n (default 5001) (only for client mode).
     - name:        udp
       type:        'None'
       count:       0
       flag:        '-u'
       description: >
-          Use UDP rather than TCP (should be enabled on server and client)
+          Use UDP rather than TCP (should be enabled on server and client mode)
     - name:        bandwidth
       type:        'str'
       count:       1
@@ -67,38 +67,43 @@ arguments:
       count:       1
       flag:        '-t'
       description: >
-          Time in seconds to transmit for (default 10 secs).
-          This setting requires client mode.
+          Time in seconds to transmit for (default 10 secs) (only for client mode).
     - name:        num_flows
       type:        'int'
       count:       1
       flag:        '-n'
       description: >
-          For client/server, the number of parallel flows (default: 1).
+          The number of parallel flows (default: 1). If specified, it should be given for client & server mode.
     - name:        cong_control
       type:        'str'
       count:       1
       flag:        '-C'
       description: >
-          For a client, the TCP congestion control algorithm to use (e.g. cubic, reno).
+          The TCP congestion control algorithm to use (e.g. cubic, reno) (only for client mode).
     - name:       mss
       type:        'int'
       count:       1
       flag:        '-M'
       description: >
-          The TCP/SCTP maximum segment size (MTU - 40 bytes)
+          The TCP/SCTP maximum segment size (MTU - 40 bytes) (only for client mode).
+    - name:        tos
+      type:        'str'
+      count:       1
+      flag:        '-S'
+      description: >
+          Set the IP type of service (The usual prefixes for octal and hex can be used, i.e. 52, 064 and 0x34 specify the same value) (only for client mode).
     - name:        iterations
       type:        'int'
       count:       1
       flag:        '-k'
       description: >
-          Number of test repetitions on client/server (default: 1) --> needs parameter exit=True.
+          Number of test repetitions on client&server (default: 1).
     - name:        rate_compute_time
       type:        'int'
       count:       1
       flag:        '-e'
       description: >
-           The elasped time after which we begin to consider the rate measures for TCP mean calculation (default: 0*interval second)
+           The elasped time after which we begin to consider the rate measures for TCP mean calculation (default: 0 second) (only for server mode)
 
 
 statistics:

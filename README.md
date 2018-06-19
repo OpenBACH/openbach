@@ -13,7 +13,7 @@ Design Principles
   
 Get Involved
 ============
-
+See OpenBACH web site : http://www.openbach.org/
 
 
 Authors

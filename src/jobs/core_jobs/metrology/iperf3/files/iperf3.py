@@ -224,8 +224,8 @@ if __name__ == "__main__":
             help='Set target bandwidth to n [M/K]bits/sec (default '
             '1M). This setting requires UDP (-u).')
     parser.add_argument(
-            '-t', '--time', type=float, default=0,
-            help='Time in seconds to transmit for (default: unlimited). '
+            '-t', '--time', type=float, default=10,
+            help='Time in seconds to transmit for (default: 10 seconds). '
             'This setting requires client mode.')
     parser.add_argument(
             '-1', '--exit', action='store_true',

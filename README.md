@@ -13,10 +13,9 @@ Design Principles
   
 Get Involved
 ============
-See OpenBACH web site : http://www.openbach.org/
-
+See OpenBACH web site : http://www.openbach.org/ 
+Mailing list are available : users@opensand.org
 
 Authors
 =======
-
 OpenBACH is promoted by CNES (French Space Center) as a reference open-source software tool within its research and development studies and activities in the domain of satellite communication systems and networks.

@@ -83,7 +83,7 @@ def _command_build_helper(flag, value):
 
 def client(
         client, interval, window_size, port, udp, bandwidth,
-        duration, num_flows, cong_control, mss, tos, iterations):
+        duration, num_flows, cong_control, mss, tos):
     cmd = ['iperf3', '-c', client]
     cmd.extend(_command_build_helper('-i', interval))
     cmd.extend(_command_build_helper('-w', window_size))
@@ -97,13 +97,10 @@ def client(
     cmd.extend(_command_build_helper('-P', num_flows))
     cmd.extend(_command_build_helper('-M', mss))
     cmd.extend(_command_build_helper('-S', tos))
-    
-    for i in range(iterations):
-        subprocess.run(cmd)
-        time.sleep(5)
+    subprocess.run(cmd)
 
 
-def server(exit, interval, port, iterations, rate_compute_time, num_flows):
+def server(exit, interval, port, num_flows):
     # Connect to collect_agent
     success = collect_agent.register_collect(
             '/opt/openbach/agent/jobs/iperf3/'
@@ -119,77 +116,65 @@ def server(exit, interval, port, iterations, rate_compute_time, num_flows):
     cmd.extend(_command_build_helper('-i', interval))
     cmd.extend(_command_build_helper('-p', port))
     
-    total_rate = []
     
     # Read output, and send stats
-    for i in range(iterations):
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        flow_map = defaultdict(AutoIncrementFlowNumber())
-        ref = int(time.time()) 
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    flow_map = defaultdict(AutoIncrementFlowNumber())
+    ref = int(time.time()) 
     
-        for flow_number in repeat(None):
-            line = p.stdout.readline().decode()
-            tokens = BRACKETS.sub('', line).split()
-            if not tokens:
-                if p.poll() is not None:
-                    break
-                continue
+    for flow_number in repeat(None):
+        line = p.stdout.readline().decode()
+        print(line)
+        tokens = BRACKETS.sub('', line).split()
+        if not tokens:
+            if p.poll() is not None:
+                break
+            continue
     
-            timestamp = int(time.time() * 1000)
+        timestamp = int(time.time() * 1000)
     
+        try:
             try:
-                try:
-                    flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
-                    jitter = float(jitter)
-                    datagrams = float(datagrams[1:-2])
-                    lost, total = map(int, packets_stats.split('/'))
-                except ValueError:
-                    udp = False
-                    flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units = tokens
-                else:
-                    udp = True
-                transfer = float(transfer)
-                bandwidth = float(bandwidth)
-                interval_begin, interval_end = map(float, duration.split('-'))
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units, jitter, jitter_units, packets_stats, datagrams = tokens
+                jitter = float(jitter)
+                datagrams = float(datagrams[1:-2])
+                lost, total = map(int, packets_stats.split('/'))
             except ValueError:
-                # filter out non-stats lines
-                continue
+                udp = False
+                flow, duration, _, transfer, transfer_units, bandwidth, bandwidth_units = tokens
+            else:
+                udp = True
+            transfer = float(transfer)
+            bandwidth = float(bandwidth)
+            interval_begin, interval_end = map(float, duration.split('-'))
+        except ValueError:
+            # filter out non-stats lines
+            continue
     
-            if not transfer or interval_end - interval_begin > interval:
-                # filter out lines covering the whole duration
+        if not transfer or interval_end - interval_begin > interval:
+            # filter out lines covering the whole duration
+            continue
+        try:
+            flow_number = flow_map[int(flow)]
+        except ValueError:
+            if flow.upper() != "SUM":
                 continue
-            elapsed = int(time.time()) - ref
-            try:
-                flow_number = flow_map[int(flow)]
-            except ValueError:
-                if flow.upper() != "SUM":
-                    continue
-                elif flow.upper() == "SUM" and elapsed > rate_compute_time:
-                    total_rate.append(bandwidth * multiplier(bandwidth_units, 'bits/sec'))
-    
-            statistics = {
-                    'sent_data': transfer * multiplier(transfer_units, 'Bytes'),
-                    'throughput': bandwidth * multiplier(bandwidth_units, 'bits/sec'),
-            }
-            if udp:
-                statistics['jitter'] = jitter * multiplier(jitter_units, 's')
-                statistics['lost_pkts'] = lost
-                statistics['sent_pkts'] = total
-                statistics['plr'] = datagrams
-            if num_flows == 1 and elapsed > rate_compute_time:
-                total_rate.append(bandwidth * multiplier(bandwidth_units, 'bits/sec'))
-                
-            collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
-        error_log = p.stderr.readline()
-        if error_log:
-            collect_agent.send_log(syslog.LOG_ERR, 'Error when launching iperf3: {}'.format(error_log))
-            sys.exit(1)
-        p.wait() 
-        statistics = {}
-        statistics['mean_total_rate'] = sum(total_rate)/len(total_rate)
-        statistics['max_total_rate'] = max(total_rate)
-        collect_agent.send_stat(timestamp, **statistics)
-        time.sleep(3)
+
+        statistics = {
+                'sent_data': transfer * multiplier(transfer_units, 'Bytes'),
+                'throughput': bandwidth * multiplier(bandwidth_units, 'bits/sec'),
+        }
+        if udp:
+            statistics['jitter'] = jitter * multiplier(jitter_units, 's')
+            statistics['lost_pkts'] = lost
+            statistics['sent_pkts'] = total
+            statistics['plr'] = datagrams
+        collect_agent.send_stat(timestamp, suffix=flow_number, **statistics)
+    error_log = p.stderr.readline()
+    if error_log:
+        collect_agent.send_log(syslog.LOG_ERR, 'Error when launching iperf3: {}'.format(error_log))
+        sys.exit(1)
+    p.wait() 
     
 
 if __name__ == "__main__":
@@ -205,7 +190,7 @@ if __name__ == "__main__":
             '-c', '--client', type=str,
             help='Run in client mode and specify server IP address')
     parser.add_argument(
-            '-i', '--interval', type=int, default=1,
+            '-i', '--interval', type=float, default=1,
             help='Pause *interval* seconds between '
             'periodic bandwidth reports')
     parser.add_argument(
@@ -243,14 +228,6 @@ if __name__ == "__main__":
             '-S', '--tos', type=str,
             help='For a client, set the IP type of service. The usual prefixes for octal and '
             'hex can be used, i.e. 52, 064 and 0x34 specify the same value..')
-    parser.add_argument(
-            '-k', '--iterations', type=int, default=1,
-            help='Number of test repetitions (on client and server) '
-            '--> needs parameter exit=True')
-    parser.add_argument(
-            '-e', '--rate_compute_time', type=int, default=0,
-            help='For the server, the elasped time after which we '
-            'begin to consider the rate measures for TCP mean calculation')
     
     # get args
     args = parser.parse_args()
@@ -258,13 +235,10 @@ if __name__ == "__main__":
     window_size = args.window_size
     port = args.port
     udp = args.udp
-    iterations = args.iterations
     num_flows = args.num_flows
-    rate_compute_time = args.rate_compute_time
 
     if args.server:
-        server(args.exit, interval, port, iterations, rate_compute_time,
-               num_flows)
+        server(args.exit, interval, port, num_flows)
     else:
         bandwidth = args.bandwidth
         duration = args.time
@@ -273,5 +247,4 @@ if __name__ == "__main__":
         tos = args.tos
         client(
                 args.client, interval, window_size, port, udp,
-                bandwidth, duration, num_flows, cong_control, mss, tos,
-                iterations)
+                bandwidth, duration, num_flows, cong_control, mss, tos)

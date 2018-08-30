@@ -82,7 +82,7 @@ if __name__ == "__main__":
     # get args
     args = parser.parse_args()
     port = args.port
-    database = args.database_name
+    database = args.database
     username = args.username
     password = args.password
     main(port, database, username, password)
